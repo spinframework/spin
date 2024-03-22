@@ -1,0 +1,122 @@
+interface tracing {
+    use wasi:clocks/wall-clock@0.2.0.{datetime};
+    use types.{key-value, instrumentation-scope};
+
+    /// Called when a span is started.
+    on-start: func(context: span-context);
+
+    /// Called when a span is ended.
+    on-end: func(span: span-data);
+
+    /// Returns the span context of the host.
+    outer-span-context: func() -> span-context;
+
+    /// The data associated with a span.
+    record span-data {
+        /// Span context.
+        span-context: span-context,
+        /// Span parent id.
+        parent-span-id: string,
+        /// Span kind.
+        span-kind: span-kind,
+        // Span name.
+        name: string,
+        /// Span start time.
+        start-time: datetime,
+        /// Span end time.
+        end-time: datetime,
+        /// Span attributes.
+        attributes: list<key-value>,
+        /// Span events.
+        events: list<event>,
+        /// Span Links.
+        links: list<link>,
+        /// Span status.
+        status: status,
+        /// Instrumentation scope that produced this span.
+        instrumentation-scope: instrumentation-scope,
+        /// Number of attributes dropped by the span due to limits being reached.
+        dropped-attributes: u32,
+        /// Number of events dropped by the span due to limits being reached.
+        dropped-events: u32,
+        /// Number of links dropped by the span due to limits being reached.
+        dropped-links: u32,
+    }
+
+    /// Identifying trace information about a span that can be serialized and propagated.
+    record span-context {
+        /// The `trace-id` for this `span-context`.
+        trace-id: trace-id,
+        /// The `span-id` for this `span-context`.
+        span-id: span-id,
+        /// The `trace-flags` for this `span-context`.
+        trace-flags: trace-flags,
+        /// Whether this `span-context` was propagated from a remote parent.
+        is-remote: bool,
+        /// The `trace-state` for this `span-context`.
+        trace-state: trace-state,
+    }
+
+    /// The trace that this `span-context` belongs to.
+    ///
+    /// 16 bytes encoded as a hexadecimal string.
+    type trace-id = string;
+
+    /// The id of this `span-context`.
+    ///
+    /// 8 bytes encoded as a hexadecimal string.
+    type span-id = string;
+
+    /// Flags that can be set on a `span-context`.
+    flags trace-flags {
+        /// Whether the `span` should be sampled or not.
+        sampled,
+    }
+
+    /// Carries system-specific configuration data, represented as a list of key-value pairs. `trace-state` allows multiple tracing systems to participate in the same trace.
+    ///
+    /// If any invalid keys or values are provided then the `trace-state` will be treated as an empty list.
+    type trace-state = list<tuple<string, string>>;
+
+    /// Describes the relationship between the Span, its parents, and its children in a trace.
+    enum span-kind {
+        /// Indicates that the span describes a request to some remote service. This span is usually the parent of a remote server span and does not end until the response is received.
+        client,
+        /// Indicates that the span covers server-side handling of a synchronous RPC or other remote request. This span is often the child of a remote client span that was expected to wait for a response.
+        server,
+        /// Indicates that the span describes the initiators of an asynchronous request. This parent span will often end before the corresponding child consumer span, possibly even before the child span starts. In messaging scenarios with batching, tracing individual messages requires a new producer span per message to be created.
+        producer,
+        /// Indicates that the span describes a child of an asynchronous consumer request.
+        consumer,
+        /// Default value. Indicates that the span represents an internal operation within an application, as opposed to an operations with remote parents or children.
+        internal
+    }
+
+    /// An event describing a specific moment in time on a span and associated attributes.
+    record event {
+        /// Event name.
+        name: string,
+        /// Event time.
+        time: datetime,
+        /// Event attributes.
+        attributes: list<key-value>,
+    }
+
+    /// Describes a relationship to another `span`.
+    record link {
+        /// Denotes which `span` to link to.
+        span-context: span-context,
+        /// Attributes describing the link.
+        attributes: list<key-value>,
+    }
+
+    /// The `status` of a `span`.
+    variant status {
+        /// The default status.
+        unset,
+        /// The operation has been validated by an Application developer or Operator to have completed successfully.
+        ok,
+        /// The operation contains an error with a description.
+        error(string),
+    }
+}

@@ -19,7 +19,7 @@ const SPIN_DISABLE_LOG_TO_TRACING: &str = "SPIN_DISABLE_LOG_TO_TRACING";
 /// - `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
 ///
 /// Note that this is overridden if OTEL_SDK_DISABLED is set and not empty.
-pub(crate) fn otel_tracing_enabled() -> bool {
+pub fn otel_tracing_enabled() -> bool {
     any_vars_set(&[
         OTEL_EXPORTER_OTLP_ENDPOINT,
         OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
@@ -33,7 +33,7 @@ pub(crate) fn otel_tracing_enabled() -> bool {
 /// - `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`
 ///
 /// Note that this is overridden if OTEL_SDK_DISABLED is set and not empty.
-pub(crate) fn otel_metrics_enabled() -> bool {
+pub fn otel_metrics_enabled() -> bool {
     any_vars_set(&[
         OTEL_EXPORTER_OTLP_ENDPOINT,
         OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
@@ -47,7 +47,7 @@ pub(crate) fn otel_metrics_enabled() -> bool {
 /// - `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`
 ///
 /// Note that this is overridden if OTEL_SDK_DISABLED is set and not empty.
-pub(crate) fn otel_logs_enabled() -> bool {
+pub fn otel_logs_enabled() -> bool {
     any_vars_set(&[
         OTEL_EXPORTER_OTLP_ENDPOINT,
         OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
@@ -59,7 +59,7 @@ pub(crate) fn otel_logs_enabled() -> bool {
 ///
 /// It is considered disabled if the environment variable `SPIN_DISABLED_LOG_TO_TRACING` is set and not
 /// empty. By default the features is enabled.
-pub(crate) fn spin_disable_log_to_tracing() -> bool {
+pub fn spin_disable_log_to_tracing() -> bool {
     any_vars_set(&[SPIN_DISABLE_LOG_TO_TRACING])
 }
 
@@ -72,13 +72,13 @@ fn any_vars_set(enabling_vars: &[&str]) -> bool {
 /// Returns a boolean indicating if the OTEL SDK should be disabled for all signals.
 ///
 /// It is considered disabled if the environment variable `OTEL_SDK_DISABLED` is set and not empty.
-pub(crate) fn otel_sdk_disabled() -> bool {
+pub fn otel_sdk_disabled() -> bool {
     std::env::var_os(OTEL_SDK_DISABLED).is_some_and(|val| !val.is_empty())
 }
 
 /// The protocol to use for OTLP exporter.
 #[derive(Debug)]
-pub(crate) enum OtlpProtocol {
+pub enum OtlpProtocol {
     Grpc,
     HttpProtobuf,
     HttpJson,
@@ -86,7 +86,7 @@ pub(crate) enum OtlpProtocol {
 
 impl OtlpProtocol {
     /// Returns the protocol to be used for exporting traces as defined by the environment.
-    pub(crate) fn traces_protocol_from_env() -> Self {
+    pub fn traces_protocol_from_env() -> Self {
         Self::protocol_from_env(
             std::env::var(OTEL_EXPORTER_OTLP_TRACES_PROTOCOL),
             std::env::var(OTEL_EXPORTER_OTLP_PROTOCOL),
@@ -94,7 +94,7 @@ impl OtlpProtocol {
     }
 
     /// Returns the protocol to be used for exporting metrics as defined by the environment.
-    pub(crate) fn metrics_protocol_from_env() -> Self {
+    pub fn metrics_protocol_from_env() -> Self {
         Self::protocol_from_env(
             std::env::var(OTEL_EXPORTER_OTLP_METRICS_PROTOCOL),
             std::env::var(OTEL_EXPORTER_OTLP_PROTOCOL),
@@ -102,7 +102,7 @@ impl OtlpProtocol {
     }
 
     /// Returns the protocol to be used for exporting logs as defined by the environment.
-    pub(crate) fn logs_protocol_from_env() -> Self {
+    pub fn logs_protocol_from_env() -> Self {
         Self::protocol_from_env(
             std::env::var(OTEL_EXPORTER_OTLP_LOGS_PROTOCOL),
             std::env::var(OTEL_EXPORTER_OTLP_PROTOCOL),
