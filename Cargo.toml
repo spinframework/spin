@@ -86,6 +86,7 @@ openssl = { version = "0.10" }
 anyhow = { workspace = true, features = ["backtrace"] }
 conformance = { path = "tests/conformance-tests" }
 conformance-tests = { workspace = true }
+fake-opentelemetry-collector = "0.26"
 hex = "0.4"
 http-body-util = { workspace = true }
 hyper = { workspace = true }
@@ -149,6 +150,15 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 indexmap = "2"
 itertools = "0.14"
 lazy_static = "1.5"
+opentelemetry = "0.28"
+# The default `reqwest-blocking-client` causes a runtime panic
+opentelemetry-otlp = { version = "0.28", default-features = false, features = ["http-proto", "reqwest-client", "logs"]}
+opentelemetry_sdk = {version = "0.28", features = [
+  "experimental_metrics_periodicreader_with_async_runtime", 
+  "experimental_trace_batch_span_processor_with_async_runtime", 
+  "experimental_logs_batch_log_processor_with_async_runtime", 
+  "experimental_async_runtime"
+]}
 path-absolutize = "3"
 pin-project-lite = "0.2.16"
 quote = "1"
@@ -177,6 +187,7 @@ toml_edit = "0.22"
 tower-service = "0.3.3"
 tracing = { version = "0.1.41", features = ["log"] }
 url = "2.5.7"
+tracing-opentelemetry = "0.29"
 walkdir = "2"
 wac-graph = "0.8.1"
 wasm-encoder = "0.244.0"

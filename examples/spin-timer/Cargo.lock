@@ -3272,7 +3272,6 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tonic",
- "tracing",
 ]
 
 [[package]]
@@ -4875,6 +4874,7 @@ dependencies = [
  "anyhow",
  "serde",
  "spin-core",
+ "spin-factor-otel",
  "spin-factors",
  "spin-locked-app",
  "spin-resource-table",
@@ -4893,6 +4893,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "serde",
+ "spin-factor-otel",
  "spin-factors",
  "spin-llm-remote-http",
  "spin-locked-app",
@@ -4902,6 +4903,24 @@ dependencies = [
  "toml 0.8.20",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "spin-factor-otel"
+version = "3.6.0-pre0"
+dependencies = [
+ "anyhow",
+ "indexmap 2.9.0",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "spin-core",
+ "spin-factors",
+ "spin-resource-table",
+ "spin-telemetry",
+ "tracing",
+ "tracing-opentelemetry",
+ "wasi-otel",
 ]
 
 [[package]]
@@ -4919,6 +4938,7 @@ dependencies = [
  "reqwest",
  "rustls 0.23.25",
  "serde",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factors",
  "spin-telemetry",
@@ -4939,6 +4959,7 @@ dependencies = [
  "anyhow",
  "rumqttc",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factors",
  "spin-resource-table",
@@ -4954,6 +4975,7 @@ dependencies = [
  "anyhow",
  "mysql_async",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factors",
  "spin-resource-table",
@@ -5001,6 +5023,7 @@ dependencies = [
  "rust_decimal",
  "serde_json",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factors",
  "spin-resource-table",
@@ -5018,6 +5041,7 @@ dependencies = [
  "anyhow",
  "redis",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factors",
  "spin-resource-table",
@@ -5031,6 +5055,7 @@ name = "spin-factor-sqlite"
 version = "3.6.0-pre0"
 dependencies = [
  "async-trait",
+ "spin-factor-otel",
  "spin-factors",
  "spin-locked-app",
  "spin-resource-table",
@@ -5044,6 +5069,7 @@ name = "spin-factor-variables"
 version = "3.6.0-pre0"
 dependencies = [
  "spin-expressions",
+ "spin-factor-otel",
  "spin-factors",
  "spin-telemetry",
  "spin-world",
@@ -5224,6 +5250,7 @@ dependencies = [
  "spin-expressions",
  "spin-factor-key-value",
  "spin-factor-llm",
+ "spin-factor-otel",
  "spin-factor-outbound-http",
  "spin-factor-outbound-mqtt",
  "spin-factor-outbound-mysql",
@@ -5256,6 +5283,7 @@ dependencies = [
  "spin-common",
  "spin-factor-key-value",
  "spin-factor-llm",
+ "spin-factor-otel",
  "spin-factor-outbound-http",
  "spin-factor-outbound-mqtt",
  "spin-factor-outbound-mysql",
@@ -5419,7 +5447,10 @@ dependencies = [
 name = "spin-world"
 version = "3.6.0-pre0"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "wasmtime",
 ]
 
@@ -6058,6 +6089,7 @@ dependencies = [
  "smallvec",
  "tracing",
  "tracing-core",
+ "tracing-log",
  "tracing-subscriber",
  "web-time",
 ]
@@ -6345,6 +6377,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9683f9a5a998d873c0d21fcbe3c083009670149a8fab228644b8bd36b2c48cb3"
 dependencies = [
  "wit-bindgen-rt",
+]
+
+[[package]]
+name = "wasi-otel"
+version = "3.6.0-pre0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "wasmtime",
 ]
 
 [[package]]

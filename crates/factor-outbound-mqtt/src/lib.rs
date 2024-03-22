@@ -7,6 +7,7 @@ use host::other_error;
 use host::InstanceState;
 use rumqttc::{AsyncClient, Event, Incoming, Outgoing, QoS};
 use spin_core::async_trait;
+use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
@@ -50,9 +51,12 @@ impl Factor for OutboundMqttFactor {
         let allowed_hosts = ctx
             .instance_builder::<OutboundNetworkingFactor>()?
             .allowed_hosts();
+        let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
+
         Ok(InstanceState::new(
             allowed_hosts,
             self.create_client.clone(),
+            otel,
         ))
     }
 }

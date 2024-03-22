@@ -10,6 +10,7 @@ use anyhow::Context as _;
 use spin_common::arg_parser::parse_kv;
 use spin_factor_key_value::KeyValueFactor;
 use spin_factor_llm::LlmFactor;
+use spin_factor_otel::OtelFactor;
 use spin_factor_outbound_http::OutboundHttpFactor;
 use spin_factor_outbound_mqtt::{NetworkedMqttClient, OutboundMqttFactor};
 use spin_factor_outbound_mysql::OutboundMysqlFactor;
@@ -25,6 +26,7 @@ use spin_variables_static::VariableSource;
 
 #[derive(RuntimeFactors)]
 pub struct TriggerFactors {
+    pub otel: OtelFactor,
     pub wasi: WasiFactor,
     pub variables: VariablesFactor,
     pub key_value: KeyValueFactor,
@@ -43,8 +45,11 @@ impl TriggerFactors {
         state_dir: Option<PathBuf>,
         working_dir: impl Into<PathBuf>,
         allow_transient_writes: bool,
+        experimental_wasi_otel: bool,
+        spin_version: &str,
     ) -> anyhow::Result<Self> {
         Ok(Self {
+            otel: OtelFactor::new(spin_version, experimental_wasi_otel)?,
             wasi: wasi_factor(working_dir, allow_transient_writes),
             variables: VariablesFactor::default(),
             key_value: KeyValueFactor::new(),
@@ -92,6 +97,10 @@ pub struct TriggerAppArgs {
     /// Set the static assets of the components in the temporary directory as writable.
     #[clap(long = "allow-transient-write")]
     pub allow_transient_write: bool,
+
+    /// [Experimental] Enable experimental WASI OTel support. Backwards compatibility of the WIT is not guaranteed.
+    #[clap(long = "experimental-wasi-otel")]
+    pub experimental_wasi_otel: bool,
 
     /// Set a key/value pair (key=value) in the application's
     /// default store. Any existing value will be overwritten.

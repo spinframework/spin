@@ -13,6 +13,8 @@ impl v2::Host for InstanceState {
         prompt: String,
         params: Option<v2::InferencingParams>,
     ) -> Result<v2::InferencingResult, v2::Error> {
+        self.otel.reparent_tracing_span();
+
         if !self.allowed_models.contains(&model) {
             return Err(access_denied_error(&model));
         }
@@ -40,6 +42,8 @@ impl v2::Host for InstanceState {
         model: v1::EmbeddingModel,
         data: Vec<String>,
     ) -> Result<v2::EmbeddingsResult, v2::Error> {
+        self.otel.reparent_tracing_span();
+
         if !self.allowed_models.contains(&model) {
             return Err(access_denied_error(&model));
         }

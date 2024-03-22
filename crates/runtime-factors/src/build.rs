@@ -46,10 +46,15 @@ impl RuntimeFactorsBuilder for FactorsBuilder {
 
         runtime_config.summarize(config.runtime_config_file.as_deref());
 
+        // This is a hack b/c we know the version of this crate will be the same as the version of Spin
+        let spin_version = env!("CARGO_PKG_VERSION");
+
         let factors = TriggerFactors::new(
             runtime_config.state_dir(),
             config.working_dir.clone(),
             args.allow_transient_write,
+            args.experimental_wasi_otel,
+            spin_version,
         )
         .context("failed to create factors")?;
         Ok((factors, runtime_config))
