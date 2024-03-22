@@ -12,14 +12,20 @@ pub struct InstanceState {
     allowed_hosts: OutboundAllowedHosts,
     connections: spin_resource_table::Table<Arc<dyn MqttClient>>,
     create_client: Arc<dyn ClientCreator>,
+    otel_context: OtelContext,
 }
 
 impl InstanceState {
-    pub fn new(allowed_hosts: OutboundAllowedHosts, create_client: Arc<dyn ClientCreator>) -> Self {
+    pub fn new(
+        allowed_hosts: OutboundAllowedHosts,
+        create_client: Arc<dyn ClientCreator>,
+        otel_context: OtelContext,
+    ) -> Self {
         Self {
             allowed_hosts,
             create_client,
             connections: spin_resource_table::Table::new(1024),
+            otel_context,
         }
     }
 }
@@ -72,6 +78,8 @@ impl v2::HostConnection for InstanceState {
         password: String,
         keep_alive_interval: u64,
     ) -> Result<Resource<Connection>, Error> {
+        self.otel_context.reparent_tracing_span();
+
         if !self
             .is_address_allowed(&address)
             .await
@@ -105,6 +113,8 @@ impl v2::HostConnection for InstanceState {
         payload: Vec<u8>,
         qos: Qos,
     ) -> Result<(), Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
 
         conn.publish_bytes(topic, qos, payload).await?;

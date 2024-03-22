@@ -14,6 +14,7 @@ use http::{
 };
 use intercept::OutboundHttpInterceptor;
 use runtime_config::RuntimeConfig;
+use spin_factor_otel::OtelContext;
 use spin_factor_outbound_networking::{
     config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
     ComponentTlsClientConfigs, OutboundNetworkingFactor,
@@ -68,6 +69,7 @@ impl Factor for OutboundHttpFactor {
         let allowed_hosts = outbound_networking.allowed_hosts();
         let blocked_networks = outbound_networking.blocked_networks();
         let component_tls_configs = outbound_networking.component_tls_configs();
+        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
         Ok(InstanceState {
             wasi_http_ctx: WasiHttpCtx::new(),
             allowed_hosts,
@@ -78,6 +80,7 @@ impl Factor for OutboundHttpFactor {
             spin_http_client: None,
             wasi_http_clients: ctx.app_state().wasi_http_clients.clone(),
             connection_pooling: ctx.app_state().connection_pooling,
+            otel_context,
         })
     }
 }
@@ -101,6 +104,7 @@ pub struct InstanceState {
     // among all instances of the app.
     wasi_http_clients: wasi::HttpClients,
     connection_pooling: bool,
+    otel_context: OtelContext,
 }
 
 impl InstanceState {

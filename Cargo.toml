@@ -83,6 +83,7 @@ openssl = { version = "0.10" }
 anyhow = { workspace = true, features = ["backtrace"] }
 conformance = { path = "tests/conformance-tests" }
 conformance-tests = { workspace = true }
+fake-opentelemetry-collector = "0.21.1"
 hex = "0.4"
 http-body-util = { workspace = true }
 hyper = { workspace = true }

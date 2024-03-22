@@ -9,7 +9,7 @@ use tracing_subscriber::{fmt, prelude::*, registry, EnvFilter, Layer};
 
 mod alert_in_dev;
 pub mod detector;
-mod env;
+pub mod env;
 pub mod logs;
 pub mod metrics;
 mod propagation;
@@ -53,6 +53,15 @@ pub use propagation::inject_trace_context;
 /// spin_telemetry::metrics::monotonic_counter!(spin.metric_name = 1, metric_attribute = "value");
 /// ```
 pub fn init(spin_version: String) -> anyhow::Result<()> {
+    // This filter globally filters out spans produced by wasi_http so that they don't conflict with
+    // the behaviour of the wasi-otel factor.
+    let wasi_http_trace_filter = tracing_subscriber::filter::filter_fn(|metadata| {
+        if metadata.is_span() && metadata.name() == "wit-bindgen export" {
+            return false;
+        }
+        true
+    });
+
     // This layer will print all tracing library log messages to stderr.
     let fmt_layer = fmt::layer()
         .with_writer(std::io::stderr)
@@ -91,6 +100,7 @@ pub fn init(spin_version: String) -> anyhow::Result<()> {
 
     // Build a registry subscriber with the layers we want to use.
     registry()
+        .with(wasi_http_trace_filter)
         .with(otel_tracing_layer)
         .with(otel_metrics_layer)
         .with(fmt_layer)

@@ -1,0 +1,19 @@
+spin_manifest_version = 2
+
+[application]
+authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+description = "An application to exercise wasi-otel tracing functionality."
+name = "wasi-otel-tracing"
+version = "1.0.0"
+
+[[trigger.http]]
+route = "/..."
+component = "wasi-otel-tracing"
+
+[component.wasi-otel-tracing]
+source = "%{source=wasi-otel-tracing}"
+key_value_stores = ["default"]
+allowed_outbound_hosts = ["http://self", "https://asdf.com"]
+[component.wasi-otel-tracing.build]
+command = "cargo build --target wasm32-wasi --release"
+watch = ["src/**/*.rs", "Cargo.toml"]

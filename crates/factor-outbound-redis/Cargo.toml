@@ -8,6 +8,7 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 redis = { version = "0.25", features = ["tokio-comp", "tokio-native-tls-comp", "aio"] }
 spin-core = { path = "../core" }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-resource-table = { path = "../table" }

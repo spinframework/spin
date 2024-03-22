@@ -29,6 +29,7 @@ spin-http = { path = "../http" }
 spin-telemetry = { path = "../telemetry" }
 spin-trigger = { path = "../trigger" }
 spin-world = { path = "../world" }
+spin-factor-otel = { path = "../factor-otel" }
 terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["full"] }
 tokio-rustls = { workspace = true }
