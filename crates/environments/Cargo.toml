@@ -1,0 +1,42 @@
+[package]
+name = "spin-environments"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = "0.1"
+bytes = "1.1"
+chrono = { workspace = true }
+futures = "0.3"
+futures-util = "0.3"
+id-arena = "2"
+indexmap = "2"
+oci-distribution = { git = "https://github.com/fermyon/oci-distribution", rev = "7e4ce9be9bcd22e78a28f06204931f10c44402ba" }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+spin-common = { path = "../common" }
+spin-componentize = { path = "../componentize" }
+spin-compose = { path = "../compose" }
+spin-loader = { path = "../loader" }
+spin-manifest = { path = "../manifest" }
+spin-serde = { path = "../serde" }
+toml = { workspace = true }
+tokio = { version = "1.23", features = ["fs"] }
+tracing = { workspace = true }
+wac-parser = "0.6.0"
+wac-resolver = "0.6.0"
+wac-types = "0.6.0"
+wasm-pkg-client = { workspace = true }
+wasmparser = { workspace = true }
+wit-component = { workspace = true }
+wit-parser = { workspace = true }
+
+[dev-dependencies]
+wit-component = { workspace = true, features = ["dummy-module"] }
+wit-encoder = "0.229"
+
+[lints]
+workspace = true

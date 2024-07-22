@@ -8,6 +8,7 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 spin-common = { path = "../common" }
+spin-environments = { path = "../environments" }
 spin-manifest = { path = "../manifest" }
 subprocess = "0.2"
 terminal = { path = "../terminal" }
