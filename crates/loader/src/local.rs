@@ -25,8 +25,8 @@ use crate::{cache::Cache, FilesMountStrategy};
 pub struct LocalLoader {
     app_root: PathBuf,
     files_mount_strategy: FilesMountStrategy,
-    cache: Cache,
-    file_loading_permits: Semaphore,
+    file_loading_permits: std::sync::Arc<Semaphore>,
+    wasm_loader: WasmLoader,
 }
 
 impl LocalLoader {
@@ -37,12 +37,14 @@ impl LocalLoader {
     ) -> Result<Self> {
         let app_root = safe_canonicalize(app_root)
             .with_context(|| format!("Invalid manifest dir `{}`", app_root.display()))?;
+        let file_loading_permits =
+            std::sync::Arc::new(Semaphore::new(crate::MAX_FILE_LOADING_CONCURRENCY));
         Ok(Self {
-            app_root,
+            app_root: app_root.clone(),
             files_mount_strategy,
-            cache: Cache::new(cache_root).await?,
             // Limit concurrency to avoid hitting system resource limits
-            file_loading_permits: Semaphore::new(crate::MAX_FILE_LOADING_CONCURRENCY),
+            file_loading_permits: file_loading_permits.clone(),
+            wasm_loader: WasmLoader::new(app_root, cache_root, Some(file_loading_permits)).await?,
         })
     }
 
@@ -268,74 +270,15 @@ impl LocalLoader {
         dependency_name: DependencyName,
         dependency: v2::ComponentDependency,
     ) -> Result<LockedComponentDependency> {
-        let (content, export) = match dependency {
-            v2::ComponentDependency::Version(version) => {
-                let version = semver::VersionReq::parse(&version).with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid semantic version requirement ({version:?}) for its package version"))?;
-
-                // This `unwrap()` should be OK because we've already validated
-                // this form of dependency requires a package name, i.e. the
-                // dependency name is not a kebab id.
-                let package = dependency_name.package().unwrap();
-
-                let content = self.load_registry_source(None, package, &version).await?;
-                (content, None)
-            }
-            v2::ComponentDependency::Package {
-                version,
-                registry,
-                package,
-                export,
-            } => {
-                let version = semver::VersionReq::parse(&version).with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid semantic version requirement ({version:?}) for its package version"))?;
-
-                let package = match package {
-                    Some(package) => {
-                        package.parse().with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid package name ({package:?})"))?
-                    }
-                    None => {
-                        // This `unwrap()` should be OK because we've already validated
-                        // this form of dependency requires a package name, i.e. the
-                        // dependency name is not a kebab id.
-                        dependency_name
-                            .package()
-                            .cloned()
-                            .unwrap()
-                    }
-                };
-
-                let registry = match registry {
-                    Some(registry) => {
-                        registry
-                            .parse()
-                            .map(Some)
-                            .with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid registry name ({registry:?})"))?
-                    }
-                    None => None,
-                };
-
-                let content = self
-                    .load_registry_source(registry.as_ref(), &package, &version)
-                    .await?;
-                (content, export)
-            }
-            v2::ComponentDependency::Local { path, export } => {
-                let content = file_content_ref(self.app_root.join(path))?;
-                (content, export)
-            }
-            v2::ComponentDependency::HTTP {
-                url,
-                digest,
-                export,
-            } => {
-                let content = self.load_http_source(&url, &digest).await?;
-                (content, export)
-            }
-        };
+        let (content, export) = self
+            .wasm_loader
+            .load_component_dependency(&dependency_name, &dependency)
+            .await?;
 
         Ok(LockedComponentDependency {
             source: LockedComponentSource {
                 content_type: "application/wasm".into(),
-                content,
+                content: file_content_ref(content)?,
             },
             export,
             inherit: if inherit_configuration {
@@ -353,114 +296,14 @@ impl LocalLoader {
         component_id: &KebabId,
         source: v2::ComponentSource,
     ) -> Result<LockedComponentSource> {
-        let content = match source {
-            v2::ComponentSource::Local(path) => file_content_ref(self.app_root.join(path))?,
-            v2::ComponentSource::Remote { url, digest } => {
-                self.load_http_source(&url, &digest).await?
-            }
-            v2::ComponentSource::Registry {
-                registry,
-                package,
-                version,
-            } => {
-                let version = semver::Version::parse(&version).with_context(|| format!("Component {component_id} specifies an invalid semantic version ({version:?}) for its package version"))?;
-                let version_req = format!("={version}").parse().expect("version");
-
-                self.load_registry_source(registry.as_ref(), &package, &version_req)
-                    .await?
-            }
-        };
+        let path = self
+            .wasm_loader
+            .load_component_source(component_id.as_ref(), &source)
+            .await?;
         Ok(LockedComponentSource {
             content_type: "application/wasm".into(),
-            content,
+            content: file_content_ref(path)?,
         })
-    }
-
-    // Load a Wasm source from the given HTTP ContentRef source URL and
-    // return a ContentRef an absolute path to the local copy.
-    async fn load_http_source(&self, url: &str, digest: &str) -> Result<ContentRef> {
-        ensure!(
-            digest.starts_with("sha256:"),
-            "invalid `digest` {digest:?}; must start with 'sha256:'"
-        );
-        let path = if let Ok(cached_path) = self.cache.wasm_file(digest) {
-            cached_path
-        } else {
-            let _loading_permit = self.file_loading_permits.acquire().await?;
-
-            self.cache.ensure_dirs().await?;
-            let dest = self.cache.wasm_path(digest);
-            verified_download(
-                url,
-                digest,
-                &dest,
-                crate::http::DestinationConvention::ContentIndexed,
-            )
-            .await
-            .with_context(|| format!("Error fetching source URL {url:?}"))?;
-            dest
-        };
-        file_content_ref(path)
-    }
-
-    async fn load_registry_source(
-        &self,
-        registry: Option<&wasm_pkg_client::Registry>,
-        package: &wasm_pkg_client::PackageRef,
-        version: &semver::VersionReq,
-    ) -> Result<ContentRef> {
-        let mut client_config = wasm_pkg_client::Config::global_defaults().await?;
-
-        if let Some(registry) = registry.cloned() {
-            let mapping = wasm_pkg_client::RegistryMapping::Registry(registry);
-            client_config.set_package_registry_override(package.clone(), mapping);
-        }
-        let pkg_loader = wasm_pkg_client::Client::new(client_config);
-
-        let mut releases = pkg_loader.list_all_versions(package).await.map_err(|e| {
-            if matches!(e, wasm_pkg_client::Error::NoRegistryForNamespace(_)) && registry.is_none() {
-                anyhow!("No default registry specified for wasm-pkg-loader. Create a default config, or set `registry` for package {package:?}")
-            } else {
-                e.into()
-            }
-        })?;
-
-        releases.sort();
-
-        let release_version = releases
-            .iter()
-            .rev()
-            .find(|release| version.matches(&release.version) && !release.yanked)
-            .with_context(|| format!("No matching version found for {package} {version}",))?;
-
-        let release = pkg_loader
-            .get_release(package, &release_version.version)
-            .await?;
-
-        let digest = match &release.content_digest {
-            wasm_pkg_client::ContentDigest::Sha256 { hex } => format!("sha256:{hex}"),
-        };
-
-        let path = if let Ok(cached_path) = self.cache.wasm_file(&digest) {
-            cached_path
-        } else {
-            let mut stm = pkg_loader.stream_content(package, &release).await?;
-
-            self.cache.ensure_dirs().await?;
-            let dest = self.cache.wasm_path(&digest);
-
-            let mut file = tokio::fs::File::create(&dest).await?;
-            while let Some(block) = stm.next().await {
-                let bytes = block.context("Failed to get content from registry")?;
-                file.write_all(&bytes)
-                    .await
-                    .context("Failed to save registry content to cache")?;
-            }
-
-            dest
-        };
-
-        file_content_ref(path)
     }
 
     // Copy content(s) from the given `mount`
@@ -810,6 +653,217 @@ fn locked_trigger(trigger_type: String, trigger: v2::Trigger) -> Result<LockedTr
         trigger_type,
         trigger_config: config.try_into()?,
     })
+}
+
+#[derive(Debug)]
+/// Handles loading of component Wasm from different sources.
+pub struct WasmLoader {
+    app_root: PathBuf,
+    cache: Cache,
+    file_loading_permits: std::sync::Arc<Semaphore>,
+}
+
+impl WasmLoader {
+    /// Create a new instance of WasmLoader.
+    pub async fn new(
+        app_root: PathBuf,
+        cache_root: Option<PathBuf>,
+        file_loading_permits: Option<std::sync::Arc<Semaphore>>,
+    ) -> Result<Self> {
+        let file_loading_permits = file_loading_permits.unwrap_or_else(|| {
+            std::sync::Arc::new(Semaphore::new(crate::MAX_FILE_LOADING_CONCURRENCY))
+        });
+        Ok(Self {
+            app_root,
+            cache: Cache::new(cache_root).await?,
+            file_loading_permits,
+        })
+    }
+
+    /// Load a Wasm source from the given ComponentSource and return a path
+    /// to a file location from where it can be read.
+    pub async fn load_component_source(
+        &self,
+        component_id: &str,
+        source: &v2::ComponentSource,
+    ) -> Result<PathBuf> {
+        let content = match source {
+            v2::ComponentSource::Local(path) => self.app_root.join(path),
+            v2::ComponentSource::Remote { url, digest } => {
+                self.load_http_source(url, digest).await?
+            }
+            v2::ComponentSource::Registry {
+                registry,
+                package,
+                version,
+            } => {
+                let version = semver::Version::parse(version).with_context(|| format!("Component {component_id} specifies an invalid semantic version ({version:?}) for its package version"))?;
+                let version_req = format!("={version}").parse().expect("version");
+
+                self.load_registry_source(registry.as_ref(), package, &version_req)
+                    .await?
+            }
+        };
+        Ok(content)
+    }
+
+    // Load a Wasm source from the given HTTP ContentRef source URL and
+    // return a ContentRef an absolute path to the local copy.
+    async fn load_http_source(&self, url: &str, digest: &str) -> Result<PathBuf> {
+        ensure!(
+            digest.starts_with("sha256:"),
+            "invalid `digest` {digest:?}; must start with 'sha256:'"
+        );
+        let path = if let Ok(cached_path) = self.cache.wasm_file(digest) {
+            cached_path
+        } else {
+            let _loading_permit = self.file_loading_permits.acquire().await?;
+
+            self.cache.ensure_dirs().await?;
+            let dest = self.cache.wasm_path(digest);
+            verified_download(
+                url,
+                digest,
+                &dest,
+                crate::http::DestinationConvention::ContentIndexed,
+            )
+            .await
+            .with_context(|| format!("Error fetching source URL {url:?}"))?;
+            dest
+        };
+        Ok(path)
+    }
+
+    async fn load_registry_source(
+        &self,
+        registry: Option<&wasm_pkg_client::Registry>,
+        package: &wasm_pkg_client::PackageRef,
+        version: &semver::VersionReq,
+    ) -> Result<PathBuf> {
+        let mut client_config = wasm_pkg_client::Config::global_defaults().await?;
+
+        if let Some(registry) = registry.cloned() {
+            let mapping = wasm_pkg_client::RegistryMapping::Registry(registry);
+            client_config.set_package_registry_override(package.clone(), mapping);
+        }
+        let pkg_loader = wasm_pkg_client::Client::new(client_config);
+
+        let mut releases = pkg_loader.list_all_versions(package).await.map_err(|e| {
+            if matches!(e, wasm_pkg_client::Error::NoRegistryForNamespace(_)) && registry.is_none() {
+                anyhow!("No default registry specified for wasm-pkg-loader. Create a default config, or set `registry` for package {package:?}")
+            } else {
+                e.into()
+            }
+        })?;
+
+        releases.sort();
+
+        let release_version = releases
+            .iter()
+            .rev()
+            .find(|release| version.matches(&release.version) && !release.yanked)
+            .with_context(|| format!("No matching version found for {package} {version}",))?;
+
+        let release = pkg_loader
+            .get_release(package, &release_version.version)
+            .await?;
+
+        let digest = match &release.content_digest {
+            wasm_pkg_client::ContentDigest::Sha256 { hex } => format!("sha256:{hex}"),
+        };
+
+        let path = if let Ok(cached_path) = self.cache.wasm_file(&digest) {
+            cached_path
+        } else {
+            let mut stm = pkg_loader.stream_content(package, &release).await?;
+
+            self.cache.ensure_dirs().await?;
+            let dest = self.cache.wasm_path(&digest);
+
+            let mut file = tokio::fs::File::create(&dest).await?;
+            while let Some(block) = stm.next().await {
+                let bytes = block.context("Failed to get content from registry")?;
+                file.write_all(&bytes)
+                    .await
+                    .context("Failed to save registry content to cache")?;
+            }
+
+            dest
+        };
+
+        Ok(path)
+    }
+
+    /// Loads a dependency
+    pub async fn load_component_dependency(
+        &self,
+        dependency_name: &DependencyName,
+        dependency: &v2::ComponentDependency,
+    ) -> Result<(PathBuf, Option<String>)> {
+        match dependency.clone() {
+            v2::ComponentDependency::Version(version) => {
+                let version = semver::VersionReq::parse(&version).with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid semantic version requirement ({version:?}) for its package version"))?;
+
+                // This `unwrap()` should be OK because we've already validated
+                // this form of dependency requires a package name, i.e. the
+                // dependency name is not a kebab id.
+                let package = dependency_name.package().unwrap();
+
+                let content = self.load_registry_source(None, package, &version).await?;
+                Ok((content, None))
+            }
+            v2::ComponentDependency::Package {
+                version,
+                registry,
+                package,
+                export,
+            } => {
+                let version = semver::VersionReq::parse(&version).with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid semantic version requirement ({version:?}) for its package version"))?;
+
+                let package = match package {
+                    Some(package) => {
+                        package.parse().with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid package name ({package:?})"))?
+                    }
+                    None => {
+                        // This `unwrap()` should be OK because we've already validated
+                        // this form of dependency requires a package name, i.e. the
+                        // dependency name is not a kebab id.
+                        dependency_name
+                            .package()
+                            .cloned()
+                            .unwrap()
+                    }
+                };
+
+                let registry = match registry {
+                    Some(registry) => {
+                        registry
+                            .parse()
+                            .map(Some)
+                            .with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid registry name ({registry:?})"))?
+                    }
+                    None => None,
+                };
+
+                let content = self
+                    .load_registry_source(registry.as_ref(), &package, &version)
+                    .await?;
+                Ok((content, export))
+            }
+            v2::ComponentDependency::Local { path, export } => {
+                let content = self.app_root.join(path);
+                Ok((content, export))
+            }
+            v2::ComponentDependency::HTTP {
+                url,
+                digest,
+                export,
+            } => {
+                let content = self.load_http_source(&url, &digest).await?;
+                Ok((content, export))
+            }
+        }
+    }
 }
 
 fn looks_like_glob_pattern(s: impl AsRef<str>) -> bool {

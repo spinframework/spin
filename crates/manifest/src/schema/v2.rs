@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use spin_serde::{DependencyName, DependencyPackageName, FixedVersion, LowerSnakeId};
@@ -77,6 +77,11 @@ pub struct AppDetails {
     /// `authors = ["author@example.com"]`
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub authors: Vec<String>,
+    /// The Spin environments with which the application must be compatible.
+    /// 
+    /// Example: `targets = ["spin-up:3.3", "spinkube:0.4"]`
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<TargetEnvironmentRef>,
     /// Application-level settings for the trigger types used in the application.
     /// The possible values are trigger type-specific.
     ///
@@ -494,7 +499,7 @@ impl ComponentDependencies {
             }
         }
 
-        anyhow::bail!("{this:?} dependency conflicts with {other:?}")
+        Err(anyhow!("{this:?} dependency conflicts with {other:?}"))
     }
 
     /// Normalize version to perform a compatibility check against another version.
@@ -523,6 +528,29 @@ impl ComponentDependencies {
     fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
+}
+
+/// Identifies a deployment target.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged, deny_unknown_fields)]
+pub enum TargetEnvironmentRef {
+    /// Environment definition doc reference e.g. `spin-up:3.2`, `my-host`. This is looked up
+    /// in the default environment catalogue (registry).
+    DefaultRegistry(String),
+    /// An environment definition doc in an OCI registry other than the default
+    Registry {
+        /// Registry or prefix hosting the environment document e.g. `ghcr.io/my/environments`.
+        registry: String,
+        /// Environment definition document name e.g. `my-spin-env:1.2`. For hosted environments
+        /// where you always want `latest`, omit the version tag e.g. `my-host`.
+        id: String,
+    },
+    /// A local environment document file. This is expected to contain a serialised
+    /// EnvironmentDefinition in TOML format.
+    File {
+        /// The file path of the document.
+        path: PathBuf,
+    },
 }
 
 mod kebab_or_snake_case {
