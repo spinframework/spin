@@ -1,0 +1,27 @@
+// wasi-cloud Blobstore service definition
+interface blobstore {
+  use container.{container};
+  use types.{error, container-name, object-id};
+
+  // creates a new empty container
+  create-container: func(name: container-name) -> result<container, error>;
+
+  // retrieves a container by name
+  get-container: func(name: container-name) -> result<container, error>;
+
+  // deletes a container and all objects within it
+  delete-container: func(name: container-name) -> result<_, error>;
+
+  // returns true if the container exists
+  container-exists: func(name: container-name) -> result<bool, error>;
+
+  // copies (duplicates) an object, to the same or a different container.
+  // returns an error if the target container does not exist.
+  // overwrites destination object if it already existed.
+  copy-object: func(src: object-id, dest: object-id) -> result<_, error>;
+
+  // moves or renames an object, to the same or a different container
+  // returns an error if the destination container does not exist.
+  // overwrites destination object if it already existed.
+  move-object: func(src:object-id, dest: object-id) -> result<_, error>;
+}
