@@ -10,7 +10,10 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+spin-blobstore-azure = { path = "../blobstore-azure" }
+spin-blobstore-memory = { path = "../blobstore-memory" }
 spin-common = { path = "../common" }
+spin-factor-blobstore = { path = "../factor-blobstore" }
 spin-factor-key-value = { path = "../factor-key-value" }
 spin-factor-llm = { path = "../factor-llm" }
 spin-factor-outbound-http = { path = "../factor-outbound-http" }

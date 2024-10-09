@@ -118,6 +118,12 @@ members = [
 [workspace.dependencies]
 anyhow = "1"
 async-trait = "0.1"
+azure_core = "0.21.0"
+azure_data_cosmos = "0.21.0"
+azure_identity = "0.21.0"
+azure_security_keyvault = "0.21.0"
+azure_storage = "0.21.0"
+azure_storage_blobs = "0.21.0"
 bytes = "1"
 conformance-tests = { git = "https://github.com/fermyon/conformance-tests", rev = "ecd22a45bcc5c775a56c67689a89aa4005866ac0" }
 dirs = "5.0"

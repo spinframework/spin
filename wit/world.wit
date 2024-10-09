@@ -11,5 +11,6 @@ world platform {
   include fermyon:spin/platform@2.0.0;
   include wasi:keyvalue/imports@0.2.0-draft2;
   import spin:postgres/postgres@3.0.0;
+  import wasi:blobstore/blobstore@0.2.0-draft-2024-09-01;
   import wasi:config/store@0.2.0-draft-2024-09-27;
 }
