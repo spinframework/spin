@@ -70,6 +70,7 @@ pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Erro
                 exclude_files: component.exclude_files,
                 key_value_stores: component.key_value_stores,
                 sqlite_databases: component.sqlite_databases,
+                blob_containers: Default::default(),
                 ai_models,
                 build: component.build,
                 tool: Default::default(),

@@ -17,6 +17,7 @@ llm-cublas = ["spin-factor-llm/llm-cublas"]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 spin-common = { path = "../common" }
+spin-factor-blobstore = { path = "../factor-blobstore" }
 spin-factor-key-value = { path = "../factor-key-value" }
 spin-factor-llm = { path = "../factor-llm" }
 spin-factor-outbound-http = { path = "../factor-outbound-http" }

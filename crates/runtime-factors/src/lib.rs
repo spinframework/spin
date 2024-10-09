@@ -8,6 +8,8 @@ use std::path::PathBuf;
 
 use anyhow::Context as _;
 use spin_common::arg_parser::parse_kv;
+
+use spin_factor_blobstore::BlobStoreFactor;
 use spin_factor_key_value::KeyValueFactor;
 use spin_factor_llm::LlmFactor;
 use spin_factor_outbound_http::OutboundHttpFactor;
@@ -36,6 +38,7 @@ pub struct TriggerFactors {
     pub pg: OutboundPgFactor,
     pub mysql: OutboundMysqlFactor,
     pub llm: LlmFactor,
+    pub blobstore: BlobStoreFactor,
 }
 
 impl TriggerFactors {
@@ -59,6 +62,7 @@ impl TriggerFactors {
                 spin_factor_llm::spin::default_engine_creator(state_dir)
                     .context("failed to configure LLM factor")?,
             ),
+            blobstore: BlobStoreFactor::new(),
         })
     }
 }

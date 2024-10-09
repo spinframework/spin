@@ -7,3 +7,4 @@ edition = { workspace = true }
 [dependencies]
 async-trait = { workspace = true }
 wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
