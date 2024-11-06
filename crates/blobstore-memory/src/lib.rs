@@ -48,9 +48,7 @@ impl BlobStoreInMemory {
 
 /// The serialized runtime configuration for the in memory blob store.
 #[derive(Deserialize, Serialize)]
-pub struct MemoryBlobStoreRuntimeConfig {
-    ignored: Option<String>,
-}
+pub struct MemoryBlobStoreRuntimeConfig {}
 
 #[async_trait]
 impl spin_factor_blobstore::ContainerManager for BlobStoreInMemory {
@@ -142,6 +140,21 @@ impl spin_factor_blobstore::Container for InMemoryContainer {
 
         Ok(Box::new(InMemoryBlobContent { data }))
     }
+
+    async fn connect_stm(&self, name: &str, mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<()>) -> anyhow::Result<()> {
+        use tokio::io::AsyncReadExt;
+        let name = name.to_owned();
+        let blobs = self.blobs.clone();
+        tokio::spawn(async move {
+            let mut bytes = Vec::with_capacity(1024);
+            stm.read_to_end(&mut bytes).await.unwrap();
+            let mut lock = blobs.write().await;
+            lock.insert(name, bytes);
+            finished_tx.send(()).await.expect("should sent finish tx");
+        });
+        Ok(())
+    }
+
     async fn list_objects(&self) -> anyhow::Result<Box<dyn spin_factor_blobstore::ObjectNames>> {
         let blobs = self.read().await;
         let names = blobs.keys().map(|k| k.to_string()).collect();
@@ -181,21 +194,21 @@ impl spin_factor_blobstore::ObjectNames for InMemoryBlobNames {
     async fn read(&mut self, len: u64) -> anyhow::Result<(Vec<String>, bool)> {
         let len = len.try_into().unwrap();
         if len > self.names.len() {
-            Ok((self.names.drain(..).collect(), false))
+            Ok((self.names.drain(..).collect(), true))
         } else {
             let taken = self.names.drain(0..len).collect();
-            Ok((taken, !self.names.is_empty()))
+            Ok((taken, self.names.is_empty()))
         }
     }
 
     async fn skip(&mut self, num: u64) -> anyhow::Result<(u64,bool)> {
         let len = num.try_into().unwrap();
-        let (count, more) = if len > self.names.len() {
-            (self.names.drain(..).len(), false)
+        let (count, at_end) = if len > self.names.len() {
+            (self.names.drain(..).len(), true)
         } else {
             let taken = self.names.drain(0..len).len();
-            (taken, !self.names.is_empty())
+            (taken, self.names.is_empty())
         };
-        Ok((count.try_into().unwrap(), more))
+        Ok((count.try_into().unwrap(), at_end))
     }
 }

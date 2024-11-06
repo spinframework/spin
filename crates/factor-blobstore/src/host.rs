@@ -7,7 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 // use tracing::{instrument, Level};
 use wasmtime_wasi::WasiView;
 
-const DEFAULT_STORE_TABLE_CAPACITY: u32 = 256;
+// const DEFAULT_STORE_TABLE_CAPACITY: u32 = 256;
 
 pub use blobstore::types::Error;
 
@@ -36,6 +36,7 @@ pub trait Container: Sync + Send {
     async fn has_object(&self, name: &str) -> anyhow::Result<bool>;
     async fn object_info(&self, name: &str) -> anyhow::Result<blobstore::types::ObjectMetadata>;
     async fn get_data(&self, name: &str, start: u64, end: u64) -> anyhow::Result<Box<dyn IncomingData>>;
+    async fn connect_stm(&self, name: &str, stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<()>) -> anyhow::Result<()>;
     async fn list_objects(&self) -> anyhow::Result<Box<dyn ObjectNames>>;
 }
 
@@ -52,7 +53,59 @@ pub trait IncomingData : Send + Sync {
     async fn size(&mut self) -> anyhow::Result<u64>;
 }
 
-pub(crate) struct OutgoingValue;
+pub struct OutgoingValue {
+    read: Option<tokio::io::ReadHalf<tokio::io::SimplexStream>>,
+    write: Option<tokio::io::WriteHalf<tokio::io::SimplexStream>>,
+    stop_tx: Option<tokio::sync::mpsc::Sender<()>>,
+    finished_rx: Option<tokio::sync::mpsc::Receiver<()>>,
+}
+
+const OUTGOING_VALUE_BUF_SIZE: usize = 16 * 1024;
+
+impl OutgoingValue {
+    fn new() -> Self {
+        let (read, write) = tokio::io::simplex(OUTGOING_VALUE_BUF_SIZE);
+        Self {
+            read: Some(read),
+            write: Some(write),
+            stop_tx: None,
+            finished_rx: None,
+       }
+    }
+
+    fn write_stream(&mut self) -> anyhow::Result<crate::AsyncWriteStream> {
+        let Some(write) = self.write.take() else {
+            anyhow::bail!("OutgoingValue has already returned its write stream");
+        };
+
+        let (stop_tx, stop_rx) = tokio::sync::mpsc::channel::<()>(1);
+
+        self.stop_tx = Some(stop_tx);
+
+        let stm = crate::AsyncWriteStream::new_closeable(OUTGOING_VALUE_BUF_SIZE, write, stop_rx);
+        Ok(stm)
+    }
+
+    fn syncers(&mut self) -> (Option<&tokio::sync::mpsc::Sender<()>>, Option<&mut tokio::sync::mpsc::Receiver<()>>) {
+        (self.stop_tx.as_ref(), self.finished_rx.as_mut())
+    }
+
+    fn take_read_stream(&mut self) -> anyhow::Result<(tokio::io::ReadHalf<tokio::io::SimplexStream>, tokio::sync::mpsc::Sender<()>)> {
+        let Some(read) = self.read.take() else {
+            anyhow::bail!("OutgoingValue has already been connected to a blob");
+        };
+
+        let (finished_tx, finished_rx) = tokio::sync::mpsc::channel::<()>(1);
+        self.finished_rx = Some(finished_rx);
+
+        Ok((read, finished_tx))
+    }
+}
+
+#[async_trait]
+pub trait Finishable : Send + Sync {
+    async fn finish(&mut self);
+}
 
 pub struct BlobStoreDispatch<'a> {
     allowed_containers: HashSet<String>,
@@ -168,7 +221,6 @@ impl<'a> blobstore::types::HostIncomingValue for BlobStoreDispatch<'a> {
         let async_body = incoming.as_mut().consume_async();
         let host_stm: Box<dyn wasmtime_wasi::HostInputStream> = Box::new(async_body);
         let resource = self.wasi.table().push(host_stm).unwrap();
-        // let rep = self.input_streams.write().await.push(async_body).unwrap();
         Ok(resource)
     }
 
@@ -186,17 +238,38 @@ impl<'a> blobstore::types::HostIncomingValue for BlobStoreDispatch<'a> {
 
 impl<'a> blobstore::types::HostOutgoingValue for BlobStoreDispatch<'a> {
     async fn new_outgoing_value(&mut self) -> anyhow::Result<Resource<blobstore::types::OutgoingValue>> {
-        let outgoing_value = OutgoingValue;
+        let outgoing_value = OutgoingValue::new();
         let rep = self.outgoing_values.write().await.push(outgoing_value).unwrap();
         Ok(Resource::new_own(rep))
     }
 
-    async fn outgoing_value_write_body(&mut self, self_: Resource<blobstore::types::OutgoingValue>) -> anyhow::Result<Result<Resource<blobstore::types::OutputStream>, ()>> {
-        todo!()
+    async fn outgoing_value_write_body(&mut self, self_: Resource<blobstore::types::OutgoingValue>) -> anyhow::Result<Result<Resource<wasmtime_wasi::OutputStream>, ()>> {
+        let mut lock = self.outgoing_values.write().await;
+        let outgoing = lock.get_mut(self_.rep()).ok_or_else(||
+            anyhow::anyhow!("invalid outgoing-value resource")
+        )?;
+        let stm = outgoing.write_stream()?;
+
+        let host_stm: Box<dyn wasmtime_wasi::HostOutputStream> = Box::new(stm);
+        let resource = self.wasi.table().push(host_stm).unwrap();
+
+        Ok(Ok(resource))
     }
 
     async fn finish(&mut self, self_: Resource<blobstore::types::OutgoingValue>) -> Result<(), String> {
-        todo!()
+        let mut lock = self.outgoing_values.write().await;
+        let outgoing = lock.get_mut(self_.rep()).ok_or_else(||
+            "invalid outgoing-value resource".to_string()
+        )?;
+        // Separate methods cause "mutable borrow while immutably borrowed" so get it all in one go
+        let (stop_tx, finished_rx) = outgoing.syncers();
+        let stop_tx = stop_tx.expect("shoulda had a stop_tx");
+        let finished_rx = finished_rx.expect("shoulda had a finished_rx");
+
+        stop_tx.send(()).await.expect("shoulda sent a stop");
+        finished_rx.recv().await;
+
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<blobstore::types::OutgoingValue>) -> anyhow::Result<()> {
@@ -236,7 +309,19 @@ impl<'a> blobstore::container::HostContainer for BlobStoreDispatch<'a> {
     }
 
     async fn write_data(&mut self, self_: Resource<blobstore::container::Container>, name: blobstore::container::ObjectName, data: Resource<blobstore::types::OutgoingValue>) -> Result<(), String> {
-        todo!()
+        let lock = self.containers.read().await;
+        let container = lock.get(self_.rep()).ok_or_else(||
+            "invalid container resource".to_string()
+        )?;
+        let mut lock2 = self.outgoing_values.write().await;
+        let outgoing = lock2.get_mut(data.rep()).ok_or_else(||
+            "invalid outgoing-value resource".to_string()
+        )?;
+
+        let (stm, finished_tx) = outgoing.take_read_stream().map_err(|e| e.to_string())?;
+        container.connect_stm(&name, stm, finished_tx).await.map_err(|e| e.to_string())?;
+
+        Ok(())
     }
 
     async fn list_objects(&mut self, self_: Resource<blobstore::container::Container>) -> Result<Resource<blobstore::container::StreamObjectNames>, String> {
