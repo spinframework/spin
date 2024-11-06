@@ -2,6 +2,8 @@ mod host;
 pub mod runtime_config;
 mod util;
 
+pub mod cackle_cackle;
+
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -9,7 +11,7 @@ use std::{
 
 use anyhow::ensure;
 use spin_factors::{
-    ConfigureAppContext, Factor, FactorInstanceBuilder, InitContext, PrepareContext, RuntimeFactors,
+    ConfigureAppContext, Factor, InitContext, PrepareContext, RuntimeFactors,
 };
 use spin_locked_app::MetadataKey;
 use spin_resource_table::Table;
@@ -17,10 +19,11 @@ use spin_resource_table::Table;
 /// Metadata key for key-value stores.
 pub const BLOB_STORES_KEY: MetadataKey<Vec<String>> = MetadataKey::new("blob_containers");
 pub use spin_world::wasi::blobstore::types::{ContainerMetadata, ObjectMetadata};
-pub use host::{log_error, Error, BlobStoreDispatch, Container, ContainerManager, IncomingData, ObjectNames};
+pub use host::{log_error, Error, BlobStoreDispatch, Container, ContainerManager, IncomingData, ObjectNames, OutgoingValue, Finishable};
 pub use runtime_config::RuntimeConfig;
 use tokio::sync::RwLock;
 pub use util::DelegatingContainerManager;
+pub use cackle_cackle::write_stream::AsyncWriteStream;
 
 /// A factor that provides key-value storage.
 #[derive(Default)]
@@ -68,9 +71,6 @@ impl Factor for BlobStoreFactor {
         spin_world::wasi::blobstore::container::add_to_linker_get_host(linker, closure)?;
         spin_world::wasi::blobstore::types::add_to_linker_get_host(linker, closure)?;
 
-        // ctx.link_bindings(spin_world::wasi::blobstore::blobstore::add_to_linker)?;
-        // ctx.link_bindings(spin_world::wasi::blobstore::container::add_to_linker)?;
-        // ctx.link_bindings(spin_world::wasi::blobstore::types::add_to_linker)?;
         Ok(())
     }
 

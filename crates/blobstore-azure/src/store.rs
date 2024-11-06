@@ -153,6 +153,62 @@ impl Container for AzureBlobContainer {
         Ok(Box::new(AzureBlobIncomingData::new(client, range)))
     }
 
+    async fn connect_stm(&self, name: &str, mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<()>) -> anyhow::Result<()> {
+        use tokio::io::AsyncReadExt;
+
+        // It seems like we can't construct a SeekableStream over a SimplexStream, which
+        // feels unfortunate.  I am not sure that the outgoing-value interface gives
+        // us a way to construct a len-able stream, because we don't know until finish
+        // time how much the guest is going to write to it. (We might be able to do resettable...
+        // but len-able...)  So for now we read it into a buffer and then zoosh that up in
+        // one go.
+        //
+        // We can kind of work around this by doing a series of Put Block calls followed by
+        // a Put Block List.  So we need to buffer only each block. But that still requires
+        // care as you are limited to 50_000 committed / 100_000 uncommitted blocks.
+
+        const APPROX_BLOCK_SIZE: usize = 2 * 1024 * 1024;
+
+        let client = self.client.blob_client(name);
+
+        tokio::spawn(async move {
+            let mut blocks = vec![];
+
+            'put_blocks: loop {
+                let mut bytes = Vec::with_capacity(APPROX_BLOCK_SIZE);  // 2MB buffer x 50k blocks per blob = 100GB.  WHICH SHOULD BE ENOUGH FOR ANYONE.
+                loop {
+                    let read = stm.read_buf(&mut bytes).await.unwrap();
+                    let len = bytes.len();
+
+                    if read == 0 {
+                        // end of stream - send the last block and go
+                        let id_bytes = uuid::Uuid::new_v4().as_bytes().to_vec();
+                        let block_id = azure_storage_blobs::prelude::BlockId::new(id_bytes);
+                        client.put_block(block_id.clone(), bytes).await.unwrap();
+                        blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(block_id));
+                        break 'put_blocks;
+                    }
+                    if len >= APPROX_BLOCK_SIZE {
+                        let id_bytes = uuid::Uuid::new_v4().as_bytes().to_vec();
+                        let block_id = azure_storage_blobs::prelude::BlockId::new(id_bytes);
+                        client.put_block(block_id.clone(), bytes).await.unwrap();
+                        blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(block_id));
+                        break;
+                    }
+                }
+            }
+
+            let block_list = azure_storage_blobs::blob::BlockList {
+                blocks
+            };
+            client.put_block_list(block_list).await.unwrap();
+
+            finished_tx.send(()).await.expect("should sent finish tx");
+        });
+
+        Ok(())
+    }
+
     async fn list_objects(&self) -> anyhow::Result<Box<dyn spin_factor_blobstore::ObjectNames>> {
         let stm = self.client.list_blobs().into_stream();
         Ok(Box::new(AzureBlobBlobsList::new(stm)))
@@ -179,16 +235,13 @@ impl AzureBlobIncomingData {
         }
     }
 
-    fn consume_async_impl(&mut self) -> wasmtime_wasi::pipe::AsyncReadStream { // Box<dyn futures::stream::Stream<Item = Result<Vec<u8>, std::io::Error>>> {
+    fn consume_async_impl(&mut self) -> wasmtime_wasi::pipe::AsyncReadStream {
         use futures::TryStreamExt;
         use tokio_util::compat::FuturesAsyncReadCompatExt;
         let stm = self.consume_as_stream();
         let ar = stm.into_async_read();
         let arr = ar.compat();
         wasmtime_wasi::pipe::AsyncReadStream::new(arr)
-        // Box::new(stm)
-        // let async_read = stm.into_async_read();
-        // todo!()
     }
 
     fn consume_as_stream(&mut self) -> impl futures::stream::Stream<Item = Result<Vec<u8>, std::io::Error>> {

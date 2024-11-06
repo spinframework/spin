@@ -20,6 +20,7 @@ spin-factor-blobstore = { path = "../factor-blobstore" }
 tokio = { workspace = true }
 tokio-stream = "0.1.16"
 tokio-util = "0.7.12"
+uuid = { version = "1.0", features = ["v4"] }
 wasmtime-wasi = { workspace = true }
 
 [lints]
