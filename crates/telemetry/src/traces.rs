@@ -51,7 +51,7 @@ pub(crate) fn otel_tracing_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
     .build();
 
     let tracer_provider = opentelemetry_sdk::trace::TracerProvider::builder()
-        .with_config(opentelemetry_sdk::trace::Config::default().with_resource(resource))
+        .with_resource(resource)
         .with_span_processor(span_processor)
         .build();
 
