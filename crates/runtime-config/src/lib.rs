@@ -469,6 +469,9 @@ pub fn blobstore_config_resolver(
     cr
         .register_store_type(spin_blobstore_azure::AzureBlobStore::new())
         .unwrap();
+    cr
+        .register_store_type(spin_blobstore_aws_s3::S3BlobStore::new())
+        .unwrap();
 
     cr
 }
