@@ -15,9 +15,11 @@ aws-config = "1.1.7"
 aws-credential-types = "1.1.7"
 aws-sdk-s3 = "1.68"
 aws-smithy-async = "1.2.3"
+bytes = { workspace = true }
 futures = { workspace = true }
 http-body = "1.0"
 http-body-util = "0.1"
+object_store = { version = "0.11", features = ["aws"] }
 serde = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-blobstore = { path = "../factor-blobstore" }

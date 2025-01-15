@@ -11,6 +11,7 @@ use spin_core::async_trait;
 use spin_factor_blobstore::{Error, Container, ContainerManager};
 
 pub struct BlobStoreS3 {
+    builder: object_store::aws::AmazonS3Builder,
     client: async_once_cell::Lazy<
         aws_sdk_s3::Client,
         std::pin::Pin<Box<dyn std::future::Future<Output = aws_sdk_s3::Client> + Send>>,
@@ -69,6 +70,16 @@ impl BlobStoreS3 {
         region: String,
         auth_options: BlobStoreS3AuthOptions,
     ) -> Result<Self> {
+        let builder = match &auth_options {
+            BlobStoreS3AuthOptions::RuntimeConfigValues(config) =>
+                object_store::aws::AmazonS3Builder::new()
+                    .with_region(&region)
+                    .with_access_key_id(&config.access_key)
+                    .with_secret_access_key(&config.secret_key)
+                    .with_token(config.token.clone().unwrap_or_default()),
+            BlobStoreS3AuthOptions::Environmental => object_store::aws::AmazonS3Builder::from_env(),
+        };
+
         let region_clone = region.clone();
         let client_fut = Box::pin(async move {
             let sdk_config = match auth_options {
@@ -84,15 +95,18 @@ impl BlobStoreS3 {
             aws_sdk_s3::Client::new(&sdk_config)
         });
 
-        Ok(Self { client: async_once_cell::Lazy::from_future(client_fut) })
+        Ok(Self { builder, client: async_once_cell::Lazy::from_future(client_fut) })
     }
 }
 
 #[async_trait]
 impl ContainerManager for BlobStoreS3 {
     async fn get(&self, name: &str) -> Result<Arc<dyn Container>, Error> {
+        let store = self.builder.clone().with_bucket_name(name).build().map_err(|e| e.to_string())?;
+
         Ok(Arc::new(S3Container {
             name: name.to_owned(),
+            store,
             client: self.client.get_unpin().await.clone(),
         }))
     }
@@ -108,6 +122,7 @@ impl ContainerManager for BlobStoreS3 {
 
 struct S3Container {
     name: String,
+    store: object_store::aws::AmazonS3,
     client: aws_sdk_s3::Client,
 }
 
@@ -183,14 +198,25 @@ impl Container for S3Container {
         Ok(Box::new(S3IncomingData::new(resp)))
     }
 
-    async fn connect_stm(&self, name: &str, stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<()>) -> anyhow::Result<()> {
-        let client = self.client.clone();
-        let bucket = self.name.clone();
-        let name = name.to_owned();
-        let byte_stm = to_byte_stream(stm);
+    async fn connect_stm(&self, name: &str, mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<()>) -> anyhow::Result<()> {
+        let store = self.store.clone();
+        let path = object_store::path::Path::from(name);
 
         tokio::spawn(async move {
-            client.put_object().bucket(&bucket).key(name).body(byte_stm).send().await.unwrap();
+            use object_store::ObjectStore;
+            let mupload = store.put_multipart(&path).await.unwrap();
+            let mut writer = object_store::WriteMultipart::new(mupload);
+            loop {
+                use tokio::io::AsyncReadExt;
+                let mut buf = vec![0; 5 * 1024 * 1024];
+                let read_amount = stm.read(&mut buf).await.unwrap();
+                if read_amount == 0 {
+                    break;
+                }
+                buf.truncate(read_amount);
+                writer.put(buf.into());
+            }
+            writer.finish().await.unwrap();
             finished_tx.send(()).await.expect("should sent finish tx");
         });
 
@@ -201,14 +227,6 @@ impl Container for S3Container {
         let stm = self.client.list_objects_v2().bucket(&self.name).into_paginator().send();
         Ok(Box::new(S3BlobsList::new(stm)))
     }
-}
-
-fn to_byte_stream(read: tokio::io::ReadHalf<tokio::io::SimplexStream>) -> aws_sdk_s3::primitives::ByteStream {
-    use futures::StreamExt;
-
-    let stm = tokio_util::io::ReaderStream::new(read).map(|item| item.map(|by| http_body::Frame::data(by)));
-    let stm_body = http_body_util::StreamBody::new(stm);
-    aws_sdk_s3::primitives::ByteStream::from_body_1_x(stm_body)
 }
 
 struct S3IncomingData {

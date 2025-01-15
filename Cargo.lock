@@ -925,7 +925,7 @@ dependencies = [
  "once_cell",
  "paste",
  "pin-project",
- "quick-xml",
+ "quick-xml 0.31.0",
  "rand 0.8.5",
  "reqwest 0.12.12",
  "rustc_version",
@@ -4059,6 +4059,7 @@ dependencies = [
  "hyper 1.6.0",
  "hyper-util",
  "rustls 0.23.23",
+ "rustls-native-certs 0.8.1",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.1",
@@ -5571,6 +5572,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "object_store"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cfccb68961a56facde1163f9319e0d15743352344e7808a11795fb99698dcaf"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "futures",
+ "humantime",
+ "hyper 1.6.0",
+ "itertools 0.13.0",
+ "md-5",
+ "parking_lot",
+ "percent-encoding",
+ "quick-xml 0.37.2",
+ "rand 0.8.5",
+ "reqwest 0.12.12",
+ "ring",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tokio",
+ "tracing",
+ "url",
+ "walkdir",
+]
+
+[[package]]
 name = "oci-client"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6547,6 +6578,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.37.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "165859e9e55f79d67b96c5d96f4e88b6f2695a1972849c15a6a3f5c59fc2c003"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7013,6 +7054,7 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls 0.23.23",
+ "rustls-native-certs 0.8.1",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "serde",
@@ -7309,6 +7351,18 @@ dependencies = [
  "rustls-pki-types",
  "schannel",
  "security-framework 2.11.1",
+]
+
+[[package]]
+name = "rustls-native-certs"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fcff2dd52b58a8d98a70243663a0d234c4e2b79235637849d15913394a247d3"
+dependencies = [
+ "openssl-probe",
+ "rustls-pki-types",
+ "schannel",
+ "security-framework 3.2.0",
 ]
 
 [[package]]
@@ -7856,6 +7910,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "snafu"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "223891c85e2a29c3fe8fb900c1fae5e69c2e42415e3177752e8718475efa5019"
+dependencies = [
+ "snafu-derive",
+]
+
+[[package]]
+name = "snafu-derive"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03c3c6b7927ffe7ecaa769ee0e3994da3b8cafc8f444578982c83ecb161af917"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
 name = "snapbox"
 version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7928,9 +8003,11 @@ dependencies = [
  "aws-credential-types",
  "aws-sdk-s3",
  "aws-smithy-async",
+ "bytes",
  "futures",
  "http-body 1.0.1",
  "http-body-util",
+ "object_store",
  "serde",
  "spin-core",
  "spin-factor-blobstore",
