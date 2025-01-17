@@ -4,20 +4,23 @@ use serde::Deserialize;
 use spin_factor_blobstore::runtime_config::spin::MakeBlobStore;
 use store::BlobStoreS3;
 
-/// A key-value store that uses Azure Cosmos as the backend.
+/// A blob store that uses a S3-compatible service as the backend.
+/// This currently supports only AWS S3
 #[derive(Default)]
 pub struct S3BlobStore {
     _priv: (),
 }
 
 impl S3BlobStore {
-    /// Creates a new `AzureBlobStore`.
+    /// Creates a new `S3BlobStore`.
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-/// Runtime configuration for the Azure Cosmos key-value store.
+// TODO: allow URL configuration for compatible non-AWS services
+
+/// Runtime configuration for the S3 blob store.
 #[derive(Deserialize)]
 pub struct S3BlobStoreRuntimeConfig {
     /// The access key for the AWS S3 account role.
@@ -31,7 +34,7 @@ pub struct S3BlobStoreRuntimeConfig {
 }
 
 impl MakeBlobStore for S3BlobStore {
-    const RUNTIME_CONFIG_TYPE: &'static str = "aws_s3";
+    const RUNTIME_CONFIG_TYPE: &'static str = "s3";
 
     type RuntimeConfig = S3BlobStoreRuntimeConfig;
 

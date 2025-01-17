@@ -10,7 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-spin-blobstore-aws-s3 = { path = "../blobstore-aws-s3" }
+spin-blobstore-s3 = { path = "../blobstore-s3" }
 spin-blobstore-azure = { path = "../blobstore-azure" }
 spin-blobstore-memory = { path = "../blobstore-memory" }
 spin-common = { path = "../common" }
