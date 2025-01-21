@@ -1,8 +1,7 @@
 mod host;
 pub mod runtime_config;
+mod stream;
 mod util;
-
-pub mod cackle_cackle;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -16,23 +15,24 @@ use spin_factors::{
 use spin_locked_app::MetadataKey;
 use spin_resource_table::Table;
 
-/// Metadata key for key-value stores.
-pub const BLOB_STORES_KEY: MetadataKey<Vec<String>> = MetadataKey::new("blob_containers");
 pub use spin_world::wasi::blobstore::types::{ContainerMetadata, ObjectMetadata};
 pub use host::{log_error, Error, BlobStoreDispatch, Container, ContainerManager, IncomingData, ObjectNames, OutgoingValue, Finishable};
 pub use runtime_config::RuntimeConfig;
 use tokio::sync::RwLock;
 pub use util::DelegatingContainerManager;
-pub use cackle_cackle::write_stream::AsyncWriteStream;
+pub use stream::AsyncWriteStream;
 
-/// A factor that provides key-value storage.
+/// Metadata key for blob stores.
+pub const BLOB_CONTAINERS_KEY: MetadataKey<Vec<String>> = MetadataKey::new("blob_containers");
+
+/// A factor that provides blob storage.
 #[derive(Default)]
 pub struct BlobStoreFactor {
     _priv: (),
 }
 
 impl BlobStoreFactor {
-    /// Create a new KeyValueFactor.
+    /// Create a new BlobStoreFactor.
     pub fn new() -> Self {
         Self { _priv: () }
     }
@@ -56,7 +56,7 @@ impl Factor for BlobStoreFactor {
             let (state, table) = get_data_with_table(data);
             let wasi = wasmtime_wasi::WasiImpl(host::WasiImplInner { ctx: &mut state.ctx, table });
             BlobStoreDispatch::new(
-                state.allowed_stores.clone(),
+                state.allowed_containers.clone(),
                 state.store_manager.clone(),
                 wasi,
                 state.containers.clone(),
@@ -81,32 +81,30 @@ impl Factor for BlobStoreFactor {
         let store_managers = ctx.take_runtime_config().unwrap_or_default();
 
         let delegating_manager = DelegatingContainerManager::new(store_managers);
-        // let caching_manager = CachingStoreManager::new(delegating_manager);
-        let store_manager = Arc::new(delegating_manager);
+        let container_manager = Arc::new(delegating_manager);
 
         // Build component -> allowed stores map
-        let mut component_allowed_stores = HashMap::new();
+        let mut component_allowed_containers = HashMap::new();
         for component in ctx.app().components() {
             let component_id = component.id().to_string();
             let containers = component
-                .get_metadata(BLOB_STORES_KEY)?
+                .get_metadata(BLOB_CONTAINERS_KEY)?
                 .unwrap_or_default()
                 .into_iter()
                 .collect::<HashSet<_>>();
             for label in &containers {
-                // TODO: port nicer errors from KeyValueComponent (via error type?)
                 ensure!(
-                    store_manager.is_defined(label),
-                    "unknown key_value_stores label {label:?} for component {component_id:?}"
+                    container_manager.is_defined(label),
+                    "unknown blob_stores label {label:?} for component {component_id:?}"
                 );
             }
-            component_allowed_stores.insert(component_id, containers);
+            component_allowed_containers.insert(component_id, containers);
             // TODO: warn (?) on unused store?
         }
 
         Ok(AppState {
-            container_manager: store_manager,
-            component_allowed_stores,
+            container_manager,
+            component_allowed_containers,
         })
     }
 
@@ -117,15 +115,15 @@ impl Factor for BlobStoreFactor {
         let mut wasi_ctx = wasmtime_wasi::WasiCtxBuilder::new();
 
         let app_state = ctx.app_state();
-        let allowed_stores = app_state
-            .component_allowed_stores
+        let allowed_containers = app_state
+            .component_allowed_containers
             .get(ctx.app_component().id())
             .expect("component should be in component_stores")
             .clone();
         let capacity = u32::MAX;
         Ok(InstanceBuilder {
             store_manager: app_state.container_manager.clone(),
-            allowed_stores,
+            allowed_containers,
             ctx: wasi_ctx.build(),
             containers: Arc::new(RwLock::new(Table::new(capacity))),
             incoming_values: Arc::new(RwLock::new(Table::new(capacity))),
@@ -135,20 +133,14 @@ impl Factor for BlobStoreFactor {
     }
 }
 
-type AppStoreManager = DelegatingContainerManager;
-
 pub struct AppState {
-    /// The store manager for the app.
+    /// The container manager for the app.
+    container_manager: Arc<DelegatingContainerManager>,
+    /// The allowed containers for each component.
     ///
-    /// This is a cache around a delegating store manager. For `get` requests,
-    /// first checks the cache before delegating to the underlying store
-    /// manager.
-    container_manager: Arc<AppStoreManager>,
-    /// The allowed stores for each component.
-    ///
-    /// This is a map from component ID to the set of store labels that the
+    /// This is a map from component ID to the set of container labels that the
     /// component is allowed to use.
-    component_allowed_stores: HashMap<String, HashSet<String>>,
+    component_allowed_containers: HashMap<String, HashSet<String>>,
 }
 
 impl AppState {
@@ -159,7 +151,7 @@ impl AppState {
 
     /// Returns true if the given store label is used by any component.
     pub fn store_is_used(&self, label: &str) -> bool {
-        self.component_allowed_stores
+        self.component_allowed_containers
             .values()
             .any(|stores| stores.contains(label))
     }
@@ -176,9 +168,9 @@ pub struct InstanceBuilder {
     /// This is a cache around a delegating store manager. For `get` requests,
     /// first checks the cache before delegating to the underlying store
     /// manager.
-    store_manager: Arc<AppStoreManager>,
+    store_manager: Arc<DelegatingContainerManager>,
     /// The allowed stores for this component instance.
-    allowed_stores: HashSet<String>,
+    allowed_containers: HashSet<String>,
     ctx: wasmtime_wasi::WasiCtx,
     containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
     incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
