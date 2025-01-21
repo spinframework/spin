@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use spin_factors::runtime_config::toml::GetTomlValue;
 use std::{collections::HashMap, sync::Arc};
 
-/// Defines the construction of a key value store from a serialized runtime config.
+/// Defines the construction of a blob store from a serialized runtime config.
 pub trait MakeBlobStore: 'static + Send + Sync {
     /// Unique type identifier for the store.
     const RUNTIME_CONFIG_TYPE: &'static str;
