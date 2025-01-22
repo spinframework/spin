@@ -16,6 +16,7 @@ pub struct BlobStoreS3 {
         aws_sdk_s3::Client,
         std::pin::Pin<Box<dyn std::future::Future<Output = aws_sdk_s3::Client> + Send>>,
     >,
+    container_name: Option<String>,
 }
 
 /// AWS S3 runtime config literal options for authentication
@@ -69,6 +70,7 @@ impl BlobStoreS3 {
     pub fn new(
         region: String,
         auth_options: BlobStoreS3AuthOptions,
+        container_name: Option<String>,
     ) -> Result<Self> {
         let builder = match &auth_options {
             BlobStoreS3AuthOptions::RuntimeConfigValues(config) =>
@@ -95,17 +97,19 @@ impl BlobStoreS3 {
             aws_sdk_s3::Client::new(&sdk_config)
         });
 
-        Ok(Self { builder, client: async_once_cell::Lazy::from_future(client_fut) })
+        Ok(Self { builder, client: async_once_cell::Lazy::from_future(client_fut), container_name })
     }
 }
 
 #[async_trait]
 impl ContainerManager for BlobStoreS3 {
     async fn get(&self, name: &str) -> Result<Arc<dyn Container>, Error> {
-        let store = self.builder.clone().with_bucket_name(name).build().map_err(|e| e.to_string())?;
+        let name = self.container_name.clone().unwrap_or_else(|| name.to_owned());
+
+        let store = self.builder.clone().with_bucket_name(&name).build().map_err(|e| e.to_string())?;
 
         Ok(Arc::new(S3Container {
-            name: name.to_owned(),
+            name,
             store,
             client: self.client.get_unpin().await.clone(),
         }))
