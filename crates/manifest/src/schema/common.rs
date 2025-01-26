@@ -1,11 +1,12 @@
 use std::fmt::Display;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use wasm_pkg_common::{package::PackageRef, registry::Registry};
 
 /// Variable definition
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Variable {
     /// `required = true`
@@ -20,7 +21,7 @@ pub struct Variable {
 }
 
 /// Component source
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, untagged)]
 pub enum ComponentSource {
     /// `"local.wasm"`
@@ -35,8 +36,10 @@ pub enum ComponentSource {
     /// `{ ... }`
     Registry {
         /// `registry = "example.com"`
+        #[schemars(with = "Option<String>")]
         registry: Option<Registry>,
         /// `package = "example:component"`
+        #[schemars(with = "String")]
         package: PackageRef,
         /// `version = "1.2.3"`
         version: String,
@@ -64,7 +67,7 @@ impl Display for ComponentSource {
 }
 
 /// WASI files mount
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, untagged)]
 pub enum WasiFilesMount {
     /// `"images/*.png"`
@@ -79,7 +82,7 @@ pub enum WasiFilesMount {
 }
 
 /// Component build configuration
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentBuildConfig {
     /// `command = "cargo build"`
@@ -104,7 +107,7 @@ impl ComponentBuildConfig {
 }
 
 /// Component build command or commands
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum Commands {
     /// `command = "cargo build"`

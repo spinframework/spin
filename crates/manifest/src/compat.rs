@@ -60,6 +60,7 @@ pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Erro
         };
         components.insert(
             component_id.clone(),
+            #[allow(deprecated)]
             v2::Component {
                 source: component.source,
                 description: component.description,
