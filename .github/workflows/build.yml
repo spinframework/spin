@@ -6,8 +6,14 @@ on:
     branches: ["main", "v*"]
     # Also run on tag pushes, as the release.yml doesn't currently run tests
     tags: ["v*"]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   pull_request:
     branches: ["main", "v*"]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
 
 # Serialize workflow runs per ref
 # Cancel any outdated, in-flight runs for refs other than 'main'
