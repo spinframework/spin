@@ -38,7 +38,7 @@ pub(crate) type TriggerInstanceBuilder<'a, F> =
     spin_trigger::TriggerInstanceBuilder<'a, HttpTrigger, F>;
 
 #[derive(Args)]
-pub struct CliArgs {
+pub struct GlobalConfig {
     /// IP address and port to listen on
     #[clap(long = "listen", env = "SPIN_HTTP_LISTEN_ADDR", default_value = "127.0.0.1:3000", value_parser = parse_listen_addr)]
     pub address: SocketAddr,
@@ -52,7 +52,7 @@ pub struct CliArgs {
     pub tls_key: Option<PathBuf>,
 }
 
-impl CliArgs {
+impl GlobalConfig {
     fn into_tls_config(self) -> Option<TlsConfig> {
         match (self.tls_cert, self.tls_key) {
             (Some(cert_path), Some(key_path)) => Some(TlsConfig {
@@ -78,11 +78,11 @@ pub struct HttpTrigger {
 impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
     const TYPE: &'static str = "http";
 
-    type CliArgs = CliArgs;
+    type GlobalConfig = GlobalConfig;
     type InstanceState = ();
 
-    fn new(cli_args: Self::CliArgs, app: &spin_app::App) -> anyhow::Result<Self> {
-        Self::new(app, cli_args.address, cli_args.into_tls_config())
+    fn new(cfg: Self::GlobalConfig, app: &spin_app::App) -> anyhow::Result<Self> {
+        Self::new(app, cfg.address, cfg.into_tls_config())
     }
 
     async fn run(self, trigger_app: TriggerApp<F>) -> anyhow::Result<()> {
