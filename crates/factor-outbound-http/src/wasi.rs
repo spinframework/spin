@@ -152,7 +152,12 @@ async fn send_request_impl(
     let host = request.uri().host().unwrap_or_default();
     let tls_client_config = component_tls_configs.get_client_config(host).clone();
 
-    if request.uri().authority().is_some() {
+    let is_self_request = request
+        .uri()
+        .authority()
+        .is_some_and(|a| a.host() == "self.alt");
+
+    if request.uri().authority().is_some() && !is_self_request {
         // Absolute URI
         let is_allowed = outbound_allowed_hosts
             .check_url(&request.uri().to_string(), "https")
