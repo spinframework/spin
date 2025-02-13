@@ -6,7 +6,7 @@ pub mod client;
 mod loader;
 pub mod utils;
 
-pub use client::Client;
+pub use client::{Client, ComposeMode};
 pub use loader::OciLoader;
 
 /// URL scheme used for the locked app "origin" metadata field for OCI-sourced apps.

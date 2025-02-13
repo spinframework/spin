@@ -7723,8 +7723,11 @@ dependencies = [
  "indexmap 2.7.1",
  "semver",
  "spin-app",
+ "spin-common",
+ "spin-componentize",
  "spin-serde",
  "thiserror 1.0.69",
+ "tokio",
  "wac-graph",
 ]
 
@@ -8218,6 +8221,7 @@ dependencies = [
  "serde",
  "serde_json",
  "spin-common",
+ "spin-compose",
  "spin-loader",
  "spin-locked-app",
  "tempfile",
@@ -8225,6 +8229,9 @@ dependencies = [
  "tokio-util",
  "tracing",
  "walkdir",
+ "wasm-encoder 0.217.0",
+ "wit-component 0.217.0",
+ "wit-parser 0.217.0",
 ]
 
 [[package]]
@@ -8424,7 +8431,6 @@ dependencies = [
  "serde_json",
  "spin-app",
  "spin-common",
- "spin-componentize",
  "spin-compose",
  "spin-core",
  "spin-factor-key-value",
@@ -11145,6 +11151,7 @@ dependencies = [
  "wasm-encoder 0.217.0",
  "wasm-metadata 0.217.0",
  "wasmparser 0.217.0",
+ "wat",
  "wit-parser 0.217.0",
 ]
 

@@ -1,5 +1,6 @@
 use anyhow::Context as _;
 use spin_common::{ui::quoted_path, url::parse_file_url};
+use spin_compose::ComponentSourceLoaderFs;
 use spin_core::{async_trait, wasmtime, Component};
 use spin_factors::AppComponent;
 
@@ -88,7 +89,7 @@ impl spin_factors_executor::ComponentLoader for ComponentLoader {
                 .with_context(|| format!("error deserializing component from {path:?}"));
         }
 
-        let composed = spin_compose::compose(&ComponentSourceLoader, component.locked)
+        let composed = spin_compose::compose(&ComponentSourceLoaderFs, component.locked)
             .await
             .with_context(|| {
                 format!(
@@ -99,34 +100,5 @@ impl spin_factors_executor::ComponentLoader for ComponentLoader {
 
         spin_core::Component::new(engine, composed)
             .with_context(|| format!("failed to compile component from {}", quoted_path(&path)))
-    }
-}
-
-struct ComponentSourceLoader;
-
-#[async_trait]
-impl spin_compose::ComponentSourceLoader for ComponentSourceLoader {
-    async fn load_component_source(
-        &self,
-        source: &spin_app::locked::LockedComponentSource,
-    ) -> anyhow::Result<Vec<u8>> {
-        let source = source
-            .content
-            .source
-            .as_ref()
-            .context("LockedComponentSource missing source field")?;
-
-        let path = parse_file_url(source)?;
-
-        let bytes: Vec<u8> = tokio::fs::read(&path).await.with_context(|| {
-            format!(
-                "failed to read component source from disk at path {}",
-                quoted_path(&path)
-            )
-        })?;
-
-        let component = spin_componentize::componentize_if_necessary(&bytes)?;
-
-        Ok(component.into())
     }
 }

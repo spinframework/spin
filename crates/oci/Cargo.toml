@@ -22,6 +22,7 @@ reqwest = "0.12"
 serde = { workspace = true }
 serde_json = { workspace = true }
 spin-common = { path = "../common" }
+spin-compose = { path = "../compose" }
 spin-loader = { path = "../loader" }
 spin-locked-app = { path = "../locked-app" }
 tempfile = { workspace = true }
@@ -29,3 +30,8 @@ tokio = { workspace = true, features = ["fs"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tracing = { workspace = true }
 walkdir = "2"
+
+[dev-dependencies]
+wasm-encoder = { workspace = true }
+wit-component = { workspace = true, features = ["dummy-module"] }
+wit-parser = { workspace = true }

@@ -24,7 +24,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 spin-app = { path = "../app" }
 spin-common = { path = "../common" }
-spin-componentize = { path = "../componentize" }
 spin-compose = { path = "../compose" }
 spin-core = { path = "../core" }
 spin-factor-key-value = { path = "../factor-key-value" }

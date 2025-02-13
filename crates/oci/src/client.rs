@@ -16,9 +16,10 @@ use reqwest::Url;
 use spin_common::sha256;
 use spin_common::ui::quoted_path;
 use spin_common::url::parse_file_url;
+use spin_compose::ComponentSourceLoaderFs;
 use spin_loader::cache::Cache;
 use spin_loader::FilesMountStrategy;
-use spin_locked_app::locked::{ContentPath, ContentRef, LockedApp};
+use spin_locked_app::locked::{ContentPath, ContentRef, LockedApp, LockedComponent};
 use tokio::fs;
 use walkdir::WalkDir;
 
@@ -58,6 +59,7 @@ const DEFAULT_CONTENT_REF_INLINE_MAX_SIZE: usize = 128;
 const DEFAULT_TOKEN_EXPIRATION_SECS: usize = 300;
 
 /// Mode of assembly of a Spin application into an OCI image
+#[derive(Copy, Clone)]
 enum AssemblyMode {
     /// Assemble the application as one layer per component and one layer for
     /// every static asset included with a given component
@@ -65,6 +67,15 @@ enum AssemblyMode {
     /// Assemble the application as one layer per component and one compressed
     /// archive layer containing all static assets included with a given component
     Archive,
+}
+
+/// Indicates whether to compose the components of a Spin application when pushing an image.
+#[derive(Copy, Clone)]
+pub enum ComposeMode {
+    /// Compose components before pushing the image.
+    All,
+    /// Skip composing components before pushing the image.
+    Skip,
 }
 
 /// Client for interacting with an OCI registry for Spin applications.
@@ -119,6 +130,7 @@ impl Client {
         reference: impl AsRef<str>,
         annotations: Option<BTreeMap<String, String>>,
         infer_annotations: InferPredefinedAnnotations,
+        compose_mode: ComposeMode,
     ) -> Result<Option<String>> {
         let reference: Reference = reference
             .as_ref()
@@ -137,8 +149,15 @@ impl Client {
         )
         .await?;
 
-        self.push_locked_core(locked, auth, reference, annotations, infer_annotations)
-            .await
+        self.push_locked_core(
+            locked,
+            auth,
+            reference,
+            annotations,
+            infer_annotations,
+            compose_mode,
+        )
+        .await
     }
 
     /// Push a Spin application to an OCI registry and return the digest (or None
@@ -149,6 +168,7 @@ impl Client {
         reference: impl AsRef<str>,
         annotations: Option<BTreeMap<String, String>>,
         infer_annotations: InferPredefinedAnnotations,
+        compose_mode: ComposeMode,
     ) -> Result<Option<String>> {
         let reference: Reference = reference
             .as_ref()
@@ -156,8 +176,15 @@ impl Client {
             .with_context(|| format!("cannot parse reference {}", reference.as_ref()))?;
         let auth = Self::auth(&reference).await?;
 
-        self.push_locked_core(locked, auth, reference, annotations, infer_annotations)
-            .await
+        self.push_locked_core(
+            locked,
+            auth,
+            reference,
+            annotations,
+            infer_annotations,
+            compose_mode,
+        )
+        .await
     }
 
     /// Push a Spin application to an OCI registry and return the digest (or None
@@ -169,10 +196,11 @@ impl Client {
         reference: Reference,
         annotations: Option<BTreeMap<String, String>>,
         infer_annotations: InferPredefinedAnnotations,
+        compose_mode: ComposeMode,
     ) -> Result<Option<String>> {
         let mut locked_app = locked.clone();
         let mut layers = self
-            .assemble_layers(&mut locked_app, AssemblyMode::Simple)
+            .assemble_layers(&mut locked_app, AssemblyMode::Simple, compose_mode)
             .await
             .context("could not assemble layers for locked application")?;
 
@@ -183,7 +211,7 @@ impl Client {
         {
             locked_app = locked.clone();
             layers = self
-                .assemble_layers(&mut locked_app, AssemblyMode::Archive)
+                .assemble_layers(&mut locked_app, AssemblyMode::Archive, compose_mode)
                 .await
                 .context("could not assemble archive layers for locked application")?;
         }
@@ -246,16 +274,43 @@ impl Client {
         &mut self,
         locked: &mut LockedApp,
         assembly_mode: AssemblyMode,
+        compose_mode: ComposeMode,
     ) -> Result<Vec<ImageLayer>> {
-        let mut layers = Vec::new();
+        let (mut layers, components) = match compose_mode {
+            ComposeMode::All => {
+                self.assemble_layers_composed(assembly_mode, locked.clone())
+                    .await?
+            }
+            ComposeMode::Skip => {
+                self.assemble_layers_uncomposed(assembly_mode, locked.clone())
+                    .await?
+            }
+        };
+
+        locked.components = components;
+        locked.metadata.remove("origin");
+
+        // Deduplicate layers
+        layers = layers.into_iter().unique().collect();
+
+        Ok(layers)
+    }
+
+    async fn assemble_layers_uncomposed(
+        &mut self,
+        assembly_mode: AssemblyMode,
+        locked: LockedApp,
+    ) -> Result<(Vec<ImageLayer>, Vec<LockedComponent>)> {
         let mut components = Vec::new();
-        for mut c in locked.clone().components {
+        let mut layers = Vec::new();
+
+        for mut c in locked.components {
             // Add the wasm module for the component as layers.
             let source = c
-                .clone()
                 .source
                 .content
                 .source
+                .as_ref()
                 .context("component loaded from disk should contain a file source")?;
 
             let source = parse_file_url(source.as_str())?;
@@ -284,42 +339,76 @@ impl Client {
             }
             c.dependencies = deps;
 
-            let mut files = Vec::new();
-            for f in c.files {
-                let source = f
-                    .content
-                    .source
-                    .context("file mount loaded from disk should contain a file source")?;
-                let source = parse_file_url(source.as_str())?;
-
-                match assembly_mode {
-                    AssemblyMode::Archive => self
-                        .push_archive_layer(&source, &mut files, &mut layers)
-                        .await
-                        .context(format!(
-                            "cannot push archive layer for source {}",
-                            quoted_path(&source)
-                        ))?,
-                    AssemblyMode::Simple => self
-                        .push_file_layers(&source, &mut files, &mut layers)
-                        .await
-                        .context(format!(
-                            "cannot push file layers for source {}",
-                            quoted_path(&source)
-                        ))?,
-                }
-            }
-            c.files = files;
-
+            c.files = self
+                .assemble_content_layers(assembly_mode, &mut layers, c.files.as_slice())
+                .await?;
             components.push(c);
         }
-        locked.components = components;
-        locked.metadata.remove("origin");
 
-        // Deduplicate layers
-        layers = layers.into_iter().unique().collect();
+        Ok((layers, components))
+    }
 
-        Ok(layers)
+    async fn assemble_layers_composed(
+        &mut self,
+        assembly_mode: AssemblyMode,
+        locked: LockedApp,
+    ) -> Result<(Vec<ImageLayer>, Vec<LockedComponent>)> {
+        let mut components = Vec::new();
+        let mut layers = Vec::new();
+
+        for mut c in locked.components {
+            let composed = spin_compose::compose(&ComponentSourceLoaderFs, &c)
+                .await
+                .with_context(|| {
+                    format!("failed to resolve dependencies for component {:?}", c.id)
+                })?;
+            let layer = ImageLayer::new(composed, WASM_LAYER_MEDIA_TYPE.to_string(), None);
+            c.source.content = self.content_ref_for_layer(&layer);
+            c.dependencies.clear();
+            layers.push(layer);
+
+            c.files = self
+                .assemble_content_layers(assembly_mode, &mut layers, c.files.as_slice())
+                .await?;
+            components.push(c);
+        }
+
+        Ok((layers, components))
+    }
+
+    async fn assemble_content_layers(
+        &mut self,
+        assembly_mode: AssemblyMode,
+        layers: &mut Vec<ImageLayer>,
+        contents: &[ContentPath],
+    ) -> Result<Vec<ContentPath>> {
+        let mut files = Vec::new();
+        for f in contents {
+            let source = f
+                .content
+                .source
+                .as_ref()
+                .context("file mount loaded from disk should contain a file source")?;
+            let source = parse_file_url(source.as_str())?;
+
+            match assembly_mode {
+                AssemblyMode::Archive => self
+                    .push_archive_layer(&source, &mut files, layers)
+                    .await
+                    .context(format!(
+                        "cannot push archive layer for source {}",
+                        quoted_path(&source)
+                    ))?,
+                AssemblyMode::Simple => self
+                    .push_file_layers(&source, &mut files, layers)
+                    .await
+                    .context(format!(
+                        "cannot push file layers for source {}",
+                        quoted_path(&source)
+                    ))?,
+            }
+        }
+        Ok(files)
     }
 
     /// Archive all of the files recursively under the source directory
@@ -940,6 +1029,40 @@ mod test {
             .await
             .expect("should write file contents");
 
+        // create a component with dependencies
+        const TEST_WIT: &str = "
+        package test:test;
+
+        interface a {
+            a: func();
+        }
+
+        world dep-a {
+            export a;
+        }
+
+        world root {
+            import a;
+        }
+        ";
+
+        let root = generate_dummy_component(TEST_WIT, "root");
+        let dep_a = generate_dummy_component(TEST_WIT, "dep-a");
+
+        let mut r = tokio::fs::File::create(working_dir.path().join("root.wasm"))
+            .await
+            .expect("should create component wasm file");
+        r.write_all(&root)
+            .await
+            .expect("should write component wasm contents");
+
+        let mut a = tokio::fs::File::create(working_dir.path().join("dep_a.wasm"))
+            .await
+            .expect("should create component wasm file");
+        a.write_all(&dep_a)
+            .await
+            .expect("should write component wasm contents");
+
         #[derive(Clone)]
         struct TestCase {
             name: &'static str,
@@ -947,6 +1070,7 @@ mod test {
             locked_components: Vec<LockedComponent>,
             expected_layer_count: usize,
             expected_error: Option<&'static str>,
+            compose_mode: ComposeMode,
         }
 
         let tests: Vec<TestCase> = [
@@ -969,6 +1093,7 @@ mod test {
                 }}]),
                 expected_layer_count: 2,
                 expected_error: None,
+                compose_mode: ComposeMode::Skip,
             },
             TestCase {
                 name: "One component layer and two file layers",
@@ -993,6 +1118,7 @@ mod test {
                 }]),
                 expected_layer_count: 3,
                 expected_error: None,
+                compose_mode: ComposeMode::Skip,
             },
             TestCase {
                 name: "One component layer and one file with inlined content",
@@ -1013,9 +1139,10 @@ mod test {
                 }]),
                 expected_layer_count: 1,
                 expected_error: None,
+                compose_mode: ComposeMode::Skip,
             },
             TestCase {
-                name: "One component layer and one dependency component layer",
+                name: "One component layer and one dependency component layer skipping composition",
                 opts: Some(ClientOpts{content_ref_inline_max_size: 0}),
                 locked_components: from_json!([{
                 "id": "component1",
@@ -1037,6 +1164,7 @@ mod test {
                 }]),
                 expected_layer_count: 2,
                 expected_error: None,
+                compose_mode: ComposeMode::Skip,
             },
             TestCase {
                 name: "Component has no source",
@@ -1051,6 +1179,7 @@ mod test {
                 }]),
                 expected_layer_count: 0,
                 expected_error: Some("Invalid URL: \"\""),
+                compose_mode: ComposeMode::Skip,
             },
             TestCase {
                 name: "Duplicate component sources",
@@ -1071,6 +1200,7 @@ mod test {
                 }}]),
                 expected_layer_count: 1,
                 expected_error: None,
+                compose_mode: ComposeMode::Skip,
             },
             TestCase {
                 name: "Duplicate file paths",
@@ -1108,6 +1238,32 @@ mod test {
                 }]),
                 expected_layer_count: 4,
                 expected_error: None,
+                compose_mode: ComposeMode::Skip,
+            },
+            TestCase {
+                name: "One component layer and one dependency component layer with composition",
+                opts: Some(ClientOpts{content_ref_inline_max_size: 0}),
+                locked_components: from_json!([{
+                "id": "component-with-deps",
+                "source": {
+                    "content_type": "application/wasm",
+                    "source": format!("file://{}", working_dir.path().join("root.wasm").to_str().unwrap()),
+                    "digest": "digest",
+                },
+                "dependencies": {
+                    "test:test/a": {
+                        "source": {
+                            "content_type": "application/wasm",
+                            "source": format!("file://{}", working_dir.path().join("dep_a.wasm").to_str().unwrap()),
+                            "digest": "digest",
+                        },
+                        "export": null,
+                    }
+                }
+                }]),
+                expected_layer_count: 1,
+                expected_error: None,
+                compose_mode: ComposeMode::All,
             },
         ]
         .to_vec();
@@ -1138,7 +1294,7 @@ mod test {
                     assert_eq!(
                         e,
                         client
-                            .assemble_layers(&mut locked, AssemblyMode::Simple)
+                            .assemble_layers(&mut locked, AssemblyMode::Simple, tc.compose_mode)
                             .await
                             .unwrap_err()
                             .to_string(),
@@ -1150,7 +1306,7 @@ mod test {
                     assert_eq!(
                         tc.expected_layer_count,
                         client
-                            .assemble_layers(&mut locked, AssemblyMode::Simple)
+                            .assemble_layers(&mut locked, AssemblyMode::Simple, tc.compose_mode)
                             .await
                             .unwrap()
                             .len(),
@@ -1160,6 +1316,29 @@ mod test {
                 }
             }
         }
+    }
+
+    fn generate_dummy_component(wit: &str, world: &str) -> Vec<u8> {
+        let mut resolve = wit_parser::Resolve::default();
+        let package_id = resolve.push_str("test", wit).expect("should parse WIT");
+        let world_id = resolve
+            .select_world(package_id, Some(world))
+            .expect("should select world");
+
+        let mut wasm = wit_component::dummy_module(&resolve, world_id);
+        wit_component::embed_component_metadata(
+            &mut wasm,
+            &resolve,
+            world_id,
+            wit_component::StringEncoding::UTF8,
+        )
+        .expect("should embed component metadata");
+
+        let encoder = wit_component::ComponentEncoder::default()
+            .validate(true)
+            .module(&wasm)
+            .expect("should set module");
+        encoder.encode().expect("should encode component")
     }
 
     fn annotatable_app() -> LockedApp {

@@ -2,6 +2,7 @@ use anyhow::Context;
 use indexmap::IndexMap;
 use semver::Version;
 use spin_app::locked::{self, InheritConfiguration, LockedComponent, LockedComponentDependency};
+use spin_common::{ui::quoted_path, url::parse_file_url};
 use spin_serde::{DependencyName, KebabId};
 use std::collections::BTreeMap;
 use thiserror::Error;
@@ -40,6 +41,36 @@ pub trait ComponentSourceLoader {
         &self,
         source: &locked::LockedComponentSource,
     ) -> anyhow::Result<Vec<u8>>;
+}
+
+/// A ComponentSourceLoader that loads component sources from the filesystem.
+pub struct ComponentSourceLoaderFs;
+
+#[async_trait::async_trait]
+impl ComponentSourceLoader for ComponentSourceLoaderFs {
+    async fn load_component_source(
+        &self,
+        source: &locked::LockedComponentSource,
+    ) -> anyhow::Result<Vec<u8>> {
+        let source = source
+            .content
+            .source
+            .as_ref()
+            .context("LockedComponentSource missing source field")?;
+
+        let path = parse_file_url(source)?;
+
+        let bytes: Vec<u8> = tokio::fs::read(&path).await.with_context(|| {
+            format!(
+                "failed to read component source from disk at path {}",
+                quoted_path(&path)
+            )
+        })?;
+
+        let component = spin_componentize::componentize_if_necessary(&bytes)?;
+
+        Ok(component.into())
+    }
 }
 
 /// Represents an error that can occur when composing dependencies.
