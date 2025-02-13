@@ -1,5 +1,4 @@
 <div align="center">
-  <h1>Fermyon Spin</h1>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./docs/static/image/logo-dark.png">
     <img alt="spin logo" src="./docs/static/image/logo.png" width="300" height="128">
