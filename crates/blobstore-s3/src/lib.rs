@@ -31,7 +31,8 @@ pub struct S3BlobStoreRuntimeConfig {
     token: Option<String>,
     /// The AWS region where the S3 account is located
     region: String,
-    container_name: Option<String>,
+    /// The name of the bucket backing the store. The default is the store label.
+    bucket: Option<String>,
 }
 
 impl MakeBlobStore for S3BlobStore {
@@ -51,7 +52,7 @@ impl MakeBlobStore for S3BlobStore {
             _ => anyhow::bail!("either both of access_key and secret_key must be provided, or neither"),
         };
     
-        let blob_store = BlobStoreS3::new(runtime_config.region, auth, runtime_config.container_name)?;
+        let blob_store = BlobStoreS3::new(runtime_config.region, auth, runtime_config.bucket)?;
         Ok(blob_store)
     }
 }
