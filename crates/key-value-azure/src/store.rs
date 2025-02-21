@@ -1,7 +1,8 @@
-use anyhow::Result;
-use azure_data_cosmos::prelude::Operation;
+use anyhow::{Context, Result};
 use azure_data_cosmos::{
-    prelude::{AuthorizationToken, CollectionClient, CosmosClient, Query},
+    prelude::{
+        AuthorizationToken, CollectionClient, CosmosClient, CosmosClientBuilder, Operation, Query,
+    },
     CosmosEntity,
 };
 use futures::StreamExt;
@@ -88,11 +89,25 @@ impl KeyValueAzureCosmos {
                 )
             }
         };
-        let cosmos_client = CosmosClient::new(account, token);
+        let cosmos_client = cosmos_client(account, token)?;
         let database_client = cosmos_client.database_client(database);
         let client = database_client.collection_client(container);
 
         Ok(Self { client, app_id })
+    }
+}
+
+fn cosmos_client(account: impl Into<String>, token: AuthorizationToken) -> Result<CosmosClient> {
+    if cfg!(feature = "connection-pooling") {
+        let client = reqwest::ClientBuilder::new()
+            .build()
+            .context("failed to build reqwest client")?;
+        let transport_options = azure_core::TransportOptions::new(std::sync::Arc::new(client));
+        Ok(CosmosClientBuilder::new(account, token)
+            .transport(transport_options)
+            .build())
+    } else {
+        Ok(CosmosClient::new(account, token))
     }
 }
 

@@ -17,6 +17,12 @@ futures = { workspace = true }
 serde = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-key-value = { path = "../factor-key-value" }
+reqwest = { version = "0.12", default-features = false }
 
 [lints]
 workspace = true
+
+[features]
+# Enables reusing connections to the Azure Cosmos DB service.
+connection-pooling = []
+default = ["connection-pooling"]

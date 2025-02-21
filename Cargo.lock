@@ -8080,6 +8080,7 @@ dependencies = [
  "azure_data_cosmos",
  "azure_identity",
  "futures",
+ "reqwest 0.12.9",
  "serde",
  "spin-core",
  "spin-factor-key-value",
