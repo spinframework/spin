@@ -548,7 +548,16 @@ impl LocalLoader {
                     .with_context(|| format!("Invalid exclude_files glob pattern {pattern:?}"))
             })
             .collect::<Result<Vec<_>>>()?;
-
+        
+        crate::fs::create_dir_all(&dest_root)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to create parent directory {}",
+                    quoted_path(&dest_root)
+                )
+            })?;
+        
         for path_res in paths {
             let src = path_res?;
             if !src.is_file() {
