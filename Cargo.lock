@@ -8076,13 +8076,13 @@ name = "spin-key-value-azure"
 version = "3.2.0-pre0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "azure_core",
  "azure_data_cosmos",
  "azure_identity",
  "futures",
  "reqwest 0.12.9",
  "serde",
- "spin-core",
  "spin-factor-key-value",
 ]
 
