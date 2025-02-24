@@ -190,7 +190,7 @@ jobs:
   all-integration-tests:
     # run on a larger runner for more SSD/resource access
     runs-on: ubuntu-22.04-4core-spin
-    if: ${{ github.repository_owner == 'fermyon' }}
+    if: ${{ github.repository_owner == 'spinframework' }}
     steps:
       - uses: actions/checkout@v3
 
