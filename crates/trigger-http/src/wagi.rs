@@ -38,13 +38,19 @@ impl HttpExecutor for WagiHttpExecutor {
         // Build the argv array by starting with the config for `argv` and substituting in
         // script name and args where appropriate.
         let script_name = uri_path.to_string();
-        let args = req.uri().query().unwrap_or_default().replace('&', " ");
-        let argv = self
-            .wagi_config
-            .argv
-            .clone()
-            .replace("${SCRIPT_NAME}", &script_name)
-            .replace("${ARGS}", &args);
+        
+        let mut args: Vec<String> = Vec::new();
+        args.push(script_name);
+
+        let parsed_url = url::Url::parse(req.uri().to_string().as_str())?;
+
+        for (key, value) in parsed_url.query_pairs() {
+            args.push(key.to_string());
+
+            if !value.is_empty() {
+                args.push(value.to_string());
+            }
+        }
 
         let (parts, body) = req.into_parts();
 
@@ -80,7 +86,7 @@ impl HttpExecutor for WagiHttpExecutor {
             .context("The wagi HTTP trigger was configured without the required wasi support")?;
 
         // Set up Wagi environment
-        wasi_builder.args(argv.split(' '));
+        wasi_builder.args(args);        
         wasi_builder.env(headers);
         wasi_builder.stdin_pipe(Cursor::new(body));
         wasi_builder.stdout(stdout.clone());
