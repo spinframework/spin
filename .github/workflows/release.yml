@@ -370,16 +370,16 @@ jobs:
           path: _dist/spin-${{ env.RELEASE_VERSION }}-static-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}.tar.gz
 
   dispatch-homebrew-tap:
-    name: Dispatch spin-release event to fermyon/homebrew-tap
+    name: Dispatch spin-release event to spinframework/homebrew-tap
     needs: create-gh-release
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'fermyon' && startsWith(github.ref, 'refs/tags/v')
+    if: github.repository_owner == 'spinframework' && startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Repository Dispatch
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.DEST_REPO_ACCESS_TOKEN }}
-          repository: fermyon/homebrew-tap
+          repository: spinframework/homebrew-tap
           event-type: spin-release
           client-payload: '{"version": "${{ github.ref_name }}"}'
 
