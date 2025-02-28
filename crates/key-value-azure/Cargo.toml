@@ -10,9 +10,9 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-azure_data_cosmos = { git = "https://github.com/azure/azure-sdk-for-rust.git", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
-azure_identity = { git = "https://github.com/azure/azure-sdk-for-rust.git", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
-azure_core = { git = "https://github.com/azure/azure-sdk-for-rust.git", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
+azure_data_cosmos = "0.21.0"
+azure_identity = "0.21.0"
+azure_core = "0.21.0"
 futures = { workspace = true }
 serde = { workspace = true }
 spin-core = { path = "../core" }
