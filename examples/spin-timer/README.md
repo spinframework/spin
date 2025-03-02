@@ -22,7 +22,7 @@ To test:
 ```toml
 name= "trigger-timer"
 description= "Run Spin components at timed intervals"
-homepage= "https://github.com/fermyon/spin/tree/main/examples/spin-timer"
+homepage= "https://github.com/spinframework/spin/tree/main/examples/spin-timer"
 version= "0.1.0"
 spin_compatibility= ">=2.0"
 license= "Apache-2.0"

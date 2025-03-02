@@ -185,7 +185,7 @@ mod integration_tests {
                 assert_spin_request(
                     spin,
                     Request::new(Method::Get, "/hello"),
-                    Response::new_with_body(200, "Hello, Fermyon!\n"),
+                    Response::new_with_body(200, "Hello World!\n"),
                 )?;
 
                 assert_eventually!(
@@ -321,8 +321,8 @@ mod integration_tests {
                     )
                 };
 
-                test("golang", "Hello Fermyon!\n")?;
-                test("rust", "Hello, Fermyon")?;
+                test("golang", "Hello World!\n")?;
+                test("rust", "Hello World!")?;
                 test("javascript", "Hello from JS-SDK")?;
                 test("typescript", "Hello from TS-SDK")?;
                 Ok(())
@@ -370,12 +370,12 @@ mod integration_tests {
                 assert_spin_request(
                     spin,
                     Request::new(Method::Get, "/outbound-allowed"),
-                    Response::new_with_body(200, "Hello, Fermyon!\n"),
+                    Response::new_with_body(200, "Hello World!\n"),
                 )?;
                 assert_spin_request(
                     spin,
                     Request::new(Method::Get, "/outbound-allowed-alt"),
-                    Response::new_with_body(200, "Hello, Fermyon!\n"),
+                    Response::new_with_body(200, "Hello World!\n"),
                 )?;
 
                 assert_spin_request(
@@ -403,7 +403,7 @@ mod integration_tests {
             &[],
             |_| Ok(()),
             HashMap::default(),
-            "Hello, Fermyon",
+            "Hello World!",
         )
     }
 
@@ -582,7 +582,7 @@ mod integration_tests {
             &[],
             prebuild,
             HashMap::default(),
-            "Hello Fermyon!\n",
+            "Hello World!\n",
         )
     }
 
@@ -666,7 +666,7 @@ mod integration_tests {
             |_| Ok(()),
             HashMap::default(),
             "/index.php",
-            "Hello Fermyon Spin",
+            "Hello World!",
         )
     }
 
@@ -749,7 +749,7 @@ mod integration_tests {
         assert_spin_request(
             env.runtime_mut(),
             Request::new(Method::Get, "/"),
-            Response::new_with_body(200, "Hello, Fermyon"),
+            Response::new_with_body(200, "Hello World!"),
         )?;
         Ok(())
     }
@@ -1456,7 +1456,7 @@ route = "/..."
                         &[("Host", "google.com")],
                         Some(""),
                     ),
-                    Response::new_with_body(200, "Hello, Fermyon!\n"),
+                    Response::new_with_body(200, "Hello World!\n"),
                 )?;
                 Ok(())
             },

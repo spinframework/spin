@@ -17,7 +17,7 @@ extern "C" void spin_http_handle_http_request(spin_http_request_t *request,
   header->f0 = header_name;
   header->f1 = header_value;
 
-  auto body_string = "Hello, Fermyon!\n";
+  auto body_string = "Hello World!\n";
   auto body_length = strlen(body_string);
   auto body = static_cast<uint8_t *>(malloc(body_length));
   memcpy(body, body_string, body_length);

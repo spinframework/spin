@@ -7,5 +7,5 @@ fn hello_world(req: http::Request<()>) -> anyhow::Result<http::Response<&'static
     Ok(http::Response::builder()
         .status(200)
         .header("Content-Type", "text/plain")
-        .body("Hello, Fermyon!\n")?)
+        .body("Hello World!\n")?)
 }

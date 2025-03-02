@@ -8,5 +8,5 @@ fn goodbye_world(req: http::Request<()>) -> Result<http::Response<&'static str>>
     Ok(http::Response::builder()
         .status(200)
         .header("foo", "bar")
-        .body("Goodbye, Fermyon!\n")?)
+        .body("Goodbye, World!\n")?)
 }

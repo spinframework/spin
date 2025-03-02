@@ -8,6 +8,6 @@ fn handle_{{project-name | snake_case}}(req: Request) -> anyhow::Result<impl Int
     Ok(Response::builder()
         .status(200)
         .header("content-type", "text/plain")
-        .body("Hello, Fermyon")
+        .body("Hello World!")
         .build())
 }
