@@ -157,6 +157,7 @@ impl<C: Send + Sync + Client> v2::Host for InstanceState<C> {}
 impl<C: Send + Sync + Client> v2::HostConnection for InstanceState<C> {
     #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
+        self.otel_context.reparent_tracing_span();
         spin_factor_outbound_networking::record_address_fields(&address);
 
         if !self
@@ -178,6 +179,8 @@ impl<C: Send + Sync + Client> v2::HostConnection for InstanceState<C> {
         statement: String,
         params: Vec<v2_types::ParameterValue>,
     ) -> Result<u64, v2::Error> {
+        self.otel_context.reparent_tracing_span();
+
         Ok(self
             .get_client(connection)
             .await?
@@ -192,6 +195,7 @@ impl<C: Send + Sync + Client> v2::HostConnection for InstanceState<C> {
         statement: String,
         params: Vec<v2_types::ParameterValue>,
     ) -> Result<v2_types::RowSet, v2::Error> {
+        self.otel_context.reparent_tracing_span();
         Ok(self
             .get_client(connection)
             .await?
