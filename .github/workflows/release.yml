@@ -168,27 +168,6 @@ jobs:
           name: spin-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}
           path: _dist/spin-${{ env.RELEASE_VERSION }}-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}.zip
 
-      - name: Configure AWS Credentials
-        if: |
-          runner.os == 'linux' &&
-          matrix.config.arch == 'amd64' &&
-          github.repository_owner == 'spinframework' &&
-          github.ref == 'refs/heads/main'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.SPIN_RELEASE_ARTIFACTS_REPO }}
-          role-session-name: spin-release-artifacts
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Copy Binary to S3 - ${{ env.RELEASE_VERSION }}
-        if: |
-          runner.os == 'linux' &&
-          matrix.config.arch == 'amd64' &&
-          github.repository_owner == 'spinframework' &&
-          github.ref == 'refs/heads/main'
-        run: |
-          aws s3 cp _dist/spin-${{ env.RELEASE_VERSION }}-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}.tar.gz s3://${{ secrets.SPIN_RELEASE_ARTIFACTS_REPO }}/spin-${{ env.RELEASE_VERSION }}-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}.tar.gz --acl public-read
-
   checksums:
     name: generate release checksums
     runs-on: ubuntu-latest
