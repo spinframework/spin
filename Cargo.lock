@@ -883,7 +883,34 @@ dependencies = [
 [[package]]
 name = "azure_core"
 version = "0.20.0"
-source = "git+https://github.com/azure/azure-sdk-for-rust.git?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
+source = "git+https://github.com/azure/azure-sdk-for-rust?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "dyn-clone",
+ "futures",
+ "getrandom 0.2.15",
+ "http-types",
+ "once_cell",
+ "paste",
+ "pin-project",
+ "rand 0.8.5",
+ "reqwest 0.12.9",
+ "rustc_version",
+ "serde",
+ "serde_json",
+ "time",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "azure_core"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b552ad43a45a746461ec3d3a51dfb6466b4759209414b439c165eb6a6b7729e"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -910,11 +937,12 @@ dependencies = [
 
 [[package]]
 name = "azure_data_cosmos"
-version = "0.20.0"
-source = "git+https://github.com/azure/azure-sdk-for-rust.git?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0aa5603f2de38c21165a1b5dfed94d64b1ab265526b0686e8557c907a53a0ee2"
 dependencies = [
  "async-trait",
- "azure_core",
+ "azure_core 0.21.0",
  "bytes",
  "futures",
  "serde",
@@ -929,12 +957,33 @@ dependencies = [
 [[package]]
 name = "azure_identity"
 version = "0.20.0"
-source = "git+https://github.com/azure/azure-sdk-for-rust.git?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
+source = "git+https://github.com/azure/azure-sdk-for-rust?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
 dependencies = [
  "async-lock 3.4.0",
  "async-process 2.3.0",
  "async-trait",
- "azure_core",
+ "azure_core 0.20.0",
+ "futures",
+ "oauth2",
+ "pin-project",
+ "serde",
+ "time",
+ "tracing",
+ "tz-rs",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "azure_identity"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88ddd80344317c40c04b603807b63a5cefa532f1b43522e72f480a988141f744"
+dependencies = [
+ "async-lock 3.4.0",
+ "async-process 2.3.0",
+ "async-trait",
+ "azure_core 0.21.0",
  "futures",
  "oauth2",
  "pin-project",
@@ -949,10 +998,10 @@ dependencies = [
 [[package]]
 name = "azure_security_keyvault"
 version = "0.20.0"
-source = "git+https://github.com/azure/azure-sdk-for-rust.git?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
+source = "git+https://github.com/azure/azure-sdk-for-rust?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
 dependencies = [
  "async-trait",
- "azure_core",
+ "azure_core 0.20.0",
  "futures",
  "serde",
  "serde_json",
@@ -8076,9 +8125,9 @@ name = "spin-key-value-azure"
 version = "3.2.0-pre0"
 dependencies = [
  "anyhow",
- "azure_core",
+ "azure_core 0.21.0",
  "azure_data_cosmos",
- "azure_identity",
+ "azure_identity 0.21.0",
  "futures",
  "reqwest 0.12.9",
  "serde",
@@ -8501,8 +8550,8 @@ dependencies = [
 name = "spin-variables"
 version = "3.2.0-pre0"
 dependencies = [
- "azure_core",
- "azure_identity",
+ "azure_core 0.20.0",
+ "azure_identity 0.20.0",
  "azure_security_keyvault",
  "dotenvy",
  "serde",
