@@ -15,7 +15,7 @@ azure_identity = { git = "https://github.com/azure/azure-sdk-for-rust.git", rev 
 azure_core = { git = "https://github.com/azure/azure-sdk-for-rust.git", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
 futures = { workspace = true }
 serde = { workspace = true }
-spin-core = { path = "../core" }
+async-trait = { workspace = true }
 spin-factor-key-value = { path = "../factor-key-value" }
 reqwest = { version = "0.12", default-features = false }
 
