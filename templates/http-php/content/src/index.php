@@ -1,1 +1,1 @@
-<?php echo "Hello Fermyon Spin"; ?>
+<?php echo "Hello World!"; ?>

@@ -73,12 +73,13 @@ That's it! Now that the application is running, use your browser or cURL in anot
 # Send a request to the application.
 $ curl -i 127.0.0.1:3000
 HTTP/1.1 200 OK
-foo: bar
-content-length: 14
-date: Thu, 13 Apr 2023 17:47:24 GMT
+content-type: text/plain
+transfer-encoding: chunked
+date: Sun, 02 Mar 2025 20:09:11 GMT
 
-Hello, Fermyon         
+Hello World!
 ```
+
 You can make the app do more by editting the `src/lib.rs` file in the `hello-rust` directory using your favorite editor or IDE. To learn more about writing Spin applications see [Writing Applications](https://developer.fermyon.com/spin/writing-apps) in the Spin documentation.  To learn how to publish and distribute your application see the [Publishing and Distribution](https://developer.fermyon.com/spin/distributing-apps) guide in the Spin documentation.
 
 For more information on the cli commands and subcommands see the [CLI Reference](https://developer.fermyon.com/common/cli-reference).
