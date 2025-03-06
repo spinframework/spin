@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use spin_factor_otel::OtelContext;
 use spin_factors::{
     ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
 };
@@ -76,7 +77,7 @@ impl Factor for LlmFactor {
 
     fn prepare<T: RuntimeFactors>(
         &self,
-        ctx: PrepareContext<T, Self>,
+        mut ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<Self::InstanceBuilder> {
         let allowed_models = ctx
             .app_state()
@@ -85,10 +86,12 @@ impl Factor for LlmFactor {
             .cloned()
             .unwrap_or_default();
         let engine = ctx.app_state().engine.clone();
+        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
 
         Ok(InstanceState {
             engine,
             allowed_models,
+            otel_context,
         })
     }
 }
@@ -103,6 +106,7 @@ pub struct AppState {
 pub struct InstanceState {
     engine: Arc<Mutex<dyn LlmEngine>>,
     pub allowed_models: Arc<HashSet<String>>,
+    otel_context: OtelContext,
 }
 
 /// The runtime configuration for the LLM factor.

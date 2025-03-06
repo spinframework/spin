@@ -8,6 +8,7 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 spin-core = { path = "../core" }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factors = { path = "../factors" }
 spin-locked-app = { path = "../locked-app" }
 spin-resource-table = { path = "../table" }

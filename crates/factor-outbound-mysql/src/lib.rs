@@ -3,6 +3,7 @@ mod host;
 
 use client::Client;
 use mysql_async::Conn as MysqlClient;
+use spin_factor_otel::OtelContext;
 use spin_factor_outbound_networking::{OutboundAllowedHosts, OutboundNetworkingFactor};
 use spin_factors::{Factor, InitContext, RuntimeFactors, SelfInstanceBuilder};
 use spin_world::v1::mysql as v1;
@@ -37,9 +38,12 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
         let allowed_hosts = ctx
             .instance_builder::<OutboundNetworkingFactor>()?
             .allowed_hosts();
+        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
+
         Ok(InstanceState {
             allowed_hosts,
             connections: Default::default(),
+            otel_context,
         })
     }
 }
@@ -61,6 +65,7 @@ impl<C> OutboundMysqlFactor<C> {
 pub struct InstanceState<C> {
     allowed_hosts: OutboundAllowedHosts,
     connections: spin_resource_table::Table<C>,
+    otel_context: OtelContext,
 }
 
 impl<C: Send + 'static> SelfInstanceBuilder for InstanceState<C> {}

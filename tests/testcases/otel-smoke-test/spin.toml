@@ -1,12 +1,13 @@
 spin_version = "1"
 authors = ["Fermyon Engineering <engineering@fermyon.com>"]
-description = "A simple application that returns hello and goodbye."
-name = "head-rust-sdk-http"
+description = "A simple application that tests otel."
+name = "otel-smoke-test"
 trigger = { type = "http" }
 version = "1.0.0"
 
 [[component]]
-id = "hello"
-source = "%{source=hello-world}"
+id = "otel"
+source = "%{source=otel-smoke-test}"
+allowed_outbound_hosts = ["http://self"]
 [component.trigger]
-route = "/hello/..."
+route = "/..."

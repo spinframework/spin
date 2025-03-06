@@ -1,6 +1,7 @@
 use anyhow::Result;
 use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
 use spin_core::wasmtime::component::Resource;
+use spin_factor_otel::OtelContext;
 use spin_factor_outbound_networking::OutboundAllowedHosts;
 use spin_world::v1::{redis as v1, redis_types};
 use spin_world::v2::redis::{
@@ -12,6 +13,7 @@ use tracing::{instrument, Level};
 pub struct InstanceState {
     pub allowed_hosts: OutboundAllowedHosts,
     pub connections: spin_resource_table::Table<MultiplexedConnection>,
+    pub otel_context: OtelContext,
 }
 
 impl InstanceState {
@@ -55,8 +57,7 @@ impl v2::Host for crate::InstanceState {
 impl v2::HostConnection for crate::InstanceState {
     #[instrument(name = "spin_outbound_redis.open_connection", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<RedisConnection>, Error> {
-        spin_factor_outbound_networking::record_address_fields(&address);
-
+        self.otel_context.reparent_tracing_span();
         if !self
             .is_address_allowed(&address)
             .await
@@ -75,6 +76,8 @@ impl v2::HostConnection for crate::InstanceState {
         channel: String,
         payload: Vec<u8>,
     ) -> Result<(), Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
         // The `let () =` syntax is needed to suppress a warning when the result type is inferred.
         // You can read more about the issue here: <https://github.com/redis-rs/redis-rs/issues/1228>
@@ -91,6 +94,8 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         key: String,
     ) -> Result<Option<Vec<u8>>, Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
         let value = conn.get(&key).await.map_err(other_error)?;
         Ok(value)
@@ -103,6 +108,8 @@ impl v2::HostConnection for crate::InstanceState {
         key: String,
         value: Vec<u8>,
     ) -> Result<(), Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
         // The `let () =` syntax is needed to suppress a warning when the result type is inferred.
         // You can read more about the issue here: <https://github.com/redis-rs/redis-rs/issues/1228>
@@ -116,6 +123,8 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         key: String,
     ) -> Result<i64, Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
         let value = conn.incr(&key, 1).await.map_err(other_error)?;
         Ok(value)
@@ -127,6 +136,8 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         keys: Vec<String>,
     ) -> Result<u32, Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
         let value = conn.del(&keys).await.map_err(other_error)?;
         Ok(value)
@@ -139,6 +150,8 @@ impl v2::HostConnection for crate::InstanceState {
         key: String,
         values: Vec<String>,
     ) -> Result<u32, Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
         let value = conn.sadd(&key, &values).await.map_err(|e| {
             if e.kind() == redis::ErrorKind::TypeError {
@@ -156,6 +169,8 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         key: String,
     ) -> Result<Vec<String>, Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
         let value = conn.smembers(&key).await.map_err(other_error)?;
         Ok(value)
@@ -168,6 +183,8 @@ impl v2::HostConnection for crate::InstanceState {
         key: String,
         values: Vec<String>,
     ) -> Result<u32, Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await.map_err(other_error)?;
         let value = conn.srem(&key, &values).await.map_err(other_error)?;
         Ok(value)
@@ -180,6 +197,8 @@ impl v2::HostConnection for crate::InstanceState {
         command: String,
         arguments: Vec<RedisParameter>,
     ) -> Result<Vec<RedisResult>, Error> {
+        self.otel_context.reparent_tracing_span();
+
         let conn = self.get_conn(connection).await?;
         let mut cmd = redis::cmd(&command);
         arguments.iter().for_each(|value| match value {
