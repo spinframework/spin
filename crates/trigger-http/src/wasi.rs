@@ -144,7 +144,7 @@ impl HttpExecutor for WasiHttpExecutor {
                         Ok(())
                     }
                     .map_err(|e: anyhow::Error| {
-                        tracing::warn!("component error after response: {e:?}");
+                        tracing::error!("component error after response started: {e:?}");
                     }),
                 );
 
