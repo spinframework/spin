@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use native_tls::TlsConnector;
 use postgres_native_tls::MakeTlsConnector;
 use spin_world::async_trait;
@@ -6,15 +6,80 @@ use spin_world::spin::postgres::postgres::{
     self as v3, Column, DbDataType, DbValue, ParameterValue, RowSet,
 };
 use tokio_postgres::types::Type;
-use tokio_postgres::{config::SslMode, types::ToSql, Row};
-use tokio_postgres::{Client as TokioClient, NoTls, Socket};
+use tokio_postgres::{config::SslMode, types::ToSql, NoTls, Row};
+
+const CONNECTION_POOL_SIZE: usize = 64;
+
+#[async_trait]
+pub trait ClientFactory: Send + Sync {
+    type Client: Client + Send + Sync + 'static;
+    fn new() -> Self;
+    async fn build_client(&mut self, address: &str) -> Result<Self::Client>;
+}
+
+pub struct PooledTokioClientFactory {
+    pools: std::collections::HashMap<String, deadpool_postgres::Pool>,
+}
+
+#[async_trait]
+impl ClientFactory for PooledTokioClientFactory {
+    type Client = deadpool_postgres::Object;
+
+    fn new() -> Self {
+        Self {
+            pools: Default::default(),
+        }
+    }
+
+    async fn build_client(&mut self, address: &str) -> Result<Self::Client> {
+        let pool_entry = self.pools.entry(address.to_owned());
+        let pool = match pool_entry {
+            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let pool = create_connection_pool(address)
+                    .context("establishing PostgreSQL connection pool")?;
+                entry.insert(pool)
+            }
+        };
+
+        Ok(pool.get().await?)
+    }
+}
+
+fn create_connection_pool(address: &str) -> Result<deadpool_postgres::Pool> {
+    let config = address
+        .parse::<tokio_postgres::Config>()
+        .context("parsing Postgres connection string")?;
+
+    tracing::debug!("Build new connection: {}", address);
+
+    // TODO: This is slower but safer. Is it the right tradeoff?
+    // https://docs.rs/deadpool-postgres/latest/deadpool_postgres/enum.RecyclingMethod.html
+    let mgr_config = deadpool_postgres::ManagerConfig {
+        recycling_method: deadpool_postgres::RecyclingMethod::Clean,
+    };
+
+    let mgr = if config.get_ssl_mode() == SslMode::Disable {
+        deadpool_postgres::Manager::from_config(config, NoTls, mgr_config)
+    } else {
+        let builder = TlsConnector::builder();
+        let connector = MakeTlsConnector::new(builder.build()?);
+        deadpool_postgres::Manager::from_config(config, connector, mgr_config)
+    };
+
+    // TODO: what is our max size heuristic?  Should this be passed in soe that different
+    // hosts can manage it according to their needs?  Will a plain number suffice for
+    // sophisticated hosts anyway?
+    let pool = deadpool_postgres::Pool::builder(mgr)
+        .max_size(CONNECTION_POOL_SIZE)
+        .build()
+        .context("building Postgres connection pool")?;
+
+    Ok(pool)
+}
 
 #[async_trait]
 pub trait Client {
-    async fn build_client(address: &str) -> Result<Self>
-    where
-        Self: Sized;
-
     async fn execute(
         &self,
         statement: String,
@@ -29,28 +94,7 @@ pub trait Client {
 }
 
 #[async_trait]
-impl Client for TokioClient {
-    async fn build_client(address: &str) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        let config = address.parse::<tokio_postgres::Config>()?;
-
-        tracing::debug!("Build new connection: {}", address);
-
-        if config.get_ssl_mode() == SslMode::Disable {
-            let (client, connection) = config.connect(NoTls).await?;
-            spawn_connection(connection);
-            Ok(client)
-        } else {
-            let builder = TlsConnector::builder();
-            let connector = MakeTlsConnector::new(builder.build()?);
-            let (client, connection) = config.connect(connector).await?;
-            spawn_connection(connection);
-            Ok(client)
-        }
-    }
-
+impl Client for deadpool_postgres::Object {
     async fn execute(
         &self,
         statement: String,
@@ -67,7 +111,8 @@ impl Client for TokioClient {
             .map(|b| b.as_ref() as &(dyn ToSql + Sync))
             .collect();
 
-        self.execute(&statement, params_refs.as_slice())
+        self.as_ref()
+            .execute(&statement, params_refs.as_slice())
             .await
             .map_err(|e| v3::Error::QueryFailed(format!("{e:?}")))
     }
@@ -89,6 +134,7 @@ impl Client for TokioClient {
             .collect();
 
         let results = self
+            .as_ref()
             .query(&statement, params_refs.as_slice())
             .await
             .map_err(|e| v3::Error::QueryFailed(format!("{e:?}")))?;
@@ -109,17 +155,6 @@ impl Client for TokioClient {
 
         Ok(RowSet { columns, rows })
     }
-}
-
-fn spawn_connection<T>(connection: tokio_postgres::Connection<Socket, T>)
-where
-    T: tokio_postgres::tls::TlsStream + std::marker::Unpin + std::marker::Send + 'static,
-{
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            tracing::error!("Postgres connection error: {}", e);
-        }
-    });
 }
 
 fn to_sql_parameter(value: &ParameterValue) -> Result<Box<dyn ToSql + Send + Sync>> {
