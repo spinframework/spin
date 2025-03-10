@@ -1,6 +1,7 @@
 use anyhow::{bail, Result};
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_outbound_pg::client::Client;
+use spin_factor_outbound_pg::client::ClientFactory;
 use spin_factor_outbound_pg::OutboundPgFactor;
 use spin_factor_variables::VariablesFactor;
 use spin_factors::{anyhow, RuntimeFactors};
@@ -15,14 +16,14 @@ use spin_world::spin::postgres::postgres::{ParameterValue, RowSet};
 struct TestFactors {
     variables: VariablesFactor,
     networking: OutboundNetworkingFactor,
-    pg: OutboundPgFactor<MockClient>,
+    pg: OutboundPgFactor<MockClientFactory>,
 }
 
 fn factors() -> TestFactors {
     TestFactors {
         variables: VariablesFactor::default(),
         networking: OutboundNetworkingFactor::new(),
-        pg: OutboundPgFactor::<MockClient>::new(),
+        pg: OutboundPgFactor::<MockClientFactory>::new(),
     }
 }
 
@@ -104,17 +105,22 @@ async fn exercise_query() -> anyhow::Result<()> {
 }
 
 // TODO: We can expand this mock to track calls and simulate return values
+pub struct MockClientFactory {}
 pub struct MockClient {}
 
 #[async_trait]
-impl Client for MockClient {
-    async fn build_client(_address: &str) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
+impl ClientFactory for MockClientFactory {
+    type Client = MockClient;
+    fn new() -> Self {
+        Self {}
+    }
+    async fn build_client(&mut self, _address: &str) -> Result<Self::Client> {
         Ok(MockClient {})
     }
+}
 
+#[async_trait]
+impl Client for MockClient {
     async fn execute(
         &self,
         _statement: String,
