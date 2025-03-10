@@ -9,17 +9,20 @@ use tracing::field::Empty;
 use tracing::instrument;
 use tracing::Level;
 
-use crate::client::Client;
+use crate::client::{Client, ClientFactory};
 use crate::InstanceState;
 
-impl<C: Client> InstanceState<C> {
+impl<CF: ClientFactory> InstanceState<CF> {
     async fn open_connection<Conn: 'static>(
         &mut self,
         address: &str,
     ) -> Result<Resource<Conn>, v3::Error> {
         self.connections
             .push(
-                C::build_client(address)
+                self.client_factory
+                    .write()
+                    .await
+                    .build_client(address)
                     .await
                     .map_err(|e| v3::Error::ConnectionFailed(format!("{e:?}")))?,
             )
@@ -30,7 +33,7 @@ impl<C: Client> InstanceState<C> {
     async fn get_client<Conn: 'static>(
         &mut self,
         connection: Resource<Conn>,
-    ) -> Result<&C, v3::Error> {
+    ) -> Result<&CF::Client, v3::Error> {
         self.connections
             .get(connection.rep())
             .ok_or_else(|| v3::Error::ConnectionFailed("no connection found".into()))
@@ -71,8 +74,8 @@ fn v2_params_to_v3(
     params.into_iter().map(|p| p.try_into()).collect()
 }
 
-impl<C: Send + Sync + Client> spin_world::spin::postgres::postgres::HostConnection
-    for InstanceState<C>
+impl<CF: ClientFactory + Send + Sync> spin_world::spin::postgres::postgres::HostConnection
+    for InstanceState<CF>
 {
     #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v3::Connection>, v3::Error> {
@@ -122,13 +125,13 @@ impl<C: Send + Sync + Client> spin_world::spin::postgres::postgres::HostConnecti
     }
 }
 
-impl<C: Send> v2_types::Host for InstanceState<C> {
+impl<CF: ClientFactory + Send> v2_types::Host for InstanceState<CF> {
     fn convert_error(&mut self, error: v2::Error) -> Result<v2::Error> {
         Ok(error)
     }
 }
 
-impl<C: Send + Sync + Client> v3::Host for InstanceState<C> {
+impl<CF: Send + Sync + ClientFactory> v3::Host for InstanceState<CF> {
     fn convert_error(&mut self, error: v3::Error) -> Result<v3::Error> {
         Ok(error)
     }
@@ -152,9 +155,9 @@ macro_rules! delegate {
     }};
 }
 
-impl<C: Send + Sync + Client> v2::Host for InstanceState<C> {}
+impl<CF: Send + Sync + ClientFactory> v2::Host for InstanceState<CF> {}
 
-impl<C: Send + Sync + Client> v2::HostConnection for InstanceState<C> {
+impl<CF: Send + Sync + ClientFactory> v2::HostConnection for InstanceState<CF> {
     #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
@@ -206,7 +209,7 @@ impl<C: Send + Sync + Client> v2::HostConnection for InstanceState<C> {
     }
 }
 
-impl<C: Send + Sync + Client> v1::Host for InstanceState<C> {
+impl<CF: Send + Sync + ClientFactory> v1::Host for InstanceState<CF> {
     async fn execute(
         &mut self,
         address: String,
