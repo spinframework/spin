@@ -241,7 +241,7 @@ impl UpCommand {
 
         set_kill_on_ctrl_c(&pids)?;
 
-        let trigger_tasks = trigger_processes
+        let mut trigger_tasks = trigger_processes
             .into_iter()
             .map(|mut ch| tokio::task::spawn(async move { ch.wait().await }))
             .collect::<Vec<_>>();
@@ -250,16 +250,24 @@ impl UpCommand {
             tokio::time::sleep(MULTI_TRIGGER_LET_ALL_START).await;
         }
 
-        let (first_to_finish, _index, _rest) = futures::future::select_all(trigger_tasks).await;
+        loop {
+            let (first_to_finish, _index, rest) = futures::future::select_all(trigger_tasks).await;
 
-        if let Ok(process_result) = first_to_finish {
-            let status = process_result?;
-            if !status.success() {
-                if is_multi {
-                    println!("A trigger exited unexpectedly. Terminating.");
-                    kill_child_processes(&pids);
+            if let Ok(process_result) = first_to_finish {
+                let status = process_result?;
+                if !status.success() {
+                    if is_multi {
+                        println!("A trigger exited unexpectedly. Terminating.");
+                        kill_child_processes(&pids);
+                    }
+                    return Err(crate::subprocess::ExitStatusError::new(status).into());
                 }
-                return Err(crate::subprocess::ExitStatusError::new(status).into());
+            }
+
+            if rest.is_empty() {
+                break;
+            } else {
+                trigger_tasks = rest;
             }
         }
 
