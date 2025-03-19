@@ -9,11 +9,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 use crate::InstanceState;
 
 impl wasi_otel::Host for InstanceState {
-    async fn on_start(
-        &mut self,
-        span_data: wasi_otel::SpanData,
-        _parent: wasi_otel::SpanContext,
-    ) -> Result<()> {
+    async fn on_start(&mut self, context: wasi_otel::SpanContext) -> Result<()> {
         let mut state = self.state.write().unwrap();
 
         // Before we do anything make sure we track the original host span ID for reparenting
@@ -28,7 +24,7 @@ impl wasi_otel::Host for InstanceState {
         }
 
         // Track the guest spans context in our ordered map
-        let span_context: opentelemetry::trace::SpanContext = span_data.span_context.into();
+        let span_context: opentelemetry::trace::SpanContext = context.into();
         state
             .guest_span_contexts
             .insert(span_context.span_id(), span_context);
@@ -51,7 +47,7 @@ impl wasi_otel::Host for InstanceState {
         Ok(())
     }
 
-    async fn current_span_context(&mut self) -> Result<wasi_otel::SpanContext> {
+    async fn outer_span_context(&mut self) -> Result<wasi_otel::SpanContext> {
         Ok(tracing::Span::current()
             .context()
             .span()

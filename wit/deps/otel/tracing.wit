@@ -2,13 +2,13 @@ interface tracing {
     use wasi:clocks/wall-clock@0.2.0.{datetime};
 
     /// Called when a span is started.
-    on-start: func(span: span-data, parent: span-context);
+    on-start: func(context: span-context);
 
     /// Called when a span is ended.
     on-end: func(span: span-data);
 
-    /// Returns the current span context of the host.
-    current-span-context: func() -> span-context;
+    /// Returns the span context of the host.
+    outer-span-context: func() -> span-context;
 
     /// The data associated with a span.
     record span-data {
