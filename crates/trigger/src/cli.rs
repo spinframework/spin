@@ -41,7 +41,12 @@ pub const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
     usage = "spin [COMMAND] [OPTIONS]",
     next_help_heading = help_heading::<T, B::Factors>()
 )]
-pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> {
+pub struct FactorsTriggerCommand<T, B>
+where
+    T: Trigger<B::Factors>,
+    T::GlobalConfig: Args,
+    B: RuntimeFactorsBuilder,
+{
     /// Log directory for the stdout and stderr of components. Setting to
     /// the empty string disables logging to disk.
     #[clap(
@@ -110,7 +115,7 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
     pub state_dir: Option<String>,
 
     #[clap(flatten)]
-    pub trigger_args: T::CliArgs,
+    pub trigger_args: T::GlobalConfig,
 
     #[clap(flatten)]
     pub builder_args: B::CliArgs,
@@ -139,12 +144,17 @@ pub struct FactorsConfig {
     pub log_dir: UserProvidedPath,
 }
 
-/// An empty implementation of clap::Args to be used as TriggerExecutor::RunConfig
-/// for executors that do not need additional CLI args.
+/// This type may be used as the [`Trigger::GlobalConfig`] for triggers with no
+/// CLI args.
 #[derive(Args)]
-pub struct NoCliArgs;
+pub struct NoGlobalConfig;
 
-impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, B> {
+impl<T, B> FactorsTriggerCommand<T, B>
+where
+    T: Trigger<B::Factors>,
+    T::GlobalConfig: Args,
+    B: RuntimeFactorsBuilder,
+{
     /// Create a new TriggerExecutorBuilder from this TriggerExecutorCommand.
     pub async fn run(self) -> Result<()> {
         // Handle --help-args-only
@@ -383,10 +393,10 @@ pub mod help {
 
     impl<F: RuntimeFactors> Trigger<F> for HelpArgsOnlyTrigger {
         const TYPE: &'static str = "help-args-only";
-        type CliArgs = NoCliArgs;
+        type GlobalConfig = NoGlobalConfig;
         type InstanceState = ();
 
-        fn new(_cli_args: Self::CliArgs, _app: &App) -> anyhow::Result<Self> {
+        fn new(_cfg: Self::GlobalConfig, _app: &App) -> anyhow::Result<Self> {
             Ok(Self)
         }
 
