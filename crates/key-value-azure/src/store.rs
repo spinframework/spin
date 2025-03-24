@@ -154,6 +154,15 @@ impl Store for AzureCosmosStore {
     }
 
     async fn set(&self, key: &str, value: &[u8]) -> Result<(), Error> {
+        let illegal_chars = ['/', '\\', '?', '#'];
+
+        if key.contains(|c| illegal_chars.contains(&c)) {
+            return Err(Error::Other(format!(
+                "Key contains an illegal character. Keys must not include any of: {}",
+                illegal_chars.iter().collect::<String>()
+            )));
+        }
+
         let pair = Pair {
             id: key.to_string(),
             value: value.to_vec(),
