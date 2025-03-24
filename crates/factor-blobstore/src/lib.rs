@@ -9,18 +9,19 @@ use std::{
 };
 
 use anyhow::ensure;
-use spin_factors::{
-    ConfigureAppContext, Factor, InitContext, PrepareContext, RuntimeFactors,
-};
+use spin_factors::{ConfigureAppContext, Factor, InitContext, PrepareContext, RuntimeFactors};
 use spin_locked_app::MetadataKey;
 use spin_resource_table::Table;
 
-pub use spin_world::wasi::blobstore::types::{ContainerMetadata, ObjectMetadata};
-pub use host::{log_error, Error, BlobStoreDispatch, Container, ContainerManager, IncomingData, ObjectNames, OutgoingValue, Finishable};
+pub use host::{
+    log_error, BlobStoreDispatch, Container, ContainerManager, Error, Finishable, IncomingData,
+    ObjectNames, OutgoingValue,
+};
 pub use runtime_config::RuntimeConfig;
+pub use spin_world::wasi::blobstore::types::{ContainerMetadata, ObjectMetadata};
+pub use stream::AsyncWriteStream;
 use tokio::sync::RwLock;
 pub use util::DelegatingContainerManager;
-pub use stream::AsyncWriteStream;
 
 /// Metadata key for blob stores.
 pub const BLOB_CONTAINERS_KEY: MetadataKey<Vec<String>> = MetadataKey::new("blob_containers");
@@ -54,7 +55,10 @@ impl Factor for BlobStoreFactor {
         let get_data_with_table = ctx.get_data_with_table_fn();
         let closure = type_annotate(move |data| {
             let (state, table) = get_data_with_table(data);
-            let wasi = wasmtime_wasi::WasiImpl(host::WasiImplInner { ctx: &mut state.ctx, table });
+            let wasi = wasmtime_wasi::WasiImpl(host::WasiImplInner {
+                ctx: &mut state.ctx,
+                table,
+            });
             BlobStoreDispatch::new(
                 state.allowed_containers.clone(),
                 state.store_manager.clone(),

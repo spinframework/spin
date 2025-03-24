@@ -1,7 +1,7 @@
-use wasmtime_wasi::{HostOutputStream, StreamError, Subscribe};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
+use wasmtime_wasi::{HostOutputStream, StreamError, Subscribe};
 
 #[derive(Debug)]
 struct WorkerState {

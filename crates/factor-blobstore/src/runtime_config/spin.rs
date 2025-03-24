@@ -1,6 +1,6 @@
 //! Runtime configuration implementation used by Spin CLI.
 
-use crate::{RuntimeConfig, ContainerManager};
+use crate::{ContainerManager, RuntimeConfig};
 use anyhow::Context as _;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -17,8 +17,10 @@ pub trait MakeBlobStore: 'static + Send + Sync {
     type ContainerManager: ContainerManager;
 
     /// Creates a new store manager from the runtime configuration.
-    fn make_store(&self, runtime_config: Self::RuntimeConfig)
-        -> anyhow::Result<Self::ContainerManager>;
+    fn make_store(
+        &self,
+        runtime_config: Self::RuntimeConfig,
+    ) -> anyhow::Result<Self::ContainerManager>;
 }
 
 /// A function that creates a store manager from a TOML table.
@@ -80,10 +82,7 @@ impl RuntimeConfigResolver {
     }
 
     /// Registers a store type to the resolver.
-    pub fn register_store_type<T: MakeBlobStore>(
-        &mut self,
-        store_type: T,
-    ) -> anyhow::Result<()> {
+    pub fn register_store_type<T: MakeBlobStore>(&mut self, store_type: T) -> anyhow::Result<()> {
         if self
             .store_types
             .insert(T::RUNTIME_CONFIG_TYPE, store_from_toml_fn(store_type))
@@ -127,9 +126,9 @@ impl RuntimeConfigResolver {
 
         let mut runtime_config = RuntimeConfig::default();
         for (label, config) in table {
-            let store_manager = self.store_manager_from_config(config).with_context(|| {
-                format!("could not configure blob store with label '{label}'")
-            })?;
+            let store_manager = self
+                .store_manager_from_config(config)
+                .with_context(|| format!("could not configure blob store with label '{label}'"))?;
             runtime_config.add_container_manager(label.clone(), store_manager);
         }
 

@@ -6,21 +6,13 @@ use spin_core::async_trait;
 
 pub struct AzureObjectNames {
     // The Mutex is used to make it Send
-    stm: Mutex<
-        Pageable<
-            ListBlobsResponse,
-            azure_core::error::Error
-        >
-    >,
+    stm: Mutex<Pageable<ListBlobsResponse, azure_core::error::Error>>,
     read_but_not_yet_returned: Vec<String>,
     end_stm_after_read_but_not_yet_returned: bool,
 }
 
 impl AzureObjectNames {
-    pub fn new(stm: Pageable<
-        ListBlobsResponse,
-        azure_core::error::Error
-    >) -> Self {
+    pub fn new(stm: Pageable<ListBlobsResponse, azure_core::error::Error>) -> Self {
         Self {
             stm: Mutex::new(stm),
             read_but_not_yet_returned: Default::default(),
@@ -28,7 +20,7 @@ impl AzureObjectNames {
         }
     }
 
-    async fn read_impl(&mut self, len: u64) -> anyhow::Result<(Vec<String>,bool)> {
+    async fn read_impl(&mut self, len: u64) -> anyhow::Result<(Vec<String>, bool)> {
         use futures::StreamExt;
 
         let len: usize = len.try_into().unwrap();
@@ -78,7 +70,7 @@ impl AzureObjectNames {
 #[async_trait]
 impl spin_factor_blobstore::ObjectNames for AzureObjectNames {
     async fn read(&mut self, len: u64) -> anyhow::Result<(Vec<String>, bool)> {
-        self.read_impl(len).await  // Separate function because rust-analyser gives better intellisense when async_trait isn't in the picture!
+        self.read_impl(len).await // Separate function because rust-analyser gives better intellisense when async_trait isn't in the picture!
     }
 
     async fn skip(&mut self, num: u64) -> anyhow::Result<(u64, bool)> {

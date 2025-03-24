@@ -47,11 +47,21 @@ impl MakeBlobStore for S3BlobStore {
         runtime_config: Self::RuntimeConfig,
     ) -> anyhow::Result<Self::ContainerManager> {
         let auth = match (&runtime_config.access_key, &runtime_config.secret_key) {
-            (Some(access_key), Some(secret_key)) => store::BlobStoreS3AuthOptions::RuntimeConfigValues(store::BlobStoreS3RuntimeConfigOptions::new(access_key.clone(), secret_key.clone(), runtime_config.token.clone())),
+            (Some(access_key), Some(secret_key)) => {
+                store::BlobStoreS3AuthOptions::RuntimeConfigValues(
+                    store::BlobStoreS3RuntimeConfigOptions::new(
+                        access_key.clone(),
+                        secret_key.clone(),
+                        runtime_config.token.clone(),
+                    ),
+                )
+            }
             (None, None) => store::BlobStoreS3AuthOptions::Environmental,
-            _ => anyhow::bail!("either both of access_key and secret_key must be provided, or neither"),
+            _ => anyhow::bail!(
+                "either both of access_key and secret_key must be provided, or neither"
+            ),
         };
-    
+
         let blob_store = BlobStoreS3::new(runtime_config.region, auth, runtime_config.bucket)?;
         Ok(blob_store)
     }

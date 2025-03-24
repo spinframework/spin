@@ -135,8 +135,7 @@ where
         let key_value_resolver = key_value_config_resolver(runtime_config_dir, state_dir.clone());
         let sqlite_resolver = sqlite_config_resolver(state_dir.clone())
             .context("failed to resolve sqlite runtime config")?;
-        let blobstore_config_resolver =
-            blobstore_config_resolver(toml_resolver.state_dir()?);
+        let blobstore_config_resolver = blobstore_config_resolver(toml_resolver.state_dir()?);
 
         let toml = toml_resolver.toml();
         let log_dir = toml_resolver.log_dir()?;
@@ -381,7 +380,9 @@ impl FactorRuntimeConfigSource<SqliteFactor> for TomlRuntimeConfigSource<'_, '_>
 }
 
 impl FactorRuntimeConfigSource<BlobStoreFactor> for TomlRuntimeConfigSource<'_, '_> {
-    fn get_runtime_config(&mut self) -> anyhow::Result<Option<spin_factor_blobstore::RuntimeConfig>> {
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<spin_factor_blobstore::RuntimeConfig>> {
         // TODO: actually
         Ok(Some(self.blob_store.resolve(Some(&self.toml.table))?))
     }
@@ -457,9 +458,10 @@ fn sqlite_config_resolver(
 /// The blob store runtime configuration resolver.
 pub fn blobstore_config_resolver(
     // local_store_base_path: Option<PathBuf>,
-    _default_store_base_path: Option<PathBuf>,  // TODO: used?
+    _default_store_base_path: Option<PathBuf>, // TODO: used?
 ) -> spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver {
-    let mut blobstore_resolver = spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver::new();
+    let mut blobstore_resolver =
+        spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver::new();
 
     // Register the supported store types.
     // Unwraps are safe because the store types are known to not overlap.

@@ -3,8 +3,8 @@ mod store;
 use serde::Deserialize;
 use spin_factor_blobstore::runtime_config::spin::MakeBlobStore;
 use store::{
-    AzureContainerManager,
     auth::{AzureBlobAuthOptions, AzureKeyAuth},
+    AzureContainerManager,
 };
 
 /// A key-value store that uses Azure Cosmos as the backend.
@@ -41,7 +41,10 @@ impl MakeBlobStore for AzureBlobStoreBuilder {
         runtime_config: Self::RuntimeConfig,
     ) -> anyhow::Result<Self::ContainerManager> {
         let auth = match &runtime_config.key {
-            Some(key) => AzureBlobAuthOptions::AccountKey(AzureKeyAuth::new(runtime_config.account.clone(), key.clone())),
+            Some(key) => AzureBlobAuthOptions::AccountKey(AzureKeyAuth::new(
+                runtime_config.account.clone(),
+                key.clone(),
+            )),
             None => AzureBlobAuthOptions::Environmental,
         };
 
