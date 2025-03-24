@@ -38,8 +38,7 @@ impl AzureIncomingData {
     fn consume_as_stream(&mut self) -> impl futures::stream::Stream<Item = Result<Vec<u8>, std::io::Error>> {
         let opt_stm = self.stm.get_mut();
         let stm = opt_stm.take().unwrap();
-        let byte_stm = stm.flat_map(|chunk| streamify_chunk(chunk.unwrap().data));
-        byte_stm
+        stm.flat_map(|chunk| streamify_chunk(chunk.unwrap().data))
     }
 }
 

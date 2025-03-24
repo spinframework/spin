@@ -126,7 +126,7 @@ pub struct WasiImplInner<'a> {
     pub table: &'a mut ResourceTable,
 }
 
-impl<'a> wasmtime_wasi::WasiView for WasiImplInner<'a> {
+impl wasmtime_wasi::WasiView for WasiImplInner<'_> {
     fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
         self.ctx
     }
@@ -171,7 +171,7 @@ impl<'a> BlobStoreDispatch<'a> {
     }
 }
 
-impl<'a> wb::Host for BlobStoreDispatch<'a> {
+impl wb::Host for BlobStoreDispatch<'_> {
     async fn create_container(&mut self, _name: String) -> Result<Resource<wbc::Container>, String> {
         Err("This version of Spin does not support creating containers".to_owned())
     }
@@ -208,13 +208,13 @@ impl<'a> wb::Host for BlobStoreDispatch<'a> {
     }
 }
 
-impl<'a> wbt::Host for BlobStoreDispatch<'a> {
+impl wbt::Host for BlobStoreDispatch<'_> {
     fn convert_error(&mut self, error: String) -> anyhow::Result<String> {
         Ok(error)
     }
 }
 
-impl<'a> wbt::HostIncomingValue for BlobStoreDispatch<'a> {
+impl wbt::HostIncomingValue for BlobStoreDispatch<'_> {
     async fn incoming_value_consume_sync(&mut self, self_: Resource<wbt::IncomingValue>) -> Result<Vec<u8>, String> {
         let mut incoming = self.take_incoming_value(self_).await?;
         incoming.as_mut().consume_sync().await.map_err(|e| e.to_string())
@@ -240,7 +240,7 @@ impl<'a> wbt::HostIncomingValue for BlobStoreDispatch<'a> {
     }
 }
 
-impl<'a> wbt::HostOutgoingValue for BlobStoreDispatch<'a> {
+impl wbt::HostOutgoingValue for BlobStoreDispatch<'_> {
     async fn new_outgoing_value(&mut self) -> anyhow::Result<Resource<wbt::OutgoingValue>> {
         let outgoing_value = OutgoingValue::new();
         let rep = self.outgoing_values.write().await.push(outgoing_value).unwrap();
@@ -286,9 +286,9 @@ impl<'a> wbt::HostOutgoingValue for BlobStoreDispatch<'a> {
 }
 
 // TODO: TBD if these belong on BSD or some other struct (like the one that maps to a Container resource JUST SAYIN)
-impl<'a> wbc::Host for BlobStoreDispatch<'a> {}
+impl wbc::Host for BlobStoreDispatch<'_> {}
 
-impl<'a> wbc::HostContainer for BlobStoreDispatch<'a> {
+impl wbc::HostContainer for BlobStoreDispatch<'_> {
     async fn name(&mut self, self_: Resource<wbc::Container>) -> Result<String, String> {
         let lock = self.containers.read().await;
         let container = lock.get(self_.rep()).ok_or_else(||
@@ -387,7 +387,7 @@ impl<'a> wbc::HostContainer for BlobStoreDispatch<'a> {
     }
 }
 
-impl<'a> wbc::HostStreamObjectNames for BlobStoreDispatch<'a> {
+impl wbc::HostStreamObjectNames for BlobStoreDispatch<'_> {
     async fn read_stream_object_names(&mut self, self_: Resource<wbc::StreamObjectNames>, len: u64) -> Result<(Vec<String>,bool), String> {
         let mut lock = self.object_names.write().await;
         let object_names = lock.get_mut(self_.rep()).ok_or_else(||
