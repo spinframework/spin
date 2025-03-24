@@ -7995,7 +7995,7 @@ dependencies = [
 
 [[package]]
 name = "spin-blobstore-azure"
-version = "3.2.0-pre0"
+version = "3.3.0-pre0"
 dependencies = [
  "anyhow",
  "azure_core",
@@ -8014,7 +8014,7 @@ dependencies = [
 
 [[package]]
 name = "spin-blobstore-fs"
-version = "3.2.0-pre0"
+version = "3.3.0-pre0"
 dependencies = [
  "anyhow",
  "futures",
@@ -8030,7 +8030,7 @@ dependencies = [
 
 [[package]]
 name = "spin-blobstore-s3"
-version = "3.2.0-pre0"
+version = "3.3.0-pre0"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -8248,7 +8248,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-blobstore"
-version = "3.2.0-pre0"
+version = "3.3.0-pre0"
 dependencies = [
  "anyhow",
  "bytes",
