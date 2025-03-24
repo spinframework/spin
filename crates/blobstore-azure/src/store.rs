@@ -123,49 +123,12 @@ impl Container for AzureContainer {
         Ok(Box::new(AzureIncomingData::new(client, range)))
     }
 
-    async fn connect_stm(&self, name: &str, mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<()>) -> anyhow::Result<()> {
-        use tokio::io::AsyncReadExt;
-
-        // Azure limits us to 50k blocks per blob.  At 2MB/block that allows 100GB, which will be
-        // enough for most use cases.  If users need flexibility for larger blobs, we could make
-        // the block size configurable via the runtime config ("size hint" or something).
-        const BLOCK_SIZE: usize = 2 * 1024 * 1024;
-
+    async fn connect_stm(&self, name: &str, stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>) -> anyhow::Result<()> {
         let client = self.client.blob_client(name);
 
         tokio::spawn(async move {
-            let mut blocks = vec![];
-
-            'put_blocks: loop {
-                let mut bytes = Vec::with_capacity(BLOCK_SIZE);
-                loop {
-                    let read = stm.read_buf(&mut bytes).await.unwrap();
-                    let len = bytes.len();
-
-                    if read == 0 {
-                        // end of stream - send the last block and go
-                        let id_bytes = uuid::Uuid::new_v4().as_bytes().to_vec();
-                        let block_id = azure_storage_blobs::prelude::BlockId::new(id_bytes);
-                        client.put_block(block_id.clone(), bytes).await.unwrap();
-                        blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(block_id));
-                        break 'put_blocks;
-                    }
-                    if len >= BLOCK_SIZE {
-                        let id_bytes = uuid::Uuid::new_v4().as_bytes().to_vec();
-                        let block_id = azure_storage_blobs::prelude::BlockId::new(id_bytes);
-                        client.put_block(block_id.clone(), bytes).await.unwrap();
-                        blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(block_id));
-                        break;
-                    }
-                }
-            }
-
-            let block_list = azure_storage_blobs::blob::BlockList {
-                blocks
-            };
-            client.put_block_list(block_list).await.unwrap();
-
-            finished_tx.send(()).await.expect("should sent finish tx");
+            let result = Self::connect_stm_core(stm, client).await;
+            finished_tx.send(result).await.expect("should sent finish tx");
         });
 
         Ok(())
@@ -177,3 +140,46 @@ impl Container for AzureContainer {
     }
 }
 
+impl AzureContainer {
+    async fn connect_stm_core(mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, client: azure_storage_blobs::prelude::BlobClient) -> anyhow::Result<()> {
+        use tokio::io::AsyncReadExt;
+
+        // Azure limits us to 50k blocks per blob.  At 2MB/block that allows 100GB, which will be
+        // enough for most use cases.  If users need flexibility for larger blobs, we could make
+        // the block size configurable via the runtime config ("size hint" or something).
+        const BLOCK_SIZE: usize = 2 * 1024 * 1024;
+
+        let mut blocks = vec![];
+
+        'put_blocks: loop {
+            let mut bytes = Vec::with_capacity(BLOCK_SIZE);
+            loop {
+                let read = stm.read_buf(&mut bytes).await?;
+                let len = bytes.len();
+
+                if read == 0 {
+                    // end of stream - send the last block and go
+                    let id_bytes = uuid::Uuid::new_v4().as_bytes().to_vec();
+                    let block_id = azure_storage_blobs::prelude::BlockId::new(id_bytes);
+                    client.put_block(block_id.clone(), bytes).await?;
+                    blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(block_id));
+                    break 'put_blocks;
+                }
+                if len >= BLOCK_SIZE {
+                    let id_bytes = uuid::Uuid::new_v4().as_bytes().to_vec();
+                    let block_id = azure_storage_blobs::prelude::BlockId::new(id_bytes);
+                    client.put_block(block_id.clone(), bytes).await?;
+                    blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(block_id));
+                    break;
+                }
+            }
+        }
+
+        let block_list = azure_storage_blobs::blob::BlockList {
+            blocks
+        };
+        client.put_block_list(block_list).await?;
+
+        Ok(())
+    }
+}

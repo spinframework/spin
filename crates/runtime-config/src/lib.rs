@@ -459,24 +459,21 @@ pub fn blobstore_config_resolver(
     // local_store_base_path: Option<PathBuf>,
     _default_store_base_path: Option<PathBuf>,  // TODO: used?
 ) -> spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver {
-    let mut cr = spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver::new();
+    let mut blobstore_resolver = spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver::new();
 
     // Register the supported store types.
     // Unwraps are safe because the store types are known to not overlap.
-    cr
-        .register_store_type(spin_blobstore_memory::MemoryBlobStore::new())
-        .unwrap();
-    cr
+    blobstore_resolver
         .register_store_type(spin_blobstore_fs::FileSystemBlobStore::new())
         .unwrap();
-    cr
+    blobstore_resolver
         .register_store_type(spin_blobstore_azure::AzureBlobStoreBuilder::new())
         .unwrap();
-    cr
+    blobstore_resolver
         .register_store_type(spin_blobstore_s3::S3BlobStore::new())
         .unwrap();
 
-    cr
+    blobstore_resolver
 }
 
 #[cfg(test)]

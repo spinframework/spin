@@ -202,26 +202,13 @@ impl Container for S3Container {
         Ok(Box::new(S3IncomingData::new(resp)))
     }
 
-    async fn connect_stm(&self, name: &str, mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<()>) -> anyhow::Result<()> {
+    async fn connect_stm(&self, name: &str, stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>) -> anyhow::Result<()> {
         let store = self.store.clone();
         let path = object_store::path::Path::from(name);
 
         tokio::spawn(async move {
-            use object_store::ObjectStore;
-            let mupload = store.put_multipart(&path).await.unwrap();
-            let mut writer = object_store::WriteMultipart::new(mupload);
-            loop {
-                use tokio::io::AsyncReadExt;
-                let mut buf = vec![0; 5 * 1024 * 1024];
-                let read_amount = stm.read(&mut buf).await.unwrap();
-                if read_amount == 0 {
-                    break;
-                }
-                buf.truncate(read_amount);
-                writer.put(buf.into());
-            }
-            writer.finish().await.unwrap();
-            finished_tx.send(()).await.expect("should sent finish tx");
+            let conn_result = Self::connect_stm_core(stm, store, path).await;
+            finished_tx.send(conn_result).await.expect("should sent finish tx");
         });
 
         Ok(())
@@ -230,6 +217,28 @@ impl Container for S3Container {
     async fn list_objects(&self) -> anyhow::Result<Box<dyn spin_factor_blobstore::ObjectNames>> {
         let stm = self.client.list_objects_v2().bucket(&self.name).into_paginator().send();
         Ok(Box::new(S3BlobsList::new(stm)))
+    }
+}
+
+impl S3Container {
+    async fn connect_stm_core(mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, store: object_store::aws::AmazonS3, path: object_store::path::Path) -> anyhow::Result<()> {
+        use object_store::ObjectStore;
+
+        let mupload = store.put_multipart(&path).await?;
+        let mut writer = object_store::WriteMultipart::new(mupload);
+        loop {
+            use tokio::io::AsyncReadExt;
+            let mut buf = vec![0; 5 * 1024 * 1024];
+            let read_amount = stm.read(&mut buf).await?;
+            if read_amount == 0 {
+                break;
+            }
+            buf.truncate(read_amount);
+            writer.put(buf.into());
+        }
+        writer.finish().await?;
+
+        Ok(())
     }
 }
 

@@ -8029,21 +8029,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spin-blobstore-memory"
-version = "3.2.0-pre0"
-dependencies = [
- "anyhow",
- "futures",
- "serde",
- "spin-core",
- "spin-factor-blobstore",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "wasmtime-wasi",
-]
-
-[[package]]
 name = "spin-blobstore-s3"
 version = "3.2.0-pre0"
 dependencies = [
@@ -8772,7 +8757,6 @@ dependencies = [
  "anyhow",
  "spin-blobstore-azure",
  "spin-blobstore-fs",
- "spin-blobstore-memory",
  "spin-blobstore-s3",
  "spin-common",
  "spin-factor-blobstore",
