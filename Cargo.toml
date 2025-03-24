@@ -6,7 +6,7 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [workspace.package]
-version = "3.2.0-pre0"
+version = "3.2.0"
 authors = ["Fermyon Engineering <engineering@fermyon.com>"]
 edition = "2021"
 license = "Apache-2.0 WITH LLVM-exception"
