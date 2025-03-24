@@ -2,9 +2,9 @@
 
 use {
     anyhow::{anyhow, Context, Result},
-    convert::{IntoEntityType, IntoExportKind},
     module_info::ModuleInfo,
     std::{borrow::Cow, collections::HashSet},
+    wasm_encoder::reencode::{Reencode, RoundtripReencoder},
     wasm_encoder::{CustomSection, ExportSection, ImportSection, Module, RawSection},
     wasmparser::{Encoding, Parser, Payload},
     wit_component::{metadata, ComponentEncoder},
@@ -14,7 +14,6 @@ pub mod bugs;
 
 #[cfg(test)]
 mod abi_conformance;
-mod convert;
 mod module_info;
 
 const SPIN_ADAPTER: &[u8] = include_bytes!(concat!(
@@ -199,7 +198,8 @@ fn retarget_imports_and_get_exports(target: &str, module: &[u8]) -> Result<(Vec<
                             Cow::Owned(format!("{}:{}", import.module, import.name)),
                         )
                     };
-                    imports.import(&module, &field, IntoEntityType(import.ty));
+                    let ty = RoundtripReencoder.entity_type(import.ty)?;
+                    imports.import(&module, &field, ty);
                 }
                 result.section(&imports);
             }
@@ -209,11 +209,8 @@ fn retarget_imports_and_get_exports(target: &str, module: &[u8]) -> Result<(Vec<
                 for export in reader {
                     let export = export?;
                     exports_result.push(export.name.to_owned());
-                    exports.export(
-                        export.name,
-                        IntoExportKind(export.kind).into(),
-                        export.index,
-                    );
+                    let kind = RoundtripReencoder.export_kind(export.kind);
+                    exports.export(export.name, kind, export.index);
                 }
                 result.section(&exports);
             }

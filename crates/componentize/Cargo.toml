@@ -11,7 +11,7 @@ rust-version.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 tracing = { workspace = true }
-wasm-encoder = { workspace = true }
+wasm-encoder = { workspace = true, features = ['wasmparser'] }
 wasm-metadata = { workspace = true }
 wasmparser = { workspace = true }
 wit-component = { workspace = true }
