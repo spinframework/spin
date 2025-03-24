@@ -68,9 +68,7 @@ impl Worker {
     }
     fn check_write(&self) -> Result<usize, StreamError> {
         let mut state = self.state();
-        if let Err(e) = state.check_error() {
-            return Err(e);
-        }
+        state.check_error()?;
 
         if state.flush_pending || state.shutdown_pending || state.write_budget == 0 {
             return Ok(0);
@@ -256,10 +254,9 @@ impl HostOutputStream for AsyncWriteStream {
         if let Some(handle) = self.shutdown_join_handle.take() {
             handle.abort();
         };
-        match self.join_handle.take() {
-            Some(task) => _ = cancel(task).await,
-            None => {}
-        }
+        if let Some(task) = self.join_handle.take() {
+            _ = cancel(task).await;
+        };
     }
 }
 #[spin_core::async_trait]

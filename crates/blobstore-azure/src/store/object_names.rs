@@ -63,14 +63,14 @@ impl AzureObjectNames {
 
         if names.len() <= len {
             // We can send them all!
-            return Ok((names, at_end));
+            Ok((names, at_end))
         } else {
             // We have more names than we can send in this response. Send what we can and
             // stash the rest.
             let to_return: Vec<_> = names.drain(0..len).collect();
             self.read_but_not_yet_returned = names;
             self.end_stm_after_read_but_not_yet_returned = at_end;
-            return Ok((to_return, false));
+            Ok((to_return, false))
         }
     }
 }
