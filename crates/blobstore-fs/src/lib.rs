@@ -1,4 +1,7 @@
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -41,9 +44,7 @@ pub struct BlobStoreFileSystem {
 
 impl BlobStoreFileSystem {
     fn new(path: PathBuf) -> Self {
-        Self {
-            path,
-        }
+        Self { path }
     }
 }
 
@@ -114,7 +115,7 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
                 std::fs::remove_file(entry.path())?;
             }
         }
-        
+
         Ok(())
     }
     async fn delete_object(&self, name: &str) -> anyhow::Result<()> {
@@ -134,9 +135,16 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
     async fn has_object(&self, name: &str) -> anyhow::Result<bool> {
         Ok(self.object_path(name)?.exists())
     }
-    async fn object_info(&self, name: &str) -> anyhow::Result<spin_factor_blobstore::ObjectMetadata> {
+    async fn object_info(
+        &self,
+        name: &str,
+    ) -> anyhow::Result<spin_factor_blobstore::ObjectMetadata> {
         let meta = tokio::fs::metadata(self.object_path(name)?).await?;
-        let created_at = meta.created()?.duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_nanos().try_into()?;
+        let created_at = meta
+            .created()?
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)?
+            .as_nanos()
+            .try_into()?;
         Ok(spin_factor_blobstore::ObjectMetadata {
             name: name.to_string(),
             container: self.name.to_string(),
@@ -144,14 +152,28 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
             size: meta.len(),
         })
     }
-    async fn get_data(&self, name: &str, start: u64, end: u64) -> anyhow::Result<Box<dyn spin_factor_blobstore::IncomingData>> {
+    async fn get_data(
+        &self,
+        name: &str,
+        start: u64,
+        end: u64,
+    ) -> anyhow::Result<Box<dyn spin_factor_blobstore::IncomingData>> {
         let path = self.object_path(name)?;
         let file = tokio::fs::File::open(&path).await?;
-        
-        Ok(Box::new(BlobContent { file: Some(file), start, end }))
+
+        Ok(Box::new(BlobContent {
+            file: Some(file),
+            start,
+            end,
+        }))
     }
 
-    async fn connect_stm(&self, name: &str, stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>) -> anyhow::Result<()> {
+    async fn connect_stm(
+        &self,
+        name: &str,
+        stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+        finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>,
+    ) -> anyhow::Result<()> {
         let path = self.object_path(name)?;
         if let Some(dir) = path.parent() {
             tokio::fs::create_dir_all(dir).await?;
@@ -160,7 +182,10 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
 
         tokio::spawn(async move {
             let result = Self::connect_stm_core(stm, file).await;
-            finished_tx.send(result).await.expect("shoulda sent finished_tx");
+            finished_tx
+                .send(result)
+                .await
+                .expect("shoulda sent finished_tx");
         });
 
         Ok(())
@@ -168,16 +193,22 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
 
     async fn list_objects(&self) -> anyhow::Result<Box<dyn spin_factor_blobstore::ObjectNames>> {
         if !self.path.is_dir() {
-            anyhow::bail!("Backing store for {} does not exist or is not a directory", self.name);
+            anyhow::bail!(
+                "Backing store for {} does not exist or is not a directory",
+                self.name
+            );
         }
         Ok(Box::new(BlobNames::new(&self.path)))
     }
 }
 
 impl FileSystemContainer {
-    async fn connect_stm_core(mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, mut file: tokio::fs::File) -> anyhow::Result<()> {
-        use tokio::io::AsyncWriteExt;
+    async fn connect_stm_core(
+        mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+        mut file: tokio::fs::File,
+    ) -> anyhow::Result<()> {
         use tokio::io::AsyncReadExt;
+        use tokio::io::AsyncWriteExt;
 
         const BUF_SIZE: usize = 8192;
 
@@ -210,14 +241,16 @@ impl spin_factor_blobstore::IncomingData for BlobContent {
         let mut buf = Vec::with_capacity(1000);
 
         file.seek(std::io::SeekFrom::Start(self.start)).await?;
-        file.take(self.end - self.start).read_to_end(&mut buf).await?;
+        file.take(self.end - self.start)
+            .read_to_end(&mut buf)
+            .await?;
 
         Ok(buf)
     }
 
     fn consume_async(&mut self) -> wasmtime_wasi::pipe::AsyncReadStream {
-        use futures::TryStreamExt;
         use futures::StreamExt;
+        use futures::TryStreamExt;
         use tokio_util::compat::FuturesAsyncReadCompatExt;
 
         let file = self.file.take().unwrap();
@@ -246,19 +279,34 @@ struct BlobNames {
 
 impl BlobNames {
     fn new(path: &Path) -> Self {
-        let walk_dir = walkdir::WalkDir::new(path).into_iter().filter_map(as_file_path);
-        Self { walk_dir: Box::new(walk_dir), base_path: path.to_owned() }
+        let walk_dir = walkdir::WalkDir::new(path)
+            .into_iter()
+            .filter_map(as_file_path);
+        Self {
+            walk_dir: Box::new(walk_dir),
+            base_path: path.to_owned(),
+        }
     }
 
     fn object_name(&self, path: &Path) -> anyhow::Result<String> {
-        Ok(path.strip_prefix(&self.base_path).map(|p| format!("{}", p.display()))?)
+        Ok(path
+            .strip_prefix(&self.base_path)
+            .map(|p| format!("{}", p.display()))?)
     }
 }
 
-fn as_file_path(entry: Result<walkdir::DirEntry, walkdir::Error>) -> Option<Result<PathBuf, walkdir::Error>> {
+fn as_file_path(
+    entry: Result<walkdir::DirEntry, walkdir::Error>,
+) -> Option<Result<PathBuf, walkdir::Error>> {
     match entry {
         Err(err) => Some(Err(err)),
-        Ok(entry) => if entry.file_type().is_file() { Some(Ok(entry.into_path())) } else { None },
+        Ok(entry) => {
+            if entry.file_type().is_file() {
+                Some(Ok(entry.into_path()))
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -289,7 +337,7 @@ impl spin_factor_blobstore::ObjectNames for BlobNames {
         Ok((names, at_end))
     }
 
-    async fn skip(&mut self, num: u64) -> anyhow::Result<(u64,bool)> {
+    async fn skip(&mut self, num: u64) -> anyhow::Result<(u64, bool)> {
         // TODO: we could save semi-duplicate code by delegating to `read`?
         // The cost would be a bunch of allocation but that seems minor when
         // you're dealing with the filesystem.

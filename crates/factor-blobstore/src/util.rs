@@ -1,9 +1,6 @@
-use crate::{Error, Container, ContainerManager};
+use crate::{Container, ContainerManager, Error};
 use spin_core::async_trait;
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 /// A [`ContainerManager`] which delegates to other `ContainerManager`s based on the store label.
 pub struct DelegatingContainerManager {

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use azure_storage_blobs::prelude::{BlobServiceClient, ContainerClient};
 use spin_core::async_trait;
-use spin_factor_blobstore::{Error, Container, ContainerManager};
+use spin_factor_blobstore::{Container, ContainerManager, Error};
 
 pub mod auth;
 mod incoming_data;
@@ -18,21 +18,25 @@ pub struct AzureContainerManager {
 }
 
 impl AzureContainerManager {
-    pub fn new(
-        auth_options: AzureBlobAuthOptions,
-    ) -> Result<Self> {
+    pub fn new(auth_options: AzureBlobAuthOptions) -> Result<Self> {
         let (account, credentials) = match auth_options {
-            AzureBlobAuthOptions::AccountKey(config) => {
-                (config.account.clone(), azure_storage::StorageCredentials::access_key(&config.account, config.key.clone()))
-            },
+            AzureBlobAuthOptions::AccountKey(config) => (
+                config.account.clone(),
+                azure_storage::StorageCredentials::access_key(&config.account, config.key.clone()),
+            ),
             AzureBlobAuthOptions::Environmental => {
                 let account = std::env::var("STORAGE_ACCOUNT").expect("missing STORAGE_ACCOUNT");
-                let access_key = std::env::var("STORAGE_ACCESS_KEY").expect("missing STORAGE_ACCOUNT_KEY");
-                (account.clone(), azure_storage::StorageCredentials::access_key(account, access_key))
-            },
+                let access_key =
+                    std::env::var("STORAGE_ACCESS_KEY").expect("missing STORAGE_ACCOUNT_KEY");
+                (
+                    account.clone(),
+                    azure_storage::StorageCredentials::access_key(account, access_key),
+                )
+            }
         };
 
-        let client = azure_storage_blobs::prelude::ClientBuilder::new(account, credentials).blob_service_client();
+        let client = azure_storage_blobs::prelude::ClientBuilder::new(account, credentials)
+            .blob_service_client();
         Ok(Self { client })
     }
 }
@@ -51,7 +55,10 @@ impl ContainerManager for AzureContainerManager {
     }
 
     fn summary(&self, _store_name: &str) -> Option<String> {
-        Some(format!("Azure blob storage account {}", self.client.account()))
+        Some(format!(
+            "Azure blob storage account {}",
+            self.client.account()
+        ))
     }
 }
 
@@ -101,17 +108,31 @@ impl Container for AzureContainer {
         Ok(self.client.blob_client(name).exists().await?)
     }
 
-    async fn object_info(&self, name: &str) -> anyhow::Result<spin_factor_blobstore::ObjectMetadata> {
+    async fn object_info(
+        &self,
+        name: &str,
+    ) -> anyhow::Result<spin_factor_blobstore::ObjectMetadata> {
         let response = self.client.blob_client(name).get_properties().await?;
         Ok(spin_factor_blobstore::ObjectMetadata {
             name: name.to_string(),
             container: self.client.container_name().to_string(),
-            created_at: response.blob.properties.creation_time.unix_timestamp().try_into().unwrap(),
+            created_at: response
+                .blob
+                .properties
+                .creation_time
+                .unix_timestamp()
+                .try_into()
+                .unwrap(),
             size: response.blob.properties.content_length,
         })
     }
 
-    async fn get_data(&self, name: &str, start: u64, end: u64) -> anyhow::Result<Box<dyn spin_factor_blobstore::IncomingData>> {
+    async fn get_data(
+        &self,
+        name: &str,
+        start: u64,
+        end: u64,
+    ) -> anyhow::Result<Box<dyn spin_factor_blobstore::IncomingData>> {
         // We can't use a Rust range because the Azure type does not accept inclusive ranges,
         // and we don't want to add 1 to `end` if it's already at MAX!
         let range = if end == u64::MAX {
@@ -123,12 +144,20 @@ impl Container for AzureContainer {
         Ok(Box::new(AzureIncomingData::new(client, range)))
     }
 
-    async fn connect_stm(&self, name: &str, stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>) -> anyhow::Result<()> {
+    async fn connect_stm(
+        &self,
+        name: &str,
+        stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+        finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>,
+    ) -> anyhow::Result<()> {
         let client = self.client.blob_client(name);
 
         tokio::spawn(async move {
             let result = Self::connect_stm_core(stm, client).await;
-            finished_tx.send(result).await.expect("should sent finish tx");
+            finished_tx
+                .send(result)
+                .await
+                .expect("should sent finish tx");
         });
 
         Ok(())
@@ -141,7 +170,10 @@ impl Container for AzureContainer {
 }
 
 impl AzureContainer {
-    async fn connect_stm_core(mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, client: azure_storage_blobs::prelude::BlobClient) -> anyhow::Result<()> {
+    async fn connect_stm_core(
+        mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+        client: azure_storage_blobs::prelude::BlobClient,
+    ) -> anyhow::Result<()> {
         use tokio::io::AsyncReadExt;
 
         // Azure limits us to 50k blocks per blob.  At 2MB/block that allows 100GB, which will be
@@ -162,22 +194,24 @@ impl AzureContainer {
                     let id_bytes = uuid::Uuid::new_v4().as_bytes().to_vec();
                     let block_id = azure_storage_blobs::prelude::BlockId::new(id_bytes);
                     client.put_block(block_id.clone(), bytes).await?;
-                    blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(block_id));
+                    blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(
+                        block_id,
+                    ));
                     break 'put_blocks;
                 }
                 if len >= BLOCK_SIZE {
                     let id_bytes = uuid::Uuid::new_v4().as_bytes().to_vec();
                     let block_id = azure_storage_blobs::prelude::BlockId::new(id_bytes);
                     client.put_block(block_id.clone(), bytes).await?;
-                    blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(block_id));
+                    blocks.push(azure_storage_blobs::blob::BlobBlockType::Uncommitted(
+                        block_id,
+                    ));
                     break;
                 }
             }
         }
 
-        let block_list = azure_storage_blobs::blob::BlockList {
-            blocks
-        };
+        let block_list = azure_storage_blobs::blob::BlockList { blocks };
         client.put_block_list(block_list).await?;
 
         Ok(())

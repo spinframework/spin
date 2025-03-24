@@ -18,10 +18,10 @@ pub enum AzureBlobAuthOptions {
     AccountKey(AzureKeyAuth),
     /// Spin should use the environment variables of the process to
     /// create the StorageCredentials for the storage client. For now this uses old school credentials:
-    /// 
+    ///
     /// STORAGE_ACCOUNT
     /// STORAGE_ACCESS_KEY
-    /// 
+    ///
     /// TODO: Thorsten pls make this proper with *hand waving* managed identity and stuff!
     Environmental,
 }

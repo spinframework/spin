@@ -1,5 +1,5 @@
 //! Adapts the WASI streams to allow closing without resource mapping.
-//! 
+//!
 //! The solution that the Wasmtime/WASI folks advice is to map your child
 //! resources to a custom type, and have the parent "close child" function
 //! get the child resource and call a suitable function to termimate it.
