@@ -13,7 +13,6 @@ anyhow = { workspace = true }
 spin-blobstore-s3 = { path = "../blobstore-s3" }
 spin-blobstore-azure = { path = "../blobstore-azure" }
 spin-blobstore-fs = { path = "../blobstore-fs" }
-spin-blobstore-memory = { path = "../blobstore-memory" }
 spin-common = { path = "../common" }
 spin-factor-blobstore = { path = "../factor-blobstore" }
 spin-factor-key-value = { path = "../factor-key-value" }

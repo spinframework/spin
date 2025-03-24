@@ -151,30 +151,16 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
         Ok(Box::new(BlobContent { file: Some(file), start, end }))
     }
 
-    async fn connect_stm(&self, name: &str, mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<()>) -> anyhow::Result<()> {
+    async fn connect_stm(&self, name: &str, stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>) -> anyhow::Result<()> {
         let path = self.object_path(name)?;
         if let Some(dir) = path.parent() {
             tokio::fs::create_dir_all(dir).await?;
         }
-        let mut file = tokio::fs::File::create(&path).await?;
+        let file = tokio::fs::File::create(&path).await?;
 
         tokio::spawn(async move {
-            use tokio::io::AsyncWriteExt;
-            use tokio::io::AsyncReadExt;
-
-            const BUF_SIZE: usize = 8192;
-
-            loop {
-                // TODO: I think errors should send `finished_tx`.
-                // (Should finished_tx take a `Result<()` for error reporting?)
-                let mut buf = vec![0; BUF_SIZE];
-                let count = stm.read(&mut buf).await.unwrap();
-                if count == 0 {
-                    finished_tx.send(()).await.unwrap();
-                    break;
-                }
-                file.write_all(&buf[0..count]).await.unwrap();
-            }
+            let result = Self::connect_stm_core(stm, file).await;
+            finished_tx.send(result).await.expect("shoulda sent finished_tx");
         });
 
         Ok(())
@@ -185,6 +171,26 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
             anyhow::bail!("Backing store for {} does not exist or is not a directory", self.name);
         }
         Ok(Box::new(BlobNames::new(&self.path)))
+    }
+}
+
+impl FileSystemContainer {
+    async fn connect_stm_core(mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>, mut file: tokio::fs::File) -> anyhow::Result<()> {
+        use tokio::io::AsyncWriteExt;
+        use tokio::io::AsyncReadExt;
+
+        const BUF_SIZE: usize = 8192;
+
+        loop {
+            let mut buf = vec![0; BUF_SIZE];
+            let count = stm.read(&mut buf).await?;
+            if count == 0 {
+                break;
+            }
+            file.write_all(&buf[0..count]).await?;
+        }
+
+        Ok(())
     }
 }
 

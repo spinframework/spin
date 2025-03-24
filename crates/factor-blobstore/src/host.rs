@@ -40,7 +40,7 @@ pub trait Container: Sync + Send {
     async fn has_object(&self, name: &str) -> anyhow::Result<bool>;
     async fn object_info(&self, name: &str) -> anyhow::Result<wbt::ObjectMetadata>;
     async fn get_data(&self, name: &str, start: u64, end: u64) -> anyhow::Result<Box<dyn IncomingData>>;
-    async fn connect_stm(&self, name: &str, stm: ReadHalf<SimplexStream>, finished_tx: mpsc::Sender<()>) -> anyhow::Result<()>;
+    async fn connect_stm(&self, name: &str, stm: ReadHalf<SimplexStream>, finished_tx: mpsc::Sender<anyhow::Result<()>>) -> anyhow::Result<()>;
     async fn list_objects(&self) -> anyhow::Result<Box<dyn ObjectNames>>;
 }
 
@@ -61,7 +61,7 @@ pub struct OutgoingValue {
     read: Option<ReadHalf<SimplexStream>>,
     write: Option<WriteHalf<SimplexStream>>,
     stop_tx: Option<mpsc::Sender<()>>,
-    finished_rx: Option<mpsc::Receiver<()>>,
+    finished_rx: Option<mpsc::Receiver<anyhow::Result<()>>>,
 }
 
 const OUTGOING_VALUE_BUF_SIZE: usize = 16 * 1024;
@@ -90,11 +90,11 @@ impl OutgoingValue {
         Ok(stm)
     }
 
-    fn syncers(&mut self) -> (Option<&mpsc::Sender<()>>, Option<&mut mpsc::Receiver<()>>) {
+    fn syncers(&mut self) -> (Option<&mpsc::Sender<()>>, Option<&mut mpsc::Receiver<anyhow::Result<()>>>) {
         (self.stop_tx.as_ref(), self.finished_rx.as_mut())
     }
 
-    fn take_read_stream(&mut self) -> anyhow::Result<(ReadHalf<SimplexStream>, mpsc::Sender<()>)> {
+    fn take_read_stream(&mut self) -> anyhow::Result<(ReadHalf<SimplexStream>, mpsc::Sender<anyhow::Result<()>>)> {
         let Some(read) = self.read.take() else {
             anyhow::bail!("OutgoingValue has already been connected to a blob");
         };
@@ -271,9 +271,12 @@ impl<'a> wbt::HostOutgoingValue for BlobStoreDispatch<'a> {
         let finished_rx = finished_rx.expect("shoulda had a finished_rx");
 
         stop_tx.send(()).await.expect("shoulda sent a stop");
-        finished_rx.recv().await;
+        let result = finished_rx.recv().await;
 
-        Ok(())
+        match result {
+            None | Some(Ok(())) => Ok(()),
+            Some(Err(e)) => Err(format!("{e}")),
+        }
     }
 
     async fn drop(&mut self, rep: Resource<wbt::OutgoingValue>) -> anyhow::Result<()> {
