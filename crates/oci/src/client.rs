@@ -932,6 +932,7 @@ fn fs_safe_segment(segment: &str) -> impl AsRef<Path> + '_ {
 #[cfg(test)]
 mod test {
     use super::*;
+    use wit_parser::{LiftLowerAbi, ManglingAndAbi};
 
     #[test]
     fn can_parse_digest_from_manifest_url() {
@@ -1325,7 +1326,11 @@ mod test {
             .select_world(package_id, Some(world))
             .expect("should select world");
 
-        let mut wasm = wit_component::dummy_module(&resolve, world_id);
+        let mut wasm = wit_component::dummy_module(
+            &resolve,
+            world_id,
+            ManglingAndAbi::Legacy(LiftLowerAbi::Sync),
+        );
         wit_component::embed_component_metadata(
             &mut wasm,
             &resolve,
@@ -1334,7 +1339,7 @@ mod test {
         )
         .expect("should embed component metadata");
 
-        let encoder = wit_component::ComponentEncoder::default()
+        let mut encoder = wit_component::ComponentEncoder::default()
             .validate(true)
             .module(&wasm)
             .expect("should set module");
