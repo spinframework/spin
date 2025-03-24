@@ -467,6 +467,9 @@ pub fn blobstore_config_resolver(
         .register_store_type(spin_blobstore_memory::MemoryBlobStore::new())
         .unwrap();
     cr
+        .register_store_type(spin_blobstore_fs::FileSystemBlobStore::new())
+        .unwrap();
+    cr
         .register_store_type(spin_blobstore_azure::AzureBlobStoreBuilder::new())
         .unwrap();
     cr
