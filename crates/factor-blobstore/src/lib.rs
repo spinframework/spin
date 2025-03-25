@@ -55,14 +55,10 @@ impl Factor for BlobStoreFactor {
         let get_data_with_table = ctx.get_data_with_table_fn();
         let closure = type_annotate(move |data| {
             let (state, table) = get_data_with_table(data);
-            let wasi = wasmtime_wasi::WasiImpl(host::WasiImplInner {
-                ctx: &mut state.ctx,
-                table,
-            });
             BlobStoreDispatch::new(
                 state.allowed_containers.clone(),
                 state.store_manager.clone(),
-                wasi,
+                table,
                 state.containers.clone(),
                 state.incoming_values.clone(),
                 state.outgoing_values.clone(),
@@ -116,8 +112,6 @@ impl Factor for BlobStoreFactor {
         &self,
         ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<InstanceBuilder> {
-        let mut wasi_ctx = wasmtime_wasi::WasiCtxBuilder::new();
-
         let app_state = ctx.app_state();
         let allowed_containers = app_state
             .component_allowed_containers
@@ -128,7 +122,6 @@ impl Factor for BlobStoreFactor {
         Ok(InstanceBuilder {
             store_manager: app_state.container_manager.clone(),
             allowed_containers,
-            ctx: wasi_ctx.build(),
             containers: Arc::new(RwLock::new(Table::new(capacity))),
             incoming_values: Arc::new(RwLock::new(Table::new(capacity))),
             object_names: Arc::new(RwLock::new(Table::new(capacity))),
@@ -175,7 +168,6 @@ pub struct InstanceBuilder {
     store_manager: Arc<DelegatingContainerManager>,
     /// The allowed stores for this component instance.
     allowed_containers: HashSet<String>,
-    ctx: wasmtime_wasi::WasiCtx,
     containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
     incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
     outgoing_values: Arc<RwLock<Table<host::OutgoingValue>>>,
