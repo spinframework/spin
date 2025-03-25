@@ -7,7 +7,6 @@ use std::{collections::HashSet, sync::Arc};
 use tokio::io::{ReadHalf, SimplexStream, WriteHalf};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
-use wasmtime_wasi::WasiView;
 
 pub use bs::types::Error;
 
@@ -127,33 +126,18 @@ pub trait Finishable: Send + Sync {
 pub struct BlobStoreDispatch<'a> {
     allowed_containers: HashSet<String>,
     manager: Arc<dyn ContainerManager>,
-    wasi: wasmtime_wasi::WasiImpl<WasiImplInner<'a>>,
+    wasi_resources: &'a mut ResourceTable,
     containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
     incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
     outgoing_values: Arc<RwLock<Table<OutgoingValue>>>,
     object_names: Arc<RwLock<Table<Box<dyn ObjectNames>>>>,
 }
 
-pub struct WasiImplInner<'a> {
-    pub ctx: &'a mut wasmtime_wasi::WasiCtx,
-    pub table: &'a mut ResourceTable,
-}
-
-impl wasmtime_wasi::WasiView for WasiImplInner<'_> {
-    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        self.ctx
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        self.table
-    }
-}
-
 impl<'a> BlobStoreDispatch<'a> {
     pub(crate) fn new(
         allowed_containers: HashSet<String>,
         manager: Arc<dyn ContainerManager>,
-        wasi: wasmtime_wasi::WasiImpl<WasiImplInner<'a>>,
+        wasi_resources: &'a mut ResourceTable,
         containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
         incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
         outgoing_values: Arc<RwLock<Table<OutgoingValue>>>,
@@ -162,7 +146,7 @@ impl<'a> BlobStoreDispatch<'a> {
         Self {
             allowed_containers,
             manager,
-            wasi,
+            wasi_resources,
             containers,
             incoming_values,
             outgoing_values,
@@ -275,7 +259,7 @@ impl bs::types::HostIncomingValue for BlobStoreDispatch<'_> {
         let mut incoming = self.take_incoming_value(self_).await?;
         let async_body = incoming.as_mut().consume_async();
         let host_stm: Box<dyn wasmtime_wasi::HostInputStream> = Box::new(async_body);
-        let resource = self.wasi.table().push(host_stm).unwrap();
+        let resource = self.wasi_resources.push(host_stm).unwrap();
         Ok(resource)
     }
 
@@ -316,7 +300,7 @@ impl bs::types::HostOutgoingValue for BlobStoreDispatch<'_> {
         let stm = outgoing.write_stream()?;
 
         let host_stm: Box<dyn wasmtime_wasi::HostOutputStream> = Box::new(stm);
-        let resource = self.wasi.table().push(host_stm).unwrap();
+        let resource = self.wasi_resources.push(host_stm).unwrap();
 
         Ok(Ok(resource))
     }
