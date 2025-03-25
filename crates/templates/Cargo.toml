@@ -14,9 +14,9 @@ flate2 = "1"
 indexmap = { version = "2", features = ["serde"] }
 itertools = { workspace = true }
 lazy_static = "1"
-liquid = "0.26"
-liquid-core = "0.26"
-liquid-derive = "0.26"
+liquid = "=0.26.9"
+liquid-core = "=0.26.9"
+liquid-derive = "=0.26.8"
 path-absolutize = "3"
 pathdiff = "0.2"
 regex = { workspace = true }

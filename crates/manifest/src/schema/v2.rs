@@ -187,6 +187,13 @@ pub struct Component {
         skip_serializing_if = "Vec::is_empty"
     )]
     pub sqlite_databases: Vec<String>,
+    /// `blob_containers = ["default", "my-container"]`
+    #[serde(
+        default,
+        with = "kebab_or_snake_case",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub blob_containers: Vec<String>,
     /// `ai_models = ["llama2-chat"]`
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ai_models: Vec<KebabId>,
@@ -541,7 +548,8 @@ mod tests {
             allowed_http_hosts: vec![],
             allowed_outbound_hosts: vec![],
             key_value_stores: labels.clone(),
-            sqlite_databases: labels,
+            sqlite_databases: labels.clone(),
+            blob_containers: labels,
             ai_models: vec![],
             build: None,
             tool: Map::new(),
