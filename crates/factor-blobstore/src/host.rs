@@ -2,18 +2,14 @@ use anyhow::{Context, Result};
 use spin_core::wasmtime::component::ResourceTable;
 use spin_core::{async_trait, wasmtime::component::Resource};
 use spin_resource_table::Table;
-use spin_world::wasi::blobstore;
+use spin_world::wasi::blobstore::{self as bs};
 use std::{collections::HashSet, sync::Arc};
 use tokio::io::{ReadHalf, SimplexStream, WriteHalf};
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use wasmtime_wasi::WasiView;
 
-use blobstore::blobstore::{self as wb};
-use blobstore::container::{self as wbc};
-use blobstore::types::{self as wbt};
-
-pub use wbt::Error;
+pub use bs::types::Error;
 
 #[async_trait]
 pub trait ContainerManager: Sync + Send {
@@ -33,12 +29,12 @@ pub trait ContainerManager: Sync + Send {
 pub trait Container: Sync + Send {
     async fn exists(&self) -> anyhow::Result<bool>;
     async fn name(&self) -> String;
-    async fn info(&self) -> anyhow::Result<wbt::ContainerMetadata>;
+    async fn info(&self) -> anyhow::Result<bs::types::ContainerMetadata>;
     async fn clear(&self) -> anyhow::Result<()>;
     async fn delete_object(&self, name: &str) -> anyhow::Result<()>;
     async fn delete_objects(&self, names: &[String]) -> anyhow::Result<()>;
     async fn has_object(&self, name: &str) -> anyhow::Result<bool>;
-    async fn object_info(&self, name: &str) -> anyhow::Result<wbt::ObjectMetadata>;
+    async fn object_info(&self, name: &str) -> anyhow::Result<bs::types::ObjectMetadata>;
     async fn get_data(
         &self,
         name: &str,
@@ -176,7 +172,7 @@ impl<'a> BlobStoreDispatch<'a> {
 
     pub async fn get_container(
         &self,
-        container: Resource<wb::Container>,
+        container: Resource<bs::blobstore::Container>,
     ) -> anyhow::Result<Arc<dyn Container>> {
         self.containers
             .read()
@@ -192,7 +188,7 @@ impl<'a> BlobStoreDispatch<'a> {
 
     async fn take_incoming_value(
         &mut self,
-        resource: Resource<wbc::IncomingValue>,
+        resource: Resource<bs::container::IncomingValue>,
     ) -> Result<Box<dyn IncomingData>, String> {
         self.incoming_values
             .write()
@@ -202,15 +198,18 @@ impl<'a> BlobStoreDispatch<'a> {
     }
 }
 
-impl wb::Host for BlobStoreDispatch<'_> {
+impl bs::blobstore::Host for BlobStoreDispatch<'_> {
     async fn create_container(
         &mut self,
         _name: String,
-    ) -> Result<Resource<wbc::Container>, String> {
+    ) -> Result<Resource<bs::container::Container>, String> {
         Err("This version of Spin does not support creating containers".to_owned())
     }
 
-    async fn get_container(&mut self, name: String) -> Result<Resource<wbc::Container>, String> {
+    async fn get_container(
+        &mut self,
+        name: String,
+    ) -> Result<Resource<bs::container::Container>, String> {
         if self.allowed_containers.contains(&name) {
             let container = self.manager.get(&name).await?;
             let rep = self.containers.write().await.push(container).unwrap();
@@ -233,25 +232,33 @@ impl wb::Host for BlobStoreDispatch<'_> {
         }
     }
 
-    async fn copy_object(&mut self, _src: wb::ObjectId, _dest: wb::ObjectId) -> Result<(), String> {
+    async fn copy_object(
+        &mut self,
+        _src: bs::blobstore::ObjectId,
+        _dest: bs::blobstore::ObjectId,
+    ) -> Result<(), String> {
         Err("This version of Spin does not support copying objects".to_owned())
     }
 
-    async fn move_object(&mut self, _src: wb::ObjectId, _dest: wb::ObjectId) -> Result<(), String> {
+    async fn move_object(
+        &mut self,
+        _src: bs::blobstore::ObjectId,
+        _dest: bs::blobstore::ObjectId,
+    ) -> Result<(), String> {
         Err("This version of Spin does not support moving objects".to_owned())
     }
 }
 
-impl wbt::Host for BlobStoreDispatch<'_> {
+impl bs::types::Host for BlobStoreDispatch<'_> {
     fn convert_error(&mut self, error: String) -> anyhow::Result<String> {
         Ok(error)
     }
 }
 
-impl wbt::HostIncomingValue for BlobStoreDispatch<'_> {
+impl bs::types::HostIncomingValue for BlobStoreDispatch<'_> {
     async fn incoming_value_consume_sync(
         &mut self,
-        self_: Resource<wbt::IncomingValue>,
+        self_: Resource<bs::types::IncomingValue>,
     ) -> Result<Vec<u8>, String> {
         let mut incoming = self.take_incoming_value(self_).await?;
         incoming
@@ -263,7 +270,7 @@ impl wbt::HostIncomingValue for BlobStoreDispatch<'_> {
 
     async fn incoming_value_consume_async(
         &mut self,
-        self_: Resource<wbt::IncomingValue>,
+        self_: Resource<bs::types::IncomingValue>,
     ) -> Result<Resource<wasmtime_wasi::InputStream>, String> {
         let mut incoming = self.take_incoming_value(self_).await?;
         let async_body = incoming.as_mut().consume_async();
@@ -272,7 +279,7 @@ impl wbt::HostIncomingValue for BlobStoreDispatch<'_> {
         Ok(resource)
     }
 
-    async fn size(&mut self, self_: Resource<wbt::IncomingValue>) -> anyhow::Result<u64> {
+    async fn size(&mut self, self_: Resource<bs::types::IncomingValue>) -> anyhow::Result<u64> {
         let mut lock = self.incoming_values.write().await;
         let incoming = lock
             .get_mut(self_.rep())
@@ -280,14 +287,14 @@ impl wbt::HostIncomingValue for BlobStoreDispatch<'_> {
         incoming.size().await
     }
 
-    async fn drop(&mut self, rep: Resource<wbt::IncomingValue>) -> anyhow::Result<()> {
+    async fn drop(&mut self, rep: Resource<bs::types::IncomingValue>) -> anyhow::Result<()> {
         self.incoming_values.write().await.remove(rep.rep());
         Ok(())
     }
 }
 
-impl wbt::HostOutgoingValue for BlobStoreDispatch<'_> {
-    async fn new_outgoing_value(&mut self) -> anyhow::Result<Resource<wbt::OutgoingValue>> {
+impl bs::types::HostOutgoingValue for BlobStoreDispatch<'_> {
+    async fn new_outgoing_value(&mut self) -> anyhow::Result<Resource<bs::types::OutgoingValue>> {
         let outgoing_value = OutgoingValue::new();
         let rep = self
             .outgoing_values
@@ -300,7 +307,7 @@ impl wbt::HostOutgoingValue for BlobStoreDispatch<'_> {
 
     async fn outgoing_value_write_body(
         &mut self,
-        self_: Resource<wbt::OutgoingValue>,
+        self_: Resource<bs::types::OutgoingValue>,
     ) -> anyhow::Result<Result<Resource<wasmtime_wasi::OutputStream>, ()>> {
         let mut lock = self.outgoing_values.write().await;
         let outgoing = lock
@@ -314,7 +321,7 @@ impl wbt::HostOutgoingValue for BlobStoreDispatch<'_> {
         Ok(Ok(resource))
     }
 
-    async fn finish(&mut self, self_: Resource<wbt::OutgoingValue>) -> Result<(), String> {
+    async fn finish(&mut self, self_: Resource<bs::types::OutgoingValue>) -> Result<(), String> {
         let mut lock = self.outgoing_values.write().await;
         let outgoing = lock
             .get_mut(self_.rep())
@@ -333,17 +340,17 @@ impl wbt::HostOutgoingValue for BlobStoreDispatch<'_> {
         }
     }
 
-    async fn drop(&mut self, rep: Resource<wbt::OutgoingValue>) -> anyhow::Result<()> {
+    async fn drop(&mut self, rep: Resource<bs::types::OutgoingValue>) -> anyhow::Result<()> {
         self.outgoing_values.write().await.remove(rep.rep());
         Ok(())
     }
 }
 
 // TODO: TBD if these belong on BSD or some other struct (like the one that maps to a Container resource JUST SAYIN)
-impl wbc::Host for BlobStoreDispatch<'_> {}
+impl bs::container::Host for BlobStoreDispatch<'_> {}
 
-impl wbc::HostContainer for BlobStoreDispatch<'_> {
-    async fn name(&mut self, self_: Resource<wbc::Container>) -> Result<String, String> {
+impl bs::container::HostContainer for BlobStoreDispatch<'_> {
+    async fn name(&mut self, self_: Resource<bs::container::Container>) -> Result<String, String> {
         let lock = self.containers.read().await;
         let container = lock
             .get(self_.rep())
@@ -353,8 +360,8 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
 
     async fn info(
         &mut self,
-        self_: Resource<wbc::Container>,
-    ) -> Result<wbc::ContainerMetadata, String> {
+        self_: Resource<bs::container::Container>,
+    ) -> Result<bs::container::ContainerMetadata, String> {
         let lock = self.containers.read().await;
         let container = lock
             .get(self_.rep())
@@ -364,11 +371,11 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
 
     async fn get_data(
         &mut self,
-        self_: Resource<wbc::Container>,
-        name: wbc::ObjectName,
+        self_: Resource<bs::container::Container>,
+        name: bs::container::ObjectName,
         start: u64,
         end: u64,
-    ) -> Result<Resource<wbt::IncomingValue>, String> {
+    ) -> Result<Resource<bs::types::IncomingValue>, String> {
         let lock = self.containers.read().await;
         let container = lock
             .get(self_.rep())
@@ -383,9 +390,9 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
 
     async fn write_data(
         &mut self,
-        self_: Resource<wbc::Container>,
-        name: wbc::ObjectName,
-        data: Resource<wbt::OutgoingValue>,
+        self_: Resource<bs::container::Container>,
+        name: bs::container::ObjectName,
+        data: Resource<bs::types::OutgoingValue>,
     ) -> Result<(), String> {
         let lock = self.containers.read().await;
         let container = lock
@@ -407,8 +414,8 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
 
     async fn list_objects(
         &mut self,
-        self_: Resource<wbc::Container>,
-    ) -> Result<Resource<wbc::StreamObjectNames>, String> {
+        self_: Resource<bs::container::Container>,
+    ) -> Result<Resource<bs::container::StreamObjectNames>, String> {
         let lock = self.containers.read().await;
         let container = lock
             .get(self_.rep())
@@ -420,7 +427,7 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
 
     async fn delete_object(
         &mut self,
-        self_: Resource<wbc::Container>,
+        self_: Resource<bs::container::Container>,
         name: String,
     ) -> Result<(), String> {
         let lock = self.containers.read().await;
@@ -435,7 +442,7 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
 
     async fn delete_objects(
         &mut self,
-        self_: Resource<wbc::Container>,
+        self_: Resource<bs::container::Container>,
         names: Vec<String>,
     ) -> Result<(), String> {
         let lock = self.containers.read().await;
@@ -450,7 +457,7 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
 
     async fn has_object(
         &mut self,
-        self_: Resource<wbc::Container>,
+        self_: Resource<bs::container::Container>,
         name: String,
     ) -> Result<bool, String> {
         let lock = self.containers.read().await;
@@ -462,9 +469,9 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
 
     async fn object_info(
         &mut self,
-        self_: Resource<wbc::Container>,
+        self_: Resource<bs::container::Container>,
         name: String,
-    ) -> Result<wbt::ObjectMetadata, String> {
+    ) -> Result<bs::types::ObjectMetadata, String> {
         let lock = self.containers.read().await;
         let container = lock
             .get(self_.rep())
@@ -475,7 +482,7 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
             .map_err(|e| e.to_string())
     }
 
-    async fn clear(&mut self, self_: Resource<wbc::Container>) -> Result<(), String> {
+    async fn clear(&mut self, self_: Resource<bs::container::Container>) -> Result<(), String> {
         let lock = self.containers.read().await;
         let container = lock
             .get(self_.rep())
@@ -483,16 +490,16 @@ impl wbc::HostContainer for BlobStoreDispatch<'_> {
         container.clear().await.map_err(|e| e.to_string())
     }
 
-    async fn drop(&mut self, rep: Resource<wbc::Container>) -> anyhow::Result<()> {
+    async fn drop(&mut self, rep: Resource<bs::container::Container>) -> anyhow::Result<()> {
         self.containers.write().await.remove(rep.rep());
         Ok(())
     }
 }
 
-impl wbc::HostStreamObjectNames for BlobStoreDispatch<'_> {
+impl bs::container::HostStreamObjectNames for BlobStoreDispatch<'_> {
     async fn read_stream_object_names(
         &mut self,
-        self_: Resource<wbc::StreamObjectNames>,
+        self_: Resource<bs::container::StreamObjectNames>,
         len: u64,
     ) -> Result<(Vec<String>, bool), String> {
         let mut lock = self.object_names.write().await;
@@ -504,7 +511,7 @@ impl wbc::HostStreamObjectNames for BlobStoreDispatch<'_> {
 
     async fn skip_stream_object_names(
         &mut self,
-        self_: Resource<wbc::StreamObjectNames>,
+        self_: Resource<bs::container::StreamObjectNames>,
         num: u64,
     ) -> Result<(u64, bool), String> {
         let mut lock = self.object_names.write().await;
@@ -514,7 +521,10 @@ impl wbc::HostStreamObjectNames for BlobStoreDispatch<'_> {
         object_names.skip(num).await.map_err(|e| e.to_string())
     }
 
-    async fn drop(&mut self, rep: Resource<wbc::StreamObjectNames>) -> anyhow::Result<()> {
+    async fn drop(
+        &mut self,
+        rep: Resource<bs::container::StreamObjectNames>,
+    ) -> anyhow::Result<()> {
         self.object_names.write().await.remove(rep.rep());
         Ok(())
     }
