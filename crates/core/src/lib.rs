@@ -100,15 +100,11 @@ impl Default for Config {
                 // globals, memories, etc. Instance allocations are relatively small and are largely inconsequential
                 // compared to other runtime state, but a number needs to be chosen here so a relatively large threshold
                 // of 10MB is arbitrarily chosen. It should be unlikely that any reasonably-sized module hits this limit.
-                .max_component_instance_size(
-                    env("SPIN_WASMTIME_INSTANCE_SIZE", (10 * MB) as u32) as usize
-                )
-                .max_core_instance_size(
-                    env("SPIN_WASMTIME_CORE_INSTANCE_SIZE", (10 * MB) as u32) as usize
-                )
+                .max_component_instance_size(env("SPIN_WASMTIME_INSTANCE_SIZE", 10 * MB) as usize)
+                .max_core_instance_size(env("SPIN_WASMTIME_CORE_INSTANCE_SIZE", 10 * MB) as usize)
                 .max_core_instances_per_component(env("SPIN_WASMTIME_CORE_INSTANCE_COUNT", 200))
                 .max_tables_per_component(env("SPIN_WASMTIME_INSTANCE_TABLES", 20))
-                .table_elements(env("SPIN_WASMTIME_INSTANCE_TABLE_ELEMENTS", 100_000) as usize)
+                .table_elements(env("SPIN_WASMTIME_INSTANCE_TABLE_ELEMENTS", 100_000))
                 // The number of memories an instance can have effectively limits the number of inner components
                 // a composed component can have (since each inner component has its own memory). We default to 32 for now, and
                 // we'll see how often this limit gets reached.
@@ -120,14 +116,21 @@ impl Default for Config {
                 // `StoreLimitsAsync` accounting method too.
                 .max_memory_size(4 * GB)
                 // These numbers are completely arbitrary at something above 0.
-                .linear_memory_keep_resident((2 * MB) as usize)
-                .table_keep_resident((MB / 2) as usize);
+                .linear_memory_keep_resident(env(
+                    "SPIN_WASMTIME_LINEAR_MEMORY_KEEP_RESIDENT",
+                    2 * MB,
+                ) as usize)
+                .table_keep_resident(env("SPIN_WASMTIME_TABLE_KEEP_RESIDENT", MB / 2) as usize);
             inner.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling_config));
         }
 
         return Self { inner };
 
-        fn env(name: &str, default: u32) -> u32 {
+        fn env<T>(name: &str, default: T) -> T
+        where
+            T: std::str::FromStr,
+            T::Err: std::fmt::Display,
+        {
             match std::env::var(name) {
                 Ok(val) => val
                     .parse()
