@@ -292,11 +292,13 @@ impl S3Container {
     ) -> anyhow::Result<()> {
         use object_store::ObjectStore;
 
+        const BUF_SIZE: usize = 5 * 1024 * 1024;
+
         let mupload = store.put_multipart(&path).await?;
         let mut writer = object_store::WriteMultipart::new(mupload);
         loop {
             use tokio::io::AsyncReadExt;
-            let mut buf = vec![0; 5 * 1024 * 1024];
+            let mut buf = vec![0; BUF_SIZE];
             let read_amount = data.read(&mut buf).await?;
             if read_amount == 0 {
                 break;

@@ -1,22 +1,22 @@
 //! Example usage:
-//! 
+//!
 //! --------------------
-//! 
+//!
 //! spin.toml:
-//! 
+//!
 //! [component.foo]
 //! blob_containers = ["default"]
 //!
 //! --------------------
-//! 
+//!
 //! runtime-config.toml
-//! 
+//!
 //! [blob_store.default]
 //! type = "file_system" | "s3" | "azure_blob"
 //! # further config settings per type
-//! 
+//!
 //! --------------------
-//! 
+//!
 //! TODO: the naming here is not very consistent and we should make a more conscious
 //! decision about whether these things are "blob stores" or "containers" or what
 
@@ -35,10 +35,7 @@ use spin_factors::{ConfigureAppContext, Factor, InitContext, PrepareContext, Run
 use spin_locked_app::MetadataKey;
 use spin_resource_table::Table;
 
-pub use host::{
-    BlobStoreDispatch, Container, ContainerManager, Error, IncomingData,
-    ObjectNames,
-};
+pub use host::{BlobStoreDispatch, Container, ContainerManager, Error, IncomingData, ObjectNames};
 pub use runtime_config::RuntimeConfig;
 pub use spin_world::wasi::blobstore::types::{ContainerMetadata, ObjectMetadata};
 pub use stream::AsyncWriteStream;
@@ -170,15 +167,15 @@ pub struct InstanceBuilder {
     /// There are multiple WASI interfaces in play here. The factor adds each of them
     /// to the linker, passing a closure that derives the interface implementation
     /// from the InstanceBuilder.
-    /// 
+    ///
     /// For the different interfaces to agree on their resource tables, each closure
     /// needs to derive the same resource table from the InstanceBuilder.
     /// The only* way that works is for the InstanceBuilder to set up all
     /// the resource tables, and Arc-RwLock them so that each clone gets
     /// the same one.
-    /// 
+    ///
     /// * TODO: for 'only', read 'or maybe we can do some shenanigans with borrowing
-    /// from the InstanceBuilder/instance state'
+    ///   from the InstanceBuilder/instance state'
     containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
     incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
     outgoing_values: Arc<RwLock<Table<host::OutgoingValue>>>,

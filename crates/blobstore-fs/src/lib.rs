@@ -206,23 +206,17 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
 
 impl FileSystemContainer {
     async fn write_data_core(
-        mut data: tokio::io::ReadHalf<tokio::io::SimplexStream>,
-        mut file: tokio::fs::File,
+        data: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+        file: tokio::fs::File,
     ) -> anyhow::Result<()> {
-        use tokio::io::AsyncReadExt;
-        use tokio::io::AsyncWriteExt;
+        use futures::SinkExt;
+        use tokio_util::codec::{BytesCodec, FramedWrite};
 
-        const BUF_SIZE: usize = 8192;
+        // Ceremonies to turn `file` and `data` into Sink and Stream
+        let mut file_sink = FramedWrite::new(file, BytesCodec::new());
+        let mut data_stm = tokio_util::io::ReaderStream::new(data);
 
-        loop {
-            let mut buf = vec![0; BUF_SIZE];
-            let count = data.read(&mut buf).await?;
-            if count == 0 {
-                _ = file.flush().await;
-                break;
-            }
-            file.write_all(&buf[0..count]).await?;
-        }
+        file_sink.send_all(&mut data_stm).await?;
 
         Ok(())
     }

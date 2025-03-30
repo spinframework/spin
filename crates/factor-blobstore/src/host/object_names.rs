@@ -28,10 +28,7 @@ impl HostStreamObjectNames for BlobStoreDispatch<'_> {
         object_names.skip(num).await.map_err(|e| e.to_string())
     }
 
-    async fn drop(
-        &mut self,
-        rep: Resource<StreamObjectNames>,
-    ) -> anyhow::Result<()> {
+    async fn drop(&mut self, rep: Resource<StreamObjectNames>) -> anyhow::Result<()> {
         self.object_names.write().await.remove(rep.rep());
         Ok(())
     }
