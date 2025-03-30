@@ -76,7 +76,7 @@ impl Factor for BlobStoreFactor {
             let (state, table) = get_data_with_table(data);
             BlobStoreDispatch::new(
                 state.allowed_containers.clone(),
-                state.store_manager.clone(),
+                state.container_manager.clone(),
                 table,
                 state.containers.clone(),
                 state.incoming_values.clone(),
@@ -97,12 +97,12 @@ impl Factor for BlobStoreFactor {
         &self,
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        let store_managers = ctx.take_runtime_config().unwrap_or_default();
+        let runtime_config = ctx.take_runtime_config().unwrap_or_default();
 
-        let delegating_manager = DelegatingContainerManager::new(store_managers);
+        let delegating_manager = DelegatingContainerManager::new(runtime_config);
         let container_manager = Arc::new(delegating_manager);
 
-        // Build component -> allowed stores map
+        // Build component -> allowed containers map
         let mut component_allowed_containers = HashMap::new();
         for component in ctx.app().components() {
             let component_id = component.id().to_string();
@@ -114,11 +114,11 @@ impl Factor for BlobStoreFactor {
             for label in &containers {
                 ensure!(
                     container_manager.is_defined(label),
-                    "unknown blob_stores label {label:?} for component {component_id:?}"
+                    "unknown {} label {label:?} for component {component_id:?}",
+                    BLOB_CONTAINERS_KEY.as_ref(),
                 );
             }
             component_allowed_containers.insert(component_id, containers);
-            // TODO: warn (?) on unused store?
         }
 
         Ok(AppState {
@@ -135,11 +135,11 @@ impl Factor for BlobStoreFactor {
         let allowed_containers = app_state
             .component_allowed_containers
             .get(ctx.app_component().id())
-            .expect("component should be in component_stores")
+            .expect("component should be in component_allowed_containers")
             .clone();
         let capacity = u32::MAX;
         Ok(InstanceBuilder {
-            store_manager: app_state.container_manager.clone(),
+            container_manager: app_state.container_manager.clone(),
             allowed_containers,
             containers: Arc::new(RwLock::new(Table::new(capacity))),
             incoming_values: Arc::new(RwLock::new(Table::new(capacity))),
@@ -161,7 +161,7 @@ pub struct AppState {
 
 pub struct InstanceBuilder {
     /// The container manager for the app. This contains *all* container mappings.
-    store_manager: Arc<DelegatingContainerManager>,
+    container_manager: Arc<DelegatingContainerManager>,
     /// The allowed containers for this component instance.
     allowed_containers: HashSet<String>,
     /// There are multiple WASI interfaces in play here. The factor adds each of them

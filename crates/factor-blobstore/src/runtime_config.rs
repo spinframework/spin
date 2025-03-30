@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::ContainerManager;
 
-/// Runtime configuration for all key value stores.
+/// Runtime configuration for all blob containers.
 #[derive(Default, Clone)]
 pub struct RuntimeConfig {
     /// Map of container names to container managers.
@@ -23,7 +23,7 @@ impl RuntimeConfig {
         self.container_managers.insert(label, container_manager);
     }
 
-    /// Returns whether a container manager exists for the store with the given label.
+    /// Returns whether a container manager exists for the given label.
     pub fn has_container_manager(&self, label: &str) -> bool {
         self.container_managers.contains_key(label)
     }
