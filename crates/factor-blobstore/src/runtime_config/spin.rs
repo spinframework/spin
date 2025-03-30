@@ -23,7 +23,7 @@ pub trait MakeBlobStore: 'static + Send + Sync {
     ) -> anyhow::Result<Self::ContainerManager>;
 }
 
-/// A function that creates a store manager from a TOML table.
+/// A function that creates a container manager from a TOML table.
 type StoreFromToml =
     Arc<dyn Fn(toml::Table) -> anyhow::Result<Arc<dyn ContainerManager>> + Send + Sync>;
 
@@ -42,43 +42,19 @@ fn store_from_toml_fn<T: MakeBlobStore>(provider_type: T) -> StoreFromToml {
 
 /// Converts from toml based runtime configuration into a [`RuntimeConfig`].
 ///
-/// Also acts as [`DefaultLabelResolver`].
-///
-/// The various store types (i.e., the "type" field in the toml field) are registered with the
+/// The various container types (i.e., the "type" field in the toml field) are registered with the
 /// resolver using `add_store_type`. The default store for a label is registered using `add_default_store`.
 #[derive(Default, Clone)]
 pub struct RuntimeConfigResolver {
     /// A map of store types to a function that returns the appropriate store
     /// manager from runtime config TOML.
     store_types: HashMap<&'static str, StoreFromToml>,
-    /// A map of default store configurations for a label.
-    defaults: HashMap<&'static str, StoreConfig>,
 }
 
 impl RuntimeConfigResolver {
     /// Create a new RuntimeConfigResolver.
     pub fn new() -> Self {
         <Self as Default>::default()
-    }
-
-    /// Adds a default store configuration for a label.
-    ///
-    /// Users must ensure that the store type for `config` has been registered with
-    /// the resolver using [`Self::register_store_type`].
-    pub fn add_default_store<T>(
-        &mut self,
-        label: &'static str,
-        config: T::RuntimeConfig,
-    ) -> anyhow::Result<()>
-    where
-        T: MakeBlobStore,
-        T::RuntimeConfig: Serialize,
-    {
-        self.defaults.insert(
-            label,
-            StoreConfig::new(T::RUNTIME_CONFIG_TYPE.to_owned(), config)?,
-        );
-        Ok(())
     }
 
     /// Registers a store type to the resolver.
@@ -97,21 +73,8 @@ impl RuntimeConfigResolver {
     }
 
     /// Resolves a toml table into a runtime config.
-    ///
-    /// The default stores are also added to the runtime config.
     pub fn resolve(&self, table: Option<&impl GetTomlValue>) -> anyhow::Result<RuntimeConfig> {
-        let mut runtime_config = self.resolve_from_toml(table)?.unwrap_or_default();
-
-        for (&label, config) in &self.defaults {
-            if !runtime_config.store_managers.contains_key(label) {
-                let store_manager = self
-                    .store_manager_from_config(config.clone())
-                    .with_context(|| {
-                        format!("could not configure blob store with label '{label}'")
-                    })?;
-                runtime_config.add_container_manager(label.to_owned(), store_manager);
-            }
-        }
+        let runtime_config = self.resolve_from_toml(table)?.unwrap_or_default();
         Ok(runtime_config)
     }
 
@@ -122,12 +85,12 @@ impl RuntimeConfigResolver {
         let Some(table) = table.and_then(|t| t.get("blob_store")) else {
             return Ok(None);
         };
-        let table: HashMap<String, StoreConfig> = table.clone().try_into()?;
+        let table: HashMap<String, ContainerConfig> = table.clone().try_into()?;
 
         let mut runtime_config = RuntimeConfig::default();
         for (label, config) in table {
             let store_manager = self
-                .store_manager_from_config(config)
+                .container_manager_from_config(config)
                 .with_context(|| format!("could not configure blob store with label '{label}'"))?;
             runtime_config.add_container_manager(label.clone(), store_manager);
         }
@@ -135,13 +98,13 @@ impl RuntimeConfigResolver {
         Ok(Some(runtime_config))
     }
 
-    /// Given a [`StoreConfig`], returns a store manager.
+    /// Given a [`ContainerConfig`], returns a container manager.
     ///
-    /// Errors if there is no [`MakeKeyValueStore`] registered for the store config's type
-    /// or if the store manager cannot be created from the config.
-    fn store_manager_from_config(
+    /// Errors if there is no [`MakeBlobStore`] registered for the container config's type
+    /// or if the container manager cannot be created from the config.
+    fn container_manager_from_config(
         &self,
-        config: StoreConfig,
+        config: ContainerConfig,
     ) -> anyhow::Result<Arc<dyn ContainerManager>> {
         let config_type = config.type_.as_str();
         let maker = self.store_types.get(config_type).with_context(|| {
@@ -152,14 +115,14 @@ impl RuntimeConfigResolver {
 }
 
 #[derive(Deserialize, Clone)]
-pub struct StoreConfig {
+pub struct ContainerConfig {
     #[serde(rename = "type")]
     pub type_: String,
     #[serde(flatten)]
     pub config: toml::Table,
 }
 
-impl StoreConfig {
+impl ContainerConfig {
     pub fn new<T>(type_: String, config: T) -> anyhow::Result<Self>
     where
         T: Serialize,

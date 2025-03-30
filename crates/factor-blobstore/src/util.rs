@@ -26,11 +26,4 @@ impl ContainerManager for DelegatingContainerManager {
     fn is_defined(&self, store_name: &str) -> bool {
         self.delegates.contains_key(store_name)
     }
-
-    fn summary(&self, store_name: &str) -> Option<String> {
-        if let Some(store) = self.delegates.get(store_name) {
-            return store.summary(store_name);
-        }
-        None
-    }
 }

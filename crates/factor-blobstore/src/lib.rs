@@ -1,3 +1,25 @@
+//! Example usage:
+//! 
+//! --------------------
+//! 
+//! spin.toml:
+//! 
+//! [component.foo]
+//! blob_containers = ["default"]
+//!
+//! --------------------
+//! 
+//! runtime-config.toml
+//! 
+//! [blob_store.default]
+//! type = "file_system" | "s3" | "azure_blob"
+//! # further config settings per type
+//! 
+//! --------------------
+//! 
+//! TODO: the naming here is not very consistent and we should make a more conscious
+//! decision about whether these things are "blob stores" or "containers" or what
+
 mod host;
 pub mod runtime_config;
 mod stream;
@@ -14,8 +36,8 @@ use spin_locked_app::MetadataKey;
 use spin_resource_table::Table;
 
 pub use host::{
-    log_error, BlobStoreDispatch, Container, ContainerManager, Error, Finishable, IncomingData,
-    ObjectNames, OutgoingValue,
+    BlobStoreDispatch, Container, ContainerManager, Error, IncomingData,
+    ObjectNames,
 };
 pub use runtime_config::RuntimeConfig;
 pub use spin_world::wasi::blobstore::types::{ContainerMetadata, ObjectMetadata};
@@ -23,7 +45,7 @@ pub use stream::AsyncWriteStream;
 use tokio::sync::RwLock;
 pub use util::DelegatingContainerManager;
 
-/// Metadata key for blob stores.
+/// Lockfile metadata key for blob stores.
 pub const BLOB_CONTAINERS_KEY: MetadataKey<Vec<String>> = MetadataKey::new("blob_containers");
 
 /// A factor that provides blob storage.
@@ -140,34 +162,23 @@ pub struct AppState {
     component_allowed_containers: HashMap<String, HashSet<String>>,
 }
 
-impl AppState {
-    /// Returns the [`StoreManager::summary`] for the given store label.
-    pub fn store_summary(&self, label: &str) -> Option<String> {
-        self.container_manager.summary(label)
-    }
-
-    /// Returns true if the given store label is used by any component.
-    pub fn store_is_used(&self, label: &str) -> bool {
-        self.component_allowed_containers
-            .values()
-            .any(|stores| stores.contains(label))
-    }
-
-    /// Get a store by label.
-    pub async fn get_container(&self, label: &str) -> Option<Arc<dyn Container>> {
-        self.container_manager.get(label).await.ok()
-    }
-}
-
 pub struct InstanceBuilder {
-    /// The store manager for the app.
-    ///
-    /// This is a cache around a delegating store manager. For `get` requests,
-    /// first checks the cache before delegating to the underlying store
-    /// manager.
+    /// The container manager for the app. This contains *all* container mappings.
     store_manager: Arc<DelegatingContainerManager>,
-    /// The allowed stores for this component instance.
+    /// The allowed containers for this component instance.
     allowed_containers: HashSet<String>,
+    /// There are multiple WASI interfaces in play here. The factor adds each of them
+    /// to the linker, passing a closure that derives the interface implementation
+    /// from the InstanceBuilder.
+    /// 
+    /// For the different interfaces to agree on their resource tables, each closure
+    /// needs to derive the same resource table from the InstanceBuilder.
+    /// The only* way that works is for the InstanceBuilder to set up all
+    /// the resource tables, and Arc-RwLock them so that each clone gets
+    /// the same one.
+    /// 
+    /// * TODO: for 'only', read 'or maybe we can do some shenanigans with borrowing
+    /// from the InstanceBuilder/instance state'
     containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
     incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
     outgoing_values: Arc<RwLock<Table<host::OutgoingValue>>>,

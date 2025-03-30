@@ -134,10 +134,6 @@ impl ContainerManager for BlobStoreS3 {
     fn is_defined(&self, _store_name: &str) -> bool {
         true
     }
-
-    fn summary(&self, _store_name: &str) -> Option<String> {
-        Some("AWS S3 blob storage".to_owned())
-    }
 }
 
 struct S3Container {
@@ -257,19 +253,19 @@ impl Container for S3Container {
         Ok(Box::new(S3IncomingData::new(resp)))
     }
 
-    async fn connect_stm(
+    async fn write_data(
         &self,
         name: &str,
-        stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+        data: tokio::io::ReadHalf<tokio::io::SimplexStream>,
         finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>,
     ) -> anyhow::Result<()> {
         let store = self.store.clone();
         let path = object_store::path::Path::from(name);
 
         tokio::spawn(async move {
-            let conn_result = Self::connect_stm_core(stm, store, path).await;
+            let write_result = Self::write_data_core(data, store, path).await;
             finished_tx
-                .send(conn_result)
+                .send(write_result)
                 .await
                 .expect("should sent finish tx");
         });
@@ -289,8 +285,8 @@ impl Container for S3Container {
 }
 
 impl S3Container {
-    async fn connect_stm_core(
-        mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+    async fn write_data_core(
+        mut data: tokio::io::ReadHalf<tokio::io::SimplexStream>,
         store: object_store::aws::AmazonS3,
         path: object_store::path::Path,
     ) -> anyhow::Result<()> {
@@ -301,7 +297,7 @@ impl S3Container {
         loop {
             use tokio::io::AsyncReadExt;
             let mut buf = vec![0; 5 * 1024 * 1024];
-            let read_amount = stm.read(&mut buf).await?;
+            let read_amount = data.read(&mut buf).await?;
             if read_amount == 0 {
                 break;
             }

@@ -23,8 +23,6 @@ wasmtime-wasi = { workspace = true }
 
 [dev-dependencies]
 spin-factors-test = { path = "../factors-test" }
-# spin-key-value-redis = { path = "../key-value-redis" }
-# spin-key-value-spin = { path = "../key-value-spin" }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 

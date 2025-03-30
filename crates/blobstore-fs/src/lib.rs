@@ -102,7 +102,13 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
         self.name.clone()
     }
     async fn info(&self) -> anyhow::Result<spin_factor_blobstore::ContainerMetadata> {
-        todo!()
+        let meta = self.path.metadata()?;
+        let created_at = created_at_nanos(&meta)?;
+
+        Ok(spin_factor_blobstore::ContainerMetadata {
+            name: self.name.to_owned(),
+            created_at,
+        })
     }
     async fn clear(&self) -> anyhow::Result<()> {
         let entries = std::fs::read_dir(&self.path)?.collect::<Vec<_>>();
@@ -140,11 +146,7 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
         name: &str,
     ) -> anyhow::Result<spin_factor_blobstore::ObjectMetadata> {
         let meta = tokio::fs::metadata(self.object_path(name)?).await?;
-        let created_at = meta
-            .created()?
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)?
-            .as_nanos()
-            .try_into()?;
+        let created_at = created_at_nanos(&meta)?;
         Ok(spin_factor_blobstore::ObjectMetadata {
             name: name.to_string(),
             container: self.name.to_string(),
@@ -168,10 +170,10 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
         }))
     }
 
-    async fn connect_stm(
+    async fn write_data(
         &self,
         name: &str,
-        stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+        data: tokio::io::ReadHalf<tokio::io::SimplexStream>,
         finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>,
     ) -> anyhow::Result<()> {
         let path = self.object_path(name)?;
@@ -181,9 +183,9 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
         let file = tokio::fs::File::create(&path).await?;
 
         tokio::spawn(async move {
-            let result = Self::connect_stm_core(stm, file).await;
+            let write_result = Self::write_data_core(data, file).await;
             finished_tx
-                .send(result)
+                .send(write_result)
                 .await
                 .expect("shoulda sent finished_tx");
         });
@@ -203,8 +205,8 @@ impl spin_factor_blobstore::Container for FileSystemContainer {
 }
 
 impl FileSystemContainer {
-    async fn connect_stm_core(
-        mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+    async fn write_data_core(
+        mut data: tokio::io::ReadHalf<tokio::io::SimplexStream>,
         mut file: tokio::fs::File,
     ) -> anyhow::Result<()> {
         use tokio::io::AsyncReadExt;
@@ -214,8 +216,9 @@ impl FileSystemContainer {
 
         loop {
             let mut buf = vec![0; BUF_SIZE];
-            let count = stm.read(&mut buf).await?;
+            let count = data.read(&mut buf).await?;
             if count == 0 {
+                _ = file.flush().await;
                 break;
             }
             file.write_all(&buf[0..count]).await?;
@@ -362,4 +365,14 @@ impl spin_factor_blobstore::ObjectNames for BlobNames {
 
         Ok((count, at_end))
     }
+}
+
+fn created_at_nanos(meta: &std::fs::Metadata) -> anyhow::Result<u64> {
+    let time_nanos = meta
+        .created()?
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)?
+        .as_nanos()
+        .try_into()
+        .unwrap_or_default();
+    Ok(time_nanos)
 }

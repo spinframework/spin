@@ -53,13 +53,6 @@ impl ContainerManager for AzureContainerManager {
     fn is_defined(&self, _store_name: &str) -> bool {
         true
     }
-
-    fn summary(&self, _store_name: &str) -> Option<String> {
-        Some(format!(
-            "Azure blob storage account {}",
-            self.client.account()
-        ))
-    }
 }
 
 struct AzureContainer {
@@ -144,18 +137,18 @@ impl Container for AzureContainer {
         Ok(Box::new(AzureIncomingData::new(client, range)))
     }
 
-    async fn connect_stm(
+    async fn write_data(
         &self,
         name: &str,
-        stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+        data: tokio::io::ReadHalf<tokio::io::SimplexStream>,
         finished_tx: tokio::sync::mpsc::Sender<anyhow::Result<()>>,
     ) -> anyhow::Result<()> {
         let client = self.client.blob_client(name);
 
         tokio::spawn(async move {
-            let result = Self::connect_stm_core(stm, client).await;
+            let write_result = Self::write_data_core(data, client).await;
             finished_tx
-                .send(result)
+                .send(write_result)
                 .await
                 .expect("should sent finish tx");
         });
@@ -170,8 +163,8 @@ impl Container for AzureContainer {
 }
 
 impl AzureContainer {
-    async fn connect_stm_core(
-        mut stm: tokio::io::ReadHalf<tokio::io::SimplexStream>,
+    async fn write_data_core(
+        mut data: tokio::io::ReadHalf<tokio::io::SimplexStream>,
         client: azure_storage_blobs::prelude::BlobClient,
     ) -> anyhow::Result<()> {
         use tokio::io::AsyncReadExt;
@@ -186,7 +179,7 @@ impl AzureContainer {
         'put_blocks: loop {
             let mut bytes = Vec::with_capacity(BLOCK_SIZE);
             loop {
-                let read = stm.read_buf(&mut bytes).await?;
+                let read = data.read_buf(&mut bytes).await?;
                 let len = bytes.len();
 
                 if read == 0 {
