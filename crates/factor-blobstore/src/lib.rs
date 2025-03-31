@@ -75,13 +75,13 @@ impl Factor for BlobStoreFactor {
         let closure = type_annotate(move |data| {
             let (state, table) = get_data_with_table(data);
             BlobStoreDispatch::new(
-                state.allowed_containers.clone(),
-                state.container_manager.clone(),
+                &state.allowed_containers,
+                state.container_manager.as_ref(),
                 table,
-                state.containers.clone(),
-                state.incoming_values.clone(),
-                state.outgoing_values.clone(),
-                state.object_names.clone(),
+                &state.containers,
+                &state.incoming_values,
+                &state.outgoing_values,
+                &state.object_names,
             )
         });
         let linker = ctx.linker();
@@ -141,10 +141,10 @@ impl Factor for BlobStoreFactor {
         Ok(InstanceBuilder {
             container_manager: app_state.container_manager.clone(),
             allowed_containers,
-            containers: Arc::new(RwLock::new(Table::new(capacity))),
-            incoming_values: Arc::new(RwLock::new(Table::new(capacity))),
-            object_names: Arc::new(RwLock::new(Table::new(capacity))),
-            outgoing_values: Arc::new(RwLock::new(Table::new(capacity))),
+            containers: RwLock::new(Table::new(capacity)),
+            incoming_values: RwLock::new(Table::new(capacity)),
+            object_names: RwLock::new(Table::new(capacity)),
+            outgoing_values: RwLock::new(Table::new(capacity)),
         })
     }
 }
@@ -170,16 +170,12 @@ pub struct InstanceBuilder {
     ///
     /// For the different interfaces to agree on their resource tables, each closure
     /// needs to derive the same resource table from the InstanceBuilder.
-    /// The only* way that works is for the InstanceBuilder to set up all
-    /// the resource tables, and Arc-RwLock them so that each clone gets
-    /// the same one.
-    ///
-    /// * TODO: for 'only', read 'or maybe we can do some shenanigans with borrowing
-    ///   from the InstanceBuilder/instance state'
-    containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
-    incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
-    outgoing_values: Arc<RwLock<Table<host::OutgoingValue>>>,
-    object_names: Arc<RwLock<Table<Box<dyn ObjectNames>>>>,
+    /// So the InstanceBuilder (which is also the instance state) sets up all the resource
+    /// tables and RwLocks them, then the dispatch object borrows them.
+    containers: RwLock<Table<Arc<dyn Container>>>,
+    incoming_values: RwLock<Table<Box<dyn IncomingData>>>,
+    outgoing_values: RwLock<Table<host::OutgoingValue>>,
+    object_names: RwLock<Table<Box<dyn ObjectNames>>>,
 }
 
 impl spin_factors::SelfInstanceBuilder for InstanceBuilder {}

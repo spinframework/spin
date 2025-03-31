@@ -68,24 +68,24 @@ pub trait IncomingData: Send + Sync {
 }
 
 pub struct BlobStoreDispatch<'a> {
-    allowed_containers: HashSet<String>,
-    manager: Arc<dyn ContainerManager>,
+    allowed_containers: &'a HashSet<String>,
+    manager: &'a dyn ContainerManager,
     wasi_resources: &'a mut ResourceTable,
-    containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
-    incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
-    outgoing_values: Arc<RwLock<Table<OutgoingValue>>>,
-    object_names: Arc<RwLock<Table<Box<dyn ObjectNames>>>>,
+    containers: &'a RwLock<Table<Arc<dyn Container>>>,
+    incoming_values: &'a RwLock<Table<Box<dyn IncomingData>>>,
+    outgoing_values: &'a RwLock<Table<OutgoingValue>>,
+    object_names: &'a RwLock<Table<Box<dyn ObjectNames>>>,
 }
 
 impl<'a> BlobStoreDispatch<'a> {
     pub(crate) fn new(
-        allowed_containers: HashSet<String>,
-        manager: Arc<dyn ContainerManager>,
+        allowed_containers: &'a HashSet<String>,
+        manager: &'a dyn ContainerManager,
         wasi_resources: &'a mut ResourceTable,
-        containers: Arc<RwLock<Table<Arc<dyn Container>>>>,
-        incoming_values: Arc<RwLock<Table<Box<dyn IncomingData>>>>,
-        outgoing_values: Arc<RwLock<Table<OutgoingValue>>>,
-        object_names: Arc<RwLock<Table<Box<dyn ObjectNames>>>>,
+        containers: &'a RwLock<Table<Arc<dyn Container>>>,
+        incoming_values: &'a RwLock<Table<Box<dyn IncomingData>>>,
+        outgoing_values: &'a RwLock<Table<OutgoingValue>>,
+        object_names: &'a RwLock<Table<Box<dyn ObjectNames>>>,
     ) -> Self {
         Self {
             allowed_containers,
@@ -99,7 +99,7 @@ impl<'a> BlobStoreDispatch<'a> {
     }
 
     pub fn allowed_containers(&self) -> &HashSet<String> {
-        &self.allowed_containers
+        self.allowed_containers
     }
 
     async fn take_incoming_value(
