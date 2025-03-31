@@ -19,7 +19,7 @@ spin-core = { path = "../core" }
 spin-factor-blobstore = { path = "../factor-blobstore" }
 tokio = { workspace = true }
 tokio-stream = "0.1.16"
-tokio-util = "0.7.12"
+tokio-util = { version = "0.7.12", features = ["compat"] }
 uuid = { version = "1.0", features = ["v4"] }
 wasmtime-wasi = { workspace = true }
 

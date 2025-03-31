@@ -2,7 +2,7 @@ mod store;
 
 use serde::Deserialize;
 use spin_factor_blobstore::runtime_config::spin::MakeBlobStore;
-use store::BlobStoreS3;
+use store::S3ContainerManager;
 
 /// A blob store that uses a S3-compatible service as the backend.
 /// This currently supports only AWS S3
@@ -40,7 +40,7 @@ impl MakeBlobStore for S3BlobStore {
 
     type RuntimeConfig = S3BlobStoreRuntimeConfig;
 
-    type ContainerManager = BlobStoreS3;
+    type ContainerManager = S3ContainerManager;
 
     fn make_store(
         &self,
@@ -48,21 +48,20 @@ impl MakeBlobStore for S3BlobStore {
     ) -> anyhow::Result<Self::ContainerManager> {
         let auth = match (&runtime_config.access_key, &runtime_config.secret_key) {
             (Some(access_key), Some(secret_key)) => {
-                store::BlobStoreS3AuthOptions::RuntimeConfigValues(
-                    store::BlobStoreS3RuntimeConfigOptions::new(
-                        access_key.clone(),
-                        secret_key.clone(),
-                        runtime_config.token.clone(),
-                    ),
-                )
+                store::S3AuthOptions::AccessKey(store::S3KeyAuth::new(
+                    access_key.clone(),
+                    secret_key.clone(),
+                    runtime_config.token.clone(),
+                ))
             }
-            (None, None) => store::BlobStoreS3AuthOptions::Environmental,
+            (None, None) => store::S3AuthOptions::Environmental,
             _ => anyhow::bail!(
                 "either both of access_key and secret_key must be provided, or neither"
             ),
         };
 
-        let blob_store = BlobStoreS3::new(runtime_config.region, auth, runtime_config.bucket)?;
+        let blob_store =
+            S3ContainerManager::new(runtime_config.region, auth, runtime_config.bucket)?;
         Ok(blob_store)
     }
 }
