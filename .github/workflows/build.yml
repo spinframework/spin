@@ -77,6 +77,36 @@ jobs:
           name: spin-ubuntu-latest
           path: target/release/spin
 
+  build-cli-reference-docs:
+    name: Build CLI reference docs
+    runs-on: ubuntu-22.04
+    needs: build-rust-ubuntu
+    steps:
+      - name: Download Spin binary
+        uses: actions/download-artifact@v4
+        with:
+          name: spin-ubuntu-latest
+      - name: Make Spin binary executable
+        run: chmod +x ./spin
+      - name: Create spin-docs front matter
+        run: |
+          cat >cli-reference.md << EOF
+          title = "Command Line Reference"
+          template = "main"
+          date = "2025-01-01T00:00:01Z"
+          [extra]
+          url = "https://github.com/spinframework/spin-docs/blob/main/content/v3/cli-reference.md"
+
+          ---
+          EOF
+      - name: Generate reference doc
+        run: ./spin maintenance generate-reference >>cli-reference.md
+      - name: Archive reference doc
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-reference-md
+          path: cli-reference.md
+
   build-spin-static:
     name: Build Spin static
     runs-on: ubuntu-22.04
