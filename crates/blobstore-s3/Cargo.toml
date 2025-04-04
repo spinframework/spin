@@ -1,0 +1,33 @@
+[package]
+name = "spin-blobstore-s3"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+async-once-cell = "0.5.4"
+aws-config = "1.1.7"
+aws-credential-types = "1.1.7"
+aws-sdk-s3 = "1.68"
+aws-smithy-async = "1.2.3"
+bytes = { workspace = true }
+futures = { workspace = true }
+http-body = "1.0"
+http-body-util = "0.1"
+object_store = { version = "0.11", features = ["aws"] }
+serde = { workspace = true }
+spin-core = { path = "../core" }
+spin-factor-blobstore = { path = "../factor-blobstore" }
+tokio = { workspace = true }
+tokio-stream = "0.1.16"
+tokio-util = { version = "0.7.12", features = ["compat"] }
+uuid = { version = "1.0", features = ["v4"] }
+wasmtime-wasi = { workspace = true }
+
+[lints]
+workspace = true
