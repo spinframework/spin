@@ -1,4 +1,4 @@
-use clap::CommandFactory;
+use clap::{Args, CommandFactory};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 
@@ -29,7 +29,12 @@ struct LaunchFlag {
 }
 
 impl LaunchMetadata {
-    pub fn infer<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder>() -> Self {
+    pub fn infer<T, B>() -> Self
+    where
+        T: Trigger<B::Factors>,
+        T::GlobalConfig: Args,
+        B: RuntimeFactorsBuilder,
+    {
         let all_flags: Vec<_> = FactorsTriggerCommand::<T, B>::command()
             .get_arguments()
             .map(LaunchFlag::infer)
