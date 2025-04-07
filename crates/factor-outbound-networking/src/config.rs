@@ -2,7 +2,10 @@ use std::ops::Range;
 
 use anyhow::{bail, ensure, Context};
 use spin_factors::{App, AppComponent};
-use spin_locked_app::MetadataKey;
+use spin_locked_app::{
+    locked::{LockedApp, LockedComponent},
+    MetadataKey,
+};
 
 const ALLOWED_HOSTS_KEY: MetadataKey<Vec<String>> = MetadataKey::new("allowed_outbound_hosts");
 const ALLOWED_HTTP_KEY: MetadataKey<Vec<String>> = MetadataKey::new("allowed_http_hosts");
@@ -14,8 +17,15 @@ pub const SERVICE_CHAINING_DOMAIN_SUFFIX: &str = ".spin.internal";
 ///
 /// This has support for converting the old `allowed_http_hosts` key to the new `allowed_outbound_hosts` key.
 pub fn allowed_outbound_hosts(component: &AppComponent) -> anyhow::Result<Vec<String>> {
+    allowed_outbound_hosts_locked(component.locked)
+}
+
+fn allowed_outbound_hosts_locked(component: &LockedComponent) -> anyhow::Result<Vec<String>> {
+    use spin_locked_app::MetadataExt;
+
     let mut allowed_hosts = component
-        .get_metadata(ALLOWED_HOSTS_KEY)
+        .metadata
+        .get_typed(ALLOWED_HOSTS_KEY)
         .with_context(|| {
             format!(
                 "locked app metadata was malformed for key {}",
@@ -24,7 +34,8 @@ pub fn allowed_outbound_hosts(component: &AppComponent) -> anyhow::Result<Vec<St
         })?
         .unwrap_or_default();
     let allowed_http = component
-        .get_metadata(ALLOWED_HTTP_KEY)
+        .metadata
+        .get_typed(ALLOWED_HTTP_KEY)
         .map(|h| h.unwrap_or_default())
         .unwrap_or_default();
     let converted =
@@ -72,6 +83,32 @@ pub fn validate_service_chaining_for_components(
     })?;
 
     Ok(())
+}
+
+/// If, after we have retained only a subset of components in an app, the remaining
+/// ones no longer require service chaining, remove the host requirement from the app.
+pub fn update_service_chaining_host_requirement(app: &mut LockedApp) {
+    use spin_locked_app::locked::SERVICE_CHAINING_KEY;
+
+    if !app.host_requirements.contains_key(SERVICE_CHAINING_KEY) {
+        // The app doesn't use service chaining so save checking.
+        return;
+    }
+
+    fn uses_service_chaining(c: &LockedComponent) -> bool {
+        let Ok(allowed_outbound_hosts) = allowed_outbound_hosts_locked(c) else {
+            return true; // err on the side of keeping the previously inferred requirement
+        };
+        allowed_outbound_hosts
+            .iter()
+            .filter_map(|h| h.parse().ok()) // don't consider templated hosts
+            .any(|h| parse_service_chaining_target(&h).is_some())
+    }
+
+    let app_uses_service_chaining = app.components.iter().any(uses_service_chaining);
+    if !app_uses_service_chaining {
+        app.host_requirements.remove(SERVICE_CHAINING_KEY);
+    }
 }
 
 /// An address is a url-like string that contains a host, a port, and an optional scheme
