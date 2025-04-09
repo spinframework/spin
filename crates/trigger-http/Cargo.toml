@@ -36,6 +36,8 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["loggin
 tracing = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
+url = { workspace = true }
+
 
 [lints]
 workspace = true
