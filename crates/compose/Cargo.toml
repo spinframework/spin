@@ -11,8 +11,8 @@ rust-version.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-indexmap = "2"
-semver = "1"
+indexmap = { workspace = true }
+semver = { workspace = true }
 spin-app = { path = "../app" }
 spin-common = { path = "../common" }
 spin-componentize = { path = "../componentize" }

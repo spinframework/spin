@@ -10,14 +10,14 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
+azure_core = "0.21.0"
 azure_data_cosmos = "0.21.0"
 azure_identity = "0.21.0"
-azure_core = "0.21.0"
 futures = { workspace = true }
-serde = { workspace = true }
-async-trait = { workspace = true }
-spin-factor-key-value = { path = "../factor-key-value" }
 reqwest = { version = "0.12", default-features = false }
+serde = { workspace = true }
+spin-factor-key-value = { path = "../factor-key-value" }
 
 [lints]
 workspace = true
