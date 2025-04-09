@@ -11,10 +11,10 @@ http1 = { version = "1.0.0", package = "http" }
 opentelemetry = { workspace = true }
 opentelemetry-appender-tracing = "0.28"
 opentelemetry-otlp = { version = "0.28", features = ["grpc-tonic"] }
-opentelemetry_sdk = { workspace = true }
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio", "spec_unstable_logs_enabled", "metrics"] }
 terminal = { path = "../terminal" }
 tracing = { workspace = true }
-tracing-opentelemetry = { workspace = true }
+tracing-opentelemetry = { version = "0.29", default-features = false, features = ["metrics"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["smallvec", "fmt", "ansi", "std", "env-filter", "json", "registry"] }
 
 [features]

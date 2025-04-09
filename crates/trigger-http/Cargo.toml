@@ -9,15 +9,15 @@ doctest = false
 
 [dependencies]
 anyhow = { workspace = true }
-clap = "3"
+clap = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
-hyper-util = { version = "0.1", features = ["tokio"] }
+hyper-util = { workspace = true }
 rustls = { workspace = true }
-rustls-pemfile = "2.1.2"
-rustls-pki-types = "1.7"
+rustls-pemfile = { workspace = true }
+rustls-pki-types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 spin-app = { path = "../app" }
@@ -32,7 +32,7 @@ spin-trigger = { path = "../trigger" }
 spin-world = { path = "../world" }
 terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["full"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls = { workspace = true }
 tracing = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }

@@ -10,6 +10,6 @@ doctest = false
 test = false
 
 [dependencies]
-heck = "0.5"
-quote = "1"
-syn = "2"
+heck = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }

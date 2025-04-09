@@ -6,7 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-chrono = "0.4"
+chrono = { workspace = true }
 native-tls = "0.2"
 postgres-native-tls = "0.5"
 spin-core = { path = "../core" }

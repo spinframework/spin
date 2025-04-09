@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 http = "1.0"
-http-body-util = "0.1.0"
+http-body-util = { workspace = true }
 log = "0.4"
 nix = "0.29"
 reqwest = { workspace = true }

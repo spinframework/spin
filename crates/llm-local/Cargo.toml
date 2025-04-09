@@ -5,7 +5,7 @@ authors = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
+anyhow = { workspace = true }
 candle = { git = "https://github.com/huggingface/candle", rev = "e3261216b157a7305c18ccdd766b6e2a41afe483", package = "candle-core" }
 candle-nn = { git = "https://github.com/huggingface/candle", rev = "e3261216b157a7305c18ccdd766b6e2a41afe483" }
 candle-transformers = { git = "https://github.com/huggingface/candle", rev = "e3261216b157a7305c18ccdd766b6e2a41afe483" }

@@ -6,21 +6,21 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { workspace = true, features = ["serde"] }
 dirs = { workspace = true }
 fd-lock = "4"
-flate2 = "1"
+flate2 = { workspace = true }
 is-terminal = "0.4"
-path-absolutize = "3"
-reqwest = { version = "0.12", features = ["json"] }
-semver = { version = "1.0", features = ["serde"] }
+path-absolutize = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+semver = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 spin-common = { path = "../common" }
-tar = "0.4"
+tar = { workspace = true }
 tempfile = { workspace = true }
 terminal = { path = "../terminal" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "process", "rt", "macros"] }
 tracing = { workspace = true }
-url = { version = "2", features = ["serde"] }
+url = { workspace = true, features = ["serde"] }
