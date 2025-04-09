@@ -167,9 +167,6 @@ toml_edit = "0.22"
 tracing = { version = "0.1", features = ["log"] }
 url = "2"
 walkdir = "2"
-wasi-common-preview1 = { version = "25.0.0", package = "wasi-common", features = [
-  "tokio",
-] }
 wasm-encoder = "0.228"
 wasm-metadata = "0.228"
 wasm-pkg-client = "0.10"
