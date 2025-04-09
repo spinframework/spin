@@ -170,17 +170,16 @@ walkdir = "2"
 wasi-common-preview1 = { version = "25.0.0", package = "wasi-common", features = [
   "tokio",
 ] }
+wasm-encoder = "0.228"
+wasm-metadata = "0.228"
 wasm-pkg-client = "0.10"
 wasm-pkg-common = "0.10"
+wasmparser = "0.228"
 wasmtime = "29.0.1"
 wasmtime-wasi = "29.0.1"
 wasmtime-wasi-http = "29.0.1"
-
-wasm-encoder = "0.227"
-wasm-metadata = "0.227"
-wasmparser = "0.227"
-wit-component = "0.227"
-wit-parser = "0.227"
+wit-component = "0.228"
+wit-parser = "0.228"
 
 spin-componentize = { path = "crates/componentize" }
 
