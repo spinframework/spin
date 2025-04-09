@@ -139,7 +139,6 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 indexmap = "2"
 itertools = "0.14"
 lazy_static = "1.5"
-opentelemetry = { version = "0.28", features = ["metrics", "trace", "logs"] }
 path-absolutize = "3"
 quote = "1"
 rand = "0.9"

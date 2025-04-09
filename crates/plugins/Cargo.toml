@@ -10,7 +10,6 @@ chrono = { workspace = true, features = ["serde"] }
 dirs = { workspace = true }
 fd-lock = "4"
 flate2 = { workspace = true }
-is-terminal = "0.4"
 path-absolutize = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 semver = { workspace = true, features = ["serde"] }

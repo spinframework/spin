@@ -8,7 +8,7 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 http0 = { version = "0.2.9", package = "http" }
 http1 = { version = "1.0.0", package = "http" }
-opentelemetry = { workspace = true }
+opentelemetry = { version = "0.28", features = ["metrics", "trace", "logs"] }
 opentelemetry-appender-tracing = "0.28"
 opentelemetry-otlp = { version = "0.28", features = ["grpc-tonic"] }
 opentelemetry_sdk = { version = "0.28", features = ["rt-tokio", "spec_unstable_logs_enabled", "metrics"] }
