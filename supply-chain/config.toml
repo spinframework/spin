@@ -808,10 +808,6 @@ criteria = "safe-to-deploy"
 version = "2.7.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.is-terminal]]
-version = "0.4.4"
-criteria = "safe-to-deploy"
-
 [[exemptions.itertools]]
 version = "0.10.5"
 criteria = "safe-to-deploy"
