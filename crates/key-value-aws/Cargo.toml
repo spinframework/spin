@@ -11,9 +11,11 @@ rust-version.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 async-once-cell = "0.5.4"
-aws-config = "1.1.7"
+# Turn off default features to avoid pulling in "aws-smithy-runtime/default-https-client" which messes up tls provider selection
+aws-config = { version = "1.1.7", default-features = false, features = ["rt-tokio", "credentials-process", "sso"] }
 aws-credential-types = "1.1.7"
-aws-sdk-dynamodb = "1.49.0"
+# Turn off default features to avoid pulling in "aws-smithy-runtime/default-https-client" which messes up tls provider selection
+aws-sdk-dynamodb = { version = "1.49.0", default-features = false, features = ["rustls", "rt-tokio"] }
 serde = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-key-value = { path = "../factor-key-value" }

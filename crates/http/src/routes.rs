@@ -154,7 +154,7 @@ impl Router {
     pub fn contains_reserved_route(&self) -> bool {
         self.router
             .iter()
-            .any(|(_spec, handker)| handker.based_route.starts_with(crate::WELL_KNOWN_PREFIX))
+            .any(|(_spec, handler)| handler.based_route.starts_with(crate::WELL_KNOWN_PREFIX))
     }
 
     /// This returns the component ID that should handle the given path, or an error
