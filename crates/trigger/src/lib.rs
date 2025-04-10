@@ -3,11 +3,11 @@ pub mod loader;
 
 use std::future::Future;
 
-use clap::Args;
-use spin_core::Linker;
-use spin_factors::RuntimeFactors;
+pub use spin_core::Linker;
+pub use spin_factors::RuntimeFactors;
 use spin_factors_executor::{FactorsExecutorApp, FactorsInstanceBuilder};
 
+pub use anyhow;
 pub use spin_app::App;
 
 /// Type alias for a [`spin_factors_executor::FactorsExecutorApp`] specialized to a [`Trigger`].
@@ -21,7 +21,7 @@ pub type TriggerInstanceBuilder<'a, T, F> =
 pub type Store<T, F> = spin_core::Store<TriggerInstanceState<T, F>>;
 
 /// Type alias for [`spin_factors_executor::InstanceState`] specialized to a [`Trigger`].
-type TriggerInstanceState<T, F> = spin_factors_executor::InstanceState<
+pub type TriggerInstanceState<T, F> = spin_factors_executor::InstanceState<
     <F as RuntimeFactors>::InstanceState,
     <T as Trigger<F>>::InstanceState,
 >;
@@ -31,14 +31,14 @@ pub trait Trigger<F: RuntimeFactors>: Sized + Send {
     /// A unique identifier for this trigger.
     const TYPE: &'static str;
 
-    /// The specific CLI arguments for this trigger.
-    type CliArgs: Args;
+    /// Global configuration used to construct this trigger.
+    type GlobalConfig;
 
-    /// The instance state for this trigger.
+    /// Extra state attached to each instance store for this trigger.
     type InstanceState: Send + 'static;
 
     /// Constructs a new trigger.
-    fn new(cli_args: Self::CliArgs, app: &App) -> anyhow::Result<Self>;
+    fn new(cfg: Self::GlobalConfig, app: &App) -> anyhow::Result<Self>;
 
     /// Update the [`spin_core::Config`] for this trigger.
     ///
