@@ -35,9 +35,9 @@ toml = { workspace = true }
 [dev-dependencies]
 spin-factors-test = { path = "../factors-test" }
 spin-world = { path = "../world" }
-tempfile = "3.2"
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
-toml = "0.8"
+toml = { workspace = true }
 
 [lints]
 workspace = true

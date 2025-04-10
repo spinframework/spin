@@ -16,8 +16,8 @@ unsafe-aot-compilation = []
 
 [dependencies]
 anyhow = { workspace = true }
-clap = { version = "3.1.18", features = ["derive", "env"] }
-ctrlc = { version = "3.2", features = ["termination"] }
+clap = { workspace = true, features = ["derive", "env"] }
+ctrlc = { workspace = true }
 futures = { workspace = true }
 sanitize-filename = "0.5"
 serde = { workspace = true }

@@ -6,7 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-redis = { version = "0.28", features = ["tokio-comp", "tokio-native-tls-comp", "connection-manager"] }
+redis = { workspace = true, features = ["tokio-comp", "tokio-native-tls-comp", "connection-manager"] }
 serde = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-key-value = { path = "../factor-key-value" }

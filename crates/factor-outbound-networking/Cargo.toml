@@ -6,12 +6,12 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-futures-util = "0.3"
+futures-util = { workspace = true }
 http = { workspace = true }
 ipnet = "2"
 rustls = { workspace = true }
-rustls-pemfile = { version = "2", optional = true }
-rustls-pki-types = "1.8"
+rustls-pemfile = { workspace = true, optional = true }
+rustls-pki-types = { workspace = true }
 serde = { workspace = true }
 spin-expressions = { path = "../expressions" }
 spin-factor-variables = { path = "../factor-variables" }

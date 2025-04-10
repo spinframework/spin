@@ -1,8 +1,9 @@
 mod store;
 
+use std::io::IsTerminal;
+
 use self::store::{BadgerRecordManager, PreviousBadger};
 use crate::manifest::PluginManifest;
-use is_terminal::IsTerminal;
 
 const BADGER_TIMEOUT_DAYS: i64 = 14;
 

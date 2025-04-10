@@ -9,16 +9,16 @@ anyhow = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
-indexmap = "2"
+indexmap = { workspace = true }
 percent-encoding = "2"
 routefinder = "0.5.4"
 serde = { workspace = true }
 spin-app = { path = "../app", optional = true }
+spin-factor-outbound-http = { path = "../factor-outbound-http" }
 tracing = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
-spin-factor-outbound-http = { path = "../factor-outbound-http" }
 
 [dev-dependencies]
 toml = { workspace = true }

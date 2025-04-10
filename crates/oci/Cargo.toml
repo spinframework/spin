@@ -8,17 +8,17 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 async-compression = { version = "0.4", features = ["gzip", "tokio"] }
 async-tar = "0.5"
-base64 = "0.22"
-chrono = "0.4"
+base64 = { workspace = true }
+chrono = { workspace = true }
 # Fork with updated auth to support ACR login
 # Ref https://github.com/camallo/dkregistry-rs/pull/263
 dirs = { workspace = true }
 dkregistry = { git = "https://github.com/fermyon/dkregistry-rs", rev = "161cf2b66996ed97c7abaf046e38244484814de3" }
 docker_credential = "1"
-futures-util = "0.3"
+futures-util = { workspace = true }
 itertools = { workspace = true }
 oci-distribution = { git = "https://github.com/fermyon/oci-distribution", rev = "7b291a39f74d1a3c9499d934a56cae6580fc8e37" }
-reqwest = "0.12"
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 spin-common = { path = "../common" }
@@ -29,7 +29,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tracing = { workspace = true }
-walkdir = "2"
+walkdir = { workspace = true }
 
 [dev-dependencies]
 wasm-encoder = { workspace = true }
