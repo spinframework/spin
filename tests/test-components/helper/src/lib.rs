@@ -17,7 +17,7 @@ use bindings::wasi::io0_2_0::streams::OutputStream;
 #[cfg(feature = "define-component")]
 pub mod http_trigger_bindings {
     wit_bindgen::generate!({
-        world: "fermyon:spin/http-trigger@3.0.0",
+        world: "spin:up/http-trigger@3.2.0",
         path: "../../../wit",
         generate_all,
         pub_export_macro: true,

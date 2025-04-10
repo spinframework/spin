@@ -1,0 +1,60 @@
+package spin:sqlite@3.0.0;
+
+interface sqlite {
+  /// A handle to an open sqlite instance
+  resource connection {
+    /// Open a connection to a named database instance.
+    ///
+    /// If `database` is "default", the default instance is opened.
+    ///
+    /// `error::no-such-database` will be raised if the `name` is not recognized.
+    open: static func(database: string) -> result<connection, error>;
+
+    /// Execute a statement returning back data if there is any
+    execute: func(statement: string, parameters: list<value>) -> result<query-result, error>;
+
+    /// The SQLite rowid of the most recent successful INSERT on the connection, or 0 if
+    /// there has not yet been an INSERT on the connection.
+    last-insert-rowid: func() -> s64;
+
+    /// The number of rows modified, inserted or deleted by the most recently completed
+    /// INSERT, UPDATE or DELETE statement on the connection.
+    changes: func() -> u64;
+  }
+
+  /// The set of errors which may be raised by functions in this interface
+  variant error {
+    /// The host does not recognize the database name requested.
+    no-such-database,
+    /// The requesting component does not have access to the specified database (which may or may not exist).
+    access-denied,
+    /// The provided connection is not valid
+    invalid-connection,
+    /// The database has reached its capacity
+    database-full,
+    /// Some implementation-specific error has occurred (e.g. I/O)
+    io(string)
+  }
+
+  /// A result of a query
+  record query-result {
+    /// The names of the columns retrieved in the query
+    columns: list<string>,
+    /// the row results each containing the values for all the columns for a given row
+    rows: list<row-result>,
+  }
+
+  /// A set of values for each of the columns in a query-result
+  record row-result {
+    values: list<value>
+  }
+
+  /// A single column's result from a database query
+  variant value {
+    integer(s64),
+    real(f64),
+    text(string),
+    blob(list<u8>),
+    null
+  }
+}

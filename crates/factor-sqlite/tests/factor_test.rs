@@ -9,7 +9,7 @@ use spin_factors::{
     RuntimeFactors,
 };
 use spin_factors_test::{toml, TestEnvironment};
-use spin_world::{async_trait, v2::sqlite as v2};
+use spin_world::{async_trait, spin::sqlite::sqlite as v3, v2::sqlite as v2};
 use v2::HostConnection as _;
 
 #[derive(RuntimeFactors)]
@@ -103,7 +103,7 @@ impl spin_factor_sqlite::ConnectionCreator for MockConnectionCreator {
     async fn create_connection(
         &self,
         label: &str,
-    ) -> Result<Box<dyn spin_factor_sqlite::Connection + 'static>, v2::Error> {
+    ) -> Result<Box<dyn spin_factor_sqlite::Connection + 'static>, v3::Error> {
         let _ = label;
         Ok(Box::new(MockConnection))
     }
@@ -117,14 +117,22 @@ impl spin_factor_sqlite::Connection for MockConnection {
     async fn query(
         &self,
         query: &str,
-        parameters: Vec<v2::Value>,
-    ) -> Result<v2::QueryResult, v2::Error> {
+        parameters: Vec<v3::Value>,
+    ) -> Result<v3::QueryResult, v3::Error> {
         let _ = (query, parameters);
-        Err(v2::Error::Io("Mock connection".into()))
+        Err(v3::Error::Io("Mock connection".into()))
     }
 
     async fn execute_batch(&self, statements: &str) -> anyhow::Result<()> {
         let _ = statements;
         bail!("Mock connection")
+    }
+
+    async fn changes(&self) -> Result<u64, v3::Error> {
+        Ok(123)
+    }
+
+    async fn last_insert_rowid(&self) -> Result<i64, v3::Error> {
+        Ok(456)
     }
 }

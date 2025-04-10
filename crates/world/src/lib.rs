@@ -10,6 +10,7 @@ wasmtime::component::bindgen!({
         include fermyon:spin/host;
         include fermyon:spin/platform@2.0.0;
         include fermyon:spin/platform@3.0.0;
+        include spin:up/platform@3.2.0;
         include wasi:keyvalue/imports@0.2.0-draft2;
     }
     "#,
@@ -31,6 +32,7 @@ wasmtime::component::bindgen!({
         "fermyon:spin/sqlite/error" => v1::sqlite::Error,
         "fermyon:spin/variables@2.0.0/error" => v2::variables::Error,
         "spin:postgres/postgres/error" => spin::postgres::postgres::Error,
+        "spin:sqlite/sqlite/error" => spin::sqlite::sqlite::Error,
         "wasi:config/store@0.2.0-draft-2024-09-27/error" => wasi::config::store::Error,
         "wasi:keyvalue/store/error" => wasi::keyvalue::store::Error,
         "wasi:keyvalue/atomics/cas-error" => wasi::keyvalue::atomics::CasError,
