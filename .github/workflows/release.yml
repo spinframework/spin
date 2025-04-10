@@ -132,6 +132,10 @@ jobs:
             --output-signature spin.sig \
             ${{ matrix.config.targetDir }}/spin${{ matrix.config.extension }}
 
+      - name: Generate manifest schema
+        if: matrix.config.os == 'ubuntu-22.04' && matrix.config.arch == 'amd64'
+        run: ${{ matrix.config.targetDir }}/spin${{ matrix.config.extension }} maintenance generate-manifest-schema -o manifest.schema.json
+
       - name: package release assets
         if: runner.os != 'Windows'
         shell: bash
@@ -167,6 +171,13 @@ jobs:
         with:
           name: spin-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}
           path: _dist/spin-${{ env.RELEASE_VERSION }}-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}.zip
+      
+      - name: Upload schema as GitHub artifact
+        if: matrix.config.os == 'ubuntu-22.04' && matrix.config.arch == 'amd64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest.schema.json
+          path: manifest.schema.json
 
   checksums:
     name: generate release checksums
@@ -206,10 +217,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: download release assets
+      - name: download binaries for release assets
         uses: actions/download-artifact@v4
         with:
           pattern: spin-*
+          path: _dist
+          merge-multiple: true
+
+      - name: download schema for release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: manifest.schema.json
           path: _dist
           merge-multiple: true
 
