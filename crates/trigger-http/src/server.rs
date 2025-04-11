@@ -222,7 +222,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
     pub async fn handle_trigger_route(
         self: &Arc<Self>,
         mut req: Request<Body>,
-        route_match: RouteMatch,
+        route_match: RouteMatch<'_, '_>,
         server_scheme: Scheme,
         client_addr: SocketAddr,
     ) -> anyhow::Result<Response<Body>> {
@@ -471,7 +471,7 @@ pub(crate) trait HttpExecutor {
     fn execute<F: RuntimeFactors>(
         &self,
         instance_builder: TriggerInstanceBuilder<F>,
-        route_match: &RouteMatch,
+        route_match: &RouteMatch<'_, '_>,
         req: Request<Body>,
         client_addr: SocketAddr,
     ) -> impl Future<Output = anyhow::Result<Response<Body>>>;

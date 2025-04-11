@@ -24,7 +24,7 @@ impl HttpExecutor for SpinHttpExecutor {
     async fn execute<F: RuntimeFactors>(
         &self,
         instance_builder: TriggerInstanceBuilder<'_, F>,
-        route_match: &RouteMatch,
+        route_match: &RouteMatch<'_, '_>,
         req: Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<Response<Body>> {
