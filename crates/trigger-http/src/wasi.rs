@@ -27,7 +27,7 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
     async fn execute<F: RuntimeFactors>(
         &self,
         instance_builder: TriggerInstanceBuilder<'_, F>,
-        route_match: &RouteMatch,
+        route_match: &RouteMatch<'_, '_>,
         mut req: Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<Response<Body>> {

@@ -32,7 +32,8 @@ impl<F: RuntimeFactors> intercept::OutboundHttpInterceptor for OutboundHttpInter
         // Handle service chaining requests
         if let Some(component_id) = parse_service_chaining_target(request.uri()) {
             let req = request.into_hyper_request();
-            let route_match = RouteMatch::synthetic(&component_id, req.uri().path());
+            let path = req.uri().path().to_owned();
+            let route_match = RouteMatch::synthetic(component_id, path);
             let resp = self
                 .server
                 .handle_trigger_route(req, route_match, Scheme::HTTP, CHAINED_CLIENT_ADDR)

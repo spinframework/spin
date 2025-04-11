@@ -23,7 +23,7 @@ impl HttpExecutor for WagiHttpExecutor<'_> {
     async fn execute<F: RuntimeFactors>(
         &self,
         mut instance_builder: TriggerInstanceBuilder<'_, F>,
-        route_match: &RouteMatch,
+        route_match: &RouteMatch<'_, '_>,
         req: Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<Response<Body>> {
