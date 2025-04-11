@@ -22,9 +22,9 @@ struct RouteHandler {
     /// The component ID that the route maps to.
     component_id: String,
     /// The route, including any application base.
-    based_route: String,
+    based_route: Cow<'static, str>,
     /// The route, not including any application base.
-    raw_route: String,
+    raw_route: Cow<'static, str>,
     /// The route, including any application base and capturing information about whether it has a trailing wildcard.
     /// (This avoids re-parsing the route string.)
     parsed_based_route: ParsedRoute,
@@ -111,8 +111,8 @@ impl Router {
 
             let handler = RouteHandler {
                 component_id: re.component_id.to_string(),
-                based_route: re.based_route,
-                raw_route: re.raw_route.to_string(),
+                based_route: re.based_route.into(),
+                raw_route: re.raw_route.to_string().into(),
                 parsed_based_route: parsed,
             };
 
@@ -235,8 +235,8 @@ impl<'router, 'path> RouteMatch<'router, 'path> {
         Self {
             route_handler: Cow::Owned(RouteHandler {
                 component_id,
-                based_route: "/...".to_string(),
-                raw_route: "/...".to_string(),
+                based_route: "/...".into(),
+                raw_route: "/...".into(),
                 parsed_based_route: ParsedRoute::TrailingWildcard(String::new()),
             }),
             best_match: None,
