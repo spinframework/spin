@@ -152,6 +152,8 @@ struct ManifestV2TriggerProbe {
     trigger: Option<toml::value::Table>,
 }
 
+// an irrelevant change to cause tests to run in ci
+
 #[cfg(test)]
 mod test {
     use super::*;
