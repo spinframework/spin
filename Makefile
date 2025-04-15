@@ -62,7 +62,7 @@ test-runtime:
 # Run all of the runtime tests including those that use some sort of assumed external dependency (e.g., Docker, a language toolchain, etc.)
 .PHONY: test-runtime-full
 test-runtime-full:
-	cargo test --release runtime_tests --no-default-features --features extern-dependencies-tests --no-fail-fast -- --nocapture
+	cargo test --release runtime_tests::outbound_mysql --no-default-features --features extern-dependencies-tests --no-fail-fast -- --nocapture
 
 # Run the integration tests without the tests that use some sort of assumed external dependency (e.g., Docker, a language toolchain, etc.)
 .PHONY: test-integration

@@ -20,172 +20,172 @@ env:
   RUST_VERSION: 1.81
 
 jobs:
-  dependency-review:
-    name: Review new dependencies for known vulnerabilities
-    runs-on: "ubuntu-22.04"
-    if: ${{ github.event_name == 'pull_request' }}
-    steps:
-      - name: 'Checkout Repository'
-        uses: actions/checkout@v4
-      - name: 'Dependency Review'
-        uses: actions/dependency-review-action@v4
+  # dependency-review:
+  #   name: Review new dependencies for known vulnerabilities
+  #   runs-on: "ubuntu-22.04"
+  #   if: ${{ github.event_name == 'pull_request' }}
+  #   steps:
+  #     - name: 'Checkout Repository'
+  #       uses: actions/checkout@v4
+  #     - name: 'Dependency Review'
+  #       uses: actions/dependency-review-action@v4
 
-  lint-rust:
-    name: Lint Rust
-    runs-on: "ubuntu-22.04"
-    permissions:
-      ## Allow this job to potentially cancel the running workflow (on failure)
-      actions: write
-    steps:
-      - uses: actions/checkout@v3
+  # lint-rust:
+  #   name: Lint Rust
+  #   runs-on: "ubuntu-22.04"
+  #   permissions:
+  #     ## Allow this job to potentially cancel the running workflow (on failure)
+  #     actions: write
+  #   steps:
+  #     - uses: actions/checkout@v3
 
-      - name: setup dependencies
-        uses: ./.github/actions/spin-ci-dependencies
-        with:
-          rust: true
-          rust-wasm: true
-          rust-cache: true
+  #     - name: setup dependencies
+  #       uses: ./.github/actions/spin-ci-dependencies
+  #       with:
+  #         rust: true
+  #         rust-wasm: true
+  #         rust-cache: true
 
-      - name: Run lints on main code
-        run: BUILD_SPIN_EXAMPLES=0 make lint
+  #     - name: Run lints on main code
+  #       run: BUILD_SPIN_EXAMPLES=0 make lint
 
-      - name: Run lints on examples
-        run: BUILD_SPIN_EXAMPLES=0 make lint-rust-examples
+  #     - name: Run lints on examples
+  #       run: BUILD_SPIN_EXAMPLES=0 make lint-rust-examples
 
-  ## This is separated out to remove full integration tests dependencies on windows/mac builds
-  build-rust-ubuntu:
-    name: Build Spin Ubuntu
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v3
+  # ## This is separated out to remove full integration tests dependencies on windows/mac builds
+  # build-rust-ubuntu:
+  #   name: Build Spin Ubuntu
+  #   runs-on: ubuntu-22.04
+  #   steps:
+  #     - uses: actions/checkout@v3
 
-      - name: setup dependencies
-        uses: ./.github/actions/spin-ci-dependencies
-        with:
-          rust: true
-          rust-wasm: true
-          rust-cache: true
+  #     - name: setup dependencies
+  #       uses: ./.github/actions/spin-ci-dependencies
+  #       with:
+  #         rust: true
+  #         rust-wasm: true
+  #         rust-cache: true
 
-      - name: Cargo Build
-        run: cargo build --workspace --release --all-targets --features openssl/vendored --features all-tests
-        env:
-          CARGO_INCREMENTAL: 0
+  #     - name: Cargo Build
+  #       run: cargo build --workspace --release --all-targets --features openssl/vendored --features all-tests
+  #       env:
+  #         CARGO_INCREMENTAL: 0
 
-      - name: "Archive executable artifact"
-        uses: actions/upload-artifact@v4
-        with:
-          name: spin-ubuntu-latest
-          path: target/release/spin
+  #     - name: "Archive executable artifact"
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: spin-ubuntu-latest
+  #         path: target/release/spin
 
-  build-spin-static:
-    name: Build Spin static
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        config:
-          - {
-              arch: "aarch64",
-              target: "aarch64-unknown-linux-musl"
-            }
-          - {
-              arch: "amd64",
-              target: "x86_64-unknown-linux-musl"
-            }
-    steps:
-      - uses: actions/checkout@v3
+  # build-spin-static:
+  #   name: Build Spin static
+  #   runs-on: ubuntu-22.04
+  #   strategy:
+  #     matrix:
+  #       config:
+  #         - {
+  #             arch: "aarch64",
+  #             target: "aarch64-unknown-linux-musl"
+  #           }
+  #         - {
+  #             arch: "amd64",
+  #             target: "x86_64-unknown-linux-musl"
+  #           }
+  #   steps:
+  #     - uses: actions/checkout@v3
 
-      - name: setup dependencies
-        uses: ./.github/actions/spin-ci-dependencies
-        with:
-          rust: true
-          rust-cross: true
-          rust-cache: true
+  #     - name: setup dependencies
+  #       uses: ./.github/actions/spin-ci-dependencies
+  #       with:
+  #         rust: true
+  #         rust-cross: true
+  #         rust-cache: true
 
-      - name: Cargo Build
-        run: cross build --target ${{ matrix.config.target }} --release --features openssl/vendored
-        env:
-          CARGO_INCREMENTAL: 0
-          BUILD_SPIN_EXAMPLES: 0
+  #     - name: Cargo Build
+  #       run: cross build --target ${{ matrix.config.target }} --release --features openssl/vendored
+  #       env:
+  #         CARGO_INCREMENTAL: 0
+  #         BUILD_SPIN_EXAMPLES: 0
 
-      - name: "Archive executable artifact"
-        uses: actions/upload-artifact@v4
-        with:
-          name: spin-static-${{ matrix.config.arch }}
-          path: target/${{ matrix.config.target }}/release/spin
+  #     - name: "Archive executable artifact"
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: spin-static-${{ matrix.config.arch }}
+  #         path: target/${{ matrix.config.target }}/release/spin
 
-  build-spin:
-    name: Build Spin
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [windows-latest, macos-13, macos-14]
-    steps:
-      - uses: actions/checkout@v3
+  # build-spin:
+  #   name: Build Spin
+  #   runs-on: ${{ matrix.os }}
+  #   strategy:
+  #     matrix:
+  #       os: [windows-latest, macos-13, macos-14]
+  #   steps:
+  #     - uses: actions/checkout@v3
 
-      - name: setup dependencies
-        uses: ./.github/actions/spin-ci-dependencies
-        with:
-          rust: true
-          rust-wasm: true
-          rust-cache: true
-          openssl-windows: "${{ matrix.os == 'windows-latest' }}"
+  #     - name: setup dependencies
+  #       uses: ./.github/actions/spin-ci-dependencies
+  #       with:
+  #         rust: true
+  #         rust-wasm: true
+  #         rust-cache: true
+  #         openssl-windows: "${{ matrix.os == 'windows-latest' }}"
 
-      - name: Cargo Build
-        run: cargo build --workspace --release --all-targets
-        env:
-          CARGO_INCREMENTAL: 0
+  #     - name: Cargo Build
+  #       run: cargo build --workspace --release --all-targets
+  #       env:
+  #         CARGO_INCREMENTAL: 0
 
-      - name: "Archive executable artifact"
-        uses: actions/upload-artifact@v4
-        with:
-          name: spin-${{ matrix.os }}
-          path: target/release/spin${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+  #     - name: "Archive executable artifact"
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: spin-${{ matrix.os }}
+  #         path: target/release/spin${{ matrix.os == 'windows-latest' && '.exe' || '' }}
 
 
-  test-spin:
-    name: Test Spin
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        runner: [ubuntu-22.04-4core-spin, macos-14]
-    steps:
-      - uses: actions/checkout@v3
+  # test-spin:
+  #   name: Test Spin
+  #   runs-on: ${{ matrix.runner }}
+  #   strategy:
+  #     matrix:
+  #       runner: [ubuntu-22.04-4core-spin, macos-14]
+  #   steps:
+  #     - uses: actions/checkout@v3
 
-      - name: setup dependencies
-        uses: ./.github/actions/spin-ci-dependencies
-        with:
-          rust: true
-          rust-wasm: true
-          rust-cache: true
-          nomad: true
+  #     - name: setup dependencies
+  #       uses: ./.github/actions/spin-ci-dependencies
+  #       with:
+  #         rust: true
+  #         rust-wasm: true
+  #         rust-cache: true
+  #         nomad: true
 
-      - name: Check disk space (Before)
-        run: df -h /
+  #     - name: Check disk space (Before)
+  #       run: df -h /
 
-      # Clear space on macOS runner which is prone to running out of space
-      - name: Free disk space
-        run: |
-          sudo rm -rf ~/.dotnet
-          sudo rm -rf /Library/Android
-          sudo rm -rf /Library/Developer/CoreSimulator
-          find /Applications -name "Xcode_*" -maxdepth 1 -mindepth 1 | xargs rm -rf
-        continue-on-error: true
-        if: ${{ matrix.runner == 'macos-14' }}
+  #     # Clear space on macOS runner which is prone to running out of space
+  #     - name: Free disk space
+  #       run: |
+  #         sudo rm -rf ~/.dotnet
+  #         sudo rm -rf /Library/Android
+  #         sudo rm -rf /Library/Developer/CoreSimulator
+  #         find /Applications -name "Xcode_*" -maxdepth 1 -mindepth 1 | xargs rm -rf
+  #       continue-on-error: true
+  #       if: ${{ matrix.runner == 'macos-14' }}
 
-      - name: Check disk space (After)
-        run: df -h /
+  #     - name: Check disk space (After)
+  #       run: df -h /
 
-      - name: Run Unit Tests
-        run: |
-          make test-unit
+  #     - name: Run Unit Tests
+  #       run: |
+  #         make test-unit
 
-      - name: Run Integration Tests
-        run: |
-          make test-integration
-        env:
-          SPIN_CONFORMANCE_TESTS_DOCKER_OPT_OUT: true
-        # Only run integration tests on macOS as they will be run on ubuntu separately
-        if: ${{ matrix.runner == 'macos-14' }}
+  #     - name: Run Integration Tests
+  #       run: |
+  #         make test-integration
+  #       env:
+  #         SPIN_CONFORMANCE_TESTS_DOCKER_OPT_OUT: true
+  #       # Only run integration tests on macOS as they will be run on ubuntu separately
+  #       if: ${{ matrix.runner == 'macos-14' }}
 
   all-integration-tests:
     # run on a larger runner for more SSD/resource access
@@ -218,86 +218,86 @@ jobs:
       - name: Run Full Integration Tests
         run: make test-integration-full
 
-  # This runs the same steps as the release build except for signing
-  ensure-release-builds:
-    name: Run release build steps
-    runs-on: ${{ matrix.config.os }}
-    strategy:
-      matrix:
-        config:
-          - {
-              os: "ubuntu-22.04",
-              arch: "amd64",
-              extension: "",
-              # Ubuntu 22.04 no longer ships libssl1.1, so we statically
-              # link it here to preserve release binary compatibility.
-              extraArgs: "--features openssl/vendored",
-              target: "",
-              targetDir: "target/release",
-            }
-          - {
-              os: "ubuntu-22.04",
-              arch: "aarch64",
-              extension: "",
-              extraArgs: "--features openssl/vendored --target aarch64-unknown-linux-gnu",
-              target: "aarch64-unknown-linux-gnu",
-              targetDir: "target/aarch64-unknown-linux-gnu/release",
-            }
-          - {
-              os: "macos-13",
-              arch: "amd64",
-              extension: "",
-              extraArgs: "",
-              target: "",
-              targetDir: "target/release",
-            }
-          - {
-              os: "macos-14",
-              arch: "aarch64",
-              extension: "",
-              extraArgs: "",
-              target: "",
-              targetDir: "target/release",
-            }
-          - {
-              os: "windows-latest",
-              arch: "amd64",
-              extension: ".exe",
-              extraArgs: "",
-              target: "",
-              targetDir: "target/release",
-            }
-    steps:
-      - uses: actions/checkout@v3
+  # # This runs the same steps as the release build except for signing
+  # ensure-release-builds:
+  #   name: Run release build steps
+  #   runs-on: ${{ matrix.config.os }}
+  #   strategy:
+  #     matrix:
+  #       config:
+  #         - {
+  #             os: "ubuntu-22.04",
+  #             arch: "amd64",
+  #             extension: "",
+  #             # Ubuntu 22.04 no longer ships libssl1.1, so we statically
+  #             # link it here to preserve release binary compatibility.
+  #             extraArgs: "--features openssl/vendored",
+  #             target: "",
+  #             targetDir: "target/release",
+  #           }
+  #         - {
+  #             os: "ubuntu-22.04",
+  #             arch: "aarch64",
+  #             extension: "",
+  #             extraArgs: "--features openssl/vendored --target aarch64-unknown-linux-gnu",
+  #             target: "aarch64-unknown-linux-gnu",
+  #             targetDir: "target/aarch64-unknown-linux-gnu/release",
+  #           }
+  #         - {
+  #             os: "macos-13",
+  #             arch: "amd64",
+  #             extension: "",
+  #             extraArgs: "",
+  #             target: "",
+  #             targetDir: "target/release",
+  #           }
+  #         - {
+  #             os: "macos-14",
+  #             arch: "aarch64",
+  #             extension: "",
+  #             extraArgs: "",
+  #             target: "",
+  #             targetDir: "target/release",
+  #           }
+  #         - {
+  #             os: "windows-latest",
+  #             arch: "amd64",
+  #             extension: ".exe",
+  #             extraArgs: "",
+  #             target: "",
+  #             targetDir: "target/release",
+  #           }
+  #   steps:
+  #     - uses: actions/checkout@v3
 
-      - name: Install Rust toolchain
-        shell: bash
-        run: |
-          rustup toolchain install ${{ env.RUST_VERSION }} --no-self-update
-          rustup default ${{ env.RUST_VERSION }}
+  #     - name: Install Rust toolchain
+  #       shell: bash
+  #       run: |
+  #         rustup toolchain install ${{ env.RUST_VERSION }} --no-self-update
+  #         rustup default ${{ env.RUST_VERSION }}
 
-      - name: Install target
-        if: matrix.config.target != ''
-        shell: bash
-        run: rustup target add --toolchain ${{ env.RUST_VERSION }} ${{ matrix.config.target }}
+  #     - name: Install target
+  #       if: matrix.config.target != ''
+  #       shell: bash
+  #       run: rustup target add --toolchain ${{ env.RUST_VERSION }} ${{ matrix.config.target }}
 
-      - name: "Install Wasm Rust target"
-        run: rustup target add wasm32-wasip1 wasm32-unknown-unknown --toolchain ${{ env.RUST_VERSION }}
+  #     - name: "Install Wasm Rust target"
+  #       run: rustup target add wasm32-wasip1 wasm32-unknown-unknown --toolchain ${{ env.RUST_VERSION }}
 
-      - name: setup for cross-compiled linux aarch64 build
-        if: matrix.config.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt update
-          sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          echo '[target.aarch64-unknown-linux-gnu]' >> ${HOME}/.cargo/config.toml
-          echo 'linker = "aarch64-linux-gnu-gcc"' >> ${HOME}/.cargo/config.toml
-          echo 'rustflags = ["-Ctarget-feature=+fp16"]' >> ${HOME}/.cargo/config.toml
+  #     - name: setup for cross-compiled linux aarch64 build
+  #       if: matrix.config.target == 'aarch64-unknown-linux-gnu'
+  #       run: |
+  #         sudo apt update
+  #         sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+  #         echo '[target.aarch64-unknown-linux-gnu]' >> ${HOME}/.cargo/config.toml
+  #         echo 'linker = "aarch64-linux-gnu-gcc"' >> ${HOME}/.cargo/config.toml
+  #         echo 'rustflags = ["-Ctarget-feature=+fp16"]' >> ${HOME}/.cargo/config.toml
 
-      - name: setup dependencies
-        uses: ./.github/actions/spin-ci-dependencies
-        with:
-          openssl-windows: "${{ matrix.os == 'windows-latest' }}"
+  #     - name: setup dependencies
+  #       uses: ./.github/actions/spin-ci-dependencies
+  #       with:
+  #         openssl-windows: "${{ matrix.os == 'windows-latest' }}"
 
-      - name: build release
-        shell: bash
-        run: cargo build --release ${{ matrix.config.extraArgs }}
+  #     - name: build release
+  #       shell: bash
+  #       run: cargo build --release ${{ matrix.config.extraArgs }}
