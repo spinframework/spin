@@ -326,6 +326,7 @@ async fn prompt_template(
         .iter()
         .map(|t| format!("{} ({})", t.id(), t.description_or_empty()))
         .collect::<Vec<_>>();
+    // this too
     let noun = variant.prompt_noun();
     let prompt = format!("Pick a template to start your {noun} with");
     let index = match dialoguer::Select::new()
