@@ -35,7 +35,7 @@ impl incoming_handler::Guest for Component {
         }) {
             let headers = Headers::new();
             headers
-                .append(&"Content-Length".into(), &"13".into())
+                .append("Content-Length", "13".as_bytes())
                 .unwrap();
             let outgoing_request = OutgoingRequest::new(headers);
             outgoing_request.set_method(&Method::Post).unwrap();
