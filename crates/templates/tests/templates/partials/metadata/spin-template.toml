@@ -1,0 +1,7 @@
+manifest_version = "1"
+id = "partials"
+description = "Tests Liquid partials"
+trigger_type = "http"
+
+[parameters]
+example-value = { type = "string", prompt = "Example value" }

@@ -19,6 +19,9 @@ use crate::{
     template::Template,
 };
 
+/// A set of partials to be included in a Liquid template.
+type PartialsBuilder = liquid::partials::EagerCompiler<liquid::partials::InMemorySource>;
+
 /// Executes a template to the point where it is ready to generate
 /// artefacts.
 pub struct Run {
@@ -104,6 +107,9 @@ impl Run {
             };
         }
 
+        let partials = self.partials()?;
+        let parser = Self::template_parser(partials)?;
+
         self.validate_provided_values()?;
 
         let files = match self.template.content_dir() {
@@ -112,7 +118,7 @@ impl Run {
                 let from = path
                     .absolutize()
                     .context("Failed to get absolute path of template directory")?;
-                self.included_files(&from, &to)?
+                self.included_files(&from, &to, &parser)?
             }
         };
 
@@ -120,7 +126,7 @@ impl Run {
             .template
             .snippets(&self.options.variant)
             .iter()
-            .map(|(id, path)| self.snippet_operation(id, path))
+            .map(|(id, path)| self.snippet_operation(id, path, &parser))
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         let extras = self
@@ -151,7 +157,12 @@ impl Run {
         }
     }
 
-    fn included_files(&self, from: &Path, to: &Path) -> anyhow::Result<Vec<RenderOperation>> {
+    fn included_files(
+        &self,
+        from: &Path,
+        to: &Path,
+        parser: &liquid::Parser,
+    ) -> anyhow::Result<Vec<RenderOperation>> {
         let gitignore = ".gitignore";
         let mut all_content_files = Self::list_content_files(from)?;
         // If user asked for no_vcs
@@ -164,7 +175,7 @@ impl Run {
         let included_files =
             self.template
                 .included_files(from, all_content_files, &self.options.variant);
-        let template_contents = self.read_all(included_files)?;
+        let template_contents = self.read_all(included_files, parser)?;
         let outputs = Self::to_output_paths(from, to, template_contents);
         let file_ops = outputs
             .into_iter()
@@ -262,7 +273,12 @@ impl Run {
         }
     }
 
-    fn snippet_operation(&self, id: &str, snippet_file: &str) -> anyhow::Result<RenderOperation> {
+    fn snippet_operation(
+        &self,
+        id: &str,
+        snippet_file: &str,
+        parser: &liquid::Parser,
+    ) -> anyhow::Result<RenderOperation> {
         let snippets_dir = self
             .template
             .snippets_dir()
@@ -271,7 +287,7 @@ impl Run {
         let abs_snippet_file = snippets_dir.join(snippet_file);
         let file_content = std::fs::read(abs_snippet_file)
             .with_context(|| format!("Error reading snippet file {}", snippet_file))?;
-        let content = TemplateContent::infer_from_bytes(file_content, &Self::template_parser())
+        let content = TemplateContent::infer_from_bytes(file_content, parser)
             .with_context(|| format!("Error parsing snippet file {}", snippet_file))?;
 
         match id {
@@ -356,11 +372,14 @@ impl Run {
     }
 
     // TODO: async when we know where things sit
-    fn read_all(&self, paths: Vec<PathBuf>) -> anyhow::Result<Vec<(PathBuf, TemplateContent)>> {
-        let template_parser = Self::template_parser();
+    fn read_all(
+        &self,
+        paths: Vec<PathBuf>,
+        template_parser: &liquid::Parser,
+    ) -> anyhow::Result<Vec<(PathBuf, TemplateContent)>> {
         let contents = paths
             .iter()
-            .map(|path| TemplateContent::infer_from_bytes(std::fs::read(path)?, &template_parser))
+            .map(|path| TemplateContent::infer_from_bytes(std::fs::read(path)?, template_parser))
             .collect::<Result<Vec<_>, _>>()?;
         // Strip optional .tmpl extension
         // Templates can use this if they don't want to store files with their final extensions
@@ -394,8 +413,11 @@ impl Run {
         pathdiff::diff_paths(source, src_dir).map(|rel| (dest_dir.join(rel), cont))
     }
 
-    fn template_parser() -> liquid::Parser {
+    fn template_parser(
+        partials: impl liquid::partials::PartialCompiler,
+    ) -> anyhow::Result<liquid::Parser> {
         let builder = liquid::ParserBuilder::with_stdlib()
+            .partials(partials)
             .filter(crate::filters::KebabCaseFilterParser)
             .filter(crate::filters::PascalCaseFilterParser)
             .filter(crate::filters::DottedPascalCaseFilterParser)
@@ -403,7 +425,33 @@ impl Run {
             .filter(crate::filters::HttpWildcardFilterParser);
         builder
             .build()
-            .expect("can't fail due to no partials support")
+            .context("Template error: unable to build parser")
+    }
+
+    fn partials(&self) -> anyhow::Result<impl liquid::partials::PartialCompiler> {
+        let mut partials = PartialsBuilder::empty();
+
+        if let Some(partials_dir) = self.template.partials_dir() {
+            let partials_dir = std::fs::read_dir(partials_dir)
+                .context("Error opening template partials directory")?;
+            for partial_file in partials_dir {
+                let partial_file =
+                    partial_file.context("Error scanning template partials directory")?;
+                if !partial_file.file_type().is_ok_and(|t| t.is_file()) {
+                    anyhow::bail!("Non-file in partials directory: {partial_file:?}");
+                }
+                let partial_name = partial_file
+                    .file_name()
+                    .into_string()
+                    .map_err(|f| anyhow!("Unusable partial name {f:?}"))?;
+                let partial_file = partial_file.path();
+                let content = std::fs::read_to_string(&partial_file)
+                    .with_context(|| format!("Invalid partial template {partial_file:?}"))?;
+                partials.add(partial_name, content);
+            }
+        }
+
+        Ok(partials)
     }
 }
 
@@ -418,7 +466,8 @@ mod test {
             "kebabby": "originally-kebabby",
             "dotted": "originally.semi-dotted"
         });
-        let parser = Run::template_parser();
+        let no_partials = super::PartialsBuilder::empty();
+        let parser = Run::template_parser(no_partials).unwrap();
 
         let eval = |s: &str| parser.parse(s).unwrap().render(&data).unwrap();
 

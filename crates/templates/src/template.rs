@@ -30,6 +30,7 @@ pub struct Template {
     parameters: Vec<TemplateParameter>,
     extra_outputs: Vec<ExtraOutputAction>,
     snippets_dir: Option<PathBuf>,
+    partials_dir: Option<PathBuf>,
     content_dir: Option<PathBuf>, // TODO: maybe always need a spin.toml file in there?
 }
 
@@ -184,6 +185,12 @@ impl Template {
             None
         };
 
+        let partials_dir = if layout.partials_dir().exists() {
+            Some(layout.partials_dir())
+        } else {
+            None
+        };
+
         let installed_from = read_install_record(layout);
 
         let template = match raw {
@@ -197,6 +204,7 @@ impl Template {
                 parameters: Self::parse_parameters(&raw.parameters)?,
                 extra_outputs: Self::parse_extra_outputs(&raw.outputs)?,
                 snippets_dir,
+                partials_dir,
                 content_dir,
             },
         };
@@ -292,6 +300,10 @@ impl Template {
 
     pub(crate) fn snippets_dir(&self) -> &Option<PathBuf> {
         &self.snippets_dir
+    }
+
+    pub(crate) fn partials_dir(&self) -> &Option<PathBuf> {
+        &self.partials_dir
     }
 
     /// Checks if the template supports the specified variant mode.
@@ -753,6 +765,7 @@ mod test {
             parameters: vec![],
             extra_outputs: vec![],
             snippets_dir: None,
+            partials_dir: None,
             content_dir: None,
         };
 

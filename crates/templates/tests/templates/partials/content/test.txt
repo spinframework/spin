@@ -1,0 +1,3 @@
+Value: {{ example-value }}
+Partial 1: {% render 'p1' %}
+Partial 2: {% render 'p2', value: example-value %}

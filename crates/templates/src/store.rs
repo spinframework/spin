@@ -68,6 +68,7 @@ pub(crate) struct TemplateLayout {
 const METADATA_DIR_NAME: &str = "metadata";
 const CONTENT_DIR_NAME: &str = "content";
 const SNIPPETS_DIR_NAME: &str = "snippets";
+const PARTIALS_DIR_NAME: &str = "partials";
 
 const MANIFEST_FILE_NAME: &str = "spin-template.toml";
 
@@ -94,6 +95,10 @@ impl TemplateLayout {
 
     pub fn snippets_dir(&self) -> PathBuf {
         self.metadata_dir().join(SNIPPETS_DIR_NAME)
+    }
+
+    pub fn partials_dir(&self) -> PathBuf {
+        self.metadata_dir().join(PARTIALS_DIR_NAME)
     }
 
     pub fn installation_record_file(&self) -> PathBuf {

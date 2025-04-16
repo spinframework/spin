@@ -1197,6 +1197,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn can_render_partials() {
+        let manager = TempManager::new();
+        manager.install_test_data_templates().await;
+
+        let partials_template = manager.get("partials").unwrap().unwrap();
+
+        let dest_temp_dir = tempdir().unwrap();
+        let output_dir = dest_temp_dir.path().join("myproj");
+        let options = run_options("my project", &output_dir, |opts| {
+            opts.values = [("example-value".to_owned(), "myvalue".to_owned())]
+                .into_iter()
+                .collect();
+        });
+
+        partials_template.run(options).silent().await.unwrap();
+
+        let generated_file = output_dir.join("test.txt");
+        let generated_text = std::fs::read_to_string(&generated_file).unwrap();
+        let generated_lines = generated_text.lines().collect::<Vec<_>>();
+
+        assert_eq!("Value: myvalue", generated_lines[0]);
+        assert_eq!("Partial 1: Hello from P1", generated_lines[1]);
+        assert_eq!("Partial 2: Value is myvalue", generated_lines[2]);
+    }
+
+    #[tokio::test]
     async fn fails_on_unknown_filter() {
         let manager = TempManager::new();
         manager.install_test_data_templates().await;
