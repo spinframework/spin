@@ -7,7 +7,7 @@ use std::{
 use anyhow::Context as _;
 use async_trait::async_trait;
 use spin_factor_sqlite::Connection;
-use spin_world::v2::sqlite;
+use spin_world::spin::sqlite::sqlite;
 
 /// The location of an in-process sqlite database.
 #[derive(Debug, Clone)]
@@ -104,6 +104,18 @@ impl Connection for InProcConnection {
         .await?
         .context("failed to spawn blocking task")?;
         Ok(())
+    }
+
+    async fn changes(&self) -> Result<u64, sqlite::Error> {
+        let connection = self.db_connection()?;
+        let conn = connection.lock().unwrap();
+        Ok(conn.changes())
+    }
+
+    async fn last_insert_rowid(&self) -> Result<i64, sqlite::Error> {
+        let connection = self.db_connection()?;
+        let conn = connection.lock().unwrap();
+        Ok(conn.last_insert_rowid())
     }
 
     fn summary(&self) -> Option<String> {

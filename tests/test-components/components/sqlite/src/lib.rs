@@ -1,4 +1,4 @@
-use helper::http_trigger_bindings::fermyon::spin2_0_0::sqlite::{Connection, Error, Value};
+use helper::http_trigger_bindings::spin::sqlite::sqlite::{Connection, Error, Value};
 use helper::{ensure_eq, ensure_matches, ensure_ok, ensure_some};
 
 helper::define_component!(Component);
@@ -8,14 +8,21 @@ impl Component {
         ensure_matches!(Connection::open("forbidden"), Err(Error::AccessDenied));
 
         let conn = ensure_ok!(Connection::open("default"));
+
         ensure_ok!(conn.execute(
             "CREATE TABLE IF NOT EXISTS test_data(key TEXT NOT NULL, value TEXT NOT NULL);",
             &[]
         ));
+
+        let prev_id = current_max_row_id(&conn)?;
+
         ensure_ok!(conn.execute(
             "INSERT INTO test_data(key, value) VALUES('my_key', 'my_value');",
             &[]
         ));
+
+        ensure_eq!(1, conn.changes());
+        ensure_eq!(prev_id + 1, conn.last_insert_rowid());
 
         let results = ensure_ok!(conn.execute(
             "SELECT * FROM test_data WHERE key = ?",
@@ -36,4 +43,13 @@ impl Component {
 
         Ok(())
     }
+}
+
+fn current_max_row_id(conn: &Connection) -> Result<i64, String> {
+    let prev_id_rs = ensure_ok!(conn.execute("SELECT MAX(rowid) FROM test_data", &[]));
+    let prev_id = match prev_id_rs.rows[0].values[0] {
+        Value::Integer(i) => i,
+        _ => 0,
+    };
+    Ok(prev_id)
 }

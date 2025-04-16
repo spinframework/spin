@@ -9,6 +9,7 @@ use host::InstanceState;
 use async_trait::async_trait;
 use spin_factors::{anyhow, Factor};
 use spin_locked_app::MetadataKey;
+use spin_world::spin::sqlite::sqlite as v3;
 use spin_world::v1::sqlite as v1;
 use spin_world::v2::sqlite as v2;
 
@@ -37,6 +38,7 @@ impl Factor for SqliteFactor {
     ) -> anyhow::Result<()> {
         ctx.link_bindings(v1::add_to_linker)?;
         ctx.link_bindings(v2::add_to_linker)?;
+        ctx.link_bindings(v3::add_to_linker)?;
         Ok(())
     }
 
@@ -152,7 +154,7 @@ impl AppState {
     pub async fn get_connection(
         &self,
         label: &str,
-    ) -> Option<Result<Box<dyn Connection>, v2::Error>> {
+    ) -> Option<Result<Box<dyn Connection>, v3::Error>> {
         let connection = self
             .connection_creators
             .get(label)?
@@ -178,7 +180,7 @@ pub trait ConnectionCreator: Send + Sync {
     async fn create_connection(
         &self,
         label: &str,
-    ) -> Result<Box<dyn Connection + 'static>, v2::Error>;
+    ) -> Result<Box<dyn Connection + 'static>, v3::Error>;
 }
 
 #[async_trait]
@@ -189,9 +191,9 @@ where
     async fn create_connection(
         &self,
         label: &str,
-    ) -> Result<Box<dyn Connection + 'static>, v2::Error> {
+    ) -> Result<Box<dyn Connection + 'static>, v3::Error> {
         let _ = label;
-        (self)().map_err(|_| v2::Error::InvalidConnection)
+        (self)().map_err(|_| v3::Error::InvalidConnection)
     }
 }
 
@@ -201,10 +203,14 @@ pub trait Connection: Send + Sync {
     async fn query(
         &self,
         query: &str,
-        parameters: Vec<v2::Value>,
-    ) -> Result<v2::QueryResult, v2::Error>;
+        parameters: Vec<v3::Value>,
+    ) -> Result<v3::QueryResult, v3::Error>;
 
     async fn execute_batch(&self, statements: &str) -> anyhow::Result<()>;
+
+    async fn changes(&self) -> Result<u64, v3::Error>;
+
+    async fn last_insert_rowid(&self) -> Result<i64, v3::Error>;
 
     /// A human-readable summary of the connection's configuration
     ///

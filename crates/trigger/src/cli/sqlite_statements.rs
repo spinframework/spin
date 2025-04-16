@@ -109,7 +109,7 @@ mod tests {
 
     use spin_core::async_trait;
     use spin_factor_sqlite::{Connection, ConnectionCreator};
-    use spin_world::v2::sqlite as v2;
+    use spin_world::spin::sqlite::sqlite as v3;
     use tempfile::NamedTempFile;
 
     use super::*;
@@ -183,7 +183,7 @@ mod tests {
         async fn create_connection(
             &self,
             label: &str,
-        ) -> Result<Box<dyn Connection + 'static>, v2::Error> {
+        ) -> Result<Box<dyn Connection + 'static>, v3::Error> {
             self.push(label);
             Ok(Box::new(MockConnection {
                 tx: self.tx.clone(),
@@ -200,11 +200,11 @@ mod tests {
         async fn query(
             &self,
             query: &str,
-            parameters: Vec<v2::Value>,
-        ) -> Result<v2::QueryResult, v2::Error> {
+            parameters: Vec<v3::Value>,
+        ) -> Result<v3::QueryResult, v3::Error> {
             self.tx.send(Action::Query(query.to_string())).unwrap();
             let _ = parameters;
-            Ok(v2::QueryResult {
+            Ok(v3::QueryResult {
                 columns: Vec::new(),
                 rows: Vec::new(),
             })
@@ -216,6 +216,16 @@ mod tests {
                 .unwrap();
             Ok(())
         }
+
+        async fn changes(&self) -> Result<u64, v3::Error> {
+            self.tx.send(Action::Changes).unwrap();
+            Ok(123)
+        }
+
+        async fn last_insert_rowid(&self) -> Result<i64, v3::Error> {
+            self.tx.send(Action::LastInsertRowid).unwrap();
+            Ok(456)
+        }
     }
 
     #[derive(Debug, PartialEq)]
@@ -223,5 +233,7 @@ mod tests {
         CreateConnection(String),
         Query(String),
         Execute(String),
+        Changes,
+        LastInsertRowid,
     }
 }

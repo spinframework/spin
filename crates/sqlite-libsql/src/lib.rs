@@ -1,8 +1,8 @@
 use anyhow::Context;
 use async_trait::async_trait;
 use spin_factor_sqlite::Connection;
-use spin_world::v2::sqlite as v2;
-use spin_world::v2::sqlite::{self, RowResult};
+use spin_world::spin::sqlite::sqlite as v3;
+use spin_world::spin::sqlite::sqlite::{self, RowResult};
 use tokio::sync::OnceCell;
 
 /// A lazy wrapper around a [`LibSqlConnection`] that implements the [`Connection`] trait.
@@ -24,7 +24,7 @@ impl LazyLibSqlConnection {
         }
     }
 
-    pub async fn get_or_create_connection(&self) -> Result<&LibSqlConnection, v2::Error> {
+    pub async fn get_or_create_connection(&self) -> Result<&LibSqlConnection, v3::Error> {
         self.inner
             .get_or_try_init(|| async {
                 LibSqlConnection::create(self.url.clone(), self.token.clone())
@@ -32,7 +32,7 @@ impl LazyLibSqlConnection {
                     .context("failed to create SQLite client")
             })
             .await
-            .map_err(|_| v2::Error::InvalidConnection)
+            .map_err(|_| v3::Error::InvalidConnection)
     }
 }
 
@@ -41,8 +41,8 @@ impl Connection for LazyLibSqlConnection {
     async fn query(
         &self,
         query: &str,
-        parameters: Vec<v2::Value>,
-    ) -> Result<v2::QueryResult, v2::Error> {
+        parameters: Vec<v3::Value>,
+    ) -> Result<v3::QueryResult, v3::Error> {
         let client = self.get_or_create_connection().await?;
         client.query(query, parameters).await
     }
@@ -50,6 +50,16 @@ impl Connection for LazyLibSqlConnection {
     async fn execute_batch(&self, statements: &str) -> anyhow::Result<()> {
         let client = self.get_or_create_connection().await?;
         client.execute_batch(statements).await
+    }
+
+    async fn changes(&self) -> Result<u64, sqlite::Error> {
+        let client = self.get_or_create_connection().await?;
+        Ok(client.changes())
+    }
+
+    async fn last_insert_rowid(&self) -> Result<i64, sqlite::Error> {
+        let client = self.get_or_create_connection().await?;
+        Ok(client.last_insert_rowid())
     }
 
     fn summary(&self) -> Option<String> {
@@ -95,6 +105,14 @@ impl LibSqlConnection {
         self.inner.execute_batch(statements).await?;
 
         Ok(())
+    }
+
+    pub fn changes(&self) -> u64 {
+        self.inner.changes()
+    }
+
+    pub fn last_insert_rowid(&self) -> i64 {
+        self.inner.last_insert_rowid()
     }
 }
 
