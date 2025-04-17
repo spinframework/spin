@@ -200,14 +200,14 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v2
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.22'
+          go-version: '1.23'
           cache-dependency-path: "**/go.sum"  # To suppress warning: https://github.com/actions/setup-go/issues/427
       - uses: acifani/setup-tinygo@v2
         with:
-          tinygo-version: '0.35.0'
+          tinygo-version: '0.37.0'
       - uses: actions/setup-node@v3
         with:
-          node-version: '20.x'
+          node-version: '22.x'
       - name: Install Grain
         run: |
           wget https://github.com/grain-lang/grain/releases/download/grain-v0.6.6/grain-linux-x64

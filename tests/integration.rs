@@ -301,7 +301,7 @@ mod integration_tests {
     }
 
     #[test]
-    /// Test that mounting works properly
+    /// Test a bunch of old apps for backwards compatibility
     fn legacy_apps() -> anyhow::Result<()> {
         run_test(
             "legacy-apps-test",
