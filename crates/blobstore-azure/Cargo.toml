@@ -1,0 +1,27 @@
+[package]
+name = "spin-blobstore-azure"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+azure_core = { workspace = true }
+azure_storage = { workspace = true }
+azure_storage_blobs = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+spin-core = { path = "../core" }
+spin-factor-blobstore = { path = "../factor-blobstore" }
+tokio = { workspace = true }
+tokio-stream = "0.1.16"
+tokio-util = { version = "0.7.12", features = ["compat"] }
+uuid = { version = "1.0", features = ["v4"] }
+wasmtime-wasi = { workspace = true }
+
+[lints]
+workspace = true
