@@ -15,8 +15,8 @@ azure_security_keyvault = { git = "https://github.com/azure/azure-sdk-for-rust",
 dotenvy = "0.15"
 serde = { workspace = true }
 spin-expressions = { path = "../expressions" }
-spin-factors = { path = "../factors" }
 spin-factor-variables = { path = "../factor-variables" }
+spin-factors = { path = "../factors" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }

@@ -7,7 +7,7 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-reqwest = { version = "0.12", features = ["stream"] }
+reqwest = { workspace = true, features = ["stream"] }
 serde = { workspace = true }
 similar = "2"
 spin-common = { path = "../common" }
@@ -16,7 +16,7 @@ tempfile = { workspace = true }
 terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["process"] }
 toml = { workspace = true }
-toml_edit = { version = "0.22", features = ["serde"] }
+toml_edit = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

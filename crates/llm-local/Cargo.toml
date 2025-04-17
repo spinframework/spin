@@ -5,18 +5,18 @@ authors = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-anyhow = "1.0"
-candle = { git = "https://github.com/huggingface/candle", rev = "e3261216b157a7305c18ccdd766b6e2a41afe483", package = "candle-core" }
-candle-nn = { git = "https://github.com/huggingface/candle", rev = "e3261216b157a7305c18ccdd766b6e2a41afe483" }
-candle-transformers = { git = "https://github.com/huggingface/candle", rev = "e3261216b157a7305c18ccdd766b6e2a41afe483" }
+anyhow = { workspace = true }
+candle = { version = "0.8", package = "candle-core" }
+candle-nn = "0.8"
+candle-transformers = "0.8"
 rand = { workspace = true }
-safetensors = "0.4"
+safetensors = "0.5"
 serde = { workspace = true }
 serde_json = { workspace = true }
 spin-common = { path = "../common" }
 spin-core = { path = "../core" }
 spin-world = { path = "../world" }
-tokenizers = "0.20"
+tokenizers = "0.21"
 tokio = { workspace = true, features = ["macros", "sync", "fs"] }
 tracing = { workspace = true }
 

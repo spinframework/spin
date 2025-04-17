@@ -99,7 +99,7 @@ impl InferencingModel for LlamaModels {
             .map_err(|e| anyhow!(e.to_string()))?
             .get_ids()
             .to_vec();
-        let mut rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = rand::rngs::StdRng::from_os_rng();
 
         let mut logits_processor = {
             let temperature = params.temperature;

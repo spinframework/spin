@@ -7,17 +7,17 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 http = { workspace = true }
-http-body-util = "0.1"
+http-body-util = { workspace = true }
 hyper = { workspace = true }
 ip_network = "0.4"
-reqwest = { version = "0.12", features = ["gzip"] }
+reqwest = { workspace = true, features = ["gzip"] }
 rustls = { workspace = true }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["macros", "rt", "net"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls = { workspace = true }
 tracing = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }

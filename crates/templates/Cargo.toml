@@ -7,28 +7,28 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 bytes = { workspace = true }
-dialoguer = "0.11"
+dialoguer = { workspace = true }
+flate2 = { workspace = true }
 fs_extra = "1"
-heck = "0.5"
-flate2 = "1"
-indexmap = { version = "2", features = ["serde"] }
+heck = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
-lazy_static = "1"
+lazy_static = { workspace = true }
 liquid = "0.26"
 liquid-core = "0.26"
 liquid-derive = "0.26"
-path-absolutize = "3"
+path-absolutize = { workspace = true }
 pathdiff = "0.2"
 regex = { workspace = true }
 reqwest = { workspace = true }
-semver = "1"
+semver = { workspace = true }
 serde = { workspace = true }
 spin-common = { path = "../common" }
 spin-manifest = { path = "../manifest" }
-tar = "0.4"
+tar = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs", "process", "rt", "macros"] }
 toml = { workspace = true }
-toml_edit = "0.22"
+toml_edit = { workspace = true }
 url = { workspace = true }
-walkdir = "2"
+walkdir = { workspace = true }
