@@ -46,6 +46,8 @@ pub struct RunOptions {
     /// Skip the overwrite prompt if the output directory already contains files
     /// (or, if silent, allow overwrite instead of erroring).
     pub allow_overwrite: bool,
+    /// The user has asked for additional explanatory information
+    pub explain: bool,
 }
 
 impl Run {
@@ -144,7 +146,7 @@ impl Run {
                     .special_values()
                     .await
                     .into_iter()
-                    .chain(parameter_values)
+                    .chain(liquefy_values(parameter_values))
                     .collect();
                 let prepared_template = TemplateRenderer {
                     render_operations,
@@ -184,16 +186,23 @@ impl Run {
         Ok(file_ops)
     }
 
-    async fn special_values(&self) -> HashMap<String, String> {
+    async fn special_values(&self) -> HashMap<String, liquid_core::model::Scalar> {
         let mut values = HashMap::new();
 
         let authors = crate::environment::get_authors().await.unwrap_or_default();
-        values.insert("authors".into(), authors.author);
-        values.insert("username".into(), authors.username);
-        values.insert("project-name".into(), self.options.name.clone());
+        values.insert("authors".into(), liquid_core::scalar!(authors.author));
+        values.insert("username".into(), liquid_core::scalar!(authors.username));
+        values.insert(
+            "project-name".into(),
+            liquid_core::scalar!(self.options.name.clone()),
+        );
         values.insert(
             "output-path".into(),
-            self.relative_target_dir().to_string_lossy().to_string(),
+            liquid_core::scalar!(self.relative_target_dir().to_string_lossy().to_string()),
+        );
+        values.insert(
+            "explain".to_owned(),
+            liquid_core::scalar!(self.options.explain),
         );
 
         values
@@ -453,6 +462,13 @@ impl Run {
 
         Ok(partials)
     }
+}
+
+fn liquefy_values(
+    map: HashMap<String, String>,
+) -> impl Iterator<Item = (String, liquid_core::model::Scalar)> {
+    map.into_iter()
+        .map(|(k, v)| (k, liquid_core::scalar!(v.to_owned())))
 }
 
 #[cfg(test)]
