@@ -6,7 +6,7 @@ use redis::{Client, Msg};
 use serde::Deserialize;
 use spin_factor_variables::VariablesFactor;
 use spin_factors::RuntimeFactors;
-use spin_trigger::{cli::NoCliArgs, App, Trigger, TriggerApp};
+use spin_trigger::{cli::NoGlobalConfig, App, Trigger, TriggerApp};
 use spin_world::exports::fermyon::spin::inbound_redis;
 use tracing::{instrument, Level};
 
@@ -34,11 +34,11 @@ struct TriggerConfig {
 impl<F: RuntimeFactors> Trigger<F> for RedisTrigger {
     const TYPE: &'static str = "redis";
 
-    type CliArgs = NoCliArgs;
+    type GlobalConfig = NoGlobalConfig;
 
     type InstanceState = ();
 
-    fn new(_cli_args: Self::CliArgs, _app: &App) -> anyhow::Result<Self> {
+    fn new(_cfg: Self::GlobalConfig, _app: &App) -> anyhow::Result<Self> {
         Ok(Self)
     }
 
