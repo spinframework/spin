@@ -177,9 +177,16 @@ fn load_environment_from_dir(path: &Path) -> anyhow::Result<TargetEnvironment> {
 /// for example when it supports multiple versions of the Spin or WASI interfaces.)
 ///
 /// In terms of implementation, internally the environment is represented by a
-/// WIT package that adheres to a specific naming convention (that the worlds for
-/// a given trigger type are exactly whose names begin `trigger-xxx` where
-/// `xxx` is the Spin trigger type).
+/// WIT package that adheres to a specific naming convention - namely that the worlds for
+/// a given trigger type are exactly whose names begin with one of:
+///
+/// * `trigger-xxx`
+/// * `xxx-trigger`
+/// * `spin-xxx` (a convention used by some plugins)
+///
+/// where `xxx` is the Spin trigger type. This flexibility is intended to maximise
+/// reuse of existing WIT files rather than needing to create custom ones to
+/// define environments.
 pub struct TargetEnvironment {
     name: String,
     decoded: wit_parser::decoding::DecodedWasm,
@@ -243,8 +250,14 @@ impl TargetEnvironment {
     /// Returns true if the given trigger type provides the world identified by
     /// `world` in this environment.
     pub fn is_world_for(&self, trigger_type: &TriggerType, world: &wit_parser::World) -> bool {
-        world.name.starts_with(&format!("trigger-{trigger_type}"))
+        self.matches_world_name(trigger_type, world)
             && world.package.is_some_and(|p| p == self.package_id)
+    }
+
+    fn matches_world_name(&self, trigger_type: &TriggerType, world: &wit_parser::World) -> bool {
+        world.name.starts_with(&format!("trigger-{trigger_type}"))
+            || world.name.starts_with(&format!("{trigger_type}-trigger"))
+            || world.name.starts_with(&format!("spin-{trigger_type}"))
     }
 
     /// Returns true if the given trigger type can run in this environment.
