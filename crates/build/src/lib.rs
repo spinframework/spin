@@ -19,7 +19,7 @@ use crate::manifest::component_build_configs;
 pub async fn build(
     manifest_file: &Path,
     component_ids: &[String],
-    skip_target_checks: bool,
+    target_checks: TargetChecking,
     cache_root: Option<PathBuf>,
 ) -> Result<()> {
     let build_info = component_build_configs(manifest_file)
@@ -42,7 +42,7 @@ pub async fn build(
         // Checking deployment targets requires a healthy manifest (because trigger types etc.),
         // if any of these were specified, warn they are being skipped.
         let should_have_checked_targets =
-            !skip_target_checks && build_info.has_deployment_targets();
+            target_checks.check() && build_info.has_deployment_targets();
         if should_have_checked_targets {
             terminal::warn!(
                 "The manifest error(s) prevented Spin from checking the deployment targets."
@@ -59,7 +59,7 @@ pub async fn build(
         return Ok(());
     };
 
-    if !skip_target_checks {
+    if target_checks.check() {
         let application = spin_environments::ApplicationToValidate::new(
             manifest.clone(),
             manifest_file.parent().unwrap(),
@@ -83,6 +83,13 @@ pub async fn build(
     }
 
     Ok(())
+}
+
+/// Run all component build commands, using the default options (build all
+/// components, perform target checking). We run a "default build" in several
+/// places and this centralises the logic of what such a "default build" means.
+pub async fn build_default(manifest_file: &Path, cache_root: Option<PathBuf>) -> Result<()> {
+    build(manifest_file, &[], TargetChecking::Check, cache_root).await
 }
 
 fn build_components(
@@ -207,6 +214,21 @@ fn construct_workdir(app_dir: &Path, workdir: Option<impl AsRef<Path>>) -> Resul
     Ok(cwd)
 }
 
+/// Specifies target environment checking behaviour
+pub enum TargetChecking {
+    /// The build should check that all components are compatible with all target environments.
+    Check,
+    /// The build should not check target environments.
+    Skip,
+}
+
+impl TargetChecking {
+    /// Should the build check target environments?
+    fn check(&self) -> bool {
+        matches!(self, Self::Check)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,6 +241,8 @@ mod tests {
     #[tokio::test]
     async fn can_load_even_if_trigger_invalid() {
         let bad_trigger_file = test_data_root().join("bad_trigger.toml");
-        build(&bad_trigger_file, &[], true, None).await.unwrap();
+        build(&bad_trigger_file, &[], TargetChecking::Skip, None)
+            .await
+            .unwrap();
     }
 }

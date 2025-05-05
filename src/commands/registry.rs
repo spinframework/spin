@@ -84,7 +84,7 @@ impl Push {
         notify_if_nondefault_rel(&app_file, distance);
 
         if self.build {
-            spin_build::build(&app_file, &[], false, self.cache_dir.clone()).await?;
+            spin_build::build_default(&app_file, self.cache_dir.clone()).await?;
         }
 
         let annotations = if self.annotations.is_empty() {

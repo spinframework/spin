@@ -56,7 +56,7 @@ impl BuildCommand {
         spin_build::build(
             &manifest_file,
             &self.component_id,
-            self.skip_target_checks,
+            self.target_checking(),
             None,
         )
         .await?;
@@ -73,6 +73,14 @@ impl BuildCommand {
             cmd.run().await
         } else {
             Ok(())
+        }
+    }
+
+    fn target_checking(&self) -> spin_build::TargetChecking {
+        if self.skip_target_checks {
+            spin_build::TargetChecking::Skip
+        } else {
+            spin_build::TargetChecking::Check
         }
     }
 }
