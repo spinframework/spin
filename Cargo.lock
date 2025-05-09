@@ -8104,11 +8104,13 @@ dependencies = [
  "spin-manifest",
  "spin-serde",
  "tokio",
+ "toml",
  "tracing",
  "wac-parser",
  "wac-resolver",
  "wac-types",
  "wasm-pkg-client",
+ "wasmparser 0.229.0",
  "wit-component 0.229.0",
  "wit-parser 0.229.0",
 ]

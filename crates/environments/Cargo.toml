@@ -22,12 +22,14 @@ spin-compose = { path = "../compose" }
 spin-loader = { path = "../loader" }
 spin-manifest = { path = "../manifest" }
 spin-serde = { path = "../serde" }
+toml = { workspace = true }
 tokio = { version = "1.23", features = ["fs"] }
 tracing = { workspace = true }
 wac-parser = "0.6.0"
 wac-resolver = "0.6.0"
 wac-types = "0.6.0"
 wasm-pkg-client = { workspace = true }
+wasmparser = { workspace = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
 

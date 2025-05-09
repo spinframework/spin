@@ -62,7 +62,7 @@ pub struct AppDetails {
     pub authors: Vec<String>,
     /// `targets = ["spin-2.5", "fermyon-cloud", "spinkube-0.4"]`
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub targets: Vec<TargetEnvironmentRef>,
+    pub targets: Vec<TargetEnvironmentRef2>,
     /// `[application.triggers.<type>]`
     #[serde(rename = "trigger", default, skip_serializing_if = "Map::is_empty")]
     #[schemars(schema_with = "json_schema::map_of_toml_tables")]
@@ -371,6 +371,28 @@ pub enum TargetEnvironmentRef {
     /// A filesystem directory. This is expected to contain a WIT package.
     WitDirectory {
         /// The directory containing the environment WIT.
+        path: PathBuf,
+    },
+}
+
+/// Identifies a deployment target.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged, deny_unknown_fields)]
+pub enum TargetEnvironmentRef2 {
+    /// Environment definition doc reference e.g. `spin-up@3.2`. This is looked up
+    /// in the default environment catalogue (registry).
+    DefaultRegistry(String),
+    /// An environment definition doc in a registry other than the default
+    Registry {
+        /// Registry hosting the environment package e.g. `spinframewoek.dev`.
+        registry: String,
+        /// Environment definition doc name e.g. `my-spin-env@1.2`.
+        id: String,
+    },
+    /// A local environment document file. This is expected to contain a serialised
+    /// EnvironmentDefinition in TOML format.
+    File {
+        /// The file path of the document.
         path: PathBuf,
     },
 }
