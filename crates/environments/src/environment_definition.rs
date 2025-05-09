@@ -5,7 +5,8 @@ use futures::future::try_join_all;
 use spin_common::ui::quoted_path;
 use spin_manifest::schema::v2::TargetEnvironmentRef2;
 
-const DEFAULT_REGISTRY: &str = "spinframework.dev";
+const DEFAULT_ENV_DEF_REGISTRY: &str = "ghcr.io/itowlson/envs";
+const DEFAULT_PACKAGE_REGISTRY: &str = "spinframework.dev";
 
 /// Serialisation format for the lockfile: registry -> env|pkg -> { name -> digest }
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -126,7 +127,7 @@ async fn load_environment(
 ) -> anyhow::Result<TargetEnvironment2> {
     match env_id {
         TargetEnvironmentRef2::DefaultRegistry(id) => {
-            load_environment_from_registry(DEFAULT_REGISTRY, id, cache, lockfile).await
+            load_environment_from_registry(DEFAULT_ENV_DEF_REGISTRY, id, cache, lockfile).await
         }
         TargetEnvironmentRef2::Registry { registry, id } => {
             load_environment_from_registry(registry, id, cache, lockfile).await
@@ -165,7 +166,34 @@ async fn load_env_def_toml_from_registry(
 }
 
 async fn download_env_def_file(registry: &str, env_id: &str) -> anyhow::Result<(Vec<u8>, String)> {
-    todo!()
+    // This implies env_id is in the format spin-up:3.2 which WHO KNOWS
+    let reference = format!("{registry}/{env_id}");
+    let reference = oci_distribution::Reference::try_from(reference)?;
+
+    let config = oci_distribution::client::ClientConfig::default();
+    let client = oci_distribution::client::Client::new(config);
+    let auth = oci_distribution::secrets::RegistryAuth::Anonymous;
+
+    let (manifest, digest) = client.pull_manifest(&reference, &auth).await?;
+
+    let im = match manifest {
+        oci_distribution::manifest::OciManifest::Image(im) => im,
+        oci_distribution::manifest::OciManifest::ImageIndex(_ind) => {
+            anyhow::bail!("found image index instead of image manifest, get in the sea")
+        }
+    };
+
+    let count = im.layers.len();
+
+    if count != 1 {
+        anyhow::bail!("artifact {reference} should have had exactly one layer");
+    }
+
+    let the_layer = &im.layers[0];
+    let mut out = Vec::with_capacity(the_layer.size.try_into().unwrap_or_default());
+    client.pull_blob(&reference, the_layer, &mut out).await?;
+
+    Ok((out, digest))
 }
 
 /// Loads the given `TargetEnvironment` from the given registry, or
@@ -253,7 +281,7 @@ async fn load_world(
 ) -> anyhow::Result<CompatibleWorld> {
     match world_ref {
         WorldRef::DefaultRegistry(world) => {
-            load_world_from_registry(DEFAULT_REGISTRY, world, cache, lockfile).await
+            load_world_from_registry(DEFAULT_PACKAGE_REGISTRY, world, cache, lockfile).await
         }
         WorldRef::Registry { registry, world } => {
             load_world_from_registry(registry, world, cache, lockfile).await
@@ -282,7 +310,7 @@ async fn load_environment_from_toml(
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<TargetEnvironment2> {
-    let env: EnvironmentDefinition = toml::from_str(&toml_text)?;
+    let env: EnvironmentDefinition = toml::from_str(toml_text)?;
 
     let mut trigger_worlds = HashMap::new();
 
@@ -416,7 +444,7 @@ async fn load_world_from_registry(
     let version = world_name.package.version.as_ref().unwrap(); // TODO: surely we can cope with unversioned? surely?
 
     let release = client
-        .get_release(&package, &version)
+        .get_release(&package, version)
         .await
         .with_context(|| format!("Failed to get {} release from registry", world_name.package))?;
     let stm = client
@@ -436,36 +464,16 @@ async fn load_world_from_registry(
         .await
         .set_package_digest(registry, &world_name.package, &digest);
 
-    CompatibleWorld::from_package_bytes(&world_name, bytes)
+    CompatibleWorld::from_package_bytes(world_name, bytes)
 }
 
-/// A parsed document representing a deployment environment, e.g. Spin 2.7,
+/// A fully realised deployment environment, e.g. Spin 2.7,
 /// SpinKube 3.1, Fermyon Cloud. The `TargetEnvironment` provides a mapping
 /// from the Spin trigger types supported in the environment to the Component Model worlds
 /// supported by that trigger type. (A trigger type may support more than one world,
 /// for example when it supports multiple versions of the Spin or WASI interfaces.)
-///
-/// In terms of implementation, internally the environment is represented by a
-/// WIT package that adheres to a specific naming convention - namely that the worlds for
-/// a given trigger type are exactly whose names begin with one of:
-///
-/// * `trigger-xxx`
-/// * `xxx-trigger`
-/// * `spin-xxx` (a convention used by some plugins)
-///
-/// where `xxx` is the Spin trigger type. This flexibility is intended to maximise
-/// reuse of existing WIT files rather than needing to create custom ones to
-/// define environments.
-// pub struct TargetEnvironment {
-//     name: String,
-//     decoded: wit_parser::decoding::DecodedWasm,
-//     package: wit_parser::Package,
-//     package_id: id_arena::Id<wit_parser::Package>,
-//     package_bytes: Vec<u8>,
-// }
-
-// The realised format
-
+/// The structure stores all worlds (that is, the packages containing them) as binaries:
+/// no further download or resolution is required after this point.
 pub struct TargetEnvironment2 {
     name: String,
     trigger_worlds: HashMap<String, CompatibleWorlds>,
@@ -525,7 +533,7 @@ impl<'a> IntoIterator for &'a CompatibleWorlds {
     }
 }
 
-const NO_COMPATIBLE_WORLDS: &'static CompatibleWorlds = &CompatibleWorlds { worlds: vec![] };
+const NO_COMPATIBLE_WORLDS: &CompatibleWorlds = &CompatibleWorlds { worlds: vec![] };
 
 pub struct CompatibleWorld {
     world: WorldName,
