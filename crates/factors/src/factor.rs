@@ -1,8 +1,11 @@
 use std::any::Any;
+use std::marker::PhantomData;
 
 use wasmtime::component::{Linker, ResourceTable};
 
-use crate::{prepare::FactorInstanceBuilder, App, Error, PrepareContext, RuntimeFactors};
+use crate::{
+    prepare::FactorInstanceBuilder, App, AsInstanceState, Error, PrepareContext, RuntimeFactors,
+};
 
 /// A contained (i.e., "factored") piece of runtime functionality.
 pub trait Factor: Any + Sized {
@@ -28,8 +31,11 @@ pub trait Factor: Any + Sized {
     ///
     /// The type parameter `T` here is the same as the [`wasmtime::Store`] type
     /// parameter `T`, which will contain the [`RuntimeFactors::InstanceState`].
-    fn init<T: Send + 'static>(&mut self, mut ctx: InitContext<T, Self>) -> anyhow::Result<()> {
-        _ = &mut ctx;
+    fn init<C>(&mut self, ctx: &mut C) -> anyhow::Result<()>
+    where
+        C: InitContext<Self>,
+    {
+        let _ = ctx;
         Ok(())
     }
 
@@ -70,58 +76,70 @@ pub trait Factor: Any + Sized {
 pub type FactorInstanceState<F> =
     <<F as Factor>::InstanceBuilder as FactorInstanceBuilder>::InstanceState;
 
-pub(crate) type GetDataFn<T, U> = fn(&mut T) -> &mut FactorInstanceState<U>;
-
-pub(crate) type GetDataWithTableFn<T, U> =
-    fn(&mut T) -> (&mut FactorInstanceState<U>, &mut ResourceTable);
-
 /// An InitContext is passed to [`Factor::init`], giving access to the global
 /// common [`wasmtime::component::Linker`].
-pub struct InitContext<'a, T, U: Factor> {
-    pub(crate) linker: &'a mut Linker<T>,
-    pub(crate) get_data: GetDataFn<T, U>,
-    pub(crate) get_data_with_table: GetDataWithTableFn<T, U>,
-}
-
-impl<'a, T, U: Factor> InitContext<'a, T, U> {
-    #[doc(hidden)]
-    pub fn new(
-        linker: &'a mut Linker<T>,
-        get_data: GetDataFn<T, U>,
-        get_data_with_table: GetDataWithTableFn<T, U>,
-    ) -> Self {
-        Self {
-            linker,
-            get_data,
-            get_data_with_table,
-        }
-    }
+pub trait InitContext<F: Factor> {
+    type StoreData: Send + 'static;
 
     /// Returns a mutable reference to the [`wasmtime::component::Linker`].
-    pub fn linker(&mut self) -> &mut Linker<T> {
+    fn linker(&mut self) -> &mut Linker<Self::StoreData>;
+
+    /// Get the instance state for this factor from the store's state.
+    fn get_data(store: &mut Self::StoreData) -> &mut FactorInstanceState<F> {
+        Self::get_data_with_table(store).0
+    }
+
+    /// Get the instance state for this factor from the store's state, with the
+    /// resource table as well.
+    fn get_data_with_table(
+        store: &mut Self::StoreData,
+    ) -> (&mut FactorInstanceState<F>, &mut ResourceTable);
+
+    /// Convenience method to link a binding to the linker.
+    fn link_bindings(
+        &mut self,
+        add_to_linker: impl Fn(
+            &mut Linker<Self::StoreData>,
+            fn(&mut Self::StoreData) -> &mut FactorInstanceState<F>,
+        ) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        let get_data = Self::get_data;
+        add_to_linker(self.linker(), get_data)
+    }
+}
+
+// used in #[derive(RuntimeFactor)]
+#[doc(hidden)]
+pub struct FactorInitContext<'a, T, G> {
+    pub linker: &'a mut Linker<T>,
+    pub _marker: PhantomData<G>,
+}
+
+// used in #[derive(RuntimeFactor)]
+#[doc(hidden)]
+pub trait FactorField {
+    type State: crate::RuntimeFactorsInstanceState;
+    type Factor: Factor;
+
+    fn get(field: &mut Self::State)
+        -> (&mut FactorInstanceState<Self::Factor>, &mut ResourceTable);
+}
+
+impl<T, G> InitContext<G::Factor> for FactorInitContext<'_, T, G>
+where
+    G: FactorField,
+    T: AsInstanceState<G::State> + Send + 'static,
+{
+    type StoreData = T;
+
+    fn linker(&mut self) -> &mut Linker<Self::StoreData> {
         self.linker
     }
 
-    /// Returns a function that can be used to get the instance state for this factor.
-    pub fn get_data_fn(&self) -> GetDataFn<T, U> {
-        self.get_data
-    }
-
-    /// Returns a function that can be used to get the instance state for this
-    /// factor along with the instance's [`ResourceTable`].
-    pub fn get_data_with_table_fn(&self) -> GetDataWithTableFn<T, U> {
-        self.get_data_with_table
-    }
-
-    /// Convenience method to link a binding to the linker.
-    pub fn link_bindings(
-        &mut self,
-        add_to_linker: impl Fn(
-            &mut Linker<T>,
-            fn(&mut T) -> &mut FactorInstanceState<U>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        add_to_linker(self.linker, self.get_data)
+    fn get_data_with_table(
+        store: &mut Self::StoreData,
+    ) -> (&mut FactorInstanceState<G::Factor>, &mut ResourceTable) {
+        G::get(store.as_instance_state())
     }
 }
 

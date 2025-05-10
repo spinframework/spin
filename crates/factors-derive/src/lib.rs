@@ -94,16 +94,27 @@ fn expand_factors(input: &DeriveInput) -> syn::Result<TokenStream> {
                 }
 
                 #(
-                    #Factor::init::<T>(
+                    #[allow(non_camel_case_types)]
+                    struct #factor_names;
+
+                    impl #factors_path::FactorField for #factor_names {
+                        type State = #state_name;
+                        type Factor = #factor_types;
+
+                        fn get(state: &mut #state_name) -> (
+                            &mut #factors_path::FactorInstanceState<#factor_types>,
+                            &mut #wasmtime::component::ResourceTable,
+                        ) {
+                            (&mut state.#factor_names, &mut state.__table)
+                        }
+                    }
+
+                    #Factor::init(
                         &mut self.#factor_names,
-                        #factors_path::InitContext::<T, #factor_types>::new(
+                        &mut #factors_path::FactorInitContext::<'_, T, #factor_names> {
                             linker,
-                            |data| &mut data.as_instance_state().#factor_names,
-                            |data| {
-                                let state = data.as_instance_state();
-                                (&mut state.#factor_names, &mut state.__table)
-                            },
-                        )
+                            _marker: std::marker::PhantomData,
+                        },
                     ).map_err(#Error::factor_init_error::<#factor_types>)?;
                 )*
                 Ok(())

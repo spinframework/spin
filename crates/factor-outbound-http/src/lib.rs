@@ -52,12 +52,12 @@ impl Factor for OutboundHttpFactor {
     type AppState = ();
     type InstanceBuilder = InstanceState;
 
-    fn init<T: Send + 'static>(
-        &mut self,
-        mut ctx: spin_factors::InitContext<T, Self>,
-    ) -> anyhow::Result<()> {
+    fn init<C>(&mut self, ctx: &mut C) -> anyhow::Result<()>
+    where
+        C: spin_factors::InitContext<Self>,
+    {
         ctx.link_bindings(spin_world::v1::http::add_to_linker)?;
-        wasi::add_to_linker::<T>(&mut ctx)?;
+        wasi::add_to_linker(ctx)?;
         Ok(())
     }
 

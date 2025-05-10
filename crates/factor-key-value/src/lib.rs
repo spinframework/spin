@@ -38,7 +38,10 @@ impl Factor for KeyValueFactor {
     type AppState = AppState;
     type InstanceBuilder = InstanceBuilder;
 
-    fn init<T: Send + 'static>(&mut self, mut ctx: InitContext<T, Self>) -> anyhow::Result<()> {
+    fn init<C>(&mut self, ctx: &mut C) -> anyhow::Result<()>
+    where
+        C: InitContext<Self>,
+    {
         ctx.link_bindings(spin_world::v1::key_value::add_to_linker)?;
         ctx.link_bindings(spin_world::v2::key_value::add_to_linker)?;
         ctx.link_bindings(spin_world::wasi::keyvalue::store::add_to_linker)?;

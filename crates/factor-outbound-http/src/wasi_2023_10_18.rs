@@ -54,10 +54,12 @@ use wasi::io::streams::{InputStream, OutputStream};
 
 use crate::wasi::WasiHttpImplInner;
 
-pub(crate) fn add_to_linker<T, F>(linker: &mut Linker<T>, closure: F) -> Result<()>
+pub(crate) fn add_to_linker<T>(
+    linker: &mut Linker<T>,
+    closure: fn(&mut T) -> WasiHttpImpl<WasiHttpImplInner<'_>>,
+) -> Result<()>
 where
-    T: Send,
-    F: Fn(&mut T) -> WasiHttpImpl<WasiHttpImplInner> + Send + Sync + Copy + 'static,
+    T: Send + 'static,
 {
     wasi::http::types::add_to_linker_get_host(linker, closure)?;
     wasi::http::outgoing_handler::add_to_linker_get_host(linker, closure)?;
