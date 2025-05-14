@@ -169,8 +169,12 @@ impl App {
     /// Checks that the application does not have any host requirements
     /// outside the supported set. The error case returns a comma-separated
     /// list of unmet requirements.
-    pub fn ensure_needs_only(&self, supported: &[&str]) -> std::result::Result<(), String> {
-        self.locked.ensure_needs_only(supported)
+    pub fn ensure_needs_only(
+        &self,
+        trigger_type: &str,
+        supported: &[&str],
+    ) -> std::result::Result<(), String> {
+        self.locked.ensure_needs_only(trigger_type, supported)
     }
 
     /// Scrubs the locked app to only contain the given list of components

@@ -1,7 +1,8 @@
 //! Spin lock file (spin.lock) serialization models.
 
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use spin_serde::{DependencyName, FixedVersionBackwardCompatible};
@@ -25,6 +26,9 @@ pub const HOST_REQ_OPTIONAL: &str = "optional";
 /// Indicates that a host feature is required.
 pub const HOST_REQ_REQUIRED: &str = "required";
 
+// TODO: it turns out that using an enum for this results in bad
+// errors by non-understanders (unknown variant rather than "I'm sorry
+// Dave I can't do that")
 /// Identifies fields in the LockedApp that the host must process if present.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -32,14 +36,9 @@ pub enum MustUnderstand {
     /// If present in `must_understand`, the host must support all features
     /// in the app's `host_requirements` section.
     HostRequirements,
-}
-
-/// Features or capabilities the application requires the host to support.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HostRequirement {
-    /// The application requires local service chaining.
-    LocalServiceChaining,
+    /// If present in `must_understand`, the host must support all features
+    /// in components' `host_requirements` section.
+    ComponentHostRequirements,
 }
 
 /// A LockedApp represents a "fully resolved" Spin application.
@@ -187,10 +186,26 @@ impl LockedApp {
     /// Checks that the application does not have any host requirements
     /// outside the supported set. The error case returns a comma-separated
     /// list of unmet requirements.
-    pub fn ensure_needs_only(&self, supported: &[&str]) -> Result<(), String> {
-        let unmet_requirements = self
-            .host_requirements
-            .keys()
+    pub fn ensure_needs_only(&self, trigger_type: &str, supported: &[&str]) -> Result<(), String> {
+        let app_host_requirements = self.host_requirements.keys();
+
+        let component_ids = self
+            .triggers
+            .iter()
+            .filter(|t| t.trigger_type == trigger_type)
+            .flat_map(|t| t.trigger_config.get("component"))
+            .filter_map(|v| v.as_str())
+            .collect::<HashSet<_>>();
+        let components = self
+            .components
+            .iter()
+            .filter(|c| component_ids.contains(c.id.as_str()));
+        let component_host_requirements = components.flat_map(|c| c.host_requirements.keys());
+
+        let all_host_requirements = app_host_requirements.chain(component_host_requirements);
+
+        let unmet_requirements = all_host_requirements
+            .unique()
             .filter(|hr| !supported.contains(&hr.as_str()))
             .map(|s| s.to_string())
             .collect::<Vec<_>>();
@@ -225,6 +240,13 @@ pub struct LockedComponent {
     /// Component dependencies
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<DependencyName, LockedComponentDependency>,
+    /// Host requirements
+    #[serde(
+        default,
+        skip_serializing_if = "ValuesMap::is_empty",
+        deserialize_with = "deserialize_host_requirements"
+    )]
+    pub host_requirements: ValuesMap,
 }
 
 /// A LockedDependency represents a "fully resolved" Spin component dependency.
