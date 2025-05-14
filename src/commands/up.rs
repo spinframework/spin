@@ -13,7 +13,9 @@ use clap::{CommandFactory, Parser};
 use reqwest::Url;
 use spin_app::locked::LockedApp;
 use spin_common::ui::quoted_path;
-use spin_factor_outbound_networking::validate_service_chaining_for_components;
+use spin_factor_outbound_networking::{
+    update_service_chaining_host_requirement, validate_service_chaining_for_components,
+};
 use spin_loader::FilesMountStrategy;
 use spin_oci::OciLoader;
 use spin_trigger::cli::{LaunchMetadata, SPIN_LOCAL_APP_DIR, SPIN_LOCKED_URL, SPIN_WORKING_DIR};
@@ -184,7 +186,7 @@ impl UpCommand {
                 return Ok(());
             }
             for cmd in trigger_cmds {
-                let mut help_process = self.start_trigger(cmd.clone(), None, &[]).await?;
+                let mut help_process = self.start_trigger(cmd, None, &[]).await?;
                 _ = help_process.wait().await;
             }
             return Ok(());
@@ -213,6 +215,8 @@ impl UpCommand {
             )?;
         }
 
+        self.update_locked_app(&mut locked_app);
+
         let trigger_types: HashSet<&str> = locked_app
             .triggers
             .iter()
@@ -225,13 +229,10 @@ impl UpCommand {
             .with_context(|| format!("Couldn't find trigger executor for {app_source}"))?;
         let is_multi = trigger_cmds.len() > 1;
 
-        self.update_locked_app(&mut locked_app);
-        let locked_url = self.write_locked_app(&locked_app, &working_dir).await?;
-
         let local_app_dir = app_source.local_app_dir().map(Into::into);
 
         let run_opts = RunTriggerOpts {
-            locked_url,
+            locked_app: locked_app.clone(),
             working_dir,
             local_app_dir,
         };
@@ -284,18 +285,18 @@ impl UpCommand {
 
     async fn get_trigger_launch_metas(
         &self,
-        trigger_cmds: &[Vec<String>],
+        trigger_cmds: &[TriggerCommand<'_>],
     ) -> anyhow::Result<HashMap<Vec<String>, LaunchMetadata>> {
         let mut metas = HashMap::new();
 
-        for trigger_cmd in trigger_cmds {
+        for t in trigger_cmds {
             let mut meta_cmd = tokio::process::Command::new(std::env::current_exe().unwrap());
-            meta_cmd.args(trigger_cmd);
+            meta_cmd.args(&t.cmd);
             meta_cmd.arg("--launch-metadata-only");
             meta_cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
             let meta_out = meta_cmd.spawn()?.wait_with_output().await?;
             let meta = serde_json::from_slice::<LaunchMetadata>(&meta_out.stderr)?;
-            metas.insert(trigger_cmd.clone(), meta);
+            metas.insert(t.cmd.clone(), meta);
         }
 
         Ok(metas)
@@ -303,7 +304,7 @@ impl UpCommand {
 
     async fn start_trigger_processes(
         self,
-        trigger_cmds: Vec<Vec<String>>,
+        trigger_cmds: Vec<TriggerCommand<'_>>,
         run_opts: RunTriggerOpts,
     ) -> anyhow::Result<Vec<tokio::process::Child>> {
         let is_multi = trigger_cmds.len() > 1;
@@ -333,13 +334,13 @@ impl UpCommand {
         let mut trigger_processes = Vec::with_capacity(trigger_cmds.len());
 
         for cmd in trigger_cmds {
-            let meta = trigger_metas.as_ref().and_then(|ms| ms.get(&cmd));
+            let meta = trigger_metas.as_ref().and_then(|ms| ms.get(&cmd.cmd));
             let trigger_args = match meta {
                 Some(m) => m.matches(&trigger_args),
                 None => self.trigger_args.iter().collect(),
             };
             let child = self
-                .start_trigger(cmd.clone(), Some(run_opts.clone()), &trigger_args)
+                .start_trigger(cmd, Some(run_opts.clone()), &trigger_args)
                 .await
                 .context("Failed to start trigger process")?;
             trigger_processes.push(child);
@@ -357,21 +358,25 @@ impl UpCommand {
 
     async fn start_trigger(
         &self,
-        trigger_cmd: Vec<String>,
+        trigger: TriggerCommand<'_>,
         opts: Option<RunTriggerOpts>,
         trigger_args: &[&OsString],
     ) -> Result<tokio::process::Child, anyhow::Error> {
         // The docs for `current_exe` warn that this may be insecure because it could be executed
         // via hard-link. I think it should be fine as long as we aren't `setuid`ing this binary.
         let mut cmd = tokio::process::Command::new(std::env::current_exe().unwrap());
-        cmd.args(&trigger_cmd);
+        cmd.args(&trigger.cmd);
 
         if let Some(RunTriggerOpts {
-            locked_url,
+            locked_app,
             working_dir,
             local_app_dir,
         }) = opts
         {
+            let locked_url = self
+                .write_locked_app_for_trigger(trigger.type_, &locked_app, &working_dir)
+                .await?;
+
             cmd.env(SPIN_LOCKED_URL, locked_url)
                 .env(SPIN_WORKING_DIR, &working_dir)
                 .args(trigger_args);
@@ -430,19 +435,33 @@ impl UpCommand {
         !self.trigger_args.is_empty() && !self.trigger_args[0].to_string_lossy().starts_with('-')
     }
 
-    async fn write_locked_app(
+    async fn write_locked_app_for_trigger(
         &self,
+        trigger_type: &str,
         locked_app: &LockedApp,
         working_dir: &Path,
     ) -> Result<String, anyhow::Error> {
-        let locked_path = working_dir.join("spin.lock");
+        let locked_app_for_trigger = get_locked_app_for_trigger(trigger_type, locked_app)?;
+        let locked_path = working_dir.join(format!("spin-{trigger_type}.lock"));
+        Self::write_locked_app(&locked_app_for_trigger, &locked_path).await
+    }
+
+    async fn write_locked_app(
+        locked_app: &LockedApp,
+        lock_file_path: &Path,
+    ) -> Result<String, anyhow::Error> {
         let locked_app_contents =
             serde_json::to_vec_pretty(&locked_app).context("failed to serialize locked app")?;
-        tokio::fs::write(&locked_path, locked_app_contents)
+        tokio::fs::write(&lock_file_path, locked_app_contents)
             .await
-            .with_context(|| format!("failed to write {}", quoted_path(&locked_path)))?;
-        let locked_url = Url::from_file_path(&locked_path)
-            .map_err(|_| anyhow!("cannot convert to file URL: {}", quoted_path(&locked_path)))?
+            .with_context(|| format!("failed to write {}", quoted_path(&lock_file_path)))?;
+        let locked_url = Url::from_file_path(lock_file_path)
+            .map_err(|_| {
+                anyhow!(
+                    "cannot convert to file URL: {}",
+                    quoted_path(&lock_file_path)
+                )
+            })?
             .to_string();
 
         Ok(locked_url)
@@ -550,6 +569,23 @@ impl UpCommand {
     }
 }
 
+fn get_locked_app_for_trigger(
+    trigger_type: &str,
+    locked_app: &LockedApp,
+) -> Result<LockedApp, anyhow::Error> {
+    let components = locked_app
+        .triggers
+        .iter()
+        .filter(|t| t.trigger_type == trigger_type)
+        .filter_map(|t| t.trigger_config.get("component"))
+        .filter_map(|j| j.as_str())
+        .collect::<Vec<_>>();
+    let mut locked_app_for_trigger =
+        spin_app::retain_components(locked_app.clone(), &components, &[])?;
+    update_service_chaining_host_requirement(&mut locked_app_for_trigger);
+    Ok(locked_app_for_trigger)
+}
+
 fn is_flag_arg(arg: &OsString) -> bool {
     if let Some(s) = arg.to_str() {
         s.starts_with('-')
@@ -602,7 +638,7 @@ fn kill_child_processes(pids: &[nix::unistd::Pid]) {
 
 #[derive(Clone)]
 struct RunTriggerOpts {
-    locked_url: String,
+    locked_app: LockedApp,
     working_dir: PathBuf,
     local_app_dir: Option<PathBuf>,
 }
@@ -663,18 +699,29 @@ fn resolve_trigger_plugin(trigger_type: &str) -> Result<String> {
     }
 }
 
-fn trigger_command(trigger_type: &str) -> Vec<String> {
-    vec!["trigger".to_owned(), trigger_type.to_owned()]
+struct TriggerCommand<'a> {
+    type_: &'a str,
+    cmd: Vec<String>,
 }
 
-fn trigger_commands_for_trigger_types(trigger_types: Vec<&str>) -> Result<Vec<Vec<String>>> {
+fn trigger_command(trigger_type: &str) -> TriggerCommand {
+    TriggerCommand {
+        type_: trigger_type,
+        cmd: vec!["trigger".to_owned(), trigger_type.to_owned()],
+    }
+}
+
+fn trigger_commands_for_trigger_types(trigger_types: Vec<&str>) -> Result<Vec<TriggerCommand>> {
     trigger_types
         .iter()
         .map(|&t| match t {
             "http" | "redis" => Ok(trigger_command(t)),
             _ => {
                 let cmd = resolve_trigger_plugin(t)?;
-                Ok(vec![cmd])
+                Ok(TriggerCommand {
+                    type_: t,
+                    cmd: vec![cmd],
+                })
             }
         })
         .collect()
