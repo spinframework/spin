@@ -12,7 +12,7 @@ wasmtime::component::bindgen!({
 });
 
 #[derive(Args)]
-pub struct CliArgs {
+pub struct GlobalConfig {
     /// If true, run each component once and exit
     #[clap(long)]
     pub test: bool,
@@ -49,11 +49,11 @@ pub struct TimerTriggerConfig {
 impl<F: RuntimeFactors> Trigger<F> for TimerTrigger {
     const TYPE: &'static str = "timer";
 
-    type CliArgs = CliArgs;
+    type GlobalConfig = GlobalConfig;
 
     type InstanceState = ();
 
-    fn new(cli_args: Self::CliArgs, app: &App) -> anyhow::Result<Self> {
+    fn new(cfg: Self::GlobalConfig, app: &App) -> anyhow::Result<Self> {
         let trigger_type = <Self as Trigger<F>>::TYPE;
         let metadata = app
             .get_trigger_metadata::<TriggerMetadata>(trigger_type)?
@@ -67,7 +67,7 @@ impl<F: RuntimeFactors> Trigger<F> for TimerTrigger {
             .collect();
 
         Ok(Self {
-            test: cli_args.test,
+            test: cfg.test,
             speedup,
             component_timings,
         })
