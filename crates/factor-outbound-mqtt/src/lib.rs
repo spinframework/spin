@@ -31,10 +31,10 @@ impl Factor for OutboundMqttFactor {
     type AppState = ();
     type InstanceBuilder = InstanceState;
 
-    fn init<T: Send + 'static>(
-        &mut self,
-        mut ctx: spin_factors::InitContext<T, Self>,
-    ) -> anyhow::Result<()> {
+    fn init<C>(&mut self, ctx: &mut C) -> anyhow::Result<()>
+    where
+        C: spin_factors::InitContext<Self>,
+    {
         ctx.link_bindings(spin_world::v2::mqtt::add_to_linker)?;
         Ok(())
     }

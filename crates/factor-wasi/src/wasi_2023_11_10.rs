@@ -111,10 +111,12 @@ use wasi::sockets::udp::{
 
 use crate::WasiImplInner;
 
-pub fn add_to_linker<T, F>(linker: &mut Linker<T>, closure: F) -> Result<()>
+pub fn add_to_linker<T>(
+    linker: &mut Linker<T>,
+    closure: fn(&mut T) -> WasiImpl<WasiImplInner<'_>>,
+) -> Result<()>
 where
-    T: Send,
-    F: Fn(&mut T) -> WasiImpl<WasiImplInner> + Send + Sync + Copy + 'static,
+    T: Send + 'static,
 {
     wasi::clocks::monotonic_clock::add_to_linker_get_host(linker, closure)?;
     wasi::clocks::wall_clock::add_to_linker_get_host(linker, closure)?;

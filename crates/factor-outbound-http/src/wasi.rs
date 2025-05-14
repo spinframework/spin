@@ -23,26 +23,24 @@ use crate::{
     wasi_2023_10_18, wasi_2023_11_10, InstanceState, OutboundHttpFactor, SelfRequestOrigin,
 };
 
-pub(crate) fn add_to_linker<T: Send + 'static>(
-    ctx: &mut spin_factors::InitContext<T, OutboundHttpFactor>,
-) -> anyhow::Result<()> {
-    fn type_annotate<T, F>(f: F) -> F
+pub(crate) fn add_to_linker<C>(ctx: &mut C) -> anyhow::Result<()>
+where
+    C: spin_factors::InitContext<OutboundHttpFactor>,
+{
+    fn get_http<C>(store: &mut C::StoreData) -> WasiHttpImpl<WasiHttpImplInner<'_>>
     where
-        F: Fn(&mut T) -> WasiHttpImpl<WasiHttpImplInner>,
+        C: spin_factors::InitContext<OutboundHttpFactor>,
     {
-        f
-    }
-    let get_data_with_table = ctx.get_data_with_table_fn();
-    let closure = type_annotate(move |data| {
-        let (state, table) = get_data_with_table(data);
+        let (state, table) = C::get_data_with_table(store);
         WasiHttpImpl(IoImpl(WasiHttpImplInner { state, table }))
-    });
+    }
+    let get_http = get_http::<C> as fn(&mut C::StoreData) -> WasiHttpImpl<WasiHttpImplInner<'_>>;
     let linker = ctx.linker();
-    wasmtime_wasi_http::bindings::http::outgoing_handler::add_to_linker_get_host(linker, closure)?;
-    wasmtime_wasi_http::bindings::http::types::add_to_linker_get_host(linker, closure)?;
+    wasmtime_wasi_http::bindings::http::outgoing_handler::add_to_linker_get_host(linker, get_http)?;
+    wasmtime_wasi_http::bindings::http::types::add_to_linker_get_host(linker, get_http)?;
 
-    wasi_2023_10_18::add_to_linker(linker, closure)?;
-    wasi_2023_11_10::add_to_linker(linker, closure)?;
+    wasi_2023_10_18::add_to_linker(linker, get_http)?;
+    wasi_2023_11_10::add_to_linker(linker, get_http)?;
 
     Ok(())
 }
