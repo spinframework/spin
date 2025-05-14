@@ -184,7 +184,7 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
         };
 
         // Validate required host features
-        if let Err(unmet) = app.ensure_needs_only(&T::supported_host_requirements()) {
+        if let Err(unmet) = app.ensure_needs_only(T::TYPE, &T::supported_host_requirements()) {
             anyhow::bail!("This application requires the following features that are not available in this version of the '{}' trigger: {unmet}", T::TYPE);
         }
 
