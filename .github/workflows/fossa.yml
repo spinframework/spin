@@ -1,0 +1,36 @@
+name: fossa
+on:
+  push:
+    branches:
+      - main
+      - v*
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  fossa-scan:
+    # Don't attempt to run FOSSA on forks or on PRs from forks (no access to GH secrets)
+    if: ${{ github.repository_owner == 'spinframework' && !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Install fossa CLI"
+        run: |
+          curl -H 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash
+
+      - name: "Run FOSSA Scan"
+        env:
+          FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+        run: fossa analyze
+
+      # - name: "Run FOSSA Scan"
+      #   uses: fossas/fossa-action@v1.7.0 # Use a specific version if locking is preferred
+      #   env:
+      #     FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+      #   with:
+      #     api-key: ${{ env.FOSSA_API_KEY }}
