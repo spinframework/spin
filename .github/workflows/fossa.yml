@@ -1,0 +1,29 @@
+name: fossa
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  fossa-scan:
+    if: github.repository_owner == 'spinframework' # FOSSA is not intended to run on forks.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+
+      - name: "Run FOSSA Scan"
+        uses: fossas/fossa-action@v1.7.0 # Use a specific version if locking is preferred
+        with:
+          api-key: ${{ secrets.FOSSA_API_KEY }}
+          run-tests: true
