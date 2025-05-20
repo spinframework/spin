@@ -16,31 +16,87 @@ use subprocess::{Exec, Redirection};
 use crate::manifest::component_build_configs;
 
 /// If present, run the build command of each component.
-pub async fn build(manifest_file: &Path, component_ids: &[String]) -> Result<()> {
-    let (components, manifest_err) =
-        component_build_configs(manifest_file)
-            .await
-            .with_context(|| {
-                format!(
-                    "Cannot read manifest file from {}",
-                    quoted_path(manifest_file)
-                )
-            })?;
+pub async fn build(
+    manifest_file: &Path,
+    component_ids: &[String],
+    target_checks: TargetChecking,
+    cache_root: Option<PathBuf>,
+) -> Result<()> {
+    let build_info = component_build_configs(manifest_file)
+        .await
+        .with_context(|| {
+            format!(
+                "Cannot read manifest file from {}",
+                quoted_path(manifest_file)
+            )
+        })?;
     let app_dir = parent_dir(manifest_file)?;
 
-    let build_result = build_components(component_ids, components, app_dir);
+    let build_result = build_components(component_ids, build_info.components(), &app_dir);
 
-    if let Some(e) = manifest_err {
+    // Emit any required warnings now, so that they don't bury any errors.
+    if let Some(e) = build_info.load_error() {
+        // The manifest had errors. We managed to attempt a build anyway, but we want to
+        // let the user know about them.
         terminal::warn!("The manifest has errors not related to the Wasm component build. Error details:\n{e:#}");
+        // Checking deployment targets requires a healthy manifest (because trigger types etc.),
+        // if any of these were specified, warn they are being skipped.
+        let should_have_checked_targets =
+            target_checks.check() && build_info.has_deployment_targets();
+        if should_have_checked_targets {
+            terminal::warn!(
+                "The manifest error(s) prevented Spin from checking the deployment targets."
+            );
+        }
     }
 
-    build_result
+    // If the build failed, exit with an error at this point.
+    build_result?;
+
+    let Some(manifest) = build_info.manifest() else {
+        // We can't proceed to checking (because that needs a full healthy manifest), and we've
+        // already emitted any necessary warning, so quit.
+        return Ok(());
+    };
+
+    if target_checks.check() {
+        let application = spin_environments::ApplicationToValidate::new(
+            manifest.clone(),
+            manifest_file.parent().unwrap(),
+        )
+        .await
+        .context("unable to load application for checking against deployment targets")?;
+        let target_validation = spin_environments::validate_application_against_environment_ids(
+            &application,
+            build_info.deployment_targets(),
+            cache_root.clone(),
+            &app_dir,
+        )
+        .await
+        .context("unable to check if the application is compatible with deployment targets")?;
+
+        if !target_validation.is_ok() {
+            for error in target_validation.errors() {
+                terminal::error!("{error}");
+            }
+            anyhow::bail!("All components built successfully, but one or more was incompatible with one or more of the deployment targets.");
+        }
+    }
+
+    Ok(())
+}
+
+/// Run all component build commands, using the default options (build all
+/// components, perform target checking). We run a "default build" in several
+/// places and this centralises the logic of what such a "default build" means.
+pub async fn build_default(manifest_file: &Path, cache_root: Option<PathBuf>) -> Result<()> {
+    build(manifest_file, &[], TargetChecking::Check, cache_root).await
 }
 
 fn build_components(
     component_ids: &[String],
     components: Vec<ComponentBuildInfo>,
-    app_dir: PathBuf,
+    app_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     let components_to_build = if component_ids.is_empty() {
         components
@@ -70,7 +126,7 @@ fn build_components(
 
     components_to_build
         .into_iter()
-        .map(|c| build_component(c, &app_dir))
+        .map(|c| build_component(c, app_dir))
         .collect::<Result<Vec<_>, _>>()?;
 
     terminal::step!("Finished", "building all Spin components");
@@ -159,6 +215,21 @@ fn construct_workdir(app_dir: &Path, workdir: Option<impl AsRef<Path>>) -> Resul
     Ok(cwd)
 }
 
+/// Specifies target environment checking behaviour
+pub enum TargetChecking {
+    /// The build should check that all components are compatible with all target environments.
+    Check,
+    /// The build should not check target environments.
+    Skip,
+}
+
+impl TargetChecking {
+    /// Should the build check target environments?
+    fn check(&self) -> bool {
+        matches!(self, Self::Check)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +242,8 @@ mod tests {
     #[tokio::test]
     async fn can_load_even_if_trigger_invalid() {
         let bad_trigger_file = test_data_root().join("bad_trigger.toml");
-        build(&bad_trigger_file, &[]).await.unwrap();
+        build(&bad_trigger_file, &[], TargetChecking::Skip, None)
+            .await
+            .unwrap();
     }
 }

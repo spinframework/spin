@@ -108,7 +108,7 @@ pub struct UpCommand {
     #[clap(long, takes_value = false)]
     pub direct_mounts: bool,
 
-    /// For local apps, specifies to perform `spin build` before running the application.
+    /// For local apps, specifies to perform `spin build` (with the default options) before running the application.
     ///
     /// This is ignored on remote applications, as they are already built.
     #[clap(long, takes_value = false, env = ALWAYS_BUILD_ENV)]
@@ -191,7 +191,7 @@ impl UpCommand {
         }
 
         if self.build {
-            app_source.build().await?;
+            app_source.build(&self.cache_dir).await?;
         }
         let mut locked_app = self
             .load_resolved_app_source(resolved_app_source, &working_dir)
