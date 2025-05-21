@@ -539,6 +539,7 @@ mod tests {
             accept_defaults: false,
             no_vcs: false,
             allow_overwrite: false,
+            explain: false,
         };
         rest(&mut options);
         options
