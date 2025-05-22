@@ -8465,6 +8465,7 @@ version = "3.3.0-pre0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "itertools 0.14.0",
  "serde",
  "serde_json",
  "spin-serde",

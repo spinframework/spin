@@ -84,8 +84,6 @@ impl LocalLoader {
 
         let metadata = locked_metadata(application, triggers.keys().cloned())?;
 
-        let app_requires_service_chaining = components.values().any(requires_service_chaining);
-
         let variables = variables
             .into_iter()
             .map(|(name, v)| Ok((name.to_string(), locked_variable(v)?)))
@@ -111,18 +109,15 @@ impl LocalLoader {
         }))
         .await?;
 
-        let mut host_requirements = ValuesMapBuilder::new();
-        if app_requires_service_chaining {
-            host_requirements.string(
-                spin_locked_app::locked::SERVICE_CHAINING_KEY,
-                spin_locked_app::locked::HOST_REQ_REQUIRED,
-            );
-        }
-        let host_requirements = host_requirements.build();
+        let host_requirements = spin_locked_app::values::ValuesMap::new();
 
         let mut must_understand = vec![];
         if !host_requirements.is_empty() {
             must_understand.push(spin_locked_app::locked::MustUnderstand::HostRequirements);
+        }
+        if components.iter().any(|c| !c.host_requirements.is_empty()) {
+            must_understand
+                .push(spin_locked_app::locked::MustUnderstand::ComponentHostRequirements);
         }
 
         drop(sloth_guard);
@@ -149,6 +144,8 @@ impl LocalLoader {
             .context("`allowed_http_hosts` is malformed")?;
         spin_factor_outbound_networking::AllowedHostsConfig::validate(&allowed_outbound_hosts)
             .context("`allowed_outbound_hosts` is malformed")?;
+
+        let component_requires_service_chaining = requires_service_chaining(&component);
 
         let metadata = ValuesMapBuilder::new()
             .string("description", component.description)
@@ -213,6 +210,15 @@ impl LocalLoader {
             .map(|(k, v)| (k.into(), v))
             .collect();
 
+        let mut host_requirements = ValuesMapBuilder::new();
+        if component_requires_service_chaining {
+            host_requirements.string(
+                spin_locked_app::locked::SERVICE_CHAINING_KEY,
+                spin_locked_app::locked::HOST_REQ_REQUIRED,
+            );
+        }
+        let host_requirements = host_requirements.build();
+
         Ok(LockedComponent {
             id: id.as_ref().into(),
             metadata,
@@ -221,6 +227,7 @@ impl LocalLoader {
             files,
             config,
             dependencies,
+            host_requirements,
         })
     }
 

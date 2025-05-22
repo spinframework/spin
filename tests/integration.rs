@@ -99,6 +99,66 @@ mod integration_tests {
     #[test]
     #[cfg(feature = "extern-dependencies-tests")]
     #[allow(dependency_on_unit_never_type_fallback)]
+    /// Test that if you have an app where some but not all components use service
+    /// chaining, the non-service-chained subset can run in a non-service-chainable
+    /// trigger.
+    fn can_split_service_chained_app() -> anyhow::Result<()> {
+        use anyhow::Context;
+        use redis::Commands;
+        run_test(
+            "multi-trigger",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: vec!["-c".into(), "hello".into()],
+                app_type: SpinAppType::Redis,
+            },
+            ServicesConfig::new(vec!["redis"])?,
+            move |env| {
+                let redis_port = env
+                    .services_mut()
+                    .get_port(6379)?
+                    .context("no redis port was exposed by test services")?;
+
+                let mut redis = redis::Client::open(format!("redis://localhost:{redis_port}"))
+                    .context("could not connect to redis in test")?;
+                redis
+                    .publish("my-channel", "msg-from-test")
+                    .context("could not publish test message to redis")?;
+                assert_eventually!(
+                    {
+                        match env.read_file(".spin/logs/hello_stdout.txt") {
+                            Ok(logs) => {
+                                let logs = String::from_utf8_lossy(&logs);
+                                logs.contains("Got message: 'msg-from-test'")
+                            }
+                            Err(e)
+                                if e.downcast_ref()
+                                    .map(|e: &std::io::Error| {
+                                        e.kind() == std::io::ErrorKind::NotFound
+                                    })
+                                    .unwrap_or_default() =>
+                            {
+                                false
+                            }
+                            Err(e) => {
+                                return Err(
+                                    anyhow::anyhow!("could not read stdout file: {e}").into()
+                                )
+                            }
+                        }
+                    },
+                    2
+                );
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "extern-dependencies-tests")]
+    #[allow(dependency_on_unit_never_type_fallback)]
     /// Test that basic redis trigger support works
     fn redis_smoke_test() -> anyhow::Result<()> {
         use anyhow::Context;

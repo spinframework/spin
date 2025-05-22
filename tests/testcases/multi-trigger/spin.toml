@@ -1,0 +1,48 @@
+spin_manifest_version = 2
+
+[application]
+authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+description = "A simple redis application that exercises the Rust SDK in the current branch"
+name = "multi-trigger"
+version = "1.0.0"
+
+[application.trigger.redis]
+address = "redis://localhost:%{port=6379}"
+
+[[trigger.redis]]
+channel = "my-channel"
+component = "hello"
+
+[[trigger.http]]
+route = "/..."
+component = "front"
+
+[[trigger.http]]
+route = { private = true }
+component = "middle"
+
+[[trigger.http]]
+route = { private = true }
+component = "back"
+
+[component.hello]
+source = "%{source=redis-smoke-test}"
+[component.hello.build]
+command = "cargo build --target wasm32-wasip1 --release"
+
+[component.front]
+source = "%{source=internal-http-front}"
+allowed_outbound_hosts = ["http://middle.spin.internal"]
+[component.front.build]
+command = "cargo build --target wasm32-wasip1 --release"
+
+[component.middle]
+source = "%{source=internal-http-middle}"
+allowed_outbound_hosts = ["http://*.spin.internal"]
+[component.middle.build]
+command = "cargo build --target wasm32-wasip1 --release"
+
+[component.back]
+source = "%{source=internal-http-back}"
+[component.back.build]
+command = "cargo build --target wasm32-wasip1 --release"
