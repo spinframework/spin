@@ -7,6 +7,7 @@ use env::otel_tracing_enabled;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use tracing_subscriber::{fmt, prelude::*, registry, EnvFilter, Layer};
 
+mod alert_in_dev;
 pub mod detector;
 mod env;
 pub mod logs;
@@ -83,11 +84,14 @@ pub fn init(spin_version: String) -> anyhow::Result<()> {
         None
     };
 
+    let alert_in_dev_layer = alert_in_dev::alert_in_dev_layer();
+
     // Build a registry subscriber with the layers we want to use.
     registry()
         .with(otel_tracing_layer)
         .with(otel_metrics_layer)
         .with(fmt_layer)
+        .with(alert_in_dev_layer)
         .init();
 
     // Used to propagate trace information in the standard W3C TraceContext format. Even if the otel

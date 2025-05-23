@@ -493,10 +493,10 @@ impl LocalLoader {
         }
 
         if glob_or_path == "*" {
-            terminal::warn!("A component is including the entire application directory as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n");
+            tracing::warn!(alert_in_dev = true, "A component is including the entire application directory as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n");
         }
         if glob_or_path == "**/*" {
-            terminal::warn!("A component is including the entire application directory tree as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./**/*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n");
+            tracing::warn!(alert_in_dev = true, "A component is including the entire application directory tree as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./**/*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n");
         }
 
         let path = self.app_root.join(glob_or_path);
