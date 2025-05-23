@@ -485,6 +485,20 @@ impl LocalLoader {
         dest_root: &Path,
         exclude_files: &[String],
     ) -> Result<()> {
+        if glob_or_path == ".." || glob_or_path.ends_with("/..") {
+            bail!("A file pattern can't end in a parent directory path (..)\nIf you want to include a directory, use source-destination form, or a glob pattern ending in **/*.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components");
+        }
+        if glob_or_path == "." || glob_or_path.ends_with("/.") {
+            bail!("A file pattern can't end in a current directory path (.)\nIf you want to include a directory, use source-destination form, or a glob pattern ending in **/*.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components");
+        }
+
+        if glob_or_path == "*" {
+            tracing::warn!(alert_in_dev = true, "A component is including the entire application directory as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n");
+        }
+        if glob_or_path == "**/*" {
+            tracing::warn!(alert_in_dev = true, "A component is including the entire application directory tree as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./**/*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n");
+        }
+
         let path = self.app_root.join(glob_or_path);
         if path.exists() {
             let dest = dest_root.join(glob_or_path);

@@ -21,6 +21,7 @@ spin-locked-app = { path = "../locked-app" }
 spin-manifest = { path = "../manifest" }
 spin-serde = { path = "../serde" }
 tempfile = { workspace = true }
+terminal = { path = "../terminal" }
 tokio = { workspace = true }
 toml = { workspace = true }
 tracing = { workspace = true }

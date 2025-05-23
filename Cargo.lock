@@ -8452,6 +8452,7 @@ dependencies = [
  "spin-manifest",
  "spin-serde",
  "tempfile",
+ "terminal",
  "tokio",
  "toml",
  "tracing",
