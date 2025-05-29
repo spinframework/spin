@@ -165,7 +165,7 @@ tokio = "1"
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
 toml = "0.8"
 toml_edit = "0.22"
-tracing = { version = "0.1", features = ["log"] }
+tracing = { version = "0.1.41", features = ["log"] }
 url = "2"
 walkdir = "2"
 wasi-common-preview1 = { version = "33.0.0", package = "wasi-common", features = [
