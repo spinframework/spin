@@ -14,5 +14,5 @@ component = "{{project-name | kebab_case}}"
 source = "main.wasm"
 allowed_outbound_hosts = []
 [component.{{project-name | kebab_case}}.build]
-command = "tinygo build -target=wasip1 -gc=leaking -buildmode=c-shared -no-debug -o main.wasm ."
+command = "tinygo build -target=wasip1 -buildmode=c-shared -no-debug -o main.wasm ."
 watch = ["**/*.go", "go.mod"]
