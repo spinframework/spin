@@ -43,7 +43,15 @@ impl Client for TokioClient {
             spawn_connection(connection);
             Ok(client)
         } else {
-            let builder = TlsConnector::builder();
+            let mut builder = TlsConnector::builder();
+
+            // SslMode::Require shouldn't perform TLS verification and is often
+            // used when you can't use a public TLS certificate on the postgres
+            // server, and can't easily install a self-signed CA on your system.
+            if config.get_ssl_mode() == SslMode::Require {
+                builder.danger_accept_invalid_certs(true);
+            }
+
             let connector = MakeTlsConnector::new(builder.build()?);
             let (client, connection) = config.connect(connector).await?;
             spawn_connection(connection);
