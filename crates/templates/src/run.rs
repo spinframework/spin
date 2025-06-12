@@ -474,7 +474,7 @@ impl Run {
         }
     }
 
-    // Function to check if the target directory is already in a git repositoriees
+    // Function to check if the target directory is already in a git repositories
     async fn is_already_in_git_repo(&self, dir: &std::path::Path) -> bool {
         use tokio::process::Command;
 
