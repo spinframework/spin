@@ -19,9 +19,6 @@ use crate::{
     template::Template,
 };
 
-/// A set of partials to be included in a Liquid template.
-type PartialsBuilder = liquid::partials::EagerCompiler<liquid::partials::InMemorySource>;
-
 /// Executes a template to the point where it is ready to generate
 /// artefacts.
 pub struct Run {
@@ -69,12 +66,17 @@ impl Run {
     }
 
     async fn run(&self, interaction: impl InteractionStrategy) -> anyhow::Result<()> {
-        self.build_renderer(interaction)
+        let result = self.build_renderer(interaction)
             .await
             .and_then(|t| t.render())
             .and_then_async(|o| async move { o.write().await })
-            .await
-            .err()
+            .await;
+
+        if matches!(result, Cancellable::Ok(_)) {
+            self.maybe_init_git().await;
+        }
+
+        result.err()
     }
 
     async fn build_renderer(
@@ -429,29 +431,79 @@ impl Run {
     }
 
     fn partials(&self) -> anyhow::Result<impl liquid::partials::PartialCompiler> {
-        let mut partials = PartialsBuilder::empty();
-
-        if let Some(partials_dir) = self.template.partials_dir() {
-            let partials_dir = std::fs::read_dir(partials_dir)
-                .context("Error opening template partials directory")?;
-            for partial_file in partials_dir {
-                let partial_file =
-                    partial_file.context("Error scanning template partials directory")?;
-                if !partial_file.file_type().is_ok_and(|t| t.is_file()) {
-                    anyhow::bail!("Non-file in partials directory: {partial_file:?}");
+        match self.template.partials_dir() {
+            None => Ok(liquid::partials::EagerCompiler::empty()),
+            Some(partials_dir) => {
+                let mut partials: liquid::partials::EagerCompiler<liquid::partials::InMemorySource> = liquid::partials::EagerCompiler::empty();
+                let walker = WalkDir::new(partials_dir);
+                for entry in walker {
+                    let entry = entry?;
+                    if entry.file_type().is_file() {
+                        let path = entry.path();
+                        let name = path
+                            .strip_prefix(partials_dir)?
+                            .with_extension("")
+                            .to_string_lossy()
+                            .to_string();
+                        let content = std::fs::read_to_string(path)?;
+                        partials.add(name, content);
+                    }
                 }
-                let partial_name = partial_file
-                    .file_name()
-                    .into_string()
-                    .map_err(|f| anyhow!("Unusable partial name {f:?}"))?;
-                let partial_file = partial_file.path();
-                let content = std::fs::read_to_string(&partial_file)
-                    .with_context(|| format!("Invalid partial template {partial_file:?}"))?;
-                partials.add(partial_name, content);
+                Ok(partials)
             }
         }
+    }
 
-        Ok(partials)
+    async fn maybe_init_git(&self) {
+        if !matches!(self.options.variant, TemplateVariantInfo::NewApplication) {
+            return;
+        }
+
+        if self.options.no_vcs {
+            return;
+        }
+
+        let target_dir = self.generation_target_dir();
+
+        if self.is_already_in_git_repo(&target_dir).await {
+            return;
+        }
+
+        if let Err(e) = self.init_git_repo(&target_dir).await {
+            eprintln!("Warning: Failed to initialize a git repository for you: {}", e);
+        }
+    }
+
+    // Function to check if the target directory is already in a git repositoriees
+    async fn is_already_in_git_repo(&self, dir: &std::path::Path) -> bool {
+        use tokio::process::Command;
+
+        let mut git = Command::new("git");
+        git.arg("-C")
+            .arg(dir)
+            .arg("rev-parse")
+            .arg("--git-dir");
+
+        match git.output().await {
+            Ok(output) => output.status.success(),
+            Err(_) => false,
+        }
+    }
+
+    async fn init_git_repo(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        use tokio::process::Command;
+        use crate::git::UnderstandGitResult;
+
+        let mut git = Command::new("git");
+        git.arg("-C")
+            .arg(dir)
+            .arg("init");
+
+        git.output()
+            .await
+            .understand_git_result()
+            .map(|_| ())
+            .map_err(|e| anyhow::anyhow!("{}", e))
     }
 }
 
