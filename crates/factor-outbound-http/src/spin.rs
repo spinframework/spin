@@ -3,12 +3,12 @@ use spin_world::v1::{
     http as spin_http,
     http_types::{self, HttpError, Method, Request, Response},
 };
-use tracing::{field::Empty, instrument, Level, Span};
+use tracing::{field::Empty, instrument, Span};
 
 use crate::intercept::InterceptOutcome;
 
 impl spin_http::Host for crate::InstanceState {
-    #[instrument(name = "spin_outbound_http.send_request", skip_all, err(level = Level::INFO),
+    #[instrument(skip_all,
         fields(otel.kind = "client", url.full = Empty, http.request.method = Empty,
         http.response.status_code = Empty, otel.name = Empty, server.address = Empty, server.port = Empty))]
     async fn send_request(&mut self, req: Request) -> Result<Response, HttpError> {
@@ -116,6 +116,8 @@ fn record_request_fields(span: &Span, req: &Request) {
         Method::Head => "HEAD",
         Method::Options => "OPTIONS",
     };
+    // Set otel.name to just the method name to fit with OpenTelemetry conventions
+    // <https://opentelemetry.io/docs/specs/semconv/http/http-spans/#name>
     span.record("otel.name", method)
         .record("http.request.method", method)
         .record("url.full", req.uri.clone());
