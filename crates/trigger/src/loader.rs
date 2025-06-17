@@ -53,7 +53,7 @@ impl ComponentLoader {
         path: &std::path::Path,
     ) -> anyhow::Result<Component> {
         assert!(self.aot_compilation_enabled);
-        match engine.detect_precompiled_file(path)? {
+        match wasmtime::Engine::detect_precompiled_file(path)? {
             Some(wasmtime::Precompiled::Component) => unsafe {
                 Component::deserialize_file(engine, path)
             },

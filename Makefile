@@ -21,7 +21,7 @@ test: lint test-unit test-integration
 
 .PHONY: lint
 lint:
-	cargo clippy --all --all-targets --features all-tests -- -D warnings
+	cargo clippy --all --all-targets --features "all-tests unsafe-aot-compilation" -- -D warnings
 	cargo fmt --all -- --check
 
 .PHONY: lint-rust-examples
