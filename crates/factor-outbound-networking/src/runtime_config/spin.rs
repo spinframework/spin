@@ -245,7 +245,7 @@ impl<'de> Deserialize<'de> for CidrOrPrivate {
 
 #[cfg(test)]
 mod tests {
-    use crate::blocked_networks::tests::cidr;
+    use spin_outbound_networking_config::blocked_networks::test::cidr;
 
     use super::*;
 

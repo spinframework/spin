@@ -18,10 +18,8 @@ pub struct BlockedNetworks {
 }
 
 impl BlockedNetworks {
-    pub(crate) fn new(
-        block_networks: impl AsRef<[IpNetwork]>,
-        block_private_networks: bool,
-    ) -> Self {
+    /// Creates a new `BlockedNetworks` instance with the given networks and private network blocking option.
+    pub fn new(block_networks: impl AsRef<[IpNetwork]>, block_private_networks: bool) -> Self {
         let mut networks = IpNetworkTable::new();
         for network in IpNetwork::collapse_addresses(block_networks.as_ref()) {
             // Omit redundant blocked_networks if block_private_networks = true
@@ -90,8 +88,26 @@ impl IpAddrLike for SocketAddr {
     }
 }
 
+/// Helpers for testing purposes
+pub mod test {
+    use super::*;
+
+    /// Converts a string to an `IpNetwork`, panicking on failure.
+    pub fn cidr(net: &str) -> IpNetwork {
+        IpNetwork::from_str_truncate(net)
+            .unwrap_or_else(|err| panic!("invalid cidr {net:?}: {err:?}"))
+    }
+
+    /// Converts a string to an `IpAddr`, panicking on failure.
+    pub fn ip(addr: &str) -> IpAddr {
+        addr.parse()
+            .unwrap_or_else(|err| panic!("invalid ip addr {addr:?}: {err:?}"))
+    }
+}
+
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
+    use super::test::*;
     use super::*;
 
     #[test]
@@ -158,15 +174,5 @@ pub(crate) mod tests {
 
         assert_eq!(addrs, allowed);
         assert_eq!(actual_blocked, blocked);
-    }
-
-    pub(crate) fn cidr(net: &str) -> IpNetwork {
-        IpNetwork::from_str_truncate(net)
-            .unwrap_or_else(|err| panic!("invalid cidr {net:?}: {err:?}"))
-    }
-
-    pub(crate) fn ip(addr: &str) -> IpAddr {
-        addr.parse()
-            .unwrap_or_else(|err| panic!("invalid ip addr {addr:?}: {err:?}"))
     }
 }

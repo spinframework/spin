@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use spin_core::{async_trait, wasmtime::component::Resource};
-use spin_factor_outbound_networking::OutboundAllowedHosts;
+use spin_factor_outbound_networking::config::OutboundAllowedHosts;
 use spin_world::v2::mqtt::{self as v2, Connection, Error, Qos};
 use tracing::{instrument, Level};
 

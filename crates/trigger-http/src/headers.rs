@@ -7,7 +7,7 @@ use std::{
 use anyhow::Result;
 use http::Uri;
 use hyper::Request;
-use spin_factor_outbound_networking::is_service_chaining_host;
+use spin_factor_outbound_networking::config::allowed_hosts::is_service_chaining_host;
 use spin_http::routes::RouteMatch;
 
 use crate::Body;

@@ -3,7 +3,7 @@ mod host;
 
 use client::Client;
 use mysql_async::Conn as MysqlClient;
-use spin_factor_outbound_networking::{OutboundAllowedHosts, OutboundNetworkingFactor};
+use spin_factor_outbound_networking::{config::OutboundAllowedHosts, OutboundNetworkingFactor};
 use spin_factors::{Factor, InitContext, RuntimeFactors, SelfInstanceBuilder};
 use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql::{self as v2};

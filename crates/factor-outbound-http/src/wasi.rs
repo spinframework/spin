@@ -4,7 +4,8 @@ use anyhow::Context;
 use http::{header::HOST, Request};
 use http_body_util::BodyExt;
 use spin_factor_outbound_networking::{
-    BlockedNetworks, ComponentTlsClientConfigs, OutboundAllowedHosts, TlsClientConfig,
+    config::{blocked_networks::BlockedNetworks, OutboundAllowedHosts},
+    ComponentTlsClientConfigs, TlsClientConfig,
 };
 use spin_factors::{wasmtime::component::ResourceTable, RuntimeFactorsInstanceState};
 use tokio::{net::TcpStream, time::timeout};

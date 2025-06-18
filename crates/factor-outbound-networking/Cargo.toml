@@ -19,6 +19,7 @@ spin-factor-wasi = { path = "../factor-wasi" }
 spin-factors = { path = "../factors" }
 spin-locked-app = { path = "../locked-app" }
 spin-manifest = { path = "../manifest" }
+spin-outbound-networking-config = { path = "../outbound-networking-config" }
 spin-serde = { path = "../serde" }
 tracing = { workspace = true }
 url = { workspace = true }
@@ -27,6 +28,7 @@ webpki-roots = "0.26"
 
 [dev-dependencies]
 spin-factors-test = { path = "../factors-test" }
+spin-outbound-networking-config = { path = "../outbound-networking-config" }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 toml = { workspace = true }

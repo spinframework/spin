@@ -8217,6 +8217,7 @@ dependencies = [
  "spin-factors-test",
  "spin-locked-app",
  "spin-manifest",
+ "spin-outbound-networking-config",
  "spin-serde",
  "tempfile",
  "tokio",
@@ -8477,10 +8478,11 @@ dependencies = [
  "serde_json",
  "sha2",
  "spin-common",
- "spin-factor-outbound-networking",
  "spin-locked-app",
  "spin-manifest",
+ "spin-outbound-networking-config",
  "spin-serde",
+ "spin-telemetry",
  "tempfile",
  "terminal",
  "tokio",
@@ -8552,6 +8554,21 @@ dependencies = [
  "wasm-encoder 0.230.0",
  "wit-component 0.230.0",
  "wit-parser 0.230.0",
+]
+
+[[package]]
+name = "spin-outbound-networking-config"
+version = "3.4.0-pre0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "http 1.1.0",
+ "ip_network",
+ "ip_network_table",
+ "spin-expressions",
+ "tracing",
+ "url",
+ "urlencoding",
 ]
 
 [[package]]

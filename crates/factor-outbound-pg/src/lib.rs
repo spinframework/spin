@@ -2,7 +2,7 @@ pub mod client;
 mod host;
 
 use client::Client;
-use spin_factor_outbound_networking::{OutboundAllowedHosts, OutboundNetworkingFactor};
+use spin_factor_outbound_networking::{config::OutboundAllowedHosts, OutboundNetworkingFactor};
 use spin_factors::{
     anyhow, ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
 };

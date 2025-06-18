@@ -1,33 +1,28 @@
 mod allowed_hosts;
-mod blocked_networks;
 pub mod runtime_config;
 mod tls;
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures_util::{
-    future::{BoxFuture, Shared},
-    FutureExt,
-};
+use futures_util::FutureExt as _;
 use spin_factor_variables::VariablesFactor;
 use spin_factor_wasi::{SocketAddrUse, WasiFactor};
 use spin_factors::{
     anyhow::{self, Context},
     ConfigureAppContext, Error, Factor, FactorInstanceBuilder, PrepareContext, RuntimeFactors,
 };
+use spin_outbound_networking_config::{DisallowedHostHandler, OutboundAllowedHosts};
 use url::Url;
 
-use crate::{runtime_config::RuntimeConfig, tls::TlsClientConfigs};
-
-pub use crate::allowed_hosts::{
-    allowed_outbound_hosts, is_service_chaining_host, parse_service_chaining_target,
-    validate_service_chaining_for_components, AllowedHostConfig, AllowedHostsConfig, HostConfig,
-    OutboundUrl, SERVICE_CHAINING_DOMAIN_SUFFIX,
+use crate::{
+    allowed_hosts::allowed_outbound_hosts, runtime_config::RuntimeConfig, tls::TlsClientConfigs,
 };
-pub use crate::blocked_networks::BlockedNetworks;
-pub use crate::tls::{ComponentTlsClientConfigs, TlsClientConfig};
+pub use allowed_hosts::validate_service_chaining_for_components;
 
-pub type SharedFutureResult<T> = Shared<BoxFuture<'static, Result<Arc<T>, Arc<anyhow::Error>>>>;
+pub use crate::tls::{ComponentTlsClientConfigs, TlsClientConfig};
+use config::allowed_hosts::AllowedHostsConfig;
+use config::blocked_networks::BlockedNetworks;
+pub use spin_outbound_networking_config as config;
 
 #[derive(Default)]
 pub struct OutboundNetworkingFactor {
@@ -116,10 +111,10 @@ impl Factor for OutboundNetworkingFactor {
         .map(|res| res.map(Arc::new).map_err(Arc::new))
         .boxed()
         .shared();
-        let allowed_hosts = OutboundAllowedHosts {
-            allowed_hosts_future: allowed_hosts_future.clone(),
-            disallowed_host_handler: self.disallowed_host_handler.clone(),
-        };
+        let allowed_hosts = OutboundAllowedHosts::new(
+            allowed_hosts_future.clone(),
+            self.disallowed_host_handler.clone(),
+        );
         let blocked_networks = ctx.app_state().blocked_networks.clone();
 
         match ctx.instance_builder::<WasiFactor>() {
@@ -210,81 +205,6 @@ impl FactorInstanceBuilder for InstanceBuilder {
 
     fn build(self) -> anyhow::Result<Self::InstanceState> {
         Ok(())
-    }
-}
-
-/// A check for whether a URL is allowed by the outbound networking configuration.
-#[derive(Clone)]
-pub struct OutboundAllowedHosts {
-    allowed_hosts_future: SharedFutureResult<AllowedHostsConfig>,
-    disallowed_host_handler: Option<Arc<dyn DisallowedHostHandler>>,
-}
-
-impl OutboundAllowedHosts {
-    /// Checks address against allowed hosts
-    ///
-    /// Calls the [`DisallowedHostHandler`] if set and URL is disallowed.
-    /// If `url` cannot be parsed, `{scheme}://` is prepended to `url` and retried.
-    pub async fn check_url(&self, url: &str, scheme: &str) -> anyhow::Result<bool> {
-        tracing::debug!("Checking outbound networking request to '{url}'");
-        let url = match OutboundUrl::parse(url, scheme) {
-            Ok(url) => url,
-            Err(err) => {
-                tracing::warn!(%err,
-                    "A component tried to make a request to a url that could not be parsed: {url}",
-                );
-                return Ok(false);
-            }
-        };
-
-        let allowed_hosts = self.resolve().await?;
-        let is_allowed = allowed_hosts.allows(&url);
-        if !is_allowed {
-            tracing::debug!("Disallowed outbound networking request to '{url}'");
-            self.report_disallowed_host(url.scheme(), &url.authority());
-        }
-        Ok(is_allowed)
-    }
-
-    /// Checks if allowed hosts permit relative requests
-    ///
-    /// Calls the [`DisallowedHostHandler`] if set and relative requests are
-    /// disallowed.
-    pub async fn check_relative_url(&self, schemes: &[&str]) -> anyhow::Result<bool> {
-        tracing::debug!("Checking relative outbound networking request with schemes {schemes:?}");
-        let allowed_hosts = self.resolve().await?;
-        let is_allowed = allowed_hosts.allows_relative_url(schemes);
-        if !is_allowed {
-            tracing::debug!(
-                "Disallowed relative outbound networking request with schemes {schemes:?}"
-            );
-            let scheme = schemes.first().unwrap_or(&"");
-            self.report_disallowed_host(scheme, "self");
-        }
-        Ok(is_allowed)
-    }
-
-    async fn resolve(&self) -> anyhow::Result<Arc<AllowedHostsConfig>> {
-        self.allowed_hosts_future
-            .clone()
-            .await
-            .map_err(anyhow::Error::msg)
-    }
-
-    fn report_disallowed_host(&self, scheme: &str, authority: &str) {
-        if let Some(handler) = &self.disallowed_host_handler {
-            handler.handle_disallowed_host(scheme, authority);
-        }
-    }
-}
-
-pub trait DisallowedHostHandler: Send + Sync {
-    fn handle_disallowed_host(&self, scheme: &str, authority: &str);
-}
-
-impl<F: Fn(&str, &str) + Send + Sync> DisallowedHostHandler for F {
-    fn handle_disallowed_host(&self, scheme: &str, authority: &str) {
-        self(scheme, authority);
     }
 }
 

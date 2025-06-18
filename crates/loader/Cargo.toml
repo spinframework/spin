@@ -16,10 +16,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 spin-common = { path = "../common" }
-spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-locked-app = { path = "../locked-app" }
 spin-manifest = { path = "../manifest" }
+spin-outbound-networking-config = { path = "../outbound-networking-config" }
 spin-serde = { path = "../serde" }
+spin-telemetry = { path = "../telemetry" }
 tempfile = { workspace = true }
 terminal = { path = "../terminal" }
 tokio = { workspace = true }

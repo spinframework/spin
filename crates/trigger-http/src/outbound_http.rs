@@ -6,7 +6,7 @@ use std::{
 use http::uri::Scheme;
 use spin_core::async_trait;
 use spin_factor_outbound_http::intercept::{self, InterceptOutcome, InterceptRequest};
-use spin_factor_outbound_networking::parse_service_chaining_target;
+use spin_factor_outbound_networking::config::allowed_hosts::parse_service_chaining_target;
 use spin_factors::RuntimeFactors;
 use spin_http::routes::RouteMatch;
 use wasmtime_wasi_http::{HttpError, HttpResult};

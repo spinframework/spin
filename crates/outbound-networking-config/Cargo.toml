@@ -1,0 +1,23 @@
+[package]
+name = "spin-outbound-networking-config"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+futures-util = { workspace = true }
+http = { workspace = true }
+ip_network = "0.4.1"
+ip_network_table = "0.2.0"
+spin-expressions = { path = "../expressions" }
+tracing = { workspace = true }
+url = { workspace = true }
+urlencoding = "2"
+
+[lints]
+workspace = true
