@@ -2,8 +2,7 @@ use std::fmt::Display;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
-use wasm_pkg_common::{package::PackageRef, registry::Registry};
+use spin_serde::{PackageRef, Registry};
 
 /// Variable definition
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
