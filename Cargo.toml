@@ -36,7 +36,7 @@ pretty_assertions = "1.3"
 regex = { workspace = true }
 reqwest = { workspace = true }
 rpassword = "7"
-schemars = { version = "0.8.21", features = ["indexmap2", "semver"] }
+schemars = { workspace = true }
 semver = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { workspace = true }
@@ -151,6 +151,7 @@ rusqlite = "0.34"
 # If both `aws_lc_rs` and `ring` are enabled, a panic at runtime will occur.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging", "tls12"] }
 rustls-pki-types = "1.12"
+schemars = { version = "0.8.22", features = ["indexmap2", "semver"] }
 semver = "1"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1.0"
@@ -170,7 +171,6 @@ walkdir = "2"
 wasm-encoder = "0.230"
 wasm-metadata = "0.230"
 wasm-pkg-client = "0.10"
-wasm-pkg-common = "0.10"
 wasmparser = "0.230"
 wasmtime = "33.0.0"
 wasmtime-wasi = "33.0.0"

@@ -15,7 +15,7 @@ use spin_manifest::schema::v2::{self, AppManifest, KebabId, WasiFilesMount};
 use spin_outbound_networking_config::allowed_hosts::{
     AllowedHostsConfig, SERVICE_CHAINING_DOMAIN_SUFFIX,
 };
-use spin_serde::DependencyName;
+use spin_serde::{DependencyName, PackageRef, Registry};
 use std::collections::BTreeMap;
 use tokio::{io::AsyncWriteExt, sync::Semaphore};
 
@@ -405,19 +405,27 @@ impl LocalLoader {
 
     async fn load_registry_source(
         &self,
-        registry: Option<&wasm_pkg_client::Registry>,
-        package: &wasm_pkg_client::PackageRef,
+        registry: Option<&Registry>,
+        package: &PackageRef,
         version: &semver::VersionReq,
     ) -> Result<ContentRef> {
         let mut client_config = wasm_pkg_client::Config::global_defaults().await?;
+        let registry = registry
+            .map(|r| wasm_pkg_client::Registry::try_from(r.to_string()))
+            .transpose()
+            .context("Failed to parse registry")?;
+        let package = package
+            .to_string()
+            .parse::<wasm_pkg_client::PackageRef>()
+            .context("Failed to parse package name")?;
 
-        if let Some(registry) = registry.cloned() {
+        if let Some(registry) = registry.clone() {
             let mapping = wasm_pkg_client::RegistryMapping::Registry(registry);
             client_config.set_package_registry_override(package.clone(), mapping);
         }
         let pkg_loader = wasm_pkg_client::Client::new(client_config);
 
-        let mut releases = pkg_loader.list_all_versions(package).await.map_err(|e| {
+        let mut releases = pkg_loader.list_all_versions(&package).await.map_err(|e| {
             if matches!(e, wasm_pkg_client::Error::NoRegistryForNamespace(_)) && registry.is_none() {
                 anyhow!("No default registry specified for wasm-pkg-loader. Create a default config, or set `registry` for package {package:?}")
             } else {
@@ -434,7 +442,7 @@ impl LocalLoader {
             .with_context(|| format!("No matching version found for {package} {version}",))?;
 
         let release = pkg_loader
-            .get_release(package, &release_version.version)
+            .get_release(&package, &release_version.version)
             .await?;
 
         let digest = match &release.content_digest {
@@ -444,7 +452,7 @@ impl LocalLoader {
         let path = if let Ok(cached_path) = self.cache.wasm_file(&digest) {
             cached_path
         } else {
-            let mut stm = pkg_loader.stream_content(package, &release).await?;
+            let mut stm = pkg_loader.stream_content(&package, &release).await?;
 
             self.cache.ensure_dirs().await?;
             let dest = self.cache.wasm_path(&digest);

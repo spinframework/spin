@@ -4,7 +4,6 @@ use crate::KebabId;
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use wasm_pkg_common::package::PackageRef;
 
 /// Name of an import package dependency.
 ///
@@ -77,6 +76,120 @@ impl FromStr for DependencyPackageName {
     }
 }
 
+/// A package reference, consisting of kebab-case namespace and name.
+///
+/// Ex: `wasm-pkg:client`
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[serde(into = "String", try_from = "String")]
+pub struct PackageRef {
+    /// The package namespace
+    pub namespace: String,
+    /// The package name
+    pub name: String,
+}
+
+impl PackageRef {
+    /// Returns the package namespace.
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    /// Returns the package name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl std::fmt::Display for PackageRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.namespace, self.name)
+    }
+}
+
+impl From<PackageRef> for String {
+    fn from(value: PackageRef) -> Self {
+        value.to_string()
+    }
+}
+
+impl TryFrom<String> for PackageRef {
+    type Error = anyhow::Error;
+
+    fn try_from(mut value: String) -> Result<Self, Self::Error> {
+        let Some(colon) = value.find(':') else {
+            anyhow::bail!("missing expected ':'");
+        };
+        let name = value.split_off(colon + 1);
+        value.truncate(colon);
+        Ok(Self {
+            // TODO(rylev): parse both fields as labels
+            namespace: value,
+            name: name,
+        })
+    }
+}
+
+impl FromStr for PackageRef {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.to_string().try_into()
+    }
+}
+
+/// A registry identifier.
+///
+/// This must be a valid HTTP Host.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(into = "String", try_from = "String")]
+pub struct Registry(http::uri::Authority);
+
+impl Registry {
+    /// Returns the registry host, without port number.
+    pub fn host(&self) -> &str {
+        self.0.host()
+    }
+
+    /// Returns the registry port number, if given.
+    pub fn port(&self) -> Option<u16> {
+        self.0.port_u16()
+    }
+}
+
+impl AsRef<str> for Registry {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl std::fmt::Display for Registry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<Registry> for String {
+    fn from(value: Registry) -> Self {
+        value.to_string()
+    }
+}
+
+impl std::str::FromStr for Registry {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.parse()?))
+    }
+}
+
+impl TryFrom<String> for Registry {
+    type Error = anyhow::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ok(Self(value.try_into()?))
+    }
+}
+
 /// Name of an import dependency.
 ///
 /// For example: `foo:bar/baz@0.1.0`, `foo:bar/baz`, `foo:bar@0.1.0`, `foo:bar`, `foo-bar`.
@@ -103,8 +216,8 @@ impl Ord for DependencyName {
             (DependencyName::Plain(a), DependencyName::Plain(b)) => a.cmp(b),
             (DependencyName::Package(a), DependencyName::Package(b)) => {
                 let big_ole_tup = (
-                    a.package.namespace().as_ref(),
-                    a.package.name().as_ref(),
+                    a.package.namespace(),
+                    a.package.name(),
                     a.interface.as_ref(),
                     a.version.as_ref(),
                 );
