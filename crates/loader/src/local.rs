@@ -4,7 +4,6 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 use futures::{future::try_join_all, StreamExt};
 use reqwest::Url;
 use spin_common::{paths::parent_dir, sloth, ui::quoted_path};
-use spin_factor_outbound_networking::SERVICE_CHAINING_DOMAIN_SUFFIX;
 use spin_locked_app::{
     locked::{
         self, ContentPath, ContentRef, LockedApp, LockedComponent, LockedComponentDependency,
@@ -838,19 +837,8 @@ fn requires_service_chaining(component: &spin_manifest::schema::v2::Component) -
 }
 
 fn is_chaining_host(pattern: &str) -> bool {
-    use spin_factor_outbound_networking::{AllowedHostConfig, HostConfig};
-
-    let Ok(allowed) = AllowedHostConfig::parse(pattern) else {
-        return false;
-    };
-
-    match allowed.host() {
-        HostConfig::List(hosts) => hosts
-            .iter()
-            .any(|h| h.ends_with(SERVICE_CHAINING_DOMAIN_SUFFIX)),
-        HostConfig::AnySubdomain(domain) => domain == SERVICE_CHAINING_DOMAIN_SUFFIX,
-        _ => false,
-    }
+    spin_factor_outbound_networking::AllowedHostConfig::parse(pattern)
+        .is_ok_and(|config| config.is_for_service_chaining())
 }
 
 const SLOTH_WARNING_DELAY_MILLIS: u64 = 1250;
