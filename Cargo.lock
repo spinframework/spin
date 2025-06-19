@@ -8365,6 +8365,7 @@ dependencies = [
  "serde",
  "spin-app",
  "spin-factor-outbound-http",
+ "spin-routes",
  "toml",
  "tracing",
  "wasmtime",
@@ -8594,6 +8595,18 @@ dependencies = [
 [[package]]
 name = "spin-resource-table"
 version = "3.4.0-pre0"
+
+[[package]]
+name = "spin-routes"
+version = "3.4.0-pre0"
+dependencies = [
+ "anyhow",
+ "indexmap 2.7.1",
+ "percent-encoding",
+ "routefinder",
+ "serde",
+ "tracing",
+]
 
 [[package]]
 name = "spin-runtime-config"

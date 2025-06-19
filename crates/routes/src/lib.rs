@@ -4,9 +4,11 @@
 
 use anyhow::{anyhow, Result};
 use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, fmt};
 
-use crate::config::HttpTriggerRouteConfig;
+/// The prefix for well-known routes.
+pub const WELL_KNOWN_PREFIX: &str = "/.well-known/spin/";
 
 /// Router for the HTTP trigger.
 #[derive(Clone, Debug)]
@@ -383,10 +385,38 @@ fn sanitize<S: Into<String>>(s: S) -> String {
     }
 }
 
+/// An HTTP trigger route
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum HttpTriggerRouteConfig {
+    /// A route that is routable.
+    Route(String),
+    /// A route that is not routable, but indicates a private endpoint.
+    Private(HttpPrivateEndpoint),
+}
+
+/// Indicates that a trigger is a private endpoint (not routable).
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HttpPrivateEndpoint {
+    /// Whether the private endpoint is private. This must be true.
+    pub private: bool,
+}
+
+impl Default for HttpTriggerRouteConfig {
+    fn default() -> Self {
+        Self::Route(Default::default())
+    }
+}
+
+impl<T: Into<String>> From<T> for HttpTriggerRouteConfig {
+    fn from(value: T) -> Self {
+        Self::Route(value.into())
+    }
+}
+
 #[cfg(test)]
 mod route_tests {
-    use crate::config::HttpPrivateEndpoint;
-
     use super::*;
 
     #[test]
