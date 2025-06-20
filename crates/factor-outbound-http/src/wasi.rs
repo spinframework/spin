@@ -10,6 +10,7 @@ use spin_factor_outbound_networking::{
 use spin_factors::{wasmtime::component::ResourceTable, RuntimeFactorsInstanceState};
 use tokio::{net::TcpStream, time::timeout};
 use tracing::{field::Empty, instrument, Instrument};
+use wasmtime::component::HasData;
 use wasmtime_wasi::p2::{IoImpl, IoView};
 use wasmtime_wasi_http::{
     bindings::http::types::ErrorCode,
@@ -24,6 +25,12 @@ use crate::{
     wasi_2023_10_18, wasi_2023_11_10, InstanceState, OutboundHttpFactor, SelfRequestOrigin,
 };
 
+pub(crate) struct HasHttp;
+
+impl HasData for HasHttp {
+    type Data<'a> = WasiHttpImpl<WasiHttpImplInner<'a>>;
+}
+
 pub(crate) fn add_to_linker<C>(ctx: &mut C) -> anyhow::Result<()>
 where
     C: spin_factors::InitContext<OutboundHttpFactor>,
@@ -37,8 +44,10 @@ where
     }
     let get_http = get_http::<C> as fn(&mut C::StoreData) -> WasiHttpImpl<WasiHttpImplInner<'_>>;
     let linker = ctx.linker();
-    wasmtime_wasi_http::bindings::http::outgoing_handler::add_to_linker_get_host(linker, get_http)?;
-    wasmtime_wasi_http::bindings::http::types::add_to_linker_get_host(linker, get_http)?;
+    wasmtime_wasi_http::bindings::http::outgoing_handler::add_to_linker::<_, HasHttp>(
+        linker, get_http,
+    )?;
+    wasmtime_wasi_http::bindings::http::types::add_to_linker::<_, HasHttp>(linker, get_http)?;
 
     wasi_2023_10_18::add_to_linker(linker, get_http)?;
     wasi_2023_11_10::add_to_linker(linker, get_http)?;

@@ -52,10 +52,10 @@ impl EnvVariablesProvider {
     /// Creates a new EnvProvider.
     ///
     /// * `prefix` - The string prefix to use to distinguish an environment variable that should be used.
-    ///    If not set, the default prefix is used.
+    ///   If not set, the default prefix is used.
     /// * `env_fetcher` - The function to use to fetch an environment variable.
     /// * `dotenv_path` - The path to the .env file to load environment variables from. If not set,
-    ///    no .env file is loaded.
+    ///   no .env file is loaded.
     pub fn new(
         prefix: Option<impl Into<String>>,
         env_fetcher: impl Fn(&str) -> Result<String, VarError> + Send + Sync + 'static,

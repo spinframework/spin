@@ -12,12 +12,12 @@ use crate::EngineBuilder;
 /// Spin trigger invocation.
 ///
 /// A `Store` can be built with a [`StoreBuilder`].
-pub struct Store<T> {
+pub struct Store<T: 'static> {
     inner: wasmtime::Store<T>,
     epoch_tick_interval: Duration,
 }
 
-impl<T> Store<T> {
+impl<T: 'static> Store<T> {
     /// Sets the execution deadline.
     ///
     /// This is a rough deadline; an instance will trap some time after this
@@ -50,19 +50,19 @@ impl<T> Store<T> {
     }
 }
 
-impl<T> AsRef<wasmtime::Store<T>> for Store<T> {
+impl<T: 'static> AsRef<wasmtime::Store<T>> for Store<T> {
     fn as_ref(&self) -> &wasmtime::Store<T> {
         &self.inner
     }
 }
 
-impl<T> AsMut<wasmtime::Store<T>> for Store<T> {
+impl<T: 'static> AsMut<wasmtime::Store<T>> for Store<T> {
     fn as_mut(&mut self) -> &mut wasmtime::Store<T> {
         &mut self.inner
     }
 }
 
-impl<T> wasmtime::AsContext for Store<T> {
+impl<T: 'static> wasmtime::AsContext for Store<T> {
     type Data = T;
 
     fn as_context(&self) -> wasmtime::StoreContext<'_, Self::Data> {
@@ -70,7 +70,7 @@ impl<T> wasmtime::AsContext for Store<T> {
     }
 }
 
-impl<T> wasmtime::AsContextMut for Store<T> {
+impl<T: 'static> wasmtime::AsContextMut for Store<T> {
     fn as_context_mut(&mut self) -> wasmtime::StoreContextMut<'_, Self::Data> {
         self.inner.as_context_mut()
     }

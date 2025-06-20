@@ -52,7 +52,7 @@ use wasi::http::types::{
 use wasi::io::poll::Pollable;
 use wasi::io::streams::{InputStream, OutputStream};
 
-use crate::wasi::WasiHttpImplInner;
+use crate::wasi::{HasHttp, WasiHttpImplInner};
 
 pub(crate) fn add_to_linker<T>(
     linker: &mut Linker<T>,
@@ -61,8 +61,8 @@ pub(crate) fn add_to_linker<T>(
 where
     T: Send + 'static,
 {
-    wasi::http::types::add_to_linker_get_host(linker, closure)?;
-    wasi::http::outgoing_handler::add_to_linker_get_host(linker, closure)?;
+    wasi::http::types::add_to_linker::<_, HasHttp>(linker, closure)?;
+    wasi::http::outgoing_handler::add_to_linker::<_, HasHttp>(linker, closure)?;
     Ok(())
 }
 

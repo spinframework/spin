@@ -9,7 +9,7 @@ use rumqttc::{AsyncClient, Event, Incoming, Outgoing, QoS};
 use spin_core::async_trait;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
-    ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
+    ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
 };
 use spin_world::v2::mqtt::{self as v2, Error, Qos};
 use tokio::sync::Mutex;
@@ -32,7 +32,7 @@ impl Factor for OutboundMqttFactor {
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::v2::mqtt::add_to_linker)?;
+        ctx.link_bindings(spin_world::v2::mqtt::add_to_linker::<_, FactorData<Self>>)?;
         Ok(())
     }
 

@@ -209,7 +209,7 @@ fn retarget_imports_and_get_exports(target: &str, module: &[u8]) -> Result<(Vec<
                 for export in reader {
                     let export = export?;
                     exports_result.push(export.name.to_owned());
-                    let kind = RoundtripReencoder.export_kind(export.kind);
+                    let kind = RoundtripReencoder.export_kind(export.kind)?;
                     exports.export(export.name, kind, export.index);
                 }
                 result.section(&exports);

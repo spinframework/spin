@@ -15,6 +15,7 @@ use spin_factors::{
     anyhow, AppComponent, Factor, FactorInstanceBuilder, InitContext, PrepareContext,
     RuntimeFactors, RuntimeFactorsInstanceState,
 };
+use wasmtime::component::HasData;
 use wasmtime_wasi::p2::{
     IoImpl, IoView, StdinStream, StdoutStream, WasiCtx, WasiCtxBuilder, WasiImpl, WasiView,
 };
@@ -98,6 +99,18 @@ trait InitContextExt: InitContext<WasiFactor> {
 
 impl<T> InitContextExt for T where T: InitContext<WasiFactor> {}
 
+struct HasWasi;
+
+impl HasData for HasWasi {
+    type Data<'a> = WasiImpl<WasiImplInner<'a>>;
+}
+
+struct HasIo;
+
+impl HasData for HasIo {
+    type Data<'a> = IoImpl<WasiImplInner<'a>>;
+}
+
 impl Factor for WasiFactor {
     type RuntimeConfig = ();
     type AppState = ();
@@ -106,33 +119,33 @@ impl Factor for WasiFactor {
     fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
         use wasmtime_wasi::p2::bindings;
 
-        ctx.link_wasi_bindings(bindings::clocks::wall_clock::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::clocks::monotonic_clock::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::filesystem::types::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::filesystem::preopens::add_to_linker_get_host)?;
-        ctx.link_io_bindings(bindings::io::error::add_to_linker_get_host)?;
-        ctx.link_io_bindings(bindings::io::poll::add_to_linker_get_host)?;
-        ctx.link_io_bindings(bindings::io::streams::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::random::random::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::random::insecure::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::random::insecure_seed::add_to_linker_get_host)?;
-        ctx.link_wasi_default_bindings(bindings::cli::exit::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::environment::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::stdin::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::stdout::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::stderr::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_input::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_output::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_stdin::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_stdout::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_stderr::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::sockets::tcp::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::sockets::tcp_create_socket::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::sockets::udp::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::sockets::udp_create_socket::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::sockets::instance_network::add_to_linker_get_host)?;
-        ctx.link_wasi_default_bindings(bindings::sockets::network::add_to_linker_get_host)?;
-        ctx.link_wasi_bindings(bindings::sockets::ip_name_lookup::add_to_linker_get_host)?;
+        ctx.link_wasi_bindings(bindings::clocks::wall_clock::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::clocks::monotonic_clock::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::filesystem::types::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::filesystem::preopens::add_to_linker::<_, HasWasi>)?;
+        ctx.link_io_bindings(bindings::io::error::add_to_linker::<_, HasIo>)?;
+        ctx.link_io_bindings(bindings::io::poll::add_to_linker::<_, HasIo>)?;
+        ctx.link_io_bindings(bindings::io::streams::add_to_linker::<_, HasIo>)?;
+        ctx.link_wasi_bindings(bindings::random::random::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::random::insecure::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::random::insecure_seed::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_default_bindings(bindings::cli::exit::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::environment::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::stdin::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::stdout::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::stderr::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::terminal_input::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::terminal_output::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::terminal_stdin::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::terminal_stdout::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::cli::terminal_stderr::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::sockets::tcp::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::sockets::tcp_create_socket::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::sockets::udp::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::sockets::udp_create_socket::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::sockets::instance_network::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_default_bindings(bindings::sockets::network::add_to_linker::<_, HasWasi>)?;
+        ctx.link_wasi_bindings(bindings::sockets::ip_name_lookup::add_to_linker::<_, HasWasi>)?;
 
         ctx.link_wasi_bindings(wasi_2023_10_18::add_to_linker)?;
         ctx.link_wasi_bindings(wasi_2023_11_10::add_to_linker)?;

@@ -12,7 +12,7 @@ use spin_factors::{
 ///
 /// It is generic over the executor's [`RuntimeFactors`]. Additionally, it
 /// holds any other per-instance state needed by the caller.
-pub struct FactorsExecutor<T: RuntimeFactors, U = ()> {
+pub struct FactorsExecutor<T: RuntimeFactors, U: 'static = ()> {
     core_engine: spin_core::Engine<InstanceState<T::InstanceState, U>>,
     factors: T,
     hooks: Vec<Box<dyn ExecutorHooks<T, U>>>,
@@ -127,7 +127,7 @@ type InstancePre<T, U> =
 ///
 /// It is generic over the executor's [`RuntimeFactors`] and any ad-hoc additional
 /// per-instance state needed by the caller.
-pub struct FactorsExecutorApp<T: RuntimeFactors, U> {
+pub struct FactorsExecutorApp<T: RuntimeFactors, U: 'static> {
     executor: Arc<FactorsExecutor<T, U>>,
     configured_app: ConfiguredApp<T>,
     // Maps component IDs -> InstancePres
@@ -194,7 +194,7 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutorApp<T, U> {
 ///
 /// It is generic over the executor's [`RuntimeFactors`] and any ad-hoc additional
 /// per-instance state needed by the caller.
-pub struct FactorsInstanceBuilder<'a, F: RuntimeFactors, U> {
+pub struct FactorsInstanceBuilder<'a, F: RuntimeFactors, U: 'static> {
     app_component: AppComponent<'a>,
     store_builder: spin_core::StoreBuilder,
     factor_builders: F::InstanceBuilders,
@@ -202,7 +202,7 @@ pub struct FactorsInstanceBuilder<'a, F: RuntimeFactors, U> {
     factors: &'a F,
 }
 
-impl<T: RuntimeFactors, U> FactorsInstanceBuilder<'_, T, U> {
+impl<T: RuntimeFactors, U: 'static> FactorsInstanceBuilder<'_, T, U> {
     /// Returns the app component for the instance.
     pub fn app_component(&self) -> &AppComponent {
         &self.app_component

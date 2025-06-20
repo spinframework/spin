@@ -7,7 +7,7 @@ use std::sync::Arc;
 use host::InstanceState;
 
 use async_trait::async_trait;
-use spin_factors::{anyhow, Factor};
+use spin_factors::{anyhow, Factor, FactorData};
 use spin_locked_app::MetadataKey;
 use spin_world::spin::sqlite::sqlite as v3;
 use spin_world::v1::sqlite as v1;
@@ -33,9 +33,9 @@ impl Factor for SqliteFactor {
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(v1::add_to_linker)?;
-        ctx.link_bindings(v2::add_to_linker)?;
-        ctx.link_bindings(v3::add_to_linker)?;
+        ctx.link_bindings(v1::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(v2::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(v3::add_to_linker::<_, FactorData<Self>>)?;
         Ok(())
     }
 

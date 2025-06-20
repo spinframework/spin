@@ -11,7 +11,7 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 env:
-  RUST_VERSION: 1.84
+  RUST_VERSION: 1.85
 
 jobs:
   build-and-sign:
@@ -172,7 +172,7 @@ jobs:
         with:
           name: spin-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}
           path: _dist/spin-${{ env.RELEASE_VERSION }}-${{ env.RUNNER_OS }}-${{ matrix.config.arch }}.zip
-      
+
       - name: Upload schema as GitHub artifact
         if: matrix.config.generateManifestSchema
         uses: actions/upload-artifact@v4

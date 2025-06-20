@@ -33,7 +33,7 @@ use test_mysql::Mysql;
 use test_postgres::Postgres;
 use test_redis::Redis;
 use wasmtime::{
-    component::{Component, InstancePre, Linker},
+    component::{Component, HasSelf, InstancePre, Linker},
     Engine, Store,
 };
 use wasmtime_wasi::p2::{pipe::MemoryOutputPipe, IoView, WasiCtx, WasiCtxBuilder, WasiView};
@@ -164,13 +164,15 @@ pub async fn test(
 ) -> Result<Report> {
     let mut linker = Linker::<Context>::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-    http::add_to_linker(&mut linker, |context| &mut context.http)?;
-    redis::add_to_linker(&mut linker, |context| &mut context.redis)?;
-    postgres::add_to_linker(&mut linker, |context| &mut context.postgres)?;
-    mysql::add_to_linker(&mut linker, |context| &mut context.mysql)?;
-    key_value::add_to_linker(&mut linker, |context| &mut context.key_value)?;
-    llm::add_to_linker(&mut linker, |context| &mut context.llm)?;
-    config::add_to_linker(&mut linker, |context| &mut context.config)?;
+    http::add_to_linker::<_, HasSelf<Http>>(&mut linker, |context| &mut context.http)?;
+    redis::add_to_linker::<_, HasSelf<Redis>>(&mut linker, |context| &mut context.redis)?;
+    postgres::add_to_linker::<_, HasSelf<Postgres>>(&mut linker, |context| &mut context.postgres)?;
+    mysql::add_to_linker::<_, HasSelf<Mysql>>(&mut linker, |context| &mut context.mysql)?;
+    key_value::add_to_linker::<_, HasSelf<KeyValue>>(&mut linker, |context| {
+        &mut context.key_value
+    })?;
+    llm::add_to_linker::<_, HasSelf<Llm>>(&mut linker, |context| &mut context.llm)?;
+    config::add_to_linker::<_, HasSelf<Config>>(&mut linker, |context| &mut context.config)?;
 
     let pre = linker.instantiate_pre(component)?;
 

@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::marker::PhantomData;
 
-use wasmtime::component::{Linker, ResourceTable};
+use wasmtime::component::{HasData, Linker, ResourceTable};
 
 use crate::{
     prepare::FactorInstanceBuilder, App, AsInstanceState, Error, PrepareContext, RuntimeFactors,
@@ -102,9 +102,17 @@ pub trait InitContext<F: Factor> {
     }
 }
 
+/// Helper type to satisfy the `D: HasData` implementations needed by
+/// wasmtime's generated `add_to_linker` functions.
+pub struct FactorData<F>(F);
+
+impl<F: Factor> HasData for FactorData<F> {
+    type Data<'a> = &'a mut FactorInstanceState<F>;
+}
+
 // used in #[derive(RuntimeFactor)]
 #[doc(hidden)]
-pub struct FactorInitContext<'a, T, G> {
+pub struct FactorInitContext<'a, T: 'static, G> {
     pub linker: &'a mut Linker<T>,
     pub _marker: PhantomData<G>,
 }

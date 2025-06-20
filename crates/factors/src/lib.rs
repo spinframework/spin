@@ -12,7 +12,7 @@ pub use spin_factors_derive::RuntimeFactors;
 
 pub use crate::{
     factor::{
-        ConfigureAppContext, ConfiguredApp, Factor, FactorField, FactorInitContext,
+        ConfigureAppContext, ConfiguredApp, Factor, FactorData, FactorField, FactorInitContext,
         FactorInstanceState, InitContext,
     },
     prepare::{FactorInstanceBuilder, PrepareContext, SelfInstanceBuilder},

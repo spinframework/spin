@@ -6,7 +6,7 @@ use mysql_async::Conn as MysqlClient;
 use spin_factor_outbound_networking::{
     config::allowed_hosts::OutboundAllowedHosts, OutboundNetworkingFactor,
 };
-use spin_factors::{Factor, InitContext, RuntimeFactors, SelfInstanceBuilder};
+use spin_factors::{Factor, FactorData, InitContext, RuntimeFactors, SelfInstanceBuilder};
 use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql::{self as v2};
 
@@ -20,8 +20,8 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
     type InstanceBuilder = InstanceState<C>;
 
     fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(v1::add_to_linker)?;
-        ctx.link_bindings(v2::add_to_linker)?;
+        ctx.link_bindings(v1::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(v2::add_to_linker::<_, FactorData<Self>>)?;
         Ok(())
     }
 

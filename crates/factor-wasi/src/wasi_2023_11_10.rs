@@ -109,7 +109,7 @@ use wasi::sockets::udp::{
     IncomingDatagram, IncomingDatagramStream, OutgoingDatagram, OutgoingDatagramStream, UdpSocket,
 };
 
-use crate::WasiImplInner;
+use crate::{HasWasi, WasiImplInner};
 
 pub fn add_to_linker<T>(
     linker: &mut Linker<T>,
@@ -118,33 +118,33 @@ pub fn add_to_linker<T>(
 where
     T: Send + 'static,
 {
-    wasi::clocks::monotonic_clock::add_to_linker_get_host(linker, closure)?;
-    wasi::clocks::wall_clock::add_to_linker_get_host(linker, closure)?;
-    wasi::filesystem::types::add_to_linker_get_host(linker, closure)?;
-    wasi::filesystem::preopens::add_to_linker_get_host(linker, closure)?;
-    wasi::io::error::add_to_linker_get_host(linker, closure)?;
-    wasi::io::poll::add_to_linker_get_host(linker, closure)?;
-    wasi::io::streams::add_to_linker_get_host(linker, closure)?;
-    wasi::random::random::add_to_linker_get_host(linker, closure)?;
-    wasi::random::insecure::add_to_linker_get_host(linker, closure)?;
-    wasi::random::insecure_seed::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::exit::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::environment::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::stdin::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::stdout::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::stderr::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::terminal_input::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::terminal_output::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::terminal_stdin::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::terminal_stdout::add_to_linker_get_host(linker, closure)?;
-    wasi::cli::terminal_stderr::add_to_linker_get_host(linker, closure)?;
-    wasi::sockets::tcp::add_to_linker_get_host(linker, closure)?;
-    wasi::sockets::tcp_create_socket::add_to_linker_get_host(linker, closure)?;
-    wasi::sockets::udp::add_to_linker_get_host(linker, closure)?;
-    wasi::sockets::udp_create_socket::add_to_linker_get_host(linker, closure)?;
-    wasi::sockets::instance_network::add_to_linker_get_host(linker, closure)?;
-    wasi::sockets::network::add_to_linker_get_host(linker, closure)?;
-    wasi::sockets::ip_name_lookup::add_to_linker_get_host(linker, closure)?;
+    wasi::clocks::monotonic_clock::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::clocks::wall_clock::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::filesystem::types::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::filesystem::preopens::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::io::error::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::io::poll::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::io::streams::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::random::random::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::random::insecure::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::random::insecure_seed::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::exit::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::environment::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::stdin::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::stdout::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::stderr::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::terminal_input::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::terminal_output::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::terminal_stdin::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::terminal_stdout::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::cli::terminal_stderr::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::sockets::tcp::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::sockets::tcp_create_socket::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::sockets::udp::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::sockets::udp_create_socket::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::sockets::instance_network::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::sockets::network::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::sockets::ip_name_lookup::add_to_linker::<_, HasWasi>(linker, closure)?;
     Ok(())
 }
 

@@ -6,7 +6,8 @@ use spin_factor_outbound_networking::{
     config::allowed_hosts::OutboundAllowedHosts, OutboundNetworkingFactor,
 };
 use spin_factors::{
-    anyhow, ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
+    anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
+    SelfInstanceBuilder,
 };
 use tokio_postgres::Client as PgClient;
 
@@ -20,9 +21,11 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundPgFactor<C> {
     type InstanceBuilder = InstanceState<C>;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::v1::postgres::add_to_linker)?;
-        ctx.link_bindings(spin_world::v2::postgres::add_to_linker)?;
-        ctx.link_bindings(spin_world::spin::postgres::postgres::add_to_linker)?;
+        ctx.link_bindings(spin_world::v1::postgres::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(spin_world::v2::postgres::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(
+            spin_world::spin::postgres::postgres::add_to_linker::<_, FactorData<Self>>,
+        )?;
         Ok(())
     }
 
