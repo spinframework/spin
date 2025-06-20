@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use spin_http_routes::HttpTriggerRouteConfig;
 
 /// Configuration for the HTTP trigger
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -11,34 +12,6 @@ pub struct HttpTriggerConfig {
     /// The HTTP executor the component requires
     #[serde(default)]
     pub executor: Option<HttpExecutorType>,
-}
-
-/// An HTTP trigger route
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum HttpTriggerRouteConfig {
-    Route(String),
-    Private(HttpPrivateEndpoint),
-}
-
-/// Indicates that a trigger is a private endpoint (not routable).
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct HttpPrivateEndpoint {
-    /// Whether the private endpoint is private. This must be true.
-    pub private: bool,
-}
-
-impl Default for HttpTriggerRouteConfig {
-    fn default() -> Self {
-        Self::Route(Default::default())
-    }
-}
-
-impl<T: Into<String>> From<T> for HttpTriggerRouteConfig {
-    fn from(value: T) -> Self {
-        Self::Route(value.into())
-    }
 }
 
 /// The executor for the HTTP component.

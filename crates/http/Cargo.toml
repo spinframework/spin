@@ -15,6 +15,7 @@ routefinder = "0.5.4"
 serde = { workspace = true }
 spin-app = { path = "../app", optional = true }
 spin-factor-outbound-http = { path = "../factor-outbound-http" }
+spin-http-routes = { path = "../routes" }
 tracing = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }

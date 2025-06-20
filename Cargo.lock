@@ -5162,6 +5162,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mio"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78bed444cc8a2160f01cbcf811ef18cac863ad68ae8ca62092e8db51d51c761c"
+dependencies = [
+ "libc",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "monostate"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5337,7 +5348,7 @@ dependencies = [
  "inotify",
  "kqueue",
  "libc",
- "mio",
+ "mio 0.8.11",
  "walkdir",
  "windows-sys 0.45.0",
 ]
@@ -8354,11 +8365,24 @@ dependencies = [
  "serde",
  "spin-app",
  "spin-factor-outbound-http",
+ "spin-http-routes",
  "toml",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
+]
+
+[[package]]
+name = "spin-http-routes"
+version = "3.4.0-pre0"
+dependencies = [
+ "anyhow",
+ "indexmap 2.7.1",
+ "percent-encoding",
+ "routefinder",
+ "serde",
+ "tracing",
 ]
 
 [[package]]
@@ -9410,28 +9434,27 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.38.1"
+version = "1.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb2caba9f80616f438e09748d5acda951967e1ea58508ef53d9c6402485a46df"
+checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
 dependencies = [
  "backtrace",
  "bytes",
  "libc",
- "mio",
- "num_cpus",
+ "mio 1.0.4",
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
  "tokio-macros",
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
 name = "tokio-macros"
-version = "2.3.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f5ae998a069d4b5aba8ee9dad856af7d520c3699e6159b185c2acd48155d39a"
+checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10436,6 +10459,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-encoder"
+version = "0.235.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3bc393c395cb621367ff02d854179882b9a351b4e0c93d1397e6090b53a5c2a"
+dependencies = [
+ "leb128fmt",
+ "wasmparser 0.235.0",
+]
+
+[[package]]
 name = "wasm-metadata"
 version = "0.202.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10488,10 +10521,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-pkg-client"
-version = "0.10.0"
+name = "wasm-metadata"
+version = "0.235.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4aec3875ee85649d19d0d33e4981eb3a241c822ba6cc03f2256a81bb46d044a2"
+checksum = "b055604ba04189d54b8c0ab2c2fc98848f208e103882d5c0b984f045d5ea4d20"
+dependencies = [
+ "anyhow",
+ "auditable-serde",
+ "flate2",
+ "indexmap 2.7.1",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spdx",
+ "url",
+ "wasm-encoder 0.235.0",
+ "wasmparser 0.235.0",
+]
+
+[[package]]
+name = "wasm-pkg-client"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8337ee27b10ff71b17a1e31e569b7e9eb0267e1e79a414e8ee90fbc780081faa"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10502,6 +10554,7 @@ dependencies = [
  "futures-util",
  "oci-client",
  "oci-wasm",
+ "reqwest 0.12.9",
  "secrecy",
  "serde",
  "serde_json",
@@ -10516,23 +10569,22 @@ dependencies = [
  "warg-client",
  "warg-crypto",
  "warg-protocol",
- "wasm-metadata 0.224.1",
+ "wasm-metadata 0.235.0",
  "wasm-pkg-common",
- "wit-component 0.224.1",
+ "wit-component 0.235.0",
 ]
 
 [[package]]
 name = "wasm-pkg-common"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e003b5142b594d7effff9dadf09573d8378edfd571b25ed83c5079c4ff2a8e5"
+checksum = "7cab484707abc3826aaab22f19e0b73ec27114b3d14bc9fc7dadcd35f101438f"
 dependencies = [
  "anyhow",
  "bytes",
  "etcetera",
  "futures-util",
  "http 1.1.0",
- "reqwest 0.12.9",
  "semver",
  "serde",
  "serde_json",
@@ -10540,7 +10592,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml",
- "tracing",
 ]
 
 [[package]]
@@ -10614,6 +10665,18 @@ dependencies = [
  "indexmap 2.7.1",
  "semver",
  "serde",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.235.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "161296c618fa2d63f6ed5fffd1112937e803cb9ec71b32b01a76321555660917"
+dependencies = [
+ "bitflags 2.6.0",
+ "hashbrown 0.15.2",
+ "indexmap 2.7.1",
+ "semver",
 ]
 
 [[package]]
@@ -11565,6 +11628,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-component"
+version = "0.235.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64a57a11109cc553396f89f3a38a158a97d0b1adaec113bd73e0f64d30fb601f"
+dependencies = [
+ "anyhow",
+ "bitflags 2.6.0",
+ "indexmap 2.7.1",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "wasm-encoder 0.235.0",
+ "wasm-metadata 0.235.0",
+ "wasmparser 0.235.0",
+ "wit-parser 0.235.0",
+]
+
+[[package]]
 name = "wit-parser"
 version = "0.224.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11616,6 +11698,24 @@ dependencies = [
  "serde_json",
  "unicode-xid",
  "wasmparser 0.230.0",
+]
+
+[[package]]
+name = "wit-parser"
+version = "0.235.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a1f95a87d03a33e259af286b857a95911eb46236a0f726cbaec1227b3dfc67a"
+dependencies = [
+ "anyhow",
+ "id-arena",
+ "indexmap 2.7.1",
+ "log",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "unicode-xid",
+ "wasmparser 0.235.0",
 ]
 
 [[package]]

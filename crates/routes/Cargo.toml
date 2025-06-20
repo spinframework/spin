@@ -1,0 +1,20 @@
+[package]
+name = "spin-http-routes"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+indexmap = { workspace = true }
+percent-encoding = "2"
+routefinder = "0.5.4"
+serde = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true
