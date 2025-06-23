@@ -8158,9 +8158,11 @@ name = "spin-factor-outbound-http"
 version = "3.4.0-pre0"
 dependencies = [
  "anyhow",
+ "bytes",
  "http 1.1.0",
  "http-body-util",
  "hyper 1.5.0",
+ "hyper-util",
  "reqwest 0.12.9",
  "rustls 0.23.18",
  "spin-factor-outbound-networking",

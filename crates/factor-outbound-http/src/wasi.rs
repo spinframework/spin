@@ -1,8 +1,10 @@
-use std::{error::Error, sync::Arc};
+use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 
 use anyhow::Context;
+use bytes::Bytes;
 use http::{header::HOST, Request};
-use http_body_util::BodyExt;
+use http_body_util::{combinators::BoxBody, BodyExt};
+use hyper_util::rt::TokioExecutor;
 use spin_factor_outbound_networking::{
     config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
     ComponentTlsClientConfigs, TlsClientConfig,
@@ -259,7 +261,7 @@ async fn send_request_handler(
             _ => ErrorCode::ConnectionRefused,
         })?;
 
-    let (mut sender, worker) = if use_tls {
+    let (mut sender, worker, is_http2) = if use_tls {
         #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
         {
             return Err(ErrorCode::InternalError(Some(
@@ -270,7 +272,11 @@ async fn send_request_handler(
         #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
         {
             use rustls::pki_types::ServerName;
-            let connector = tokio_rustls::TlsConnector::from(tls_client_config.inner());
+
+            let mut tls_client_config = (*tls_client_config).clone();
+            tls_client_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+            let connector = tokio_rustls::TlsConnector::from(Arc::new(tls_client_config));
             let mut parts = authority_str.split(':');
             let host = parts.next().unwrap_or(&authority_str);
             let domain = ServerName::try_from(host)
@@ -283,15 +289,30 @@ async fn send_request_handler(
                 tracing::warn!("tls protocol error: {e:?}");
                 ErrorCode::TlsProtocolError
             })?;
+
+            let is_http2 = stream.get_ref().1.alpn_protocol() == Some(b"h2");
+
             let stream = TokioIo::new(stream);
 
-            let (sender, conn) = timeout(
-                connect_timeout,
-                hyper::client::conn::http1::handshake(stream),
-            )
-            .await
-            .map_err(|_| ErrorCode::ConnectionTimeout)?
-            .map_err(hyper_request_error)?;
+            let (sender, conn) = if is_http2 {
+                timeout(
+                    connect_timeout,
+                    hyper::client::conn::http2::handshake(TokioExecutor::default(), stream),
+                )
+                .await
+                .map_err(|_| ErrorCode::ConnectionTimeout)?
+                .map_err(hyper_request_error)
+                .map(|(sender, conn)| (HttpSender::Http2(sender), HttpConn::Http2(conn)))?
+            } else {
+                timeout(
+                    connect_timeout,
+                    hyper::client::conn::http1::handshake(stream),
+                )
+                .await
+                .map_err(|_| ErrorCode::ConnectionTimeout)?
+                .map_err(hyper_request_error)
+                .map(|(sender, conn)| (HttpSender::Http1(sender), HttpConn::Http1(conn)))?
+            };
 
             let worker = wasmtime_wasi::runtime::spawn(async move {
                 match conn.await {
@@ -302,18 +323,37 @@ async fn send_request_handler(
                 }
             });
 
-            (sender, worker)
+            (sender, worker, is_http2)
         }
     } else {
         let tcp_stream = TokioIo::new(tcp_stream);
-        let (sender, conn) = timeout(
-            connect_timeout,
-            // TODO: we should plumb the builder through the http context, and use it here
-            hyper::client::conn::http1::handshake(tcp_stream),
-        )
-        .await
-        .map_err(|_| ErrorCode::ConnectionTimeout)?
-        .map_err(hyper_request_error)?;
+
+        let is_http2 = std::env::var_os("SPIN_OUTBOUND_H2C_PRIOR_KNOWLEDGE").is_some_and(|v| {
+            request
+                .uri()
+                .authority()
+                .is_some_and(|authority| authority.as_str() == v)
+        });
+
+        let (sender, conn) = if is_http2 {
+            timeout(
+                connect_timeout,
+                hyper::client::conn::http2::handshake(TokioExecutor::default(), tcp_stream),
+            )
+            .await
+            .map_err(|_| ErrorCode::ConnectionTimeout)?
+            .map_err(hyper_request_error)
+            .map(|(sender, conn)| (HttpSender::Http2(sender), HttpConn::Http2(conn)))?
+        } else {
+            timeout(
+                connect_timeout,
+                hyper::client::conn::http1::handshake(tcp_stream),
+            )
+            .await
+            .map_err(|_| ErrorCode::ConnectionTimeout)?
+            .map_err(hyper_request_error)
+            .map(|(sender, conn)| (HttpSender::Http1(sender), HttpConn::Http1(conn)))?
+        };
 
         let worker = wasmtime_wasi::runtime::spawn(async move {
             match conn.await {
@@ -323,22 +363,24 @@ async fn send_request_handler(
             }
         });
 
-        (sender, worker)
+        (sender, worker, is_http2)
     };
 
-    // at this point, the request contains the scheme and the authority, but
-    // the http packet should only include those if addressing a proxy, so
-    // remove them here, since SendRequest::send_request does not do it for us
-    *request.uri_mut() = http::Uri::builder()
-        .path_and_query(
-            request
-                .uri()
-                .path_and_query()
-                .map(|p| p.as_str())
-                .unwrap_or("/"),
-        )
-        .build()
-        .expect("comes from valid request");
+    if !is_http2 {
+        // at this point, the request contains the scheme and the authority, but
+        // the http packet should only include those if addressing a proxy, so
+        // remove them here, since SendRequest::send_request does not do it for us
+        *request.uri_mut() = http::Uri::builder()
+            .path_and_query(
+                request
+                    .uri()
+                    .path_and_query()
+                    .map(|p| p.as_str())
+                    .unwrap_or("/"),
+            )
+            .build()
+            .expect("comes from valid request");
+    }
 
     let resp = timeout(first_byte_timeout, sender.send_request(request))
         .await
@@ -353,6 +395,43 @@ async fn send_request_handler(
         worker: Some(worker),
         between_bytes_timeout,
     })
+}
+
+enum HttpSender {
+    Http1(hyper::client::conn::http1::SendRequest<BoxBody<Bytes, ErrorCode>>),
+    Http2(hyper::client::conn::http2::SendRequest<BoxBody<Bytes, ErrorCode>>),
+}
+
+#[allow(clippy::large_enum_variant)]
+enum HttpConn<T: hyper::rt::Read + hyper::rt::Write + Unpin + Send + 'static> {
+    Http1(hyper::client::conn::http1::Connection<T, BoxBody<Bytes, ErrorCode>>),
+    Http2(hyper::client::conn::http2::Connection<T, BoxBody<Bytes, ErrorCode>, TokioExecutor>),
+}
+
+impl<T: hyper::rt::Read + hyper::rt::Write + Unpin + Send> Future for HttpConn<T> {
+    type Output = Result<(), hyper::Error>;
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        match self.get_mut() {
+            HttpConn::Http1(conn) => Pin::new(conn).poll(cx),
+            HttpConn::Http2(conn) => Pin::new(conn).poll(cx),
+        }
+    }
+}
+
+impl HttpSender {
+    async fn send_request(
+        &mut self,
+        request: http::Request<BoxBody<Bytes, ErrorCode>>,
+    ) -> Result<http::Response<hyper::body::Incoming>, hyper::Error> {
+        match self {
+            HttpSender::Http1(sender) => sender.send_request(request).await,
+            HttpSender::Http2(sender) => sender.send_request(request).await,
+        }
+    }
 }
 
 /// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
