@@ -885,7 +885,9 @@ fn file_url(path: impl AsRef<Path>) -> Result<String> {
     Ok(Url::from_file_path(abs_path).unwrap().to_string())
 }
 
-fn requires_service_chaining(component: &spin_manifest::schema::v2::Component) -> bool {
+/// Determines if a component requires the host to support local
+/// service chaining.
+pub fn requires_service_chaining(component: &spin_manifest::schema::v2::Component) -> bool {
     component
         .normalized_allowed_outbound_hosts()
         .unwrap_or_default()

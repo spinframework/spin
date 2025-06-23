@@ -14,22 +14,44 @@ use anyhow::Context;
 /// ```ignore
 /// # spin-up.3.2.toml
 /// [triggers]
-/// http = ["spin:up/http-trigger@3.2.0", "spin:up/http-trigger-rc20231018@3.2.0"]
-/// redis = ["spin:up/redis-trigger@3.2.0"]
+/// http = { worlds = ["spin:up/http-trigger@3.2.0", "spin:up/http-trigger-rc20231018@3.2.0"], capabilities = ["local_service_chaining"] }
+/// redis = { worlds = ["spin:up/redis-trigger@3.2.0"] }
 /// ```
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvironmentDefinition {
-    triggers: HashMap<String, Vec<WorldRef>>,
-    default: Option<Vec<WorldRef>>,
+    triggers: HashMap<String, TriggerEnvironment>,
+    #[serde(default)]
+    default: Option<TriggerEnvironment>,
+}
+
+/// The environment definition for a trigger, comprising the worlds which are
+/// compatible with that trigger and the host capabilities which the trigger
+/// supports.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TriggerEnvironment {
+    worlds: Vec<WorldRef>,
+    #[serde(default)]
+    capabilities: Vec<String>,
+}
+
+impl TriggerEnvironment {
+    pub fn world_refs(&self) -> &[WorldRef] {
+        &self.worlds
+    }
+
+    pub fn capabilities(&self) -> Vec<String> {
+        self.capabilities.clone()
+    }
 }
 
 impl EnvironmentDefinition {
-    pub fn triggers(&self) -> &HashMap<String, Vec<WorldRef>> {
+    pub fn triggers(&self) -> &HashMap<String, TriggerEnvironment> {
         &self.triggers
     }
 
-    pub fn default(&self) -> Option<&Vec<WorldRef>> {
+    pub fn default(&self) -> Option<&TriggerEnvironment> {
         self.default.as_ref()
     }
 }

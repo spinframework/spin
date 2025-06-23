@@ -10,6 +10,7 @@ pub(crate) struct ComponentToValidate<'a> {
     id: &'a str,
     source_description: String,
     wasm: Vec<u8>,
+    host_requirements: Vec<String>,
 }
 
 impl ComponentToValidate<'_> {
@@ -25,12 +26,22 @@ impl ComponentToValidate<'_> {
         &self.wasm
     }
 
+    pub fn host_requirements(&self) -> &[String] {
+        &self.host_requirements
+    }
+
     #[cfg(test)]
-    pub(crate) fn new(id: &'static str, description: &str, wasm: Vec<u8>) -> Self {
+    pub(crate) fn new(
+        id: &'static str,
+        description: &str,
+        wasm: Vec<u8>,
+        host_requirements: Vec<String>,
+    ) -> Self {
         Self {
             id,
             source_description: description.to_owned(),
             wasm,
+            host_requirements,
         }
     }
 }
@@ -61,10 +72,13 @@ impl ApplicationToValidate {
             .component
             .as_ref()
             .ok_or_else(|| anyhow!("No component specified for trigger {}", trigger.id))?;
-        let (id, source, dependencies) = match component_spec {
-            spin_manifest::schema::v2::ComponentSpec::Inline(c) => {
-                (trigger.id.as_str(), &c.source, &c.dependencies)
-            }
+        let (id, source, dependencies, service_chaining) = match component_spec {
+            spin_manifest::schema::v2::ComponentSpec::Inline(c) => (
+                trigger.id.as_str(),
+                &c.source,
+                &c.dependencies,
+                spin_loader::requires_service_chaining(c),
+            ),
             spin_manifest::schema::v2::ComponentSpec::Reference(r) => {
                 let id = r.as_ref();
                 let Some(component) = self.manifest.components.get(r) else {
@@ -73,7 +87,12 @@ impl ApplicationToValidate {
                         trigger.id
                     );
                 };
-                (id, &component.source, &component.dependencies)
+                (
+                    id,
+                    &component.source,
+                    &component.dependencies,
+                    spin_loader::requires_service_chaining(component),
+                )
             }
         };
 
@@ -81,6 +100,7 @@ impl ApplicationToValidate {
             id,
             source,
             dependencies: WrappedComponentDependencies::new(dependencies),
+            requires_service_chaining: service_chaining,
         })
     }
 
@@ -127,10 +147,17 @@ impl ApplicationToValidate {
 
         let wasm = spin_compose::compose(&loader, &component).await.with_context(|| format!("Spin needed to compose dependencies for {} as part of target checking, but composition failed", component.id))?;
 
+        let host_requirements = if component.requires_service_chaining {
+            vec!["local_service_chaining".to_string()]
+        } else {
+            vec![]
+        };
+
         Ok(ComponentToValidate {
             id: component.id,
             source_description: source_description(component.source),
             wasm,
+            host_requirements,
         })
     }
 }
@@ -139,6 +166,7 @@ struct ComponentSource<'a> {
     id: &'a str,
     source: &'a spin_manifest::schema::v2::ComponentSource,
     dependencies: WrappedComponentDependencies,
+    requires_service_chaining: bool,
 }
 
 struct ComponentSourceLoader<'a> {

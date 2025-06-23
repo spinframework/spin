@@ -128,25 +128,33 @@ async fn load_environment_from_toml(
     let env: EnvironmentDefinition = toml::from_str(toml_text)?;
 
     let mut trigger_worlds = HashMap::new();
+    let mut trigger_capabilities = HashMap::new();
 
     // TODO: parallel all the things
     // TODO: this loads _all_ triggers not just the ones we need
-    for (trigger_type, world_refs) in env.triggers() {
+    for (trigger_type, trigger_env) in env.triggers() {
         trigger_worlds.insert(
             trigger_type.to_owned(),
-            load_worlds(world_refs, cache, lockfile).await?,
+            load_worlds(trigger_env.world_refs(), cache, lockfile).await?,
         );
+        trigger_capabilities.insert(trigger_type.to_owned(), trigger_env.capabilities());
     }
 
     let unknown_trigger = match env.default() {
         None => UnknownTrigger::Deny,
-        Some(world_refs) => UnknownTrigger::Allow(load_worlds(world_refs, cache, lockfile).await?),
+        Some(env) => UnknownTrigger::Allow(load_worlds(env.world_refs(), cache, lockfile).await?),
+    };
+    let unknown_capabilities = match env.default() {
+        None => vec![],
+        Some(env) => env.capabilities(),
     };
 
     Ok(TargetEnvironment {
         name: name.to_owned(),
         trigger_worlds,
+        trigger_capabilities,
         unknown_trigger,
+        unknown_capabilities,
     })
 }
 
