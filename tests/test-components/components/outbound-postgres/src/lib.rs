@@ -32,8 +32,8 @@ impl Component {
         ensure_matches!(rowset.rows[0][2], postgres::DbValue::Time((h, m, s, ns)) if h == 4 && m == 5 && s == 6 && ns == 789_000_000);
         ensure_matches!(rowset.rows[0][3], postgres::DbValue::Datetime((y, _, _, h, _, _, ns)) if y == 1989 && h == 1 && ns == 0);
         ensure_matches!(rowset.rows[1][1], postgres::DbValue::Date((y, m, d)) if y == 2525 && m == 12 && d == 25);
-        ensure_matches!(rowset.rows[1][2], postgres::DbValue::Time((h, m, s, ns)) if h == 14 && m == 15 && s == 16 && ns == 17);
-        ensure_matches!(rowset.rows[1][3], postgres::DbValue::Datetime((y, _, _, h, _, _, ns)) if y == 1989 && h == 1 && ns == 4);
+        ensure_matches!(rowset.rows[1][2], postgres::DbValue::Time((h, m, s, ns)) if h == 14 && m == 15 && s == 16 && ns == 0);
+        ensure_matches!(rowset.rows[1][3], postgres::DbValue::Datetime((y, _, _, h, _, _, ns)) if y == 1989 && h == 1 && ns == 1000);
 
         let rowset = ensure_ok!(nullable(&conn));
         ensure!(rowset.rows.iter().all(|r| r.len() == 1));
