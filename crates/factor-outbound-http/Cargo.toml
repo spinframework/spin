@@ -6,9 +6,11 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+bytes = { workspace = true }
 http = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
+hyper-util = { workspace = true }
 reqwest = { workspace = true, features = ["gzip"] }
 rustls = { workspace = true }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }

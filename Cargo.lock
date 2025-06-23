@@ -1805,8 +1805,7 @@ dependencies = [
 [[package]]
 name = "cranelift-assembler-x64"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ff8e35182c7372df00447cb90a04e584e032c42b9b9b6e8c50ddaaf0d7900d5"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cranelift-assembler-x64-meta",
 ]
@@ -1814,8 +1813,7 @@ dependencies = [
 [[package]]
 name = "cranelift-assembler-x64-meta"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14220f9c2698015c3b94dc6b84ae045c1c45509ddc406e43c6139252757fdb7a"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cranelift-srcgen",
 ]
@@ -1823,8 +1821,7 @@ dependencies = [
 [[package]]
 name = "cranelift-bforest"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d372ef2777ceefd75829e1390211ac240e9196bc60699218f7ea2419038288ee"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cranelift-entity",
 ]
@@ -1832,8 +1829,7 @@ dependencies = [
 [[package]]
 name = "cranelift-bitset"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56323783e423818fa89ce8078e90a3913d2a6e0810399bfce8ebd7ee87baa81f"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "serde",
  "serde_derive",
@@ -1842,8 +1838,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74ffb780aab6186c6e9ba26519654b1ac55a09c0a866f6088a4efbbd84da68ed"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "bumpalo",
  "cranelift-assembler-x64",
@@ -1868,8 +1863,7 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c23ef13814d3b39c869650d5961128cbbecad83fbdff4e6836a03ecf6862d7ed"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cranelift-assembler-x64-meta",
  "cranelift-codegen-shared",
@@ -1880,14 +1874,12 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9f623300657679f847803ce80811454bfff89cea4f6bf684be5c468d4a73631"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 
 [[package]]
 name = "cranelift-control"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f4168af69989aa6b91fab46799ed4df6096f3209f4a6c8fb4358f49c60188f"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "arbitrary",
 ]
@@ -1895,8 +1887,7 @@ dependencies = [
 [[package]]
 name = "cranelift-entity"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca6fa9bae1c8de26d71ac2162f069447610fd91e7780cb480ee0d76ac81eabb8"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cranelift-bitset",
  "serde",
@@ -1906,8 +1897,7 @@ dependencies = [
 [[package]]
 name = "cranelift-frontend"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8219205608aa0b0e6769b580284a7e055c7e0c323c1041cde7ca078add3e412"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cranelift-codegen",
  "log",
@@ -1918,14 +1908,12 @@ dependencies = [
 [[package]]
 name = "cranelift-isle"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "588d0c5964f10860b04043e55aab26d7f7a206b0fd4f10c5260e8aa5773832bd"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 
 [[package]]
 name = "cranelift-native"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19ed3c94cb97b14f92b6a94a1d45ef8c851f6a2ad9114e5d91d233f7da638fed"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cranelift-codegen",
  "libc",
@@ -1935,8 +1923,7 @@ dependencies = [
 [[package]]
 name = "cranelift-srcgen"
 version = "0.120.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85256fac1519a7d25a040c1d850fba67478f3f021ad5fdf738ba4425ee862dbf"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 
 [[package]]
 name = "crc32fast"
@@ -6476,8 +6463,7 @@ dependencies = [
 [[package]]
 name = "pulley-interpreter"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aeb99cb5a3ada8e95a246d09f5fdb609f021bf740efd3ca9bddf458e3293a6a0"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cranelift-bitset",
  "log",
@@ -8144,9 +8130,11 @@ name = "spin-factor-outbound-http"
 version = "3.4.0-pre0"
 dependencies = [
  "anyhow",
+ "bytes",
  "http 1.1.0",
  "http-body-util",
  "hyper 1.5.0",
+ "hyper-util",
  "reqwest 0.12.9",
  "rustls 0.23.18",
  "spin-factor-outbound-networking",
@@ -10703,8 +10691,7 @@ dependencies = [
 [[package]]
 name = "wasmtime"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15396de4fce22e431aa913a9d17325665e72a39aaa7972c8aeae7507eff6144f"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -10760,8 +10747,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-asm-macros"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8d13b1a25d9b77ce42b4641a797e8c0bde0643b9ad5aaa36ce7e00cf373ffab"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cfg-if",
 ]
@@ -10769,8 +10755,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-cache"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfc77a5e7d358c0180745021735de789e0d8d64a9eb740d54cee525a164f0343"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -10789,8 +10774,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-component-macro"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be73f1c13b25cf7c062ea2f3aba8a92abe4284a14b49e866e4962824802da5cf"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "proc-macro2",
@@ -10804,14 +10788,12 @@ dependencies = [
 [[package]]
 name = "wasmtime-component-util"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cba282555a9f2443f4e40e415772ea98acabbc341e9b3b905f541ff304cbc5e"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 
 [[package]]
 name = "wasmtime-cranelift"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0c2c2e083dc4c119cca61cc42ca6b3711b75ed9823f77b684ee009c74f939d8"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -10836,8 +10818,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-environ"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "357542664493b1359727f235b615ae74f63bd46aa4d0c587b09e3b060eb0b8ef"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "cpp_demangle",
@@ -10863,8 +10844,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-fiber"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d83e697b13d6ae9eff31edac86673aabaf8dbf20267f2aa20e831dd01da480a3"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "cc",
@@ -10878,8 +10858,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-jit-debug"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6748fe974240d45e6bb25ac8e9a600be36f77347253cbbb35bd2d72e01ff0ece"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "cc",
  "object",
@@ -10890,8 +10869,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-jit-icache-coherence"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "175e924dbc944c185808466d1e90b5a7feb610f3b9abdfe26f8ee25fd1086d1c"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -10902,8 +10880,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-math"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d9448adcd9c5980c0eac1630794bd1be3cf573c28d0630f7d3184405b36bcfe"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "libm",
 ]
@@ -10911,14 +10888,12 @@ dependencies = [
 [[package]]
 name = "wasmtime-slab"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b50f7c227d6a925d9dfd0fbfdbf06877cb2fe387bb3248049706b19b5f86e560"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 
 [[package]]
 name = "wasmtime-versioned-export-macros"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55b39ffeda28be925babb2d45067d8ba2c67d2227328c5364d23b4152eba9950"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10928,8 +10903,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-wasi"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d357e5699ed32103d0dab897c3965fd66f1ba29a37072d441199e7febe6324e"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10959,8 +10933,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-wasi-http"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7db9276689904ae7ed4359253d120015ec20cd14fc4c311db2f10a87576c44ab"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10982,8 +10955,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-wasi-io"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43418871afd46c188231e4d822d375c0660c7a1484db3f7f247e552186e971a2"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10995,8 +10967,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-winch"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f180e6a8c0724608cd2d55ceb7d03ed3a729ca78fcd34a6756f36cf9a5fd546"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -11012,8 +10983,7 @@ dependencies = [
 [[package]]
 name = "wasmtime-wit-bindgen"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f8d793a398e2974d562e65c8d366f39a942fe1ce7970244d9d6e5f96f29b534"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
@@ -11188,8 +11158,7 @@ dependencies = [
 [[package]]
 name = "wiggle"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73aed697b5eb6a5726dca57f85199f73c61dee669e58faab71086eb7eda6b077"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -11203,8 +11172,7 @@ dependencies = [
 [[package]]
 name = "wiggle-generate"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d477015cda1d476b7e45d50eeb93d9038df8f24827007669065292651b26d225"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
@@ -11217,8 +11185,7 @@ dependencies = [
 [[package]]
 name = "wiggle-macro"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71ac603ee46847d2e3c142ba715d326f1045155c7758f4e8dd001d5f92810c12"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11260,8 +11227,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 [[package]]
 name = "winch-codegen"
 version = "33.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad3072bf7c270d5e29a3d69744c81665dd3adb6e60f123925393a1c150bf9ec4"
+source = "git+https://github.com/fibonacci1729/wasmtime?branch=allow-te#b13fa25c4f94913f366846e96026860ce18de0a3"
 dependencies = [
  "anyhow",
  "cranelift-assembler-x64",

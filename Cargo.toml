@@ -187,3 +187,9 @@ blocks_in_conditions = "allow"
 [[bin]]
 name = "spin"
 path = "src/bin/spin.rs"
+
+# Remove this once Wasmtime 35.0.0 is released
+[patch.crates-io]
+wasmtime = { git = "https://github.com/fibonacci1729/wasmtime", branch = "allow-te" }
+wasmtime-wasi = { git = "https://github.com/fibonacci1729/wasmtime", branch = "allow-te" }
+wasmtime-wasi-http = { git = "https://github.com/fibonacci1729/wasmtime", branch = "allow-te" }
