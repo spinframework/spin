@@ -78,7 +78,7 @@ pub struct AppDetails {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub authors: Vec<String>,
     /// The Spin environments with which the application must be compatible.
-    /// 
+    ///
     /// Example: `targets = ["spin-up:3.3", "spinkube:0.4"]`
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub targets: Vec<TargetEnvironmentRef>,

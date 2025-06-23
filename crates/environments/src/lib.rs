@@ -102,6 +102,11 @@ async fn validate_component_against_environments(
         {
             errs.push(e);
         }
+
+        let host_caps = env.capabilities(trigger_type);
+        if let Some(e) = validate_host_reqs(env, host_caps, component).err() {
+            errs.push(e);
+        }
     }
 
     if errs.is_empty() {
@@ -214,4 +219,26 @@ async fn validate_wasm_against_world(
             Err(anyhow!(e))
         },
     }
+}
+
+fn validate_host_reqs(
+    env: &TargetEnvironment,
+    host_caps: &[String],
+    component: &ComponentToValidate,
+) -> anyhow::Result<()> {
+    let unsatisfied: Vec<_> = component
+        .host_requirements()
+        .iter()
+        .filter(|host_req| !satisfies(host_caps, host_req))
+        .cloned()
+        .collect();
+    if unsatisfied.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!("Component {} can't run in environment {} because it requires the feature(s) '{}' which the environment does not support", component.id(), env.name(), unsatisfied.join(", ")))
+    }
+}
+
+fn satisfies(host_caps: &[String], host_req: &String) -> bool {
+    host_caps.contains(host_req)
 }

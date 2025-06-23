@@ -18,7 +18,9 @@ use definition::WorldName;
 pub struct TargetEnvironment {
     name: String,
     trigger_worlds: HashMap<TriggerType, CandidateWorlds>,
+    trigger_capabilities: HashMap<TriggerType, Vec<String>>,
     unknown_trigger: UnknownTrigger,
+    unknown_capabilities: Vec<String>,
 }
 
 impl TargetEnvironment {
@@ -51,6 +53,13 @@ impl TargetEnvironment {
             .get(trigger_type)
             .or_else(|| self.unknown_trigger.worlds())
             .unwrap_or(NO_WORLDS)
+    }
+
+    /// Lists all host capabilities supported for the given trigger type in this environment.
+    pub fn capabilities(&self, trigger_type: &TriggerType) -> &[String] {
+        self.trigger_capabilities
+            .get(trigger_type)
+            .unwrap_or(&self.unknown_capabilities)
     }
 }
 
@@ -229,7 +238,9 @@ mod test {
         TargetEnvironment {
             name: "test".to_owned(),
             trigger_worlds: [("s".to_owned(), candidate_worlds)].into_iter().collect(),
+            trigger_capabilities: Default::default(),
             unknown_trigger: UnknownTrigger::Deny,
+            unknown_capabilities: Default::default(),
         }
     }
 
@@ -242,7 +253,9 @@ mod test {
         TargetEnvironment {
             name: "test".to_owned(),
             trigger_worlds: [].into_iter().collect(),
+            trigger_capabilities: Default::default(),
             unknown_trigger: UnknownTrigger::Allow(candidate_worlds),
+            unknown_capabilities: Default::default(),
         }
     }
 
@@ -260,7 +273,7 @@ mod test {
         assert!(env.supports_trigger_type(&"s".to_owned()));
         assert!(!env.supports_trigger_type(&"t".to_owned()));
 
-        let component = crate::ComponentToValidate::new("scomp", "scomp.wasm", wasm);
+        let component = crate::ComponentToValidate::new("scomp", "scomp.wasm", wasm, vec![]);
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
                 .await;
@@ -291,13 +304,53 @@ mod test {
 
         assert!(env.supports_trigger_type(&non_existent_trigger));
 
-        let component = crate::ComponentToValidate::new("comp", "comp.wasm", wasm);
+        let component = crate::ComponentToValidate::new("comp", "comp.wasm", wasm, vec![]);
         let errs = crate::validate_component_against_environments(
             &[env],
             &non_existent_trigger,
             &component,
         )
         .await;
+        assert!(
+            errs.is_empty(),
+            "{}",
+            errs.iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+
+    #[tokio::test]
+    async fn can_validate_component_with_host_requirement() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+
+        let mut env = target_simple_world(&wit_path);
+        env.trigger_capabilities.insert(
+            "s".to_owned(),
+            vec![
+                "local_spline_reticulation".to_owned(),
+                "nice_cup_of_tea".to_owned(),
+            ],
+        );
+
+        assert!(env.supports_trigger_type(&"s".to_owned()));
+        assert!(!env.supports_trigger_type(&"t".to_owned()));
+
+        let component = crate::ComponentToValidate::new(
+            "cscomp",
+            "cscomp.wasm",
+            wasm,
+            vec!["nice_cup_of_tea".to_string()],
+        );
+        let errs =
+            crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
+                .await;
         assert!(
             errs.is_empty(),
             "{}",
@@ -319,7 +372,7 @@ mod test {
 
         let env = target_simple_world(&wit_path);
 
-        let component = crate::ComponentToValidate::new("nscomp", "nscomp.wasm", wasm);
+        let component = crate::ComponentToValidate::new("nscomp", "nscomp.wasm", wasm, vec![]);
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
                 .await;
@@ -346,7 +399,7 @@ mod test {
 
         let env = target_simple_world(&wit_path);
 
-        let component = crate::ComponentToValidate::new("tdscomp", "tdscomp.wasm", wasm);
+        let component = crate::ComponentToValidate::new("tdscomp", "tdscomp.wasm", wasm, vec![]);
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
                 .await;
@@ -357,6 +410,39 @@ mod test {
             err.contains("Component tdscomp (tdscomp.wasm) can't run in environment test"),
             "unexpected error {err}"
         );
+    }
+
+    #[tokio::test]
+    async fn unsupported_host_req_invalidates_component() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+
+        let env = target_simple_world(&wit_path);
+
+        assert!(env.supports_trigger_type(&"s".to_owned()));
+        assert!(!env.supports_trigger_type(&"t".to_owned()));
+
+        let component = crate::ComponentToValidate::new(
+            "cscomp",
+            "cscomp.wasm",
+            wasm,
+            vec!["nice_cup_of_tea".to_string()],
+        );
+        let errs =
+            crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
+                .await;
+        assert!(!errs.is_empty());
+
+        let err = errs[0].to_string();
+        assert!(
+            err.contains("Component cscomp can't run in environment test"),
+            "unexpected error {err}"
+        );
+        assert!(err.contains("nice_cup_of_tea"), "unexpected error {err}");
     }
 
     fn generate_dummy_component(wit: &str, world: &str) -> Vec<u8> {
