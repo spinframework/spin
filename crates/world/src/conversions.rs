@@ -2,6 +2,8 @@ use super::*;
 
 mod rdbms_types {
     use super::*;
+    use spin::postgres3_0_0::postgres as pg3;
+    use spin::postgres4_0_0::postgres as pg4;
 
     impl From<v2::rdbms_types::Column> for v1::rdbms_types::Column {
         fn from(value: v2::rdbms_types::Column) -> Self {
@@ -12,7 +14,7 @@ mod rdbms_types {
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::Column> for v1::rdbms_types::Column {
+    impl From<pg4::Column> for v1::rdbms_types::Column {
         fn from(value: spin::postgres4_0_0::postgres::Column) -> Self {
             v1::rdbms_types::Column {
                 name: value.name,
@@ -21,8 +23,8 @@ mod rdbms_types {
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::Column> for v2::rdbms_types::Column {
-        fn from(value: spin::postgres4_0_0::postgres::Column) -> Self {
+    impl From<pg4::Column> for v2::rdbms_types::Column {
+        fn from(value: pg4::Column) -> Self {
             v2::rdbms_types::Column {
                 name: value.name,
                 data_type: value.data_type.into(),
@@ -30,9 +32,9 @@ mod rdbms_types {
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::Column> for spin::postgres3_0_0::postgres::Column {
-        fn from(value: spin::postgres4_0_0::postgres::Column) -> Self {
-            spin::postgres3_0_0::postgres::Column {
+    impl From<pg4::Column> for pg3::Column {
+        fn from(value: pg4::Column) -> Self {
+            pg3::Column {
                 name: value.name,
                 data_type: value.data_type.into(),
             }
@@ -61,265 +63,129 @@ mod rdbms_types {
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::DbValue> for v1::rdbms_types::DbValue {
-        fn from(value: spin::postgres4_0_0::postgres::DbValue) -> v1::rdbms_types::DbValue {
+    impl From<pg4::DbValue> for v1::rdbms_types::DbValue {
+        fn from(value: pg4::DbValue) -> v1::rdbms_types::DbValue {
             match value {
-                spin::postgres4_0_0::postgres::DbValue::Boolean(b) => {
-                    v1::rdbms_types::DbValue::Boolean(b)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int8(i) => {
-                    v1::rdbms_types::DbValue::Int8(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int16(i) => {
-                    v1::rdbms_types::DbValue::Int16(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int32(i) => {
-                    v1::rdbms_types::DbValue::Int32(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int64(i) => {
-                    v1::rdbms_types::DbValue::Int64(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Floating32(r) => {
-                    v1::rdbms_types::DbValue::Floating32(r)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Floating64(r) => {
-                    v1::rdbms_types::DbValue::Floating64(r)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Str(s) => v1::rdbms_types::DbValue::Str(s),
-                spin::postgres4_0_0::postgres::DbValue::Binary(b) => {
-                    v1::rdbms_types::DbValue::Binary(b)
-                }
-                spin::postgres4_0_0::postgres::DbValue::DbNull => v1::rdbms_types::DbValue::DbNull,
-                spin::postgres4_0_0::postgres::DbValue::Unsupported => {
-                    v1::rdbms_types::DbValue::Unsupported
-                }
+                pg4::DbValue::Boolean(b) => v1::rdbms_types::DbValue::Boolean(b),
+                pg4::DbValue::Int8(i) => v1::rdbms_types::DbValue::Int8(i),
+                pg4::DbValue::Int16(i) => v1::rdbms_types::DbValue::Int16(i),
+                pg4::DbValue::Int32(i) => v1::rdbms_types::DbValue::Int32(i),
+                pg4::DbValue::Int64(i) => v1::rdbms_types::DbValue::Int64(i),
+                pg4::DbValue::Floating32(r) => v1::rdbms_types::DbValue::Floating32(r),
+                pg4::DbValue::Floating64(r) => v1::rdbms_types::DbValue::Floating64(r),
+                pg4::DbValue::Str(s) => v1::rdbms_types::DbValue::Str(s),
+                pg4::DbValue::Binary(b) => v1::rdbms_types::DbValue::Binary(b),
+                pg4::DbValue::DbNull => v1::rdbms_types::DbValue::DbNull,
+                pg4::DbValue::Unsupported => v1::rdbms_types::DbValue::Unsupported,
                 _ => v1::rdbms_types::DbValue::Unsupported,
             }
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::DbValue> for v2::rdbms_types::DbValue {
-        fn from(value: spin::postgres4_0_0::postgres::DbValue) -> v2::rdbms_types::DbValue {
+    impl From<pg4::DbValue> for v2::rdbms_types::DbValue {
+        fn from(value: pg4::DbValue) -> v2::rdbms_types::DbValue {
             match value {
-                spin::postgres4_0_0::postgres::DbValue::Boolean(b) => {
-                    v2::rdbms_types::DbValue::Boolean(b)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int8(i) => {
-                    v2::rdbms_types::DbValue::Int8(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int16(i) => {
-                    v2::rdbms_types::DbValue::Int16(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int32(i) => {
-                    v2::rdbms_types::DbValue::Int32(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int64(i) => {
-                    v2::rdbms_types::DbValue::Int64(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Floating32(r) => {
-                    v2::rdbms_types::DbValue::Floating32(r)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Floating64(r) => {
-                    v2::rdbms_types::DbValue::Floating64(r)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Str(s) => v2::rdbms_types::DbValue::Str(s),
-                spin::postgres4_0_0::postgres::DbValue::Binary(b) => {
-                    v2::rdbms_types::DbValue::Binary(b)
-                }
-                spin::postgres4_0_0::postgres::DbValue::DbNull => v2::rdbms_types::DbValue::DbNull,
-                spin::postgres4_0_0::postgres::DbValue::Unsupported => {
-                    v2::rdbms_types::DbValue::Unsupported
-                }
+                pg4::DbValue::Boolean(b) => v2::rdbms_types::DbValue::Boolean(b),
+                pg4::DbValue::Int8(i) => v2::rdbms_types::DbValue::Int8(i),
+                pg4::DbValue::Int16(i) => v2::rdbms_types::DbValue::Int16(i),
+                pg4::DbValue::Int32(i) => v2::rdbms_types::DbValue::Int32(i),
+                pg4::DbValue::Int64(i) => v2::rdbms_types::DbValue::Int64(i),
+                pg4::DbValue::Floating32(r) => v2::rdbms_types::DbValue::Floating32(r),
+                pg4::DbValue::Floating64(r) => v2::rdbms_types::DbValue::Floating64(r),
+                pg4::DbValue::Str(s) => v2::rdbms_types::DbValue::Str(s),
+                pg4::DbValue::Binary(b) => v2::rdbms_types::DbValue::Binary(b),
+                pg4::DbValue::DbNull => v2::rdbms_types::DbValue::DbNull,
+                pg4::DbValue::Unsupported => v2::rdbms_types::DbValue::Unsupported,
                 _ => v2::rdbms_types::DbValue::Unsupported,
             }
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::DbValue> for spin::postgres3_0_0::postgres::DbValue {
-        fn from(
-            value: spin::postgres4_0_0::postgres::DbValue,
-        ) -> spin::postgres3_0_0::postgres::DbValue {
+    impl From<pg4::DbValue> for pg3::DbValue {
+        fn from(value: pg4::DbValue) -> pg3::DbValue {
             match value {
-                spin::postgres4_0_0::postgres::DbValue::Boolean(b) => {
-                    spin::postgres3_0_0::postgres::DbValue::Boolean(b)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int8(i) => {
-                    spin::postgres3_0_0::postgres::DbValue::Int8(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int16(i) => {
-                    spin::postgres3_0_0::postgres::DbValue::Int16(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int32(i) => {
-                    spin::postgres3_0_0::postgres::DbValue::Int32(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Int64(i) => {
-                    spin::postgres3_0_0::postgres::DbValue::Int64(i)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Floating32(r) => {
-                    spin::postgres3_0_0::postgres::DbValue::Floating32(r)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Floating64(r) => {
-                    spin::postgres3_0_0::postgres::DbValue::Floating64(r)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Str(s) => {
-                    spin::postgres3_0_0::postgres::DbValue::Str(s)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Binary(b) => {
-                    spin::postgres3_0_0::postgres::DbValue::Binary(b)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Date(d) => {
-                    spin::postgres3_0_0::postgres::DbValue::Date(d)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Datetime(dt) => {
-                    spin::postgres3_0_0::postgres::DbValue::Datetime(dt)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Time(t) => {
-                    spin::postgres3_0_0::postgres::DbValue::Time(t)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Timestamp(t) => {
-                    spin::postgres3_0_0::postgres::DbValue::Timestamp(t)
-                }
-                spin::postgres4_0_0::postgres::DbValue::Uuid(_) => {
-                    spin::postgres3_0_0::postgres::DbValue::Unsupported
-                }
-                spin::postgres4_0_0::postgres::DbValue::Jsonb(_) => {
-                    spin::postgres3_0_0::postgres::DbValue::Unsupported
-                }
-                spin::postgres4_0_0::postgres::DbValue::DbNull => {
-                    spin::postgres3_0_0::postgres::DbValue::DbNull
-                }
-                spin::postgres4_0_0::postgres::DbValue::Unsupported => {
-                    spin::postgres3_0_0::postgres::DbValue::Unsupported
-                }
+                pg4::DbValue::Boolean(b) => pg3::DbValue::Boolean(b),
+                pg4::DbValue::Int8(i) => pg3::DbValue::Int8(i),
+                pg4::DbValue::Int16(i) => pg3::DbValue::Int16(i),
+                pg4::DbValue::Int32(i) => pg3::DbValue::Int32(i),
+                pg4::DbValue::Int64(i) => pg3::DbValue::Int64(i),
+                pg4::DbValue::Floating32(r) => pg3::DbValue::Floating32(r),
+                pg4::DbValue::Floating64(r) => pg3::DbValue::Floating64(r),
+                pg4::DbValue::Str(s) => pg3::DbValue::Str(s),
+                pg4::DbValue::Binary(b) => pg3::DbValue::Binary(b),
+                pg4::DbValue::Date(d) => pg3::DbValue::Date(d),
+                pg4::DbValue::Datetime(dt) => pg3::DbValue::Datetime(dt),
+                pg4::DbValue::Time(t) => pg3::DbValue::Time(t),
+                pg4::DbValue::Timestamp(t) => pg3::DbValue::Timestamp(t),
+                pg4::DbValue::Uuid(_) => pg3::DbValue::Unsupported,
+                pg4::DbValue::Jsonb(_) => pg3::DbValue::Unsupported,
+                pg4::DbValue::Decimal(_) => pg3::DbValue::Unsupported,
+                pg4::DbValue::Range32(_) => pg3::DbValue::Unsupported,
+                pg4::DbValue::Range64(_) => pg3::DbValue::Unsupported,
+                pg4::DbValue::DbNull => pg3::DbValue::DbNull,
+                pg4::DbValue::Unsupported => pg3::DbValue::Unsupported,
             }
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::DbDataType> for v1::rdbms_types::DbDataType {
-        fn from(value: spin::postgres4_0_0::postgres::DbDataType) -> v1::rdbms_types::DbDataType {
+    impl From<pg4::DbDataType> for v1::rdbms_types::DbDataType {
+        fn from(value: pg4::DbDataType) -> v1::rdbms_types::DbDataType {
             match value {
-                spin::postgres4_0_0::postgres::DbDataType::Boolean => {
-                    v1::rdbms_types::DbDataType::Boolean
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int8 => {
-                    v1::rdbms_types::DbDataType::Int8
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int16 => {
-                    v1::rdbms_types::DbDataType::Int16
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int32 => {
-                    v1::rdbms_types::DbDataType::Int32
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int64 => {
-                    v1::rdbms_types::DbDataType::Int64
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Floating32 => {
-                    v1::rdbms_types::DbDataType::Floating32
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Floating64 => {
-                    v1::rdbms_types::DbDataType::Floating64
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Str => v1::rdbms_types::DbDataType::Str,
-                spin::postgres4_0_0::postgres::DbDataType::Binary => {
-                    v1::rdbms_types::DbDataType::Binary
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Other => {
-                    v1::rdbms_types::DbDataType::Other
-                }
+                pg4::DbDataType::Boolean => v1::rdbms_types::DbDataType::Boolean,
+                pg4::DbDataType::Int8 => v1::rdbms_types::DbDataType::Int8,
+                pg4::DbDataType::Int16 => v1::rdbms_types::DbDataType::Int16,
+                pg4::DbDataType::Int32 => v1::rdbms_types::DbDataType::Int32,
+                pg4::DbDataType::Int64 => v1::rdbms_types::DbDataType::Int64,
+                pg4::DbDataType::Floating32 => v1::rdbms_types::DbDataType::Floating32,
+                pg4::DbDataType::Floating64 => v1::rdbms_types::DbDataType::Floating64,
+                pg4::DbDataType::Str => v1::rdbms_types::DbDataType::Str,
+                pg4::DbDataType::Binary => v1::rdbms_types::DbDataType::Binary,
+                pg4::DbDataType::Other => v1::rdbms_types::DbDataType::Other,
                 _ => v1::rdbms_types::DbDataType::Other,
             }
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::DbDataType> for v2::rdbms_types::DbDataType {
-        fn from(value: spin::postgres4_0_0::postgres::DbDataType) -> v2::rdbms_types::DbDataType {
+    impl From<pg4::DbDataType> for v2::rdbms_types::DbDataType {
+        fn from(value: pg4::DbDataType) -> v2::rdbms_types::DbDataType {
             match value {
-                spin::postgres4_0_0::postgres::DbDataType::Boolean => {
-                    v2::rdbms_types::DbDataType::Boolean
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int8 => {
-                    v2::rdbms_types::DbDataType::Int8
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int16 => {
-                    v2::rdbms_types::DbDataType::Int16
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int32 => {
-                    v2::rdbms_types::DbDataType::Int32
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int64 => {
-                    v2::rdbms_types::DbDataType::Int64
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Floating32 => {
-                    v2::rdbms_types::DbDataType::Floating32
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Floating64 => {
-                    v2::rdbms_types::DbDataType::Floating64
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Str => v2::rdbms_types::DbDataType::Str,
-                spin::postgres4_0_0::postgres::DbDataType::Binary => {
-                    v2::rdbms_types::DbDataType::Binary
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Other => {
-                    v2::rdbms_types::DbDataType::Other
-                }
+                pg4::DbDataType::Boolean => v2::rdbms_types::DbDataType::Boolean,
+                pg4::DbDataType::Int8 => v2::rdbms_types::DbDataType::Int8,
+                pg4::DbDataType::Int16 => v2::rdbms_types::DbDataType::Int16,
+                pg4::DbDataType::Int32 => v2::rdbms_types::DbDataType::Int32,
+                pg4::DbDataType::Int64 => v2::rdbms_types::DbDataType::Int64,
+                pg4::DbDataType::Floating32 => v2::rdbms_types::DbDataType::Floating32,
+                pg4::DbDataType::Floating64 => v2::rdbms_types::DbDataType::Floating64,
+                pg4::DbDataType::Str => v2::rdbms_types::DbDataType::Str,
+                pg4::DbDataType::Binary => v2::rdbms_types::DbDataType::Binary,
+                pg4::DbDataType::Other => v2::rdbms_types::DbDataType::Other,
                 _ => v2::rdbms_types::DbDataType::Other,
             }
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::DbDataType> for spin::postgres3_0_0::postgres::DbDataType {
-        fn from(
-            value: spin::postgres4_0_0::postgres::DbDataType,
-        ) -> spin::postgres3_0_0::postgres::DbDataType {
+    impl From<pg4::DbDataType> for pg3::DbDataType {
+        fn from(value: pg4::DbDataType) -> pg3::DbDataType {
             match value {
-                spin::postgres4_0_0::postgres::DbDataType::Boolean => {
-                    spin::postgres3_0_0::postgres::DbDataType::Boolean
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int8 => {
-                    spin::postgres3_0_0::postgres::DbDataType::Int8
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int16 => {
-                    spin::postgres3_0_0::postgres::DbDataType::Int16
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int32 => {
-                    spin::postgres3_0_0::postgres::DbDataType::Int32
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Int64 => {
-                    spin::postgres3_0_0::postgres::DbDataType::Int64
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Floating32 => {
-                    spin::postgres3_0_0::postgres::DbDataType::Floating32
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Floating64 => {
-                    spin::postgres3_0_0::postgres::DbDataType::Floating64
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Str => {
-                    spin::postgres3_0_0::postgres::DbDataType::Str
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Binary => {
-                    spin::postgres3_0_0::postgres::DbDataType::Binary
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Date => {
-                    spin::postgres3_0_0::postgres::DbDataType::Date
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Datetime => {
-                    spin::postgres3_0_0::postgres::DbDataType::Datetime
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Time => {
-                    spin::postgres3_0_0::postgres::DbDataType::Time
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Timestamp => {
-                    spin::postgres3_0_0::postgres::DbDataType::Timestamp
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Uuid => {
-                    spin::postgres3_0_0::postgres::DbDataType::Other
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Jsonb => {
-                    spin::postgres3_0_0::postgres::DbDataType::Other
-                }
-                spin::postgres4_0_0::postgres::DbDataType::Other => {
-                    spin::postgres3_0_0::postgres::DbDataType::Other
-                }
+                pg4::DbDataType::Boolean => pg3::DbDataType::Boolean,
+                pg4::DbDataType::Int8 => pg3::DbDataType::Int8,
+                pg4::DbDataType::Int16 => pg3::DbDataType::Int16,
+                pg4::DbDataType::Int32 => pg3::DbDataType::Int32,
+                pg4::DbDataType::Int64 => pg3::DbDataType::Int64,
+                pg4::DbDataType::Floating32 => pg3::DbDataType::Floating32,
+                pg4::DbDataType::Floating64 => pg3::DbDataType::Floating64,
+                pg4::DbDataType::Str => pg3::DbDataType::Str,
+                pg4::DbDataType::Binary => pg3::DbDataType::Binary,
+                pg4::DbDataType::Date => pg3::DbDataType::Date,
+                pg4::DbDataType::Datetime => pg3::DbDataType::Datetime,
+                pg4::DbDataType::Time => pg3::DbDataType::Time,
+                pg4::DbDataType::Timestamp => pg3::DbDataType::Timestamp,
+                pg4::DbDataType::Uuid => pg3::DbDataType::Other,
+                pg4::DbDataType::Jsonb => pg3::DbDataType::Other,
+                pg4::DbDataType::Decimal => pg3::DbDataType::Other,
+                pg4::DbDataType::Range32 => pg3::DbDataType::Other,
+                pg4::DbDataType::Range64 => pg3::DbDataType::Other,
+                pg4::DbDataType::Other => pg3::DbDataType::Other,
             }
         }
     }
@@ -390,28 +256,18 @@ mod rdbms_types {
         }
     }
 
-    impl TryFrom<v1::rdbms_types::ParameterValue> for spin::postgres4_0_0::postgres::ParameterValue {
+    impl TryFrom<v1::rdbms_types::ParameterValue> for pg4::ParameterValue {
         type Error = v1::postgres::PgError;
 
         fn try_from(
             value: v1::rdbms_types::ParameterValue,
-        ) -> Result<spin::postgres4_0_0::postgres::ParameterValue, Self::Error> {
+        ) -> Result<pg4::ParameterValue, Self::Error> {
             let converted = match value {
-                v1::rdbms_types::ParameterValue::Boolean(b) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Boolean(b)
-                }
-                v1::rdbms_types::ParameterValue::Int8(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int8(i)
-                }
-                v1::rdbms_types::ParameterValue::Int16(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int16(i)
-                }
-                v1::rdbms_types::ParameterValue::Int32(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int32(i)
-                }
-                v1::rdbms_types::ParameterValue::Int64(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int64(i)
-                }
+                v1::rdbms_types::ParameterValue::Boolean(b) => pg4::ParameterValue::Boolean(b),
+                v1::rdbms_types::ParameterValue::Int8(i) => pg4::ParameterValue::Int8(i),
+                v1::rdbms_types::ParameterValue::Int16(i) => pg4::ParameterValue::Int16(i),
+                v1::rdbms_types::ParameterValue::Int32(i) => pg4::ParameterValue::Int32(i),
+                v1::rdbms_types::ParameterValue::Int64(i) => pg4::ParameterValue::Int64(i),
                 v1::rdbms_types::ParameterValue::Uint8(_)
                 | v1::rdbms_types::ParameterValue::Uint16(_)
                 | v1::rdbms_types::ParameterValue::Uint32(_)
@@ -421,47 +277,31 @@ mod rdbms_types {
                     ));
                 }
                 v1::rdbms_types::ParameterValue::Floating32(r) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Floating32(r)
+                    pg4::ParameterValue::Floating32(r)
                 }
                 v1::rdbms_types::ParameterValue::Floating64(r) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Floating64(r)
+                    pg4::ParameterValue::Floating64(r)
                 }
-                v1::rdbms_types::ParameterValue::Str(s) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Str(s)
-                }
-                v1::rdbms_types::ParameterValue::Binary(b) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Binary(b)
-                }
-                v1::rdbms_types::ParameterValue::DbNull => {
-                    spin::postgres4_0_0::postgres::ParameterValue::DbNull
-                }
+                v1::rdbms_types::ParameterValue::Str(s) => pg4::ParameterValue::Str(s),
+                v1::rdbms_types::ParameterValue::Binary(b) => pg4::ParameterValue::Binary(b),
+                v1::rdbms_types::ParameterValue::DbNull => pg4::ParameterValue::DbNull,
             };
             Ok(converted)
         }
     }
 
-    impl TryFrom<v2::rdbms_types::ParameterValue> for spin::postgres4_0_0::postgres::ParameterValue {
+    impl TryFrom<v2::rdbms_types::ParameterValue> for pg4::ParameterValue {
         type Error = v2::rdbms_types::Error;
 
         fn try_from(
             value: v2::rdbms_types::ParameterValue,
-        ) -> Result<spin::postgres4_0_0::postgres::ParameterValue, Self::Error> {
+        ) -> Result<pg4::ParameterValue, Self::Error> {
             let converted = match value {
-                v2::rdbms_types::ParameterValue::Boolean(b) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Boolean(b)
-                }
-                v2::rdbms_types::ParameterValue::Int8(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int8(i)
-                }
-                v2::rdbms_types::ParameterValue::Int16(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int16(i)
-                }
-                v2::rdbms_types::ParameterValue::Int32(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int32(i)
-                }
-                v2::rdbms_types::ParameterValue::Int64(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int64(i)
-                }
+                v2::rdbms_types::ParameterValue::Boolean(b) => pg4::ParameterValue::Boolean(b),
+                v2::rdbms_types::ParameterValue::Int8(i) => pg4::ParameterValue::Int8(i),
+                v2::rdbms_types::ParameterValue::Int16(i) => pg4::ParameterValue::Int16(i),
+                v2::rdbms_types::ParameterValue::Int32(i) => pg4::ParameterValue::Int32(i),
+                v2::rdbms_types::ParameterValue::Int64(i) => pg4::ParameterValue::Int64(i),
                 v2::rdbms_types::ParameterValue::Uint8(_)
                 | v2::rdbms_types::ParameterValue::Uint16(_)
                 | v2::rdbms_types::ParameterValue::Uint32(_)
@@ -471,74 +311,36 @@ mod rdbms_types {
                     ));
                 }
                 v2::rdbms_types::ParameterValue::Floating32(r) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Floating32(r)
+                    pg4::ParameterValue::Floating32(r)
                 }
                 v2::rdbms_types::ParameterValue::Floating64(r) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Floating64(r)
+                    pg4::ParameterValue::Floating64(r)
                 }
-                v2::rdbms_types::ParameterValue::Str(s) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Str(s)
-                }
-                v2::rdbms_types::ParameterValue::Binary(b) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Binary(b)
-                }
-                v2::rdbms_types::ParameterValue::DbNull => {
-                    spin::postgres4_0_0::postgres::ParameterValue::DbNull
-                }
+                v2::rdbms_types::ParameterValue::Str(s) => pg4::ParameterValue::Str(s),
+                v2::rdbms_types::ParameterValue::Binary(b) => pg4::ParameterValue::Binary(b),
+                v2::rdbms_types::ParameterValue::DbNull => pg4::ParameterValue::DbNull,
             };
             Ok(converted)
         }
     }
 
-    impl From<spin::postgres3_0_0::postgres::ParameterValue>
-        for spin::postgres4_0_0::postgres::ParameterValue
-    {
-        fn from(
-            value: spin::postgres3_0_0::postgres::ParameterValue,
-        ) -> spin::postgres4_0_0::postgres::ParameterValue {
+    impl From<pg3::ParameterValue> for pg4::ParameterValue {
+        fn from(value: pg3::ParameterValue) -> pg4::ParameterValue {
             match value {
-                spin::postgres3_0_0::postgres::ParameterValue::Boolean(b) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Boolean(b)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Int8(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int8(i)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Int16(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int16(i)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Int32(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int32(i)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Int64(i) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Int64(i)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Floating32(r) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Floating32(r)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Floating64(r) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Floating64(r)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Str(s) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Str(s)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Binary(b) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Binary(b)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Date(d) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Date(d)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Datetime(dt) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Datetime(dt)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Time(t) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Time(t)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::Timestamp(t) => {
-                    spin::postgres4_0_0::postgres::ParameterValue::Timestamp(t)
-                }
-                spin::postgres3_0_0::postgres::ParameterValue::DbNull => {
-                    spin::postgres4_0_0::postgres::ParameterValue::DbNull
-                }
+                pg3::ParameterValue::Boolean(b) => pg4::ParameterValue::Boolean(b),
+                pg3::ParameterValue::Int8(i) => pg4::ParameterValue::Int8(i),
+                pg3::ParameterValue::Int16(i) => pg4::ParameterValue::Int16(i),
+                pg3::ParameterValue::Int32(i) => pg4::ParameterValue::Int32(i),
+                pg3::ParameterValue::Int64(i) => pg4::ParameterValue::Int64(i),
+                pg3::ParameterValue::Floating32(r) => pg4::ParameterValue::Floating32(r),
+                pg3::ParameterValue::Floating64(r) => pg4::ParameterValue::Floating64(r),
+                pg3::ParameterValue::Str(s) => pg4::ParameterValue::Str(s),
+                pg3::ParameterValue::Binary(b) => pg4::ParameterValue::Binary(b),
+                pg3::ParameterValue::Date(d) => pg4::ParameterValue::Date(d),
+                pg3::ParameterValue::Datetime(dt) => pg4::ParameterValue::Datetime(dt),
+                pg3::ParameterValue::Time(t) => pg4::ParameterValue::Time(t),
+                pg3::ParameterValue::Timestamp(t) => pg4::ParameterValue::Timestamp(t),
+                pg3::ParameterValue::DbNull => pg4::ParameterValue::DbNull,
             }
         }
     }
@@ -557,68 +359,42 @@ mod rdbms_types {
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::Error> for v1::postgres::PgError {
-        fn from(error: spin::postgres4_0_0::postgres::Error) -> v1::postgres::PgError {
+    impl From<pg4::Error> for v1::postgres::PgError {
+        fn from(error: pg4::Error) -> v1::postgres::PgError {
             match error {
-                spin::postgres4_0_0::postgres::Error::ConnectionFailed(e) => {
-                    v1::postgres::PgError::ConnectionFailed(e)
-                }
-                spin::postgres4_0_0::postgres::Error::BadParameter(e) => {
-                    v1::postgres::PgError::BadParameter(e)
-                }
-                spin::postgres4_0_0::postgres::Error::QueryFailed(e) => {
-                    v1::postgres::PgError::QueryFailed(e)
-                }
-                spin::postgres4_0_0::postgres::Error::ValueConversionFailed(e) => {
+                pg4::Error::ConnectionFailed(e) => v1::postgres::PgError::ConnectionFailed(e),
+                pg4::Error::BadParameter(e) => v1::postgres::PgError::BadParameter(e),
+                pg4::Error::QueryFailed(e) => v1::postgres::PgError::QueryFailed(e),
+                pg4::Error::ValueConversionFailed(e) => {
                     v1::postgres::PgError::ValueConversionFailed(e)
                 }
-                spin::postgres4_0_0::postgres::Error::Other(e) => {
-                    v1::postgres::PgError::OtherError(e)
-                }
+                pg4::Error::Other(e) => v1::postgres::PgError::OtherError(e),
             }
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::Error> for v2::rdbms_types::Error {
-        fn from(error: spin::postgres4_0_0::postgres::Error) -> v2::rdbms_types::Error {
+    impl From<pg4::Error> for v2::rdbms_types::Error {
+        fn from(error: pg4::Error) -> v2::rdbms_types::Error {
             match error {
-                spin::postgres4_0_0::postgres::Error::ConnectionFailed(e) => {
-                    v2::rdbms_types::Error::ConnectionFailed(e)
-                }
-                spin::postgres4_0_0::postgres::Error::BadParameter(e) => {
-                    v2::rdbms_types::Error::BadParameter(e)
-                }
-                spin::postgres4_0_0::postgres::Error::QueryFailed(e) => {
-                    v2::rdbms_types::Error::QueryFailed(e)
-                }
-                spin::postgres4_0_0::postgres::Error::ValueConversionFailed(e) => {
+                pg4::Error::ConnectionFailed(e) => v2::rdbms_types::Error::ConnectionFailed(e),
+                pg4::Error::BadParameter(e) => v2::rdbms_types::Error::BadParameter(e),
+                pg4::Error::QueryFailed(e) => v2::rdbms_types::Error::QueryFailed(e),
+                pg4::Error::ValueConversionFailed(e) => {
                     v2::rdbms_types::Error::ValueConversionFailed(e)
                 }
-                spin::postgres4_0_0::postgres::Error::Other(e) => v2::rdbms_types::Error::Other(e),
+                pg4::Error::Other(e) => v2::rdbms_types::Error::Other(e),
             }
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::Error> for spin::postgres3_0_0::postgres::Error {
-        fn from(
-            error: spin::postgres4_0_0::postgres::Error,
-        ) -> spin::postgres3_0_0::postgres::Error {
+    impl From<pg4::Error> for pg3::Error {
+        fn from(error: pg4::Error) -> pg3::Error {
             match error {
-                spin::postgres4_0_0::postgres::Error::ConnectionFailed(e) => {
-                    spin::postgres3_0_0::postgres::Error::ConnectionFailed(e)
-                }
-                spin::postgres4_0_0::postgres::Error::BadParameter(e) => {
-                    spin::postgres3_0_0::postgres::Error::BadParameter(e)
-                }
-                spin::postgres4_0_0::postgres::Error::QueryFailed(e) => {
-                    spin::postgres3_0_0::postgres::Error::QueryFailed(e)
-                }
-                spin::postgres4_0_0::postgres::Error::ValueConversionFailed(e) => {
-                    spin::postgres3_0_0::postgres::Error::ValueConversionFailed(e)
-                }
-                spin::postgres4_0_0::postgres::Error::Other(e) => {
-                    spin::postgres3_0_0::postgres::Error::Other(e)
-                }
+                pg4::Error::ConnectionFailed(e) => pg3::Error::ConnectionFailed(e),
+                pg4::Error::BadParameter(e) => pg3::Error::BadParameter(e),
+                pg4::Error::QueryFailed(e) => pg3::Error::QueryFailed(e),
+                pg4::Error::ValueConversionFailed(e) => pg3::Error::ValueConversionFailed(e),
+                pg4::Error::Other(e) => pg3::Error::Other(e),
             }
         }
     }
@@ -626,9 +402,11 @@ mod rdbms_types {
 
 mod postgres {
     use super::*;
+    use spin::postgres3_0_0::postgres as pg3;
+    use spin::postgres4_0_0::postgres as pg4;
 
-    impl From<spin::postgres4_0_0::postgres::RowSet> for v1::postgres::RowSet {
-        fn from(value: spin::postgres4_0_0::postgres::RowSet) -> v1::postgres::RowSet {
+    impl From<pg4::RowSet> for v1::postgres::RowSet {
+        fn from(value: pg4::RowSet) -> v1::postgres::RowSet {
             v1::mysql::RowSet {
                 columns: value.columns.into_iter().map(Into::into).collect(),
                 rows: value
@@ -640,8 +418,8 @@ mod postgres {
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::RowSet> for v2::rdbms_types::RowSet {
-        fn from(value: spin::postgres4_0_0::postgres::RowSet) -> v2::rdbms_types::RowSet {
+    impl From<pg4::RowSet> for v2::rdbms_types::RowSet {
+        fn from(value: pg4::RowSet) -> v2::rdbms_types::RowSet {
             v2::rdbms_types::RowSet {
                 columns: value.columns.into_iter().map(Into::into).collect(),
                 rows: value
@@ -653,11 +431,9 @@ mod postgres {
         }
     }
 
-    impl From<spin::postgres4_0_0::postgres::RowSet> for spin::postgres3_0_0::postgres::RowSet {
-        fn from(
-            value: spin::postgres4_0_0::postgres::RowSet,
-        ) -> spin::postgres3_0_0::postgres::RowSet {
-            spin::postgres3_0_0::postgres::RowSet {
+    impl From<pg4::RowSet> for pg3::RowSet {
+        fn from(value: pg4::RowSet) -> pg3::RowSet {
+            pg3::RowSet {
                 columns: value.columns.into_iter().map(Into::into).collect(),
                 rows: value
                     .rows
