@@ -27,6 +27,9 @@ interface postgres {
       timestamp,
       uuid,
       jsonb,
+      decimal,
+      range32,
+      range64,
       other,
   }
 
@@ -50,6 +53,9 @@ interface postgres {
       timestamp(s64),
       uuid(string),
       jsonb(list<u8>),
+      decimal(string), // I admit defeat. Base 10
+      range32(tuple<option<tuple<s32, range-bound-kind>>, option<tuple<s32, range-bound-kind>>>),
+      range64(tuple<option<tuple<s64, range-bound-kind>>, option<tuple<s64, range-bound-kind>>>),
       db-null,
       unsupported,
   }
@@ -74,6 +80,9 @@ interface postgres {
       timestamp(s64),
       uuid(string),
       jsonb(list<u8>),
+      decimal(string), // base 10
+      range32(tuple<option<tuple<s32, range-bound-kind>>, option<tuple<s32, range-bound-kind>>>),
+      range64(tuple<option<tuple<s64, range-bound-kind>>, option<tuple<s64, range-bound-kind>>>),
       db-null,
   }
 
@@ -90,6 +99,12 @@ interface postgres {
   record row-set {
       columns: list<column>,
       rows: list<row>,
+  }
+
+  /// For range types, indicates if each bound is inclusive or exclusive
+  enum range-bound-kind {
+    inclusive,
+    exclusive,
   }
 
   /// A connection to a postgres database.
