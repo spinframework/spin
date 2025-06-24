@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use native_tls::TlsConnector;
 use postgres_native_tls::MakeTlsConnector;
 use spin_world::async_trait;
-use spin_world::spin::postgres::postgres::{
-    self as v3, Column, DbDataType, DbValue, ParameterValue, RowSet,
+use spin_world::spin::postgres4_0_0::postgres::{
+    self as v4, Column, DbDataType, DbValue, ParameterValue, RowSet,
 };
 use tokio_postgres::types::Type;
 use tokio_postgres::{config::SslMode, types::ToSql, Row};
@@ -19,13 +19,13 @@ pub trait Client {
         &self,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<u64, v3::Error>;
+    ) -> Result<u64, v4::Error>;
 
     async fn query(
         &self,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<RowSet, v3::Error>;
+    ) -> Result<RowSet, v4::Error>;
 }
 
 #[async_trait]
@@ -55,12 +55,12 @@ impl Client for TokioClient {
         &self,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<u64, v3::Error> {
+    ) -> Result<u64, v4::Error> {
         let params = params
             .iter()
             .map(to_sql_parameter)
             .collect::<Result<Vec<_>>>()
-            .map_err(|e| v3::Error::ValueConversionFailed(format!("{:?}", e)))?;
+            .map_err(|e| v4::Error::ValueConversionFailed(format!("{:?}", e)))?;
 
         let params_refs: Vec<&(dyn ToSql + Sync)> = params
             .iter()
@@ -69,19 +69,19 @@ impl Client for TokioClient {
 
         self.execute(&statement, params_refs.as_slice())
             .await
-            .map_err(|e| v3::Error::QueryFailed(format!("{:?}", e)))
+            .map_err(|e| v4::Error::QueryFailed(format!("{:?}", e)))
     }
 
     async fn query(
         &self,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<RowSet, v3::Error> {
+    ) -> Result<RowSet, v4::Error> {
         let params = params
             .iter()
             .map(to_sql_parameter)
             .collect::<Result<Vec<_>>>()
-            .map_err(|e| v3::Error::BadParameter(format!("{:?}", e)))?;
+            .map_err(|e| v4::Error::BadParameter(format!("{:?}", e)))?;
 
         let params_refs: Vec<&(dyn ToSql + Sync)> = params
             .iter()
@@ -91,7 +91,7 @@ impl Client for TokioClient {
         let results = self
             .query(&statement, params_refs.as_slice())
             .await
-            .map_err(|e| v3::Error::QueryFailed(format!("{:?}", e)))?;
+            .map_err(|e| v4::Error::QueryFailed(format!("{:?}", e)))?;
 
         if results.is_empty() {
             return Ok(RowSet {
@@ -105,7 +105,7 @@ impl Client for TokioClient {
             .iter()
             .map(convert_row)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| v3::Error::QueryFailed(format!("{:?}", e)))?;
+            .map_err(|e| v4::Error::QueryFailed(format!("{:?}", e)))?;
 
         Ok(RowSet { columns, rows })
     }
@@ -158,6 +158,15 @@ fn to_sql_parameter(value: &ParameterValue) -> Result<Box<dyn ToSql + Send + Syn
                 .ok_or_else(|| anyhow!("invalid epoch timestamp {v}"))?;
             Ok(Box::new(ts))
         }
+        ParameterValue::Uuid(v) => {
+            let u = uuid::Uuid::parse_str(v).with_context(|| format!("invalid UUID {v}"))?;
+            Ok(Box::new(u))
+        }
+        ParameterValue::Jsonb(v) => {
+            let j: serde_json::Value = serde_json::from_slice(v)
+                .with_context(|| format!("invalid JSON {}", String::from_utf8_lossy(v)))?;
+            Ok(Box::new(j))
+        }
         ParameterValue::DbNull => Ok(Box::new(PgNull)),
     }
 }
@@ -190,6 +199,8 @@ fn convert_data_type(pg_type: &Type) -> DbDataType {
         Type::TIMESTAMP | Type::TIMESTAMPTZ => DbDataType::Timestamp,
         Type::DATE => DbDataType::Date,
         Type::TIME => DbDataType::Time,
+        Type::UUID => DbDataType::Uuid,
+        Type::JSONB => DbDataType::Jsonb,
         _ => {
             tracing::debug!("Couldn't convert Postgres type {} to WIT", pg_type.name(),);
             DbDataType::Other
@@ -282,6 +293,22 @@ fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
             let value: Option<chrono::NaiveTime> = row.try_get(index)?;
             match value {
                 Some(v) => DbValue::Time(tuplify_time(v)?),
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::UUID => {
+            let value: Option<uuid::Uuid> = row.try_get(index)?;
+            match value {
+                Some(v) => DbValue::Uuid(v.to_string()),
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::JSONB => {
+            let value: Option<serde_json::Value> = row.try_get(index)?;
+            match value {
+                Some(v) => {
+                    DbValue::Jsonb(serde_json::to_vec(&v).context("invalid JSON from database")?)
+                }
                 None => DbValue::DbNull,
             }
         }
