@@ -167,7 +167,39 @@ fn to_sql_parameter(value: &ParameterValue) -> Result<Box<dyn ToSql + Send + Syn
                 .with_context(|| format!("invalid JSON {}", String::from_utf8_lossy(v)))?;
             Ok(Box::new(j))
         }
+        ParameterValue::Decimal(v) => {
+            let dec = rust_decimal::Decimal::from_str_exact(v)
+                .with_context(|| format!("invalid decimal {v}"))?;
+            Ok(Box::new(dec))
+        }
+        ParameterValue::Range32((lower, upper)) => {
+            let lbound = lower.map(|(value, kind)| {
+                postgres_range::RangeBound::new(value, range_bound_kind(kind))
+            });
+            let ubound = upper.map(|(value, kind)| {
+                postgres_range::RangeBound::new(value, range_bound_kind(kind))
+            });
+            let r = postgres_range::Range::new(lbound, ubound);
+            Ok(Box::new(r))
+        }
+        ParameterValue::Range64((lower, upper)) => {
+            let lbound = lower.map(|(value, kind)| {
+                postgres_range::RangeBound::new(value, range_bound_kind(kind))
+            });
+            let ubound = upper.map(|(value, kind)| {
+                postgres_range::RangeBound::new(value, range_bound_kind(kind))
+            });
+            let r = postgres_range::Range::new(lbound, ubound);
+            Ok(Box::new(r))
+        }
         ParameterValue::DbNull => Ok(Box::new(PgNull)),
+    }
+}
+
+fn range_bound_kind(wit_kind: v4::RangeBoundKind) -> postgres_range::BoundType {
+    match wit_kind {
+        v4::RangeBoundKind::Inclusive => postgres_range::BoundType::Inclusive,
+        v4::RangeBoundKind::Exclusive => postgres_range::BoundType::Exclusive,
     }
 }
 
@@ -201,6 +233,9 @@ fn convert_data_type(pg_type: &Type) -> DbDataType {
         Type::TIME => DbDataType::Time,
         Type::UUID => DbDataType::Uuid,
         Type::JSONB => DbDataType::Jsonb,
+        Type::NUMERIC => DbDataType::Decimal,
+        Type::INT4_RANGE => DbDataType::Range32,
+        Type::INT8_RANGE => DbDataType::Range64,
         _ => {
             tracing::debug!("Couldn't convert Postgres type {} to WIT", pg_type.name(),);
             DbDataType::Other
@@ -312,6 +347,35 @@ fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
                 None => DbValue::DbNull,
             }
         }
+        &Type::NUMERIC => {
+            let value: Option<rust_decimal::Decimal> = row.try_get(index)?;
+            match value {
+                Some(v) => DbValue::Decimal(v.to_string()),
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::INT4_RANGE => {
+            let value: Option<postgres_range::Range<i32>> = row.try_get(index)?;
+            match value {
+                Some(v) => {
+                    let lower = v.lower().map(tuplify_range_bound);
+                    let upper = v.lower().map(tuplify_range_bound);
+                    DbValue::Range32((lower, upper))
+                }
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::INT8_RANGE => {
+            let value: Option<postgres_range::Range<i64>> = row.try_get(index)?;
+            match value {
+                Some(v) => {
+                    let lower = v.lower().map(tuplify_range_bound);
+                    let upper = v.lower().map(tuplify_range_bound);
+                    DbValue::Range64((lower, upper))
+                }
+                None => DbValue::DbNull,
+            }
+        }
         t => {
             tracing::debug!(
                 "Couldn't convert Postgres type {} in column {}",
@@ -322,6 +386,19 @@ fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
         }
     };
     Ok(value)
+}
+
+fn tuplify_range_bound<S: postgres_range::BoundSided, T: Copy>(
+    value: &postgres_range::RangeBound<S, T>,
+) -> (T, v4::RangeBoundKind) {
+    (value.value, wit_bound_kind(value.type_))
+}
+
+fn wit_bound_kind(bound_type: postgres_range::BoundType) -> v4::RangeBoundKind {
+    match bound_type {
+        postgres_range::BoundType::Inclusive => v4::RangeBoundKind::Inclusive,
+        postgres_range::BoundType::Exclusive => v4::RangeBoundKind::Exclusive,
+    }
 }
 
 // Functions to convert from the chrono types to the WIT interface tuples
