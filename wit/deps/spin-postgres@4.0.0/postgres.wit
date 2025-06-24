@@ -1,0 +1,106 @@
+package spin:postgres@4.0.0;
+
+interface postgres {
+  /// Errors related to interacting with a database.
+  variant error {
+      connection-failed(string),
+      bad-parameter(string),
+      query-failed(string),
+      value-conversion-failed(string),
+      other(string)
+  }
+
+  /// Data types for a database column
+  enum db-data-type {
+      boolean,
+      int8,
+      int16,
+      int32,
+      int64,
+      floating32,
+      floating64,
+      str,
+      binary,
+      date,
+      time,
+      datetime,
+      timestamp,
+      uuid,
+      jsonb,
+      other,
+  }
+
+  /// Database values
+  variant db-value {
+      boolean(bool),
+      int8(s8),
+      int16(s16),
+      int32(s32),
+      int64(s64),
+      floating32(f32),
+      floating64(f64),
+      str(string),
+      binary(list<u8>),
+      date(tuple<s32, u8, u8>), // (year, month, day)
+      time(tuple<u8, u8, u8, u32>), // (hour, minute, second, nanosecond)
+      /// Date-time types are always treated as UTC (without timezone info).
+      /// The instant is represented as a (year, month, day, hour, minute, second, nanosecond) tuple.
+      datetime(tuple<s32, u8, u8, u8, u8, u8, u32>),
+      /// Unix timestamp (seconds since epoch)
+      timestamp(s64),
+      uuid(string),
+      jsonb(list<u8>),
+      db-null,
+      unsupported,
+  }
+
+  /// Values used in parameterized queries
+  variant parameter-value {
+      boolean(bool),
+      int8(s8),
+      int16(s16),
+      int32(s32),
+      int64(s64),
+      floating32(f32),
+      floating64(f64),
+      str(string),
+      binary(list<u8>),
+      date(tuple<s32, u8, u8>), // (year, month, day)
+      time(tuple<u8, u8, u8, u32>), // (hour, minute, second, nanosecond)
+      /// Date-time types are always treated as UTC (without timezone info).
+      /// The instant is represented as a (year, month, day, hour, minute, second, nanosecond) tuple.
+      datetime(tuple<s32, u8, u8, u8, u8, u8, u32>),
+      /// Unix timestamp (seconds since epoch)
+      timestamp(s64),
+      uuid(string),
+      jsonb(list<u8>),
+      db-null,
+  }
+
+  /// A database column
+  record column {
+      name: string,
+      data-type: db-data-type,
+  }
+
+  /// A database row
+  type row = list<db-value>;
+
+  /// A set of database rows
+  record row-set {
+      columns: list<column>,
+      rows: list<row>,
+  }
+
+  /// A connection to a postgres database.
+  resource connection {
+    /// Open a connection to the Postgres instance at `address`.
+    open: static func(address: string) -> result<connection, error>;
+
+    /// Query the database.
+    query: func(statement: string, params: list<parameter-value>) -> result<row-set, error>;
+
+    /// Execute command to the database.
+    execute: func(statement: string, params: list<parameter-value>) -> result<u64, error>;
+  }
+}
