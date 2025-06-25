@@ -33,6 +33,7 @@ interface postgres {
       array-int32,
       array-int64,
       array-str,
+      interval,
       other,
   }
 
@@ -62,6 +63,7 @@ interface postgres {
       array-int32(list<option<s32>>),
       array-int64(list<option<s64>>),
       array-str(list<option<string>>),
+      interval(interval),
       db-null,
       unsupported,
   }
@@ -92,7 +94,14 @@ interface postgres {
       array-int32(list<option<s32>>),
       array-int64(list<option<s64>>),
       array-str(list<option<string>>),
+      interval(interval),
       db-null,
+  }
+
+  record interval {
+    micros: s64,
+    days: s32,
+    months: s32,
   }
 
   /// A database column
