@@ -122,6 +122,9 @@ mod rdbms_types {
                 pg4::DbValue::Decimal(_) => pg3::DbValue::Unsupported,
                 pg4::DbValue::Range32(_) => pg3::DbValue::Unsupported,
                 pg4::DbValue::Range64(_) => pg3::DbValue::Unsupported,
+                pg4::DbValue::ArrayInt32(_) => pg3::DbValue::Unsupported,
+                pg4::DbValue::ArrayInt64(_) => pg3::DbValue::Unsupported,
+                pg4::DbValue::ArrayStr(_) => pg3::DbValue::Unsupported,
                 pg4::DbValue::DbNull => pg3::DbValue::DbNull,
                 pg4::DbValue::Unsupported => pg3::DbValue::Unsupported,
             }
@@ -185,6 +188,9 @@ mod rdbms_types {
                 pg4::DbDataType::Decimal => pg3::DbDataType::Other,
                 pg4::DbDataType::Range32 => pg3::DbDataType::Other,
                 pg4::DbDataType::Range64 => pg3::DbDataType::Other,
+                pg4::DbDataType::ArrayInt32 => pg3::DbDataType::Other,
+                pg4::DbDataType::ArrayInt64 => pg3::DbDataType::Other,
+                pg4::DbDataType::ArrayStr => pg3::DbDataType::Other,
                 pg4::DbDataType::Other => pg3::DbDataType::Other,
             }
         }
