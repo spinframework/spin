@@ -192,6 +192,9 @@ fn to_sql_parameter(value: &ParameterValue) -> Result<Box<dyn ToSql + Send + Syn
             let r = postgres_range::Range::new(lbound, ubound);
             Ok(Box::new(r))
         }
+        ParameterValue::ArrayInt32(vs) => Ok(Box::new(vs.to_owned())),
+        ParameterValue::ArrayInt64(vs) => Ok(Box::new(vs.to_owned())),
+        ParameterValue::ArrayStr(vs) => Ok(Box::new(vs.to_owned())),
         ParameterValue::DbNull => Ok(Box::new(PgNull)),
     }
 }
@@ -236,6 +239,9 @@ fn convert_data_type(pg_type: &Type) -> DbDataType {
         Type::NUMERIC => DbDataType::Decimal,
         Type::INT4_RANGE => DbDataType::Range32,
         Type::INT8_RANGE => DbDataType::Range64,
+        Type::INT4_ARRAY => DbDataType::ArrayInt32,
+        Type::INT8_ARRAY => DbDataType::ArrayInt64,
+        Type::TEXT_ARRAY | Type::VARCHAR_ARRAY | Type::BPCHAR_ARRAY => DbDataType::ArrayStr,
         _ => {
             tracing::debug!("Couldn't convert Postgres type {} to WIT", pg_type.name(),);
             DbDataType::Other
@@ -359,7 +365,7 @@ fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
             match value {
                 Some(v) => {
                     let lower = v.lower().map(tuplify_range_bound);
-                    let upper = v.lower().map(tuplify_range_bound);
+                    let upper = v.upper().map(tuplify_range_bound);
                     DbValue::Range32((lower, upper))
                 }
                 None => DbValue::DbNull,
@@ -370,9 +376,30 @@ fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
             match value {
                 Some(v) => {
                     let lower = v.lower().map(tuplify_range_bound);
-                    let upper = v.lower().map(tuplify_range_bound);
+                    let upper = v.upper().map(tuplify_range_bound);
                     DbValue::Range64((lower, upper))
                 }
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::INT4_ARRAY => {
+            let value: Option<Vec<Option<i32>>> = row.try_get(index)?;
+            match value {
+                Some(v) => DbValue::ArrayInt32(v),
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::INT8_ARRAY => {
+            let value: Option<Vec<Option<i64>>> = row.try_get(index)?;
+            match value {
+                Some(v) => DbValue::ArrayInt64(v),
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::TEXT_ARRAY | &Type::VARCHAR_ARRAY | &Type::BPCHAR_ARRAY => {
+            let value: Option<Vec<Option<String>>> = row.try_get(index)?;
+            match value {
+                Some(v) => DbValue::ArrayStr(v),
                 None => DbValue::DbNull,
             }
         }
