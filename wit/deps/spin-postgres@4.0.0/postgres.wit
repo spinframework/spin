@@ -30,6 +30,9 @@ interface postgres {
       decimal,
       range32,
       range64,
+      array-int32,
+      array-int64,
+      array-str,
       other,
   }
 
@@ -56,6 +59,9 @@ interface postgres {
       decimal(string), // I admit defeat. Base 10
       range32(tuple<option<tuple<s32, range-bound-kind>>, option<tuple<s32, range-bound-kind>>>),
       range64(tuple<option<tuple<s64, range-bound-kind>>, option<tuple<s64, range-bound-kind>>>),
+      array-int32(list<option<s32>>),
+      array-int64(list<option<s64>>),
+      array-str(list<option<string>>),
       db-null,
       unsupported,
   }
@@ -83,6 +89,9 @@ interface postgres {
       decimal(string), // base 10
       range32(tuple<option<tuple<s32, range-bound-kind>>, option<tuple<s32, range-bound-kind>>>),
       range64(tuple<option<tuple<s64, range-bound-kind>>, option<tuple<s64, range-bound-kind>>>),
+      array-int32(list<option<s32>>),
+      array-int64(list<option<s64>>),
+      array-str(list<option<string>>),
       db-null,
   }
 
