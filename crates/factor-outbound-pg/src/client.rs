@@ -172,7 +172,7 @@ fn to_sql_parameter(value: &ParameterValue) -> Result<Box<dyn ToSql + Send + Syn
                 .with_context(|| format!("invalid decimal {v}"))?;
             Ok(Box::new(dec))
         }
-        ParameterValue::Range32((lower, upper)) => {
+        ParameterValue::RangeInt32((lower, upper)) => {
             let lbound = lower.map(|(value, kind)| {
                 postgres_range::RangeBound::new(value, range_bound_kind(kind))
             });
@@ -182,18 +182,58 @@ fn to_sql_parameter(value: &ParameterValue) -> Result<Box<dyn ToSql + Send + Syn
             let r = postgres_range::Range::new(lbound, ubound);
             Ok(Box::new(r))
         }
-        ParameterValue::Range64((lower, upper)) => {
+        ParameterValue::RangeInt64((lower, upper)) => {
             let lbound = lower.map(|(value, kind)| {
                 postgres_range::RangeBound::new(value, range_bound_kind(kind))
             });
             let ubound = upper.map(|(value, kind)| {
                 postgres_range::RangeBound::new(value, range_bound_kind(kind))
             });
+            let r = postgres_range::Range::new(lbound, ubound);
+            Ok(Box::new(r))
+        }
+        ParameterValue::RangeDecimal((lower, upper)) => {
+            let lbound = match lower {
+                None => None,
+                Some((value, kind)) => {
+                    let dec = rust_decimal::Decimal::from_str_exact(value)
+                        .with_context(|| format!("invalid decimal {value}"))?;
+                    let dec = RangeableDecimal(dec);
+                    Some(postgres_range::RangeBound::new(
+                        dec,
+                        range_bound_kind(*kind),
+                    ))
+                }
+            };
+            let ubound = match upper {
+                None => None,
+                Some((value, kind)) => {
+                    let dec = rust_decimal::Decimal::from_str_exact(value)
+                        .with_context(|| format!("invalid decimal {value}"))?;
+                    let dec = RangeableDecimal(dec);
+                    Some(postgres_range::RangeBound::new(
+                        dec,
+                        range_bound_kind(*kind),
+                    ))
+                }
+            };
             let r = postgres_range::Range::new(lbound, ubound);
             Ok(Box::new(r))
         }
         ParameterValue::ArrayInt32(vs) => Ok(Box::new(vs.to_owned())),
         ParameterValue::ArrayInt64(vs) => Ok(Box::new(vs.to_owned())),
+        ParameterValue::ArrayDecimal(vs) => {
+            let decs = vs
+                .iter()
+                .map(|v| match v {
+                    None => Ok(None),
+                    Some(v) => rust_decimal::Decimal::from_str_exact(v)
+                        .with_context(|| format!("invalid decimal {v}"))
+                        .map(Some),
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            Ok(Box::new(decs))
+        }
         ParameterValue::ArrayStr(vs) => Ok(Box::new(vs.to_owned())),
         ParameterValue::Interval(v) => Ok(Box::new(Interval(*v))),
         ParameterValue::DbNull => Ok(Box::new(PgNull)),
@@ -238,11 +278,14 @@ fn convert_data_type(pg_type: &Type) -> DbDataType {
         Type::UUID => DbDataType::Uuid,
         Type::JSONB => DbDataType::Jsonb,
         Type::NUMERIC => DbDataType::Decimal,
-        Type::INT4_RANGE => DbDataType::Range32,
-        Type::INT8_RANGE => DbDataType::Range64,
+        Type::INT4_RANGE => DbDataType::RangeInt32,
+        Type::INT8_RANGE => DbDataType::RangeInt64,
+        Type::NUM_RANGE => DbDataType::RangeDecimal,
         Type::INT4_ARRAY => DbDataType::ArrayInt32,
         Type::INT8_ARRAY => DbDataType::ArrayInt64,
+        Type::NUMERIC_ARRAY => DbDataType::ArrayDecimal,
         Type::TEXT_ARRAY | Type::VARCHAR_ARRAY | Type::BPCHAR_ARRAY => DbDataType::ArrayStr,
+        Type::INTERVAL => DbDataType::Interval,
         _ => {
             tracing::debug!("Couldn't convert Postgres type {} to WIT", pg_type.name(),);
             DbDataType::Other
@@ -367,7 +410,7 @@ fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
                 Some(v) => {
                     let lower = v.lower().map(tuplify_range_bound);
                     let upper = v.upper().map(tuplify_range_bound);
-                    DbValue::Range32((lower, upper))
+                    DbValue::RangeInt32((lower, upper))
                 }
                 None => DbValue::DbNull,
             }
@@ -378,7 +421,22 @@ fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
                 Some(v) => {
                     let lower = v.lower().map(tuplify_range_bound);
                     let upper = v.upper().map(tuplify_range_bound);
-                    DbValue::Range64((lower, upper))
+                    DbValue::RangeInt64((lower, upper))
+                }
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::NUM_RANGE => {
+            let value: Option<postgres_range::Range<RangeableDecimal>> = row.try_get(index)?;
+            match value {
+                Some(v) => {
+                    let lower = v
+                        .lower()
+                        .map(|b| tuplify_range_bound_map(b, |d| d.0.to_string()));
+                    let upper = v
+                        .upper()
+                        .map(|b| tuplify_range_bound_map(b, |d| d.0.to_string()));
+                    DbValue::RangeDecimal((lower, upper))
                 }
                 None => DbValue::DbNull,
             }
@@ -394,6 +452,16 @@ fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
             let value: Option<Vec<Option<i64>>> = row.try_get(index)?;
             match value {
                 Some(v) => DbValue::ArrayInt64(v),
+                None => DbValue::DbNull,
+            }
+        }
+        &Type::NUMERIC_ARRAY => {
+            let value: Option<Vec<Option<rust_decimal::Decimal>>> = row.try_get(index)?;
+            match value {
+                Some(v) => {
+                    let dstrs = v.iter().map(|opt| opt.map(|d| d.to_string())).collect();
+                    DbValue::ArrayDecimal(dstrs)
+                }
                 None => DbValue::DbNull,
             }
         }
@@ -427,6 +495,13 @@ fn tuplify_range_bound<S: postgres_range::BoundSided, T: Copy>(
     value: &postgres_range::RangeBound<S, T>,
 ) -> (T, v4::RangeBoundKind) {
     (value.value, wit_bound_kind(value.type_))
+}
+
+fn tuplify_range_bound_map<S: postgres_range::BoundSided, T, U>(
+    value: &postgres_range::RangeBound<S, T>,
+    map_fn: impl Fn(&T) -> U,
+) -> (U, v4::RangeBoundKind) {
+    (map_fn(&value.value), wit_bound_kind(value.type_))
 }
 
 fn wit_bound_kind(bound_type: postgres_range::BoundType) -> v4::RangeBoundKind {
@@ -587,5 +662,55 @@ impl std::fmt::Display for IntervalLengthError {
 impl std::fmt::Debug for IntervalLengthError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+struct RangeableDecimal(rust_decimal::Decimal);
+
+impl ToSql for RangeableDecimal {
+    tokio_postgres::types::to_sql_checked!();
+
+    fn to_sql(
+        &self,
+        ty: &Type,
+        out: &mut tokio_postgres::types::private::BytesMut,
+    ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>>
+    where
+        Self: Sized,
+    {
+        self.0.to_sql(ty, out)
+    }
+
+    fn accepts(ty: &Type) -> bool
+    where
+        Self: Sized,
+    {
+        <rust_decimal::Decimal as ToSql>::accepts(ty)
+    }
+}
+
+impl FromSql<'_> for RangeableDecimal {
+    fn from_sql(
+        ty: &Type,
+        raw: &'_ [u8],
+    ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+        let d = <rust_decimal::Decimal as FromSql>::from_sql(ty, raw)?;
+        Ok(Self(d))
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        <rust_decimal::Decimal as FromSql>::accepts(ty)
+    }
+}
+
+impl postgres_range::Normalizable for RangeableDecimal {
+    fn normalize<S>(
+        bound: postgres_range::RangeBound<S, Self>,
+    ) -> postgres_range::RangeBound<S, Self>
+    where
+        S: postgres_range::BoundSided,
+    {
+        bound
     }
 }
