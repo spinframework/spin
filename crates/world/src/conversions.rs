@@ -76,7 +76,7 @@ mod rdbms_types {
                 pg4::DbValue::Str(s) => v1::rdbms_types::DbValue::Str(s),
                 pg4::DbValue::Binary(b) => v1::rdbms_types::DbValue::Binary(b),
                 pg4::DbValue::DbNull => v1::rdbms_types::DbValue::DbNull,
-                pg4::DbValue::Unsupported => v1::rdbms_types::DbValue::Unsupported,
+                pg4::DbValue::Unsupported(_) => v1::rdbms_types::DbValue::Unsupported,
                 _ => v1::rdbms_types::DbValue::Unsupported,
             }
         }
@@ -95,7 +95,7 @@ mod rdbms_types {
                 pg4::DbValue::Str(s) => v2::rdbms_types::DbValue::Str(s),
                 pg4::DbValue::Binary(b) => v2::rdbms_types::DbValue::Binary(b),
                 pg4::DbValue::DbNull => v2::rdbms_types::DbValue::DbNull,
-                pg4::DbValue::Unsupported => v2::rdbms_types::DbValue::Unsupported,
+                pg4::DbValue::Unsupported(_) => v2::rdbms_types::DbValue::Unsupported,
                 _ => v2::rdbms_types::DbValue::Unsupported,
             }
         }
@@ -129,7 +129,7 @@ mod rdbms_types {
                 pg4::DbValue::ArrayStr(_) => pg3::DbValue::Unsupported,
                 pg4::DbValue::Interval(_) => pg3::DbValue::Unsupported,
                 pg4::DbValue::DbNull => pg3::DbValue::DbNull,
-                pg4::DbValue::Unsupported => pg3::DbValue::Unsupported,
+                pg4::DbValue::Unsupported(_) => pg3::DbValue::Unsupported,
             }
         }
     }
@@ -146,7 +146,7 @@ mod rdbms_types {
                 pg4::DbDataType::Floating64 => v1::rdbms_types::DbDataType::Floating64,
                 pg4::DbDataType::Str => v1::rdbms_types::DbDataType::Str,
                 pg4::DbDataType::Binary => v1::rdbms_types::DbDataType::Binary,
-                pg4::DbDataType::Other => v1::rdbms_types::DbDataType::Other,
+                pg4::DbDataType::Other(_) => v1::rdbms_types::DbDataType::Other,
                 _ => v1::rdbms_types::DbDataType::Other,
             }
         }
@@ -164,7 +164,7 @@ mod rdbms_types {
                 pg4::DbDataType::Floating64 => v2::rdbms_types::DbDataType::Floating64,
                 pg4::DbDataType::Str => v2::rdbms_types::DbDataType::Str,
                 pg4::DbDataType::Binary => v2::rdbms_types::DbDataType::Binary,
-                pg4::DbDataType::Other => v2::rdbms_types::DbDataType::Other,
+                pg4::DbDataType::Other(_) => v2::rdbms_types::DbDataType::Other,
                 _ => v2::rdbms_types::DbDataType::Other,
             }
         }
@@ -197,7 +197,7 @@ mod rdbms_types {
                 pg4::DbDataType::ArrayDecimal => pg3::DbDataType::Other,
                 pg4::DbDataType::ArrayStr => pg3::DbDataType::Other,
                 pg4::DbDataType::Interval => pg3::DbDataType::Other,
-                pg4::DbDataType::Other => pg3::DbDataType::Other,
+                pg4::DbDataType::Other(_) => pg3::DbDataType::Other,
             }
         }
     }
