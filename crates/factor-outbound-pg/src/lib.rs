@@ -1,5 +1,6 @@
 pub mod client;
 mod host;
+mod types;
 
 use client::Client;
 use spin_factor_outbound_networking::{
