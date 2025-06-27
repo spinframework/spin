@@ -1,13 +1,14 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use native_tls::TlsConnector;
 use postgres_native_tls::MakeTlsConnector;
 use spin_world::async_trait;
 use spin_world::spin::postgres4_0_0::postgres::{
-    self as v4, Column, DbDataType, DbValue, ParameterValue, RowSet,
+    self as v4, Column, DbValue, ParameterValue, RowSet,
 };
-use tokio_postgres::types::{FromSql, Type};
 use tokio_postgres::{config::SslMode, types::ToSql, Row};
 use tokio_postgres::{Client as TokioClient, NoTls, Socket};
+
+use crate::types::{convert_data_type, convert_entry, to_sql_parameter};
 
 #[async_trait]
 pub trait Client {
@@ -122,130 +123,130 @@ where
     });
 }
 
-fn to_sql_parameter(value: &ParameterValue) -> Result<Box<dyn ToSql + Send + Sync>> {
-    match value {
-        ParameterValue::Boolean(v) => Ok(Box::new(*v)),
-        ParameterValue::Int32(v) => Ok(Box::new(*v)),
-        ParameterValue::Int64(v) => Ok(Box::new(*v)),
-        ParameterValue::Int8(v) => Ok(Box::new(*v)),
-        ParameterValue::Int16(v) => Ok(Box::new(*v)),
-        ParameterValue::Floating32(v) => Ok(Box::new(*v)),
-        ParameterValue::Floating64(v) => Ok(Box::new(*v)),
-        ParameterValue::Str(v) => Ok(Box::new(v.clone())),
-        ParameterValue::Binary(v) => Ok(Box::new(v.clone())),
-        ParameterValue::Date((y, mon, d)) => {
-            let naive_date = chrono::NaiveDate::from_ymd_opt(*y, (*mon).into(), (*d).into())
-                .ok_or_else(|| anyhow!("invalid date y={y}, m={mon}, d={d}"))?;
-            Ok(Box::new(naive_date))
-        }
-        ParameterValue::Time((h, min, s, ns)) => {
-            let naive_time =
-                chrono::NaiveTime::from_hms_nano_opt((*h).into(), (*min).into(), (*s).into(), *ns)
-                    .ok_or_else(|| anyhow!("invalid time {h}:{min}:{s}:{ns}"))?;
-            Ok(Box::new(naive_time))
-        }
-        ParameterValue::Datetime((y, mon, d, h, min, s, ns)) => {
-            let naive_date = chrono::NaiveDate::from_ymd_opt(*y, (*mon).into(), (*d).into())
-                .ok_or_else(|| anyhow!("invalid date y={y}, m={mon}, d={d}"))?;
-            let naive_time =
-                chrono::NaiveTime::from_hms_nano_opt((*h).into(), (*min).into(), (*s).into(), *ns)
-                    .ok_or_else(|| anyhow!("invalid time {h}:{min}:{s}:{ns}"))?;
-            let dt = chrono::NaiveDateTime::new(naive_date, naive_time);
-            Ok(Box::new(dt))
-        }
-        ParameterValue::Timestamp(v) => {
-            let ts = chrono::DateTime::<chrono::Utc>::from_timestamp(*v, 0)
-                .ok_or_else(|| anyhow!("invalid epoch timestamp {v}"))?;
-            Ok(Box::new(ts))
-        }
-        ParameterValue::Uuid(v) => {
-            let u = uuid::Uuid::parse_str(v).with_context(|| format!("invalid UUID {v}"))?;
-            Ok(Box::new(u))
-        }
-        ParameterValue::Jsonb(v) => {
-            let j: serde_json::Value = serde_json::from_slice(v)
-                .with_context(|| format!("invalid JSON {}", String::from_utf8_lossy(v)))?;
-            Ok(Box::new(j))
-        }
-        ParameterValue::Decimal(v) => {
-            let dec = rust_decimal::Decimal::from_str_exact(v)
-                .with_context(|| format!("invalid decimal {v}"))?;
-            Ok(Box::new(dec))
-        }
-        ParameterValue::RangeInt32((lower, upper)) => {
-            let lbound = lower.map(|(value, kind)| {
-                postgres_range::RangeBound::new(value, range_bound_kind(kind))
-            });
-            let ubound = upper.map(|(value, kind)| {
-                postgres_range::RangeBound::new(value, range_bound_kind(kind))
-            });
-            let r = postgres_range::Range::new(lbound, ubound);
-            Ok(Box::new(r))
-        }
-        ParameterValue::RangeInt64((lower, upper)) => {
-            let lbound = lower.map(|(value, kind)| {
-                postgres_range::RangeBound::new(value, range_bound_kind(kind))
-            });
-            let ubound = upper.map(|(value, kind)| {
-                postgres_range::RangeBound::new(value, range_bound_kind(kind))
-            });
-            let r = postgres_range::Range::new(lbound, ubound);
-            Ok(Box::new(r))
-        }
-        ParameterValue::RangeDecimal((lower, upper)) => {
-            let lbound = match lower {
-                None => None,
-                Some((value, kind)) => {
-                    let dec = rust_decimal::Decimal::from_str_exact(value)
-                        .with_context(|| format!("invalid decimal {value}"))?;
-                    let dec = RangeableDecimal(dec);
-                    Some(postgres_range::RangeBound::new(
-                        dec,
-                        range_bound_kind(*kind),
-                    ))
-                }
-            };
-            let ubound = match upper {
-                None => None,
-                Some((value, kind)) => {
-                    let dec = rust_decimal::Decimal::from_str_exact(value)
-                        .with_context(|| format!("invalid decimal {value}"))?;
-                    let dec = RangeableDecimal(dec);
-                    Some(postgres_range::RangeBound::new(
-                        dec,
-                        range_bound_kind(*kind),
-                    ))
-                }
-            };
-            let r = postgres_range::Range::new(lbound, ubound);
-            Ok(Box::new(r))
-        }
-        ParameterValue::ArrayInt32(vs) => Ok(Box::new(vs.to_owned())),
-        ParameterValue::ArrayInt64(vs) => Ok(Box::new(vs.to_owned())),
-        ParameterValue::ArrayDecimal(vs) => {
-            let decs = vs
-                .iter()
-                .map(|v| match v {
-                    None => Ok(None),
-                    Some(v) => rust_decimal::Decimal::from_str_exact(v)
-                        .with_context(|| format!("invalid decimal {v}"))
-                        .map(Some),
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?;
-            Ok(Box::new(decs))
-        }
-        ParameterValue::ArrayStr(vs) => Ok(Box::new(vs.to_owned())),
-        ParameterValue::Interval(v) => Ok(Box::new(Interval(*v))),
-        ParameterValue::DbNull => Ok(Box::new(PgNull)),
-    }
-}
+// fn to_sql_parameter(value: &ParameterValue) -> Result<Box<dyn ToSql + Send + Sync>> {
+//     match value {
+//         ParameterValue::Boolean(v) => Ok(Box::new(*v)),
+//         ParameterValue::Int32(v) => Ok(Box::new(*v)),
+//         ParameterValue::Int64(v) => Ok(Box::new(*v)),
+//         ParameterValue::Int8(v) => Ok(Box::new(*v)),
+//         ParameterValue::Int16(v) => Ok(Box::new(*v)),
+//         ParameterValue::Floating32(v) => Ok(Box::new(*v)),
+//         ParameterValue::Floating64(v) => Ok(Box::new(*v)),
+//         ParameterValue::Str(v) => Ok(Box::new(v.clone())),
+//         ParameterValue::Binary(v) => Ok(Box::new(v.clone())),
+//         ParameterValue::Date((y, mon, d)) => {
+//             let naive_date = chrono::NaiveDate::from_ymd_opt(*y, (*mon).into(), (*d).into())
+//                 .ok_or_else(|| anyhow!("invalid date y={y}, m={mon}, d={d}"))?;
+//             Ok(Box::new(naive_date))
+//         }
+//         ParameterValue::Time((h, min, s, ns)) => {
+//             let naive_time =
+//                 chrono::NaiveTime::from_hms_nano_opt((*h).into(), (*min).into(), (*s).into(), *ns)
+//                     .ok_or_else(|| anyhow!("invalid time {h}:{min}:{s}:{ns}"))?;
+//             Ok(Box::new(naive_time))
+//         }
+//         ParameterValue::Datetime((y, mon, d, h, min, s, ns)) => {
+//             let naive_date = chrono::NaiveDate::from_ymd_opt(*y, (*mon).into(), (*d).into())
+//                 .ok_or_else(|| anyhow!("invalid date y={y}, m={mon}, d={d}"))?;
+//             let naive_time =
+//                 chrono::NaiveTime::from_hms_nano_opt((*h).into(), (*min).into(), (*s).into(), *ns)
+//                     .ok_or_else(|| anyhow!("invalid time {h}:{min}:{s}:{ns}"))?;
+//             let dt = chrono::NaiveDateTime::new(naive_date, naive_time);
+//             Ok(Box::new(dt))
+//         }
+//         ParameterValue::Timestamp(v) => {
+//             let ts = chrono::DateTime::<chrono::Utc>::from_timestamp(*v, 0)
+//                 .ok_or_else(|| anyhow!("invalid epoch timestamp {v}"))?;
+//             Ok(Box::new(ts))
+//         }
+//         ParameterValue::Uuid(v) => {
+//             let u = uuid::Uuid::parse_str(v).with_context(|| format!("invalid UUID {v}"))?;
+//             Ok(Box::new(u))
+//         }
+//         ParameterValue::Jsonb(v) => {
+//             let j: serde_json::Value = serde_json::from_slice(v)
+//                 .with_context(|| format!("invalid JSON {}", String::from_utf8_lossy(v)))?;
+//             Ok(Box::new(j))
+//         }
+//         ParameterValue::Decimal(v) => {
+//             let dec = rust_decimal::Decimal::from_str_exact(v)
+//                 .with_context(|| format!("invalid decimal {v}"))?;
+//             Ok(Box::new(dec))
+//         }
+//         ParameterValue::RangeInt32((lower, upper)) => {
+//             let lbound = lower.map(|(value, kind)| {
+//                 postgres_range::RangeBound::new(value, range_bound_kind(kind))
+//             });
+//             let ubound = upper.map(|(value, kind)| {
+//                 postgres_range::RangeBound::new(value, range_bound_kind(kind))
+//             });
+//             let r = postgres_range::Range::new(lbound, ubound);
+//             Ok(Box::new(r))
+//         }
+//         ParameterValue::RangeInt64((lower, upper)) => {
+//             let lbound = lower.map(|(value, kind)| {
+//                 postgres_range::RangeBound::new(value, range_bound_kind(kind))
+//             });
+//             let ubound = upper.map(|(value, kind)| {
+//                 postgres_range::RangeBound::new(value, range_bound_kind(kind))
+//             });
+//             let r = postgres_range::Range::new(lbound, ubound);
+//             Ok(Box::new(r))
+//         }
+//         ParameterValue::RangeDecimal((lower, upper)) => {
+//             let lbound = match lower {
+//                 None => None,
+//                 Some((value, kind)) => {
+//                     let dec = rust_decimal::Decimal::from_str_exact(value)
+//                         .with_context(|| format!("invalid decimal {value}"))?;
+//                     let dec = RangeableDecimal(dec);
+//                     Some(postgres_range::RangeBound::new(
+//                         dec,
+//                         range_bound_kind(*kind),
+//                     ))
+//                 }
+//             };
+//             let ubound = match upper {
+//                 None => None,
+//                 Some((value, kind)) => {
+//                     let dec = rust_decimal::Decimal::from_str_exact(value)
+//                         .with_context(|| format!("invalid decimal {value}"))?;
+//                     let dec = RangeableDecimal(dec);
+//                     Some(postgres_range::RangeBound::new(
+//                         dec,
+//                         range_bound_kind(*kind),
+//                     ))
+//                 }
+//             };
+//             let r = postgres_range::Range::new(lbound, ubound);
+//             Ok(Box::new(r))
+//         }
+//         ParameterValue::ArrayInt32(vs) => Ok(Box::new(vs.to_owned())),
+//         ParameterValue::ArrayInt64(vs) => Ok(Box::new(vs.to_owned())),
+//         ParameterValue::ArrayDecimal(vs) => {
+//             let decs = vs
+//                 .iter()
+//                 .map(|v| match v {
+//                     None => Ok(None),
+//                     Some(v) => rust_decimal::Decimal::from_str_exact(v)
+//                         .with_context(|| format!("invalid decimal {v}"))
+//                         .map(Some),
+//                 })
+//                 .collect::<anyhow::Result<Vec<_>>>()?;
+//             Ok(Box::new(decs))
+//         }
+//         ParameterValue::ArrayStr(vs) => Ok(Box::new(vs.to_owned())),
+//         ParameterValue::Interval(v) => Ok(Box::new(Interval(*v))),
+//         ParameterValue::DbNull => Ok(Box::new(PgNull)),
+//     }
+// }
 
-fn range_bound_kind(wit_kind: v4::RangeBoundKind) -> postgres_range::BoundType {
-    match wit_kind {
-        v4::RangeBoundKind::Inclusive => postgres_range::BoundType::Inclusive,
-        v4::RangeBoundKind::Exclusive => postgres_range::BoundType::Exclusive,
-    }
-}
+// fn range_bound_kind(wit_kind: v4::RangeBoundKind) -> postgres_range::BoundType {
+//     match wit_kind {
+//         v4::RangeBoundKind::Inclusive => postgres_range::BoundType::Inclusive,
+//         v4::RangeBoundKind::Exclusive => postgres_range::BoundType::Exclusive,
+//     }
+// }
 
 fn infer_columns(row: &Row) -> Vec<Column> {
     let mut result = Vec::with_capacity(row.len());
@@ -262,37 +263,6 @@ fn infer_column(row: &Row, index: usize) -> Column {
     Column { name, data_type }
 }
 
-fn convert_data_type(pg_type: &Type) -> DbDataType {
-    match *pg_type {
-        Type::BOOL => DbDataType::Boolean,
-        Type::BYTEA => DbDataType::Binary,
-        Type::FLOAT4 => DbDataType::Floating32,
-        Type::FLOAT8 => DbDataType::Floating64,
-        Type::INT2 => DbDataType::Int16,
-        Type::INT4 => DbDataType::Int32,
-        Type::INT8 => DbDataType::Int64,
-        Type::TEXT | Type::VARCHAR | Type::BPCHAR => DbDataType::Str,
-        Type::TIMESTAMP | Type::TIMESTAMPTZ => DbDataType::Timestamp,
-        Type::DATE => DbDataType::Date,
-        Type::TIME => DbDataType::Time,
-        Type::UUID => DbDataType::Uuid,
-        Type::JSONB => DbDataType::Jsonb,
-        Type::NUMERIC => DbDataType::Decimal,
-        Type::INT4_RANGE => DbDataType::RangeInt32,
-        Type::INT8_RANGE => DbDataType::RangeInt64,
-        Type::NUM_RANGE => DbDataType::RangeDecimal,
-        Type::INT4_ARRAY => DbDataType::ArrayInt32,
-        Type::INT8_ARRAY => DbDataType::ArrayInt64,
-        Type::NUMERIC_ARRAY => DbDataType::ArrayDecimal,
-        Type::TEXT_ARRAY | Type::VARCHAR_ARRAY | Type::BPCHAR_ARRAY => DbDataType::ArrayStr,
-        Type::INTERVAL => DbDataType::Interval,
-        _ => {
-            tracing::debug!("Couldn't convert Postgres type {} to WIT", pg_type.name(),);
-            DbDataType::Other
-        }
-    }
-}
-
 fn convert_row(row: &Row) -> anyhow::Result<Vec<DbValue>> {
     let mut result = Vec::with_capacity(row.len());
     for index in 0..row.len() {
@@ -301,416 +271,310 @@ fn convert_row(row: &Row) -> anyhow::Result<Vec<DbValue>> {
     Ok(result)
 }
 
-fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
-    let column = &row.columns()[index];
-    let value = match column.type_() {
-        &Type::BOOL => {
-            let value: Option<bool> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Boolean(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::BYTEA => {
-            let value: Option<Vec<u8>> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Binary(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::FLOAT4 => {
-            let value: Option<f32> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Floating32(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::FLOAT8 => {
-            let value: Option<f64> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Floating64(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::INT2 => {
-            let value: Option<i16> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Int16(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::INT4 => {
-            let value: Option<i32> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Int32(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::INT8 => {
-            let value: Option<i64> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Int64(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::TEXT | &Type::VARCHAR | &Type::BPCHAR => {
-            let value: Option<String> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Str(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::TIMESTAMP | &Type::TIMESTAMPTZ => {
-            let value: Option<chrono::NaiveDateTime> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Datetime(tuplify_date_time(v)?),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::DATE => {
-            let value: Option<chrono::NaiveDate> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Date(tuplify_date(v)?),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::TIME => {
-            let value: Option<chrono::NaiveTime> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Time(tuplify_time(v)?),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::UUID => {
-            let value: Option<uuid::Uuid> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Uuid(v.to_string()),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::JSONB => {
-            let value: Option<serde_json::Value> = row.try_get(index)?;
-            match value {
-                Some(v) => {
-                    DbValue::Jsonb(serde_json::to_vec(&v).context("invalid JSON from database")?)
-                }
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::NUMERIC => {
-            let value: Option<rust_decimal::Decimal> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Decimal(v.to_string()),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::INT4_RANGE => {
-            let value: Option<postgres_range::Range<i32>> = row.try_get(index)?;
-            match value {
-                Some(v) => {
-                    let lower = v.lower().map(tuplify_range_bound);
-                    let upper = v.upper().map(tuplify_range_bound);
-                    DbValue::RangeInt32((lower, upper))
-                }
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::INT8_RANGE => {
-            let value: Option<postgres_range::Range<i64>> = row.try_get(index)?;
-            match value {
-                Some(v) => {
-                    let lower = v.lower().map(tuplify_range_bound);
-                    let upper = v.upper().map(tuplify_range_bound);
-                    DbValue::RangeInt64((lower, upper))
-                }
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::NUM_RANGE => {
-            let value: Option<postgres_range::Range<RangeableDecimal>> = row.try_get(index)?;
-            match value {
-                Some(v) => {
-                    let lower = v
-                        .lower()
-                        .map(|b| tuplify_range_bound_map(b, |d| d.0.to_string()));
-                    let upper = v
-                        .upper()
-                        .map(|b| tuplify_range_bound_map(b, |d| d.0.to_string()));
-                    DbValue::RangeDecimal((lower, upper))
-                }
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::INT4_ARRAY => {
-            let value: Option<Vec<Option<i32>>> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::ArrayInt32(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::INT8_ARRAY => {
-            let value: Option<Vec<Option<i64>>> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::ArrayInt64(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::NUMERIC_ARRAY => {
-            let value: Option<Vec<Option<rust_decimal::Decimal>>> = row.try_get(index)?;
-            match value {
-                Some(v) => {
-                    let dstrs = v.iter().map(|opt| opt.map(|d| d.to_string())).collect();
-                    DbValue::ArrayDecimal(dstrs)
-                }
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::TEXT_ARRAY | &Type::VARCHAR_ARRAY | &Type::BPCHAR_ARRAY => {
-            let value: Option<Vec<Option<String>>> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::ArrayStr(v),
-                None => DbValue::DbNull,
-            }
-        }
-        &Type::INTERVAL => {
-            let value: Option<Interval> = row.try_get(index)?;
-            match value {
-                Some(v) => DbValue::Interval(v.0),
-                None => DbValue::DbNull,
-            }
-        }
-        t => {
-            tracing::debug!(
-                "Couldn't convert Postgres type {} in column {}",
-                t.name(),
-                column.name()
-            );
-            DbValue::Unsupported
-        }
-    };
-    Ok(value)
-}
+// fn db_value<'a, T: FromSql<'a>>(row: &'a Row, index: usize, convert_fn: impl Fn(T) -> DbValue) -> anyhow::Result<DbValue> {
+//     let value: Option<T> = row.try_get(index)?;
+//     Ok(match value {
+//         Some(v) => convert_fn(v),
+//         None => DbValue::DbNull,
+//     })
+// }
 
-fn tuplify_range_bound<S: postgres_range::BoundSided, T: Copy>(
-    value: &postgres_range::RangeBound<S, T>,
-) -> (T, v4::RangeBoundKind) {
-    (value.value, wit_bound_kind(value.type_))
-}
+// fn map_db_value<'a, T: FromSql<'a>, W>(row: &'a Row, index: usize, ctor: impl Fn(W) -> DbValue, convert_fn: impl Fn(T) -> W) -> anyhow::Result<DbValue> {
+//     let value: Option<T> = row.try_get(index)?;
+//     Ok(match value {
+//         Some(v) => ctor(convert_fn(v)),
+//         None => DbValue::DbNull,
+//     })
+// }
 
-fn tuplify_range_bound_map<S: postgres_range::BoundSided, T, U>(
-    value: &postgres_range::RangeBound<S, T>,
-    map_fn: impl Fn(&T) -> U,
-) -> (U, v4::RangeBoundKind) {
-    (map_fn(&value.value), wit_bound_kind(value.type_))
-}
+// fn try_map_db_value<'a, T: FromSql<'a>, W>(row: &'a Row, index: usize, ctor: impl Fn(W) -> DbValue, convert_fn: impl Fn(T) -> anyhow::Result<W>) -> anyhow::Result<DbValue> {
+//     let value: Option<T> = row.try_get(index)?;
+//     Ok(match value {
+//         Some(v) => ctor(convert_fn(v)?),
+//         None => DbValue::DbNull,
+//     })
+// }
 
-fn wit_bound_kind(bound_type: postgres_range::BoundType) -> v4::RangeBoundKind {
-    match bound_type {
-        postgres_range::BoundType::Inclusive => v4::RangeBoundKind::Inclusive,
-        postgres_range::BoundType::Exclusive => v4::RangeBoundKind::Exclusive,
-    }
-}
+// fn json_db_value_to_vec(value: serde_json::Value) -> anyhow::Result<Vec<u8>> {
+//     serde_json::to_vec(&value).context("invalid JSON from database")
+// }
 
-// Functions to convert from the chrono types to the WIT interface tuples
-fn tuplify_date_time(
-    value: chrono::NaiveDateTime,
-) -> anyhow::Result<(i32, u8, u8, u8, u8, u8, u32)> {
-    use chrono::{Datelike, Timelike};
-    Ok((
-        value.year(),
-        value.month().try_into()?,
-        value.day().try_into()?,
-        value.hour().try_into()?,
-        value.minute().try_into()?,
-        value.second().try_into()?,
-        value.nanosecond(),
-    ))
-}
+// fn range_db_value_to_range<T: Copy + postgres_range::Normalizable + PartialOrd>(value: postgres_range::Range<T>) -> (Option<(T, v4::RangeBoundKind)>, Option<(T, v4::RangeBoundKind)>) {
+//     let lower = value.lower().map(tuplify_range_bound);
+//     let upper = value.upper().map(tuplify_range_bound);
+//     (lower, upper)
+// }
 
-fn tuplify_date(value: chrono::NaiveDate) -> anyhow::Result<(i32, u8, u8)> {
-    use chrono::Datelike;
-    Ok((
-        value.year(),
-        value.month().try_into()?,
-        value.day().try_into()?,
-    ))
-}
+// fn decimal_range_db_value_to_range(value: postgres_range::Range<RangeableDecimal>) -> (Option<(String, v4::RangeBoundKind)>, Option<(String, v4::RangeBoundKind)>) {
+//     let lower = value
+//         .lower()
+//         .map(|b| tuplify_range_bound_map(b, |d| d.0.to_string()));
+//     let upper = value
+//         .upper()
+//         .map(|b| tuplify_range_bound_map(b, |d| d.0.to_string()));
+//     (lower, upper)
+// }
 
-fn tuplify_time(value: chrono::NaiveTime) -> anyhow::Result<(u8, u8, u8, u32)> {
-    use chrono::Timelike;
-    Ok((
-        value.hour().try_into()?,
-        value.minute().try_into()?,
-        value.second().try_into()?,
-        value.nanosecond(),
-    ))
-}
+// fn decimal_array_db_value_to_wit(value: Vec<Option<rust_decimal::Decimal>>) -> Vec<Option<String>> {
+//     value.iter().map(|opt| opt.map(|d| d.to_string())).collect()
+// }
 
-/// Although the Postgres crate converts Rust Option::None to Postgres NULL,
-/// it enforces the type of the Option as it does so. (For example, trying to
-/// pass an Option::<i32>::None to a VARCHAR column fails conversion.) As we
-/// do not know expected column types, we instead use a "neutral" custom type
-/// which allows conversion to any type but always tells the Postgres crate to
-/// treat it as a SQL NULL.
-struct PgNull;
+// fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
+//     let column = &row.columns()[index];
+//     match column.type_() {
+//         &Type::BOOL => db_value(row, index, DbValue::Boolean),
+//         &Type::BYTEA => db_value(row, index, DbValue::Binary),
+//         &Type::FLOAT4 => db_value(row, index, DbValue::Floating32),
+//         &Type::FLOAT8 => db_value(row, index, DbValue::Floating64),
+//         &Type::INT2 => db_value(row, index, DbValue::Int16),
+//         &Type::INT4 => db_value(row, index, DbValue::Int32),
+//         &Type::INT8 => db_value(row, index, DbValue::Int64),
+//         &Type::TEXT | &Type::VARCHAR | &Type::BPCHAR => db_value(row, index, DbValue::Str),
+//         &Type::TIMESTAMP | &Type::TIMESTAMPTZ => try_map_db_value(row, index, DbValue::Datetime, tuplify_date_time),
+//         &Type::DATE => try_map_db_value(row, index, DbValue::Date, tuplify_date),
+//         &Type::TIME => try_map_db_value(row, index, DbValue::Time, tuplify_time),
+//         &Type::UUID => map_db_value(row, index, DbValue::Uuid, |v: uuid::Uuid| v.to_string()),
+//         &Type::JSONB => try_map_db_value(row, index, DbValue::Jsonb, json_db_value_to_vec),
+//         &Type::NUMERIC => map_db_value(row, index, DbValue::Decimal, |v: rust_decimal::Decimal| v.to_string()),
+//         &Type::INT4_RANGE => map_db_value(row, index, DbValue::RangeInt32, range_db_value_to_range),
+//         &Type::INT8_RANGE => map_db_value(row, index, DbValue::RangeInt64, range_db_value_to_range),
+//         &Type::NUM_RANGE => map_db_value(row, index, DbValue::RangeDecimal, decimal_range_db_value_to_range),
+//         &Type::INT4_ARRAY => db_value(row, index, DbValue::ArrayInt32),
+//         &Type::INT8_ARRAY => db_value(row, index, DbValue::ArrayInt64),
+//         &Type::NUMERIC_ARRAY => map_db_value(row, index, DbValue::ArrayDecimal, decimal_array_db_value_to_wit),
+//         &Type::TEXT_ARRAY | &Type::VARCHAR_ARRAY | &Type::BPCHAR_ARRAY => db_value(row, index, DbValue::ArrayStr),
+//         &Type::INTERVAL => map_db_value(row, index, DbValue::Interval, |v: Interval| v.0),
+//         t => {
+//             tracing::debug!(
+//                 "Couldn't convert Postgres type {} in column {}",
+//                 t.name(),
+//                 column.name()
+//             );
+//             Ok(DbValue::Unsupported)
+//         }
+//     }
+// }
 
-impl ToSql for PgNull {
-    fn to_sql(
-        &self,
-        _ty: &Type,
-        _out: &mut tokio_postgres::types::private::BytesMut,
-    ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
-        Ok(tokio_postgres::types::IsNull::Yes)
-    }
+// fn tuplify_range_bound<S: postgres_range::BoundSided, T: Copy>(
+//     value: &postgres_range::RangeBound<S, T>,
+// ) -> (T, v4::RangeBoundKind) {
+//     (value.value, wit_bound_kind(value.type_))
+// }
 
-    fn accepts(_ty: &Type) -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
+// fn tuplify_range_bound_map<S: postgres_range::BoundSided, T, U>(
+//     value: &postgres_range::RangeBound<S, T>,
+//     map_fn: impl Fn(&T) -> U,
+// ) -> (U, v4::RangeBoundKind) {
+//     (map_fn(&value.value), wit_bound_kind(value.type_))
+// }
 
-    fn to_sql_checked(
-        &self,
-        _ty: &Type,
-        _out: &mut tokio_postgres::types::private::BytesMut,
-    ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>> {
-        Ok(tokio_postgres::types::IsNull::Yes)
-    }
-}
+// fn wit_bound_kind(bound_type: postgres_range::BoundType) -> v4::RangeBoundKind {
+//     match bound_type {
+//         postgres_range::BoundType::Inclusive => v4::RangeBoundKind::Inclusive,
+//         postgres_range::BoundType::Exclusive => v4::RangeBoundKind::Exclusive,
+//     }
+// }
 
-impl std::fmt::Debug for PgNull {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NULL").finish()
-    }
-}
+// // Functions to convert from the chrono types to the WIT interface tuples
+// fn tuplify_date_time(
+//     value: chrono::NaiveDateTime,
+// ) -> anyhow::Result<(i32, u8, u8, u8, u8, u8, u32)> {
+//     use chrono::{Datelike, Timelike};
+//     Ok((
+//         value.year(),
+//         value.month().try_into()?,
+//         value.day().try_into()?,
+//         value.hour().try_into()?,
+//         value.minute().try_into()?,
+//         value.second().try_into()?,
+//         value.nanosecond(),
+//     ))
+// }
 
-#[derive(Debug)]
-struct Interval(v4::Interval);
+// fn tuplify_date(value: chrono::NaiveDate) -> anyhow::Result<(i32, u8, u8)> {
+//     use chrono::Datelike;
+//     Ok((
+//         value.year(),
+//         value.month().try_into()?,
+//         value.day().try_into()?,
+//     ))
+// }
 
-impl ToSql for Interval {
-    tokio_postgres::types::to_sql_checked!();
+// fn tuplify_time(value: chrono::NaiveTime) -> anyhow::Result<(u8, u8, u8, u32)> {
+//     use chrono::Timelike;
+//     Ok((
+//         value.hour().try_into()?,
+//         value.minute().try_into()?,
+//         value.second().try_into()?,
+//         value.nanosecond(),
+//     ))
+// }
 
-    fn to_sql(
-        &self,
-        _ty: &Type,
-        out: &mut tokio_postgres::types::private::BytesMut,
-    ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
-        use bytes::BufMut;
+// /// Although the Postgres crate converts Rust Option::None to Postgres NULL,
+// /// it enforces the type of the Option as it does so. (For example, trying to
+// /// pass an Option::<i32>::None to a VARCHAR column fails conversion.) As we
+// /// do not know expected column types, we instead use a "neutral" custom type
+// /// which allows conversion to any type but always tells the Postgres crate to
+// /// treat it as a SQL NULL.
+// struct PgNull;
 
-        out.put_i64(self.0.micros);
-        out.put_i32(self.0.days);
-        out.put_i32(self.0.months);
+// impl ToSql for PgNull {
+//     fn to_sql(
+//         &self,
+//         _ty: &Type,
+//         _out: &mut tokio_postgres::types::private::BytesMut,
+//     ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>>
+//     where
+//         Self: Sized,
+//     {
+//         Ok(tokio_postgres::types::IsNull::Yes)
+//     }
 
-        Ok(tokio_postgres::types::IsNull::No)
-    }
+//     fn accepts(_ty: &Type) -> bool
+//     where
+//         Self: Sized,
+//     {
+//         true
+//     }
 
-    fn accepts(ty: &Type) -> bool
-    where
-        Self: Sized,
-    {
-        matches!(ty, &Type::INTERVAL)
-    }
-}
+//     fn to_sql_checked(
+//         &self,
+//         _ty: &Type,
+//         _out: &mut tokio_postgres::types::private::BytesMut,
+//     ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>> {
+//         Ok(tokio_postgres::types::IsNull::Yes)
+//     }
+// }
 
-impl FromSql<'_> for Interval {
-    fn from_sql(
-        _ty: &Type,
-        raw: &'_ [u8],
-    ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
-        const EXPECTED_LEN: usize = size_of::<i64>() + size_of::<i32>() + size_of::<i32>();
+// impl std::fmt::Debug for PgNull {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.debug_struct("NULL").finish()
+//     }
+// }
 
-        if raw.len() != EXPECTED_LEN {
-            return Err(Box::new(IntervalLengthError));
-        }
+// #[derive(Debug)]
+// struct Interval(v4::Interval);
 
-        let (micro_bytes, rest) = raw.split_at(size_of::<i64>());
-        let (day_bytes, rest) = rest.split_at(size_of::<i32>());
-        let month_bytes = rest;
-        let months = i32::from_be_bytes(month_bytes.try_into().unwrap());
-        let days = i32::from_be_bytes(day_bytes.try_into().unwrap());
-        let micros = i64::from_be_bytes(micro_bytes.try_into().unwrap());
+// impl ToSql for Interval {
+//     tokio_postgres::types::to_sql_checked!();
 
-        Ok(Self(v4::Interval {
-            micros,
-            days,
-            months,
-        }))
-    }
+//     fn to_sql(
+//         &self,
+//         _ty: &Type,
+//         out: &mut tokio_postgres::types::private::BytesMut,
+//     ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>>
+//     where
+//         Self: Sized,
+//     {
+//         use bytes::BufMut;
 
-    fn accepts(ty: &Type) -> bool {
-        matches!(ty, &Type::INTERVAL)
-    }
-}
+//         out.put_i64(self.0.micros);
+//         out.put_i32(self.0.days);
+//         out.put_i32(self.0.months);
 
-struct IntervalLengthError;
+//         Ok(tokio_postgres::types::IsNull::No)
+//     }
 
-impl std::error::Error for IntervalLengthError {}
+//     fn accepts(ty: &Type) -> bool
+//     where
+//         Self: Sized,
+//     {
+//         matches!(ty, &Type::INTERVAL)
+//     }
+// }
 
-impl std::fmt::Display for IntervalLengthError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("unexpected binary format for Postgres INTERVAL")
-    }
-}
+// impl FromSql<'_> for Interval {
+//     fn from_sql(
+//         _ty: &Type,
+//         raw: &'_ [u8],
+//     ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+//         const EXPECTED_LEN: usize = size_of::<i64>() + size_of::<i32>() + size_of::<i32>();
 
-impl std::fmt::Debug for IntervalLengthError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(self, f)
-    }
-}
+//         if raw.len() != EXPECTED_LEN {
+//             return Err(Box::new(IntervalLengthError));
+//         }
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-struct RangeableDecimal(rust_decimal::Decimal);
+//         let (micro_bytes, rest) = raw.split_at(size_of::<i64>());
+//         let (day_bytes, rest) = rest.split_at(size_of::<i32>());
+//         let month_bytes = rest;
+//         let months = i32::from_be_bytes(month_bytes.try_into().unwrap());
+//         let days = i32::from_be_bytes(day_bytes.try_into().unwrap());
+//         let micros = i64::from_be_bytes(micro_bytes.try_into().unwrap());
 
-impl ToSql for RangeableDecimal {
-    tokio_postgres::types::to_sql_checked!();
+//         Ok(Self(v4::Interval {
+//             micros,
+//             days,
+//             months,
+//         }))
+//     }
 
-    fn to_sql(
-        &self,
-        ty: &Type,
-        out: &mut tokio_postgres::types::private::BytesMut,
-    ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>>
-    where
-        Self: Sized,
-    {
-        self.0.to_sql(ty, out)
-    }
+//     fn accepts(ty: &Type) -> bool {
+//         matches!(ty, &Type::INTERVAL)
+//     }
+// }
 
-    fn accepts(ty: &Type) -> bool
-    where
-        Self: Sized,
-    {
-        <rust_decimal::Decimal as ToSql>::accepts(ty)
-    }
-}
+// struct IntervalLengthError;
 
-impl FromSql<'_> for RangeableDecimal {
-    fn from_sql(
-        ty: &Type,
-        raw: &'_ [u8],
-    ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
-        let d = <rust_decimal::Decimal as FromSql>::from_sql(ty, raw)?;
-        Ok(Self(d))
-    }
+// impl std::error::Error for IntervalLengthError {}
 
-    fn accepts(ty: &Type) -> bool {
-        <rust_decimal::Decimal as FromSql>::accepts(ty)
-    }
-}
+// impl std::fmt::Display for IntervalLengthError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.write_str("unexpected binary format for Postgres INTERVAL")
+//     }
+// }
 
-impl postgres_range::Normalizable for RangeableDecimal {
-    fn normalize<S>(
-        bound: postgres_range::RangeBound<S, Self>,
-    ) -> postgres_range::RangeBound<S, Self>
-    where
-        S: postgres_range::BoundSided,
-    {
-        bound
-    }
-}
+// impl std::fmt::Debug for IntervalLengthError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         std::fmt::Display::fmt(self, f)
+//     }
+// }
+
+// #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+// struct RangeableDecimal(rust_decimal::Decimal);
+
+// impl ToSql for RangeableDecimal {
+//     tokio_postgres::types::to_sql_checked!();
+
+//     fn to_sql(
+//         &self,
+//         ty: &Type,
+//         out: &mut tokio_postgres::types::private::BytesMut,
+//     ) -> Result<tokio_postgres::types::IsNull, Box<dyn std::error::Error + Sync + Send>>
+//     where
+//         Self: Sized,
+//     {
+//         self.0.to_sql(ty, out)
+//     }
+
+//     fn accepts(ty: &Type) -> bool
+//     where
+//         Self: Sized,
+//     {
+//         <rust_decimal::Decimal as ToSql>::accepts(ty)
+//     }
+// }
+
+// impl FromSql<'_> for RangeableDecimal {
+//     fn from_sql(
+//         ty: &Type,
+//         raw: &'_ [u8],
+//     ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
+//         let d = <rust_decimal::Decimal as FromSql>::from_sql(ty, raw)?;
+//         Ok(Self(d))
+//     }
+
+//     fn accepts(ty: &Type) -> bool {
+//         <rust_decimal::Decimal as FromSql>::accepts(ty)
+//     }
+// }
+
+// impl postgres_range::Normalizable for RangeableDecimal {
+//     fn normalize<S>(
+//         bound: postgres_range::RangeBound<S, Self>,
+//     ) -> postgres_range::RangeBound<S, Self>
+//     where
+//         S: postgres_range::BoundSided,
+//     {
+//         bound
+//     }
+// }
