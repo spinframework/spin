@@ -20,6 +20,7 @@ pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Erro
         version: manifest.version,
         description: manifest.description,
         authors: manifest.authors,
+        targets: Default::default(),
         trigger_global_configs,
         tool: Default::default(),
     };
