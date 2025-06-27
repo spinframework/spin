@@ -5,6 +5,7 @@ use tokio_postgres::{types::ToSql, Row};
 mod convert;
 mod decimal;
 mod interval;
+mod other;
 mod pg_null;
 
 use convert::{
@@ -14,6 +15,7 @@ use convert::{
     range_wit_to_pg, time_pg_to_wit, time_wit_to_pg, timestamp_wit_to_pg, uuid_wit_to_pg,
 };
 use interval::Interval;
+use other::Other;
 use pg_null::PgNull;
 
 pub fn convert_data_type(pg_type: &Type) -> DbDataType {
@@ -42,7 +44,7 @@ pub fn convert_data_type(pg_type: &Type) -> DbDataType {
         Type::INTERVAL => DbDataType::Interval,
         _ => {
             tracing::debug!("Couldn't convert Postgres type {} to WIT", pg_type.name(),);
-            DbDataType::Other
+            DbDataType::Other(pg_type.name().to_owned())
         }
     }
 }
@@ -126,7 +128,7 @@ pub fn convert_entry(row: &Row, index: usize) -> anyhow::Result<DbValue> {
                 t.name(),
                 column.name()
             );
-            Ok(DbValue::Unsupported)
+            map_db_value(row, index, DbValue::Unsupported, |v: Other| v.into())
         }
     }
 }
