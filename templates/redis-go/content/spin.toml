@@ -1,3 +1,5 @@
+#:schema https://github.com/spinframework/spin/releases/download/v3.3.1/manifest.schema.json
+
 spin_manifest_version = 2
 
 [application]
