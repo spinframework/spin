@@ -60,7 +60,7 @@ impl Client for TokioClient {
             .iter()
             .map(to_sql_parameter)
             .collect::<Result<Vec<_>>>()
-            .map_err(|e| v3::Error::ValueConversionFailed(format!("{:?}", e)))?;
+            .map_err(|e| v3::Error::ValueConversionFailed(format!("{e:?}")))?;
 
         let params_refs: Vec<&(dyn ToSql + Sync)> = params
             .iter()
@@ -69,7 +69,7 @@ impl Client for TokioClient {
 
         self.execute(&statement, params_refs.as_slice())
             .await
-            .map_err(|e| v3::Error::QueryFailed(format!("{:?}", e)))
+            .map_err(|e| v3::Error::QueryFailed(format!("{e:?}")))
     }
 
     async fn query(
@@ -81,7 +81,7 @@ impl Client for TokioClient {
             .iter()
             .map(to_sql_parameter)
             .collect::<Result<Vec<_>>>()
-            .map_err(|e| v3::Error::BadParameter(format!("{:?}", e)))?;
+            .map_err(|e| v3::Error::BadParameter(format!("{e:?}")))?;
 
         let params_refs: Vec<&(dyn ToSql + Sync)> = params
             .iter()
@@ -91,7 +91,7 @@ impl Client for TokioClient {
         let results = self
             .query(&statement, params_refs.as_slice())
             .await
-            .map_err(|e| v3::Error::QueryFailed(format!("{:?}", e)))?;
+            .map_err(|e| v3::Error::QueryFailed(format!("{e:?}")))?;
 
         if results.is_empty() {
             return Ok(RowSet {
@@ -105,7 +105,7 @@ impl Client for TokioClient {
             .iter()
             .map(convert_row)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| v3::Error::QueryFailed(format!("{:?}", e)))?;
+            .map_err(|e| v3::Error::QueryFailed(format!("{e:?}")))?;
 
         Ok(RowSet { columns, rows })
     }

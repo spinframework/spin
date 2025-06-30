@@ -18,7 +18,7 @@ impl<const V: usize> TryFrom<usize> for FixedVersion<V> {
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         if value != V {
-            return Err(format!("invalid version {} != {}", value, V));
+            return Err(format!("invalid version {value} != {V}"));
         }
         Ok(Self)
     }
@@ -42,7 +42,7 @@ impl<const V: usize> TryFrom<usize> for FixedVersionBackwardCompatible<V> {
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         if value > V {
-            return Err(format!("invalid version {} > {}", value, V));
+            return Err(format!("invalid version {value} > {V}"));
         }
         Ok(Self)
     }

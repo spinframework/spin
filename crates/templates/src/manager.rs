@@ -173,7 +173,7 @@ impl TemplateManager {
                     .file_name()
                     .map(|s| s.to_string_lossy().to_string())
                     .unwrap_or_else(|| format!("{}", source_dir.display()));
-                let message = format!("{}", e);
+                let message = format!("{e}");
                 return Ok(InstallationResult::Skipped(
                     fake_id,
                     SkippedReason::InvalidManifest(message),
@@ -182,7 +182,7 @@ impl TemplateManager {
         };
         let id = template.id();
 
-        let message = format!("Installing template {}...", id);
+        let message = format!("Installing template {id}...");
         reporter.report(&message);
 
         let dest_dir = self.store.get_directory(id);
@@ -424,7 +424,7 @@ fn build_list_warning(
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| format!("{}", source_dir.display()));
-            let message = format!("{}", load_err);
+            let message = format!("{load_err}");
             Ok((fake_id, InstalledTemplateWarning::InvalidManifest(message)))
         }
         None => Err(load_err).context("Failed to load template but unable to determine which one"),

@@ -121,11 +121,11 @@ pub(crate) fn prompt_parameter(parameter: &TemplateParameter) -> Option<String> 
             Ok(text) => match parameter.validate_value(text) {
                 Ok(text) => return Some(text),
                 Err(e) => {
-                    println!("Invalid value: {}", e);
+                    println!("Invalid value: {e}");
                 }
             },
             Err(e) => {
-                println!("Invalid value: {}", e);
+                println!("Invalid value: {e}");
             }
         }
     }

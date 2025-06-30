@@ -57,7 +57,7 @@ pub fn compute_default_headers<'a>(
 
     let scheme = uri.scheme_str().unwrap_or("http");
 
-    let full_url = format!("{}://{}{}", scheme, host, abs_path);
+    let full_url = format!("{scheme}://{host}{abs_path}");
 
     res.push((owned_path_info, path_info));
     res.push((owned_full_url, full_url.into()));

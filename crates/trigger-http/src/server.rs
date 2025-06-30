@@ -413,10 +413,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
         println!("Available Routes:");
         for (route, component_id) in self.router.routes() {
-            println!("  {}: {}{}", component_id, base_url, route);
+            println!("  {component_id}: {base_url}{route}");
             if let Some(component) = self.trigger_app.app().get_component(component_id) {
                 if let Some(description) = component.get_metadata(APP_DESCRIPTION_KEY)? {
-                    println!("    {}", description);
+                    println!("    {description}");
                 }
             }
         }

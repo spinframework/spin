@@ -42,7 +42,7 @@ pub fn build_headers(
     // accompanied by a message-body entity.  The CONTENT_LENGTH value must
     // reflect the length of the message-body after the server has removed
     // any transfer-codings or content-codings.
-    headers.insert("CONTENT_LENGTH".to_owned(), format!("{}", content_length));
+    headers.insert("CONTENT_LENGTH".to_owned(), format!("{content_length}"));
 
     // CONTENT_TYPE (from the spec)
     // The server MUST set this meta-variable if an HTTP Content-Type field is present

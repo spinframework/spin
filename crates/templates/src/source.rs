@@ -55,7 +55,7 @@ impl TemplateSource {
     ) -> anyhow::Result<Self> {
         let url_str = git_url.as_ref();
         let url =
-            Url::parse(url_str).with_context(|| format!("Failed to parse {} as URL", url_str))?;
+            Url::parse(url_str).with_context(|| format!("Failed to parse {url_str} as URL"))?;
         Ok(Self::Git(GitTemplateSource {
             url,
             branch: branch.clone(),
@@ -123,10 +123,7 @@ impl LocalTemplateSource {
         let templates_root = self.root.join(TEMPLATE_SOURCE_DIR);
         if templates_root.exists() {
             subdirectories(&templates_root).with_context(|| {
-                format!(
-                    "Failed to read contents of '{}' directory",
-                    TEMPLATE_SOURCE_DIR
-                )
+                format!("Failed to read contents of '{TEMPLATE_SOURCE_DIR}' directory")
             })
         } else {
             Err(anyhow!(
@@ -189,7 +186,7 @@ fn version_preferred_tag(text: &str) -> String {
         Ok(version) => format!("{}.{}", version.major, version.minor),
         Err(_) => text.to_owned(),
     };
-    format!("{}{}", TEMPLATE_VERSION_TAG_PREFIX, mm_version)
+    format!("{TEMPLATE_VERSION_TAG_PREFIX}{mm_version}")
 }
 
 async fn check_local(path: &Path) -> anyhow::Result<LocalTemplateSource> {

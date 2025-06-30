@@ -81,7 +81,7 @@ pub(crate) async fn get_authors() -> Result<Authors> {
 
     let author = match discover_author().await? {
         (name, Some(email)) => Authors {
-            author: format!("{} <{}>", name, email),
+            author: format!("{name} <{email}>"),
             username: name,
         },
         (name, None) => Authors {

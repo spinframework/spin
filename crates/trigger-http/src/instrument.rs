@@ -69,7 +69,7 @@ pub(crate) fn finalize_http_span(
 pub(crate) fn instrument_error(err: &anyhow::Error) {
     let span = tracing::Span::current();
     tracing::event!(target:module_path!(), Level::INFO, error = %err);
-    span.record("error.type", format!("{:?}", err));
+    span.record("error.type", format!("{err:?}"));
 }
 
 /// MatchedRoute is used as a response extension to track the route that was matched for OTel

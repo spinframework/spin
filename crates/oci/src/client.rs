@@ -443,8 +443,7 @@ impl Client {
         let archive_path = crate::utils::archive(source, &working_dir.into_path())
             .await
             .context(format!(
-                "Unable to create compressed archive for source {:?}",
-                source
+                "Unable to create compressed archive for source {source:?}"
             ))?;
         let layer = Self::data_layer(archive_path.as_path(), ARCHIVE_MEDIATYPE.to_string()).await?;
         layers.push(layer);

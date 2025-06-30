@@ -474,12 +474,12 @@ impl std::str::FromStr for ImportName {
         if s.contains([':', '/']) {
             let (package, rest) = s
                 .split_once('/')
-                .with_context(|| format!("invalid import name: {}", s))?;
+                .with_context(|| format!("invalid import name: {s}"))?;
 
             let (interface, version) = match rest.split_once('@') {
                 Some((interface, version)) => {
                     let version = Version::parse(version)
-                        .with_context(|| format!("invalid version in import name: {}", s))?;
+                        .with_context(|| format!("invalid version in import name: {s}"))?;
 
                     (interface, Some(version))
                 }

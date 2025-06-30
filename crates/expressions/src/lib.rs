@@ -254,7 +254,7 @@ impl<'a> Key<'a> {
                 .chars()
                 .find(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == &'_'))
             {
-                Err(format!("invalid character {:?}. Variable names may contain only lower-case letters, numbers, and underscores.", invalid))
+                Err(format!("invalid character {invalid:?}. Variable names may contain only lower-case letters, numbers, and underscores."))
             } else if !key.bytes().next().unwrap().is_ascii_lowercase() {
                 Err("must start with a lowercase ASCII letter".to_string())
             } else if !key.bytes().last().unwrap().is_ascii_alphanumeric() {

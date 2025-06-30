@@ -55,7 +55,7 @@ impl Client for MysqlClient {
 
         self.exec_batch(&statement, &[parameters])
             .await
-            .map_err(|e| v2::Error::QueryFailed(format!("{:?}", e)))
+            .map_err(|e| v2::Error::QueryFailed(format!("{e:?}")))
     }
 
     async fn query(
@@ -69,7 +69,7 @@ impl Client for MysqlClient {
         let mut query_result = self
             .exec_iter(&statement, parameters)
             .await
-            .map_err(|e| v2::Error::QueryFailed(format!("{:?}", e)))?;
+            .map_err(|e| v2::Error::QueryFailed(format!("{e:?}")))?;
 
         // We have to get these before collect() destroys them
         let columns = convert_columns(query_result.columns());
@@ -193,8 +193,7 @@ fn convert_entry(
     match (row.take(index), columns.get(index)) {
         (None, _) => Ok(DbValue::DbNull), // TODO: is this right or is this an "index out of range" thing
         (_, None) => Err(v2::Error::Other(format!(
-            "Can't get column at index {}",
-            index
+            "Can't get column at index {index}"
         ))),
         (Some(mysql_async::Value::NULL), _) => Ok(DbValue::DbNull),
         (Some(value), Some(column)) => convert_value(value, column),
@@ -261,7 +260,7 @@ fn build_opts(address: &str) -> Result<Opts, mysql_async::Error> {
 }
 
 fn convert_value_to<T: FromValue>(value: mysql_async::Value) -> Result<T, v2::Error> {
-    from_value_opt::<T>(value).map_err(|e| v2::Error::ValueConversionFailed(format!("{}", e)))
+    from_value_opt::<T>(value).map_err(|e| v2::Error::ValueConversionFailed(format!("{e}")))
 }
 
 #[cfg(test)]

@@ -72,18 +72,17 @@ fn parse_allowed_http_host_from_unschemed(text: &str) -> Result<AllowedHttpHost,
     // Host name parsing is quite hairy (thanks, IPv6), so punt it off to the
     // Url type which gets paid big bucks to do it properly. (But preserve the
     // original un-URL-ified string for use in error messages.)
-    let urlised = format!("http://{}", text);
+    let urlised = format!("http://{text}");
     let fake_url = Url::parse(&urlised)
-        .map_err(|_| format!("{} isn't a valid host or host:port string", text))?;
+        .map_err(|_| format!("{text} isn't a valid host or host:port string"))?;
     parse_allowed_http_host_from_http_url(&fake_url, text)
 }
 
 fn parse_allowed_http_host_from_schemed(text: &str) -> Result<AllowedHttpHost, String> {
-    let url =
-        Url::parse(text).map_err(|e| format!("{} isn't a valid HTTP host URL: {}", text, e))?;
+    let url = Url::parse(text).map_err(|e| format!("{text} isn't a valid HTTP host URL: {e}"))?;
 
     if !matches!(url.scheme(), "http" | "https") {
-        return Err(format!("{} isn't a valid host or host:port string", text));
+        return Err(format!("{text} isn't a valid host or host:port string"));
     }
 
     parse_allowed_http_host_from_http_url(&url, text)
@@ -92,13 +91,12 @@ fn parse_allowed_http_host_from_schemed(text: &str) -> Result<AllowedHttpHost, S
 fn parse_allowed_http_host_from_http_url(url: &Url, text: &str) -> Result<AllowedHttpHost, String> {
     let host = url
         .host_str()
-        .ok_or_else(|| format!("{} doesn't contain a host name", text))?;
+        .ok_or_else(|| format!("{text} doesn't contain a host name"))?;
 
     let has_path = url.path().len() > 1; // allow "/"
     if has_path {
         return Err(format!(
-            "{} contains a path, should be host and optional port only",
-            text
+            "{text} contains a path, should be host and optional port only"
         ));
     }
 

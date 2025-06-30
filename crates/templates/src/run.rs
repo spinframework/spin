@@ -224,7 +224,7 @@ impl Run {
             Ok(())
         } else {
             // TODO: better to provide this as a structured object and let the caller choose how to present it
-            let errors_msg = errors.iter().map(|s| format!("- {}", s)).join("\n");
+            let errors_msg = errors.iter().map(|s| format!("- {s}")).join("\n");
             Err(anyhow!(
                 "The following provided value(s) are invalid according to the template:\n{}",
                 errors_msg
@@ -235,12 +235,11 @@ impl Run {
     fn validate_value(&self, name: &str, value: &str) -> Option<String> {
         match self.template.parameter(name) {
             None => Some(format!(
-                "Template does not contain a parameter named '{}'",
-                name
+                "Template does not contain a parameter named '{name}'"
             )),
             Some(p) => match p.validate_value(value) {
                 Ok(_) => None,
-                Err(e) => Some(format!("{}: {}", name, e)),
+                Err(e) => Some(format!("{name}: {e}")),
             },
         }
     }
@@ -286,9 +285,9 @@ impl Run {
             .ok_or_else(|| anyhow::anyhow!("Template snippets directory not found"))?;
         let abs_snippet_file = snippets_dir.join(snippet_file);
         let file_content = std::fs::read(abs_snippet_file)
-            .with_context(|| format!("Error reading snippet file {}", snippet_file))?;
+            .with_context(|| format!("Error reading snippet file {snippet_file}"))?;
         let content = TemplateContent::infer_from_bytes(file_content, parser)
-            .with_context(|| format!("Error parsing snippet file {}", snippet_file))?;
+            .with_context(|| format!("Error parsing snippet file {snippet_file}"))?;
 
         match id {
             "component" => {

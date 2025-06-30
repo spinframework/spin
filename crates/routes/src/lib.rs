@@ -217,8 +217,8 @@ impl ParsedRoute {
 impl fmt::Display for ParsedRoute {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self {
-            ParsedRoute::Exact(path) => write!(f, "{}", path),
-            ParsedRoute::TrailingWildcard(pattern) => write!(f, "{} (wildcard)", pattern),
+            ParsedRoute::Exact(path) => write!(f, "{path}"),
+            ParsedRoute::TrailingWildcard(pattern) => write!(f, "{pattern} (wildcard)"),
         }
     }
 }

@@ -228,7 +228,7 @@ async fn send_request_handler(
             authority.to_string()
         } else {
             let port = if use_tls { 443 } else { 80 };
-            format!("{}:{port}", authority)
+            format!("{authority}:{port}")
         }
     } else {
         return Err(ErrorCode::HttpRequestUriInvalid);

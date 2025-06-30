@@ -150,7 +150,7 @@ fn plugin_manifests_repo_path(plugins_dir: &Path) -> PathBuf {
 // Given a name and option version, outputs expected file name for the plugin.
 fn manifest_file_name_version(plugin_name: &str, version: &Option<semver::Version>) -> String {
     match version {
-        Some(v) => format!("{}@{}.json", plugin_name, v),
+        Some(v) => format!("{plugin_name}@{v}.json"),
         None => manifest_file_name(plugin_name),
     }
 }

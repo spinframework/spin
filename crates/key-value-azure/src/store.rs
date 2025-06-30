@@ -441,7 +441,7 @@ impl AzureCosmosStore {
     }
 
     fn get_query(&self, key: &str) -> String {
-        let mut query = format!("SELECT * FROM c WHERE c.id='{}'", key);
+        let mut query = format!("SELECT * FROM c WHERE c.id='{key}'");
         self.append_store_id(&mut query, true);
         query
     }
@@ -459,7 +459,7 @@ impl AzureCosmosStore {
             .collect::<Vec<String>>()
             .join(", ");
 
-        let mut query = format!("SELECT * FROM c WHERE c.id IN ({})", in_clause);
+        let mut query = format!("SELECT * FROM c WHERE c.id IN ({in_clause})");
         self.append_store_id(&mut query, true);
         query
     }

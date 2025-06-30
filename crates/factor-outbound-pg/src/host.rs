@@ -51,7 +51,7 @@ impl<C: Client> InstanceState<C> {
                         ports
                             .get(i)
                             .or_else(|| if ports.len() == 1 { ports.get(1) } else { None });
-                    let port_str = port.map(|p| format!(":{}", p)).unwrap_or_default();
+                    let port_str = port.map(|p| format!(":{p}")).unwrap_or_default();
                     let url = format!("{address}{port_str}");
                     if !self.allowed_hosts.check_url(&url, "postgres").await? {
                         return Ok(false);
