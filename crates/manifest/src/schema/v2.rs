@@ -19,7 +19,11 @@ pub struct AppManifest {
     pub spin_manifest_version: FixedVersion<2>,
     /// `[application]`
     pub application: AppDetails,
-    /// `[variables]`
+    /// Application configuration variables. These can be set via environment variables, or
+    /// from sources such as Hashicorp Vault or Azure KeyVault by using a runtime config file.
+    /// They are not available directly to components: use a component variable to ingest them.
+    ///
+    /// Learn more: https://spinframework.dev/variables, https://spinframework.dev/dynamic-configuration#application-variables-runtime-configuration
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     pub variables: Map<LowerSnakeId, Variable>,
     /// `[[trigger.<type>]]`
@@ -171,7 +175,13 @@ pub struct Component {
     /// `environment = { VAR = "value" }`
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     pub environment: Map<String, String>,
-    /// `files = [...]`
+    /// The files the component is allowed to read. Each list entry is either:
+    ///
+    /// - a glob pattern (e.g. "assets/**/*.jpg"); or
+    ///
+    /// - a source-destination pair indicating where a host directory should be mapped in the guest (e.g. { source = "assets", destination = "/" })
+    ///
+    /// Learn more: https://spinframework.dev/writing-apps#including-files-with-components
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<WasiFilesMount>,
     /// `exclude_files = ["secrets/*"]`
@@ -181,10 +191,26 @@ pub struct Component {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[deprecated]
     pub allowed_http_hosts: Vec<String>,
-    /// `allowed_outbound_hosts = ["redis://myredishost.com:6379"]`
+    /// The network destinations which the component is allowed to access.
+    /// Each entry is in the form "(scheme)://(host)[:port]". Each element
+    /// allows * as a wildcard e.g. "https://\*" (HTTPS on the default port
+    /// to any destination) or "\*://localhost:\*" (any protocol to any port on
+    /// localhost). The host part allows segment wildcards for subdomains
+    /// e.g. "https://\*.example.com". Application variables are allowed using
+    /// `{{ my_var }}`` syntax.
+    ///
+    /// Example: `allowed_outbound_hosts = ["redis://myredishost.com:6379"]`
+    ///
+    /// Learn more: https://spinframework.dev/http-outbound#granting-http-permissions-to-components
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_outbound_hosts: Vec<String>,
-    /// `key_value_stores = ["default", "my-store"]`
+    /// The key-value stores which the component is allowed to access. Stores are identified
+    /// by label e.g. "default" or "customer". Stores other than "default" must be mapped
+    /// to a backing store in the runtime config.
+    ///
+    /// Example: `key_value_stores = ["default", "my-store"]`
+    ///
+    /// Learn more: https://spinframework.dev/kv-store-api-guide#custom-key-value-stores
     #[serde(
         default,
         with = "kebab_or_snake_case",
@@ -192,7 +218,13 @@ pub struct Component {
     )]
     #[schemars(with = "Vec<String>")]
     pub key_value_stores: Vec<String>,
-    /// `sqlite_databases = ["default", "my-database"]`
+    /// The SQLite databases which the component is allowed to access. Databases are identified
+    /// by label e.g. "default" or "analytics". Databases other than "default" must be mapped
+    /// to a backing store in the runtime config. Use "spin up --sqlite" to run database setup scripts.
+    ///
+    /// Example: `sqlite_databases = ["default", "my-database"]`
+    ///
+    /// Learn more: https://spinframework.dev/sqlite-api-guide#preparing-an-sqlite-database
     #[serde(
         default,
         with = "kebab_or_snake_case",
