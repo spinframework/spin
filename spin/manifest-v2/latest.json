@@ -1,0 +1,623 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AppManifest",
+  "description": "App manifest",
+  "type": "object",
+  "required": [
+    "application",
+    "spin_manifest_version",
+    "trigger"
+  ],
+  "properties": {
+    "application": {
+      "description": "`[application]`",
+      "allOf": [
+        {
+          "$ref": "#/definitions/AppDetails"
+        }
+      ]
+    },
+    "component": {
+      "description": "`[component.<id>]`",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Component"
+      }
+    },
+    "spin_manifest_version": {
+      "description": "`spin_manifest_version = 2`",
+      "type": "integer",
+      "format": "uint",
+      "minimum": 0.0
+    },
+    "trigger": {
+      "description": "`[[trigger.<type>]]`",
+      "allOf": [
+        {
+          "$ref": "#/definitions/TriggerSchema"
+        }
+      ]
+    },
+    "variables": {
+      "description": "`[variables]`",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Variable"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "AppDetails": {
+      "description": "App details",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "authors": {
+          "description": "`authors = [\"author@example.com\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "description": "`description = \"App description\"`",
+          "type": "string"
+        },
+        "name": {
+          "description": "`name = \"my-app\"`",
+          "type": "string"
+        },
+        "tool": {
+          "description": "Settings for custom tools or plugins. Spin ignores this field.",
+          "type": "object"
+        },
+        "trigger": {
+          "description": "`[application.triggers.<type>]`",
+          "type": "object"
+        },
+        "version": {
+          "description": "`version = \"1.0.0\"`",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Commands": {
+      "description": "Component build command or commands",
+      "anyOf": [
+        {
+          "description": "`command = \"cargo build\"`",
+          "type": "string"
+        },
+        {
+          "description": "`command = [\"cargo build\", \"wac encode compose-deps.wac -d my:pkg=app.wasm --registry fermyon.com\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "Component": {
+      "description": "Component definition",
+      "type": "object",
+      "required": [
+        "source"
+      ],
+      "properties": {
+        "ai_models": {
+          "description": "`ai_models = [\"llama2-chat\"]`",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Id_for_-_and_false"
+          }
+        },
+        "allowed_http_hosts": {
+          "description": "`allowed_http_hosts = [\"example.com\"]`",
+          "deprecated": true,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowed_outbound_hosts": {
+          "description": "`allowed_outbound_hosts = [\"redis://myredishost.com:6379\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "build": {
+          "description": "Build configuration",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComponentBuildConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dependencies": {
+          "description": "Component dependencies",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ComponentDependency"
+          }
+        },
+        "dependencies_inherit_configuration": {
+          "description": "If true, allow dependencies to inherit configuration.",
+          "type": "boolean"
+        },
+        "description": {
+          "description": "`description = \"Component description\"`",
+          "type": "string"
+        },
+        "environment": {
+          "description": "`environment = { VAR = \"value\" }`",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "exclude_files": {
+          "description": "`exclude_files = [\"secrets/*\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "description": "`files = [...]`",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WasiFilesMount"
+          }
+        },
+        "key_value_stores": {
+          "description": "`key_value_stores = [\"default\", \"my-store\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "description": "`source = ...`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ComponentSource"
+            }
+          ]
+        },
+        "sqlite_databases": {
+          "description": "`sqlite_databases = [\"default\", \"my-database\"]`",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tool": {
+          "description": "Settings for custom tools or plugins. Spin ignores this field.",
+          "type": "object"
+        },
+        "variables": {
+          "description": "`variables = { name = \"{{ app_var }}\"}`",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ComponentBuildConfig": {
+      "description": "Component build configuration",
+      "type": "object",
+      "required": [
+        "command"
+      ],
+      "properties": {
+        "command": {
+          "description": "`command = \"cargo build\"`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Commands"
+            }
+          ]
+        },
+        "watch": {
+          "description": "watch = [\"src/**/*.rs\"]",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "workdir": {
+          "description": "`workdir = \"components/main\"",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ComponentDependency": {
+      "description": "Component dependency",
+      "anyOf": [
+        {
+          "description": "`... = \">= 0.1.0\"`",
+          "type": "string"
+        },
+        {
+          "description": "`... = { version = \"0.1.0\", registry = \"registry.io\", ...}`",
+          "type": "object",
+          "required": [
+            "version"
+          ],
+          "properties": {
+            "export": {
+              "description": "Optional export name",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "package": {
+              "description": "Optional package name `foo:bar`. If not specified, the package name is inferred from the DependencyName key.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "registry": {
+              "description": "Optional registry spec",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "version": {
+              "description": "Package version requirement",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`... = { path = \"path/to/component.wasm\", export = \"my-export\" }`",
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "export": {
+              "description": "Optional export name",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "description": "Path to Wasm",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`... = { url = \"https://example.com/component.wasm\", sha256 = \"...\" }`",
+          "type": "object",
+          "required": [
+            "digest",
+            "url"
+          ],
+          "properties": {
+            "digest": {
+              "description": "SHA256 Checksum of the component. The string should start with 'sha256:'",
+              "type": "string"
+            },
+            "export": {
+              "description": "Optional export name",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "url": {
+              "description": "URL to Wasm",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ComponentSource": {
+      "description": "Component source",
+      "anyOf": [
+        {
+          "description": "`\"local.wasm\"`",
+          "type": "string"
+        },
+        {
+          "description": "`{ ... }`",
+          "type": "object",
+          "required": [
+            "digest",
+            "url"
+          ],
+          "properties": {
+            "digest": {
+              "description": "`digest = `\"sha256:abc123...\"`",
+              "type": "string"
+            },
+            "url": {
+              "description": "`url = \"https://example.test/remote.wasm\"`",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "`{ ... }`",
+          "type": "object",
+          "required": [
+            "package",
+            "version"
+          ],
+          "properties": {
+            "package": {
+              "description": "`package = \"example:component\"`",
+              "type": "string"
+            },
+            "registry": {
+              "description": "`registry = \"example.com\"`",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "version": {
+              "description": "`version = \"1.2.3\"`",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ComponentSpec": {
+      "description": "Component reference or inline definition",
+      "anyOf": [
+        {
+          "description": "`\"component-id\"`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Id_for_-_and_false"
+            }
+          ]
+        },
+        {
+          "description": "`{ ... }`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Component"
+            }
+          ]
+        }
+      ]
+    },
+    "HttpPrivateEndpoint": {
+      "type": "object",
+      "required": [
+        "private"
+      ],
+      "properties": {
+        "private": {
+          "description": "Whether the private endpoint is private. This must be true.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "HttpRouteSchema": {
+      "anyOf": [
+        {
+          "description": "`route = \"/user/:name/...\"`",
+          "type": "string"
+        },
+        {
+          "description": "`route = { private = true }`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HttpPrivateEndpoint"
+            }
+          ]
+        }
+      ]
+    },
+    "HttpTriggerSchema": {
+      "type": "object",
+      "required": [
+        "route"
+      ],
+      "properties": {
+        "component": {
+          "description": "`component = ...`",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComponentSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "components": {
+          "description": "`components = { ... }`",
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/definitions/ComponentSpec"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/ComponentSpec"
+                }
+              }
+            ]
+          }
+        },
+        "executor": {
+          "description": "`executor = { type = \"wagi\" }",
+          "default": null,
+          "type": "object"
+        },
+        "id": {
+          "description": "`id = \"trigger-id\"`",
+          "type": "string"
+        },
+        "route": {
+          "description": "`route = \"/user/:name/...\"`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/HttpRouteSchema"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Id_for_-_and_false": {
+      "description": "An ID is a non-empty string containing one or more component model `word`s separated by a delimiter char.",
+      "type": "string"
+    },
+    "RedisTriggerSchema": {
+      "type": "object",
+      "required": [
+        "channel"
+      ],
+      "properties": {
+        "address": {
+          "description": "`address = \"redis://redis.example.com:6379\"`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "channel": {
+          "description": "`channel = \"my-messages\"`",
+          "type": "string"
+        },
+        "component": {
+          "description": "`component = ...`",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ComponentSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "components": {
+          "description": "`components = { ... }`",
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "$ref": "#/definitions/ComponentSpec"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/ComponentSpec"
+                }
+              }
+            ]
+          }
+        },
+        "id": {
+          "description": "`id = \"trigger-id\"`",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TriggerSchema": {
+      "type": "object",
+      "properties": {
+        "http": {
+          "description": "HTTP triggers",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HttpTriggerSchema"
+          }
+        },
+        "redis": {
+          "description": "Redis triggers",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RedisTriggerSchema"
+          }
+        }
+      }
+    },
+    "Variable": {
+      "description": "Variable definition",
+      "type": "object",
+      "properties": {
+        "default": {
+          "description": "`default = \"default value\"`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "description": "`required = true`",
+          "type": "boolean"
+        },
+        "secret": {
+          "description": "`secret = true`",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "WasiFilesMount": {
+      "description": "WASI files mount",
+      "anyOf": [
+        {
+          "description": "`\"images/*.png\"`",
+          "type": "string"
+        },
+        {
+          "description": "`{ ... }`",
+          "type": "object",
+          "required": [
+            "destination",
+            "source"
+          ],
+          "properties": {
+            "destination": {
+              "description": "`destination = \"/\"`",
+              "type": "string"
+            },
+            "source": {
+              "description": "`source = \"content/dir\"`",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}
