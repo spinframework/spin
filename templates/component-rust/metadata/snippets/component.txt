@@ -1,0 +1,6 @@
+[component.{{project-name | kebab_case}}]
+source = "{{ output-path }}/target/wasm32-wasip2/release/{{project-name | snake_case}}.wasm"
+[component.{{project-name | kebab_case}}.build]
+command = "cargo build --target wasm32-wasip2 --release"
+workdir = "{{ output-path }}"
+watch = ["src/**/*.rs", "Cargo.toml"]
