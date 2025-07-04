@@ -1,4 +1,4 @@
-use helper::http_trigger_bindings::spin::postgres::postgres;
+use helper::http_trigger_bindings::spin::postgres4_0_0::postgres;
 use helper::{ensure, ensure_eq, ensure_matches, ensure_ok};
 
 helper::define_component!(Component);
@@ -34,6 +34,16 @@ impl Component {
         ensure_matches!(rowset.rows[1][1], postgres::DbValue::Date((y, m, d)) if y == 2525 && m == 12 && d == 25);
         ensure_matches!(rowset.rows[1][2], postgres::DbValue::Time((h, m, s, ns)) if h == 14 && m == 15 && s == 16 && ns == 17);
         ensure_matches!(rowset.rows[1][3], postgres::DbValue::Datetime((y, _, _, h, _, _, ns)) if y == 1989 && h == 1 && ns == 4);
+
+        let rowset = ensure_ok!(json_types(&conn));
+        ensure!(rowset.rows.iter().all(|r| r.len() == 2));
+        ensure_matches!(&rowset.rows[0][1], postgres::DbValue::Jsonb(v) if String::from_utf8_lossy(v) == r#"{"s":"hello","n":123,"b":true,"x":null}"#);
+        ensure_matches!(&rowset.rows[1][1], postgres::DbValue::Jsonb(v) if String::from_utf8_lossy(v) == r#"{"s":"world","n":234,"b":false,"x":null}"#);
+
+        let rowset = ensure_ok!(uuid_type(&conn));
+        ensure!(rowset.rows.iter().all(|r| r.len() == 2));
+        ensure_matches!(&rowset.rows[0][1], postgres::DbValue::Uuid(v) if v == "12345678-1234-1234-1234-123456789abc");
+        ensure_matches!(&rowset.rows[1][1], postgres::DbValue::Uuid(v) if v == "fedcba98-fedc-fedc-fedc-fedcba987654");
 
         let rowset = ensure_ok!(nullable(&conn));
         ensure!(rowset.rows.iter().all(|r| r.len() == 1));
@@ -171,6 +181,98 @@ fn date_time_types(conn: &postgres::Connection) -> Result<postgres::RowSet, post
             rtime,
             rtimestamp
         FROM test_date_time_types
+        ORDER BY index;
+    "#;
+
+    conn.query(sql, &[])
+}
+
+fn json_types(conn: &postgres::Connection) -> Result<postgres::RowSet, postgres::Error> {
+    let create_table_sql = r#"
+        CREATE TEMPORARY TABLE test_json_types (
+            index int2,
+            j jsonb NOT NULL
+         );
+    "#;
+
+    conn.execute(create_table_sql, &[])?;
+
+    // We will use this to test that we correctly decode "known good"
+    // Postgres database values. (This validates our decoding logic
+    // independently of our encoding logic.)
+    let insert_sql_pg_literals = r#"
+        INSERT INTO test_json_types
+            (index, j)
+        VALUES
+            (1, jsonb('{ "s": "hello", "n": 123, "b": true, "x": null }'));
+    "#;
+
+    conn.execute(insert_sql_pg_literals, &[])?;
+
+    // We will use this to test that we correctly encode Spin ParameterValue
+    // objects. (In conjunction with knowing that our decode logic is good,
+    // this validates our encode logic.)
+    let insert_sql_spin_parameters = r#"
+        INSERT INTO test_json_types
+            (index, j)
+        VALUES
+            (2, $1);
+        "#;
+
+    let jsonb_pv = postgres::ParameterValue::Jsonb(r#"{ "s": "world", "n": 234, "b": false, "x": null }"#.as_bytes().to_vec());
+    conn.execute(insert_sql_spin_parameters, &[jsonb_pv])?;
+
+    let sql = r#"
+        SELECT
+            index,
+            j
+        FROM test_json_types
+        ORDER BY index;
+    "#;
+
+    conn.query(sql, &[])
+}
+
+fn uuid_type(conn: &postgres::Connection) -> Result<postgres::RowSet, postgres::Error> {
+    let create_table_sql = r#"
+        CREATE TEMPORARY TABLE test_uuid_type (
+            index int2,
+            u uuid NOT NULL
+         );
+    "#;
+
+    conn.execute(create_table_sql, &[])?;
+
+    // We will use this to test that we correctly decode "known good"
+    // Postgres database values. (This validates our decoding logic
+    // independently of our encoding logic.)
+    let insert_sql_pg_literals = r#"
+        INSERT INTO test_uuid_type
+            (index, u)
+        VALUES
+            (1, uuid('12345678-1234-1234-1234-123456789abc'));
+    "#;
+
+    conn.execute(insert_sql_pg_literals, &[])?;
+
+    // We will use this to test that we correctly encode Spin ParameterValue
+    // objects. (In conjunction with knowing that our decode logic is good,
+    // this validates our encode logic.)
+    let insert_sql_spin_parameters = r#"
+        INSERT INTO test_uuid_type
+            (index, u)
+        VALUES
+            (2, $1);
+        "#;
+
+    let uuid_pv = postgres::ParameterValue::Uuid("fedcba98-fedc-fedc-fedc-fedcba987654".to_owned());
+    conn.execute(insert_sql_spin_parameters, &[uuid_pv])?;
+
+    let sql = r#"
+        SELECT
+            index,
+            u
+        FROM test_uuid
         ORDER BY index;
     "#;
 
