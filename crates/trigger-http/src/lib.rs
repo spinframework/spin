@@ -50,6 +50,9 @@ pub struct CliArgs {
     /// The path to the certificate key to use for https, if this is not set, normal http will be used. The key should be in PKCS#8 format
     #[clap(long, env = "SPIN_TLS_KEY", requires = "tls-cert")]
     pub tls_key: Option<PathBuf>,
+
+    #[clap(long = "find-free-port")]
+    pub find_free_port: bool,
 }
 
 impl CliArgs {
@@ -73,6 +76,7 @@ pub struct HttpTrigger {
     /// If the port is set to 0, the actual address will be determined by the OS.
     listen_addr: SocketAddr,
     tls_config: Option<TlsConfig>,
+    find_free_port: bool,
 }
 
 impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
@@ -82,7 +86,14 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
     type InstanceState = ();
 
     fn new(cli_args: Self::CliArgs, app: &spin_app::App) -> anyhow::Result<Self> {
-        Self::new(app, cli_args.address, cli_args.into_tls_config())
+        let find_free_port = cli_args.find_free_port;
+
+        Self::new(
+            app,
+            cli_args.address,
+            cli_args.into_tls_config(),
+            find_free_port,
+        )
     }
 
     async fn run(self, trigger_app: TriggerApp<F>) -> anyhow::Result<()> {
@@ -104,12 +115,14 @@ impl HttpTrigger {
         app: &spin_app::App,
         listen_addr: SocketAddr,
         tls_config: Option<TlsConfig>,
+        find_free_port: bool,
     ) -> anyhow::Result<Self> {
         Self::validate_app(app)?;
 
         Ok(Self {
             listen_addr,
             tls_config,
+            find_free_port,
         })
     }
 
@@ -121,8 +134,14 @@ impl HttpTrigger {
         let Self {
             listen_addr,
             tls_config,
+            find_free_port,
         } = self;
-        let server = Arc::new(HttpServer::new(listen_addr, tls_config, trigger_app)?);
+        let server = Arc::new(HttpServer::new(
+            listen_addr,
+            tls_config,
+            find_free_port,
+            trigger_app,
+        )?);
         Ok(server)
     }
 

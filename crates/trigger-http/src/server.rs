@@ -1,4 +1,10 @@
-use std::{collections::HashMap, future::Future, io::IsTerminal, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    future::Future,
+    io::{ErrorKind, IsTerminal},
+    net::SocketAddr,
+    sync::Arc,
+};
 
 use anyhow::{bail, Context};
 use http::{
@@ -47,6 +53,8 @@ pub struct HttpServer<F: RuntimeFactors> {
     listen_addr: SocketAddr,
     /// The TLS configuration for the server.
     tls_config: Option<TlsConfig>,
+    /// Whether to find a free port if the specified port is already in use.
+    find_free_port: bool,
     /// Request router.
     router: Router,
     /// The app being triggered.
@@ -62,6 +70,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
     pub fn new(
         listen_addr: SocketAddr,
         tls_config: Option<TlsConfig>,
+        find_free_port: bool,
         trigger_app: TriggerApp<F>,
     ) -> anyhow::Result<Self> {
         // This needs to be a vec before building the router to handle duplicate routes
@@ -129,6 +138,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         Ok(Self {
             listen_addr,
             tls_config,
+            find_free_port,
             router,
             trigger_app,
             component_trigger_configs,
@@ -138,12 +148,43 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
     /// Serve incoming requests over the provided [`TcpListener`].
     pub async fn serve(self: Arc<Self>) -> anyhow::Result<()> {
-        let listener = TcpListener::bind(self.listen_addr).await.with_context(|| {
-            format!(
-                "Unable to listen on {listen_addr}",
-                listen_addr = self.listen_addr
-            )
-        })?;
+        let listener: TcpListener = match TcpListener::bind(self.listen_addr).await {
+            Ok(listener) => listener,
+            Err(err) => {
+                if self.find_free_port && err.kind() == ErrorKind::AddrInUse {
+                    let mut found_listener = None;
+                    for _ in 1..=9 {
+                        let mut addr = self.listen_addr;
+                        addr.set_port(addr.port() + 1);
+
+                        match TcpListener::bind(addr).await {
+                            Ok(listener) => {
+                                found_listener = Some(listener);
+                                break;
+                            }
+                            Err(err) => {
+                                if err.kind() == ErrorKind::AddrInUse {
+                                    continue;
+                                }
+                                return Err(anyhow::anyhow!("Unable to listen on {}", addr));
+                            }
+                        }
+                    }
+
+                    match found_listener {
+                        Some(listener) => listener,
+                        None => {
+                            return Err(anyhow::anyhow!(
+                                "All retries failed. Unable to bind to a free port"
+                            ));
+                        }
+                    }
+                } else {
+                    return Err(anyhow::anyhow!("Unable to listen on {}", self.listen_addr));
+                }
+            }
+        };
+
         if let Some(tls_config) = self.tls_config.clone() {
             self.serve_https(listener, tls_config).await?;
         } else {
