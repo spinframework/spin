@@ -1,4 +1,4 @@
-use std::{error::Error, future::Future, pin::Pin, sync::Arc};
+use std::{error::Error, future::Future, pin::Pin, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use bytes::Bytes;
@@ -294,25 +294,7 @@ async fn send_request_handler(
 
             let stream = TokioIo::new(stream);
 
-            let (sender, conn) = if is_http2 {
-                timeout(
-                    connect_timeout,
-                    hyper::client::conn::http2::handshake(TokioExecutor::default(), stream),
-                )
-                .await
-                .map_err(|_| ErrorCode::ConnectionTimeout)?
-                .map_err(hyper_request_error)
-                .map(|(sender, conn)| (HttpSender::Http2(sender), HttpConn::Http2(conn)))?
-            } else {
-                timeout(
-                    connect_timeout,
-                    hyper::client::conn::http1::handshake(stream),
-                )
-                .await
-                .map_err(|_| ErrorCode::ConnectionTimeout)?
-                .map_err(hyper_request_error)
-                .map(|(sender, conn)| (HttpSender::Http1(sender), HttpConn::Http1(conn)))?
-            };
+            let (sender, conn) = new_sender_and_conn(stream, is_http2, connect_timeout).await?;
 
             let worker = wasmtime_wasi::runtime::spawn(async move {
                 match conn.await {
@@ -335,25 +317,7 @@ async fn send_request_handler(
                 .is_some_and(|authority| authority.as_str() == v)
         });
 
-        let (sender, conn) = if is_http2 {
-            timeout(
-                connect_timeout,
-                hyper::client::conn::http2::handshake(TokioExecutor::default(), tcp_stream),
-            )
-            .await
-            .map_err(|_| ErrorCode::ConnectionTimeout)?
-            .map_err(hyper_request_error)
-            .map(|(sender, conn)| (HttpSender::Http2(sender), HttpConn::Http2(conn)))?
-        } else {
-            timeout(
-                connect_timeout,
-                hyper::client::conn::http1::handshake(tcp_stream),
-            )
-            .await
-            .map_err(|_| ErrorCode::ConnectionTimeout)?
-            .map_err(hyper_request_error)
-            .map(|(sender, conn)| (HttpSender::Http1(sender), HttpConn::Http1(conn)))?
-        };
+        let (sender, conn) = new_sender_and_conn(tcp_stream, is_http2, connect_timeout).await?;
 
         let worker = wasmtime_wasi::runtime::spawn(async move {
             match conn.await {
@@ -395,6 +359,32 @@ async fn send_request_handler(
         worker: Some(worker),
         between_bytes_timeout,
     })
+}
+
+async fn new_sender_and_conn<T: hyper::rt::Read + hyper::rt::Write + Unpin + Send + 'static>(
+    stream: T,
+    is_http2: bool,
+    connect_timeout: Duration,
+) -> Result<(HttpSender, HttpConn<T>), ErrorCode> {
+    if is_http2 {
+        timeout(
+            connect_timeout,
+            hyper::client::conn::http2::handshake(TokioExecutor::default(), stream),
+        )
+        .await
+        .map_err(|_| ErrorCode::ConnectionTimeout)?
+        .map_err(hyper_request_error)
+        .map(|(sender, conn)| (HttpSender::Http2(sender), HttpConn::Http2(conn)))
+    } else {
+        timeout(
+            connect_timeout,
+            hyper::client::conn::http1::handshake(stream),
+        )
+        .await
+        .map_err(|_| ErrorCode::ConnectionTimeout)?
+        .map_err(hyper_request_error)
+        .map(|(sender, conn)| (HttpSender::Http1(sender), HttpConn::Http1(conn)))
+    }
 }
 
 enum HttpSender {
