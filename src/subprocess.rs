@@ -24,7 +24,7 @@ impl ExitStatusError {
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(not(unix))]
     pub(crate) fn new(status: std::process::ExitStatus) -> Self {
         if let Some(code) = status.code() {
             Self::ExitCode(code)
@@ -36,9 +36,10 @@ impl ExitStatusError {
     pub fn code(&self) -> i32 {
         match self {
             Self::ExitCode(code) => *code,
-            Self::Signal(signal) => *signal,
+            Self::Signal(signal) => 128 + *signal,
             Self::Unknown => 1,
         }
+        .min(255)
     }
 }
 
@@ -50,7 +51,7 @@ impl std::fmt::Display for ExitStatusError {
 
         match self {
             Self::ExitCode(code) => writeln!(f, "{code}"),
-            Self::Signal(signal) => writeln!(f, "{signal}"),
+            Self::Signal(signal) => writeln!(f, "signal {signal}"),
             Self::Unknown => writeln!(f, "unknown"),
         }
     }
