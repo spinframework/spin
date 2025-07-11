@@ -1,3 +1,5 @@
+use std::os::unix::process::ExitStatusExt as _;
+
 /// An error representing a subprocess that errored
 ///
 /// This can be used to propogate a subprocesses exit status.
@@ -9,9 +11,17 @@ pub struct ExitStatusError {
 }
 
 impl ExitStatusError {
+    #[cfg(windows)]
     pub(crate) fn new(status: std::process::ExitStatus) -> Self {
         Self {
             status: status.code(),
+        }
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn new(status: std::process::ExitStatus) -> Self {
+        Self {
+            status: status.code().or_else(|| status.signal()),
         }
     }
 
