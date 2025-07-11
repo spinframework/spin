@@ -330,7 +330,11 @@ async fn send_request_handler(
         (sender, worker, is_http2)
     };
 
-    if !is_http2 {
+    if is_http2 {
+        // Some servers (looking at you nginx) don't like a host header even though
+        // http/2 allows it: https://github.com/hyperium/hyper/issues/3298
+        request.headers_mut().remove(HOST);
+    } else {
         // at this point, the request contains the scheme and the authority, but
         // the http packet should only include those if addressing a proxy, so
         // remove them here, since SendRequest::send_request does not do it for us
