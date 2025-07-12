@@ -5,8 +5,11 @@
 /// instead of printing an error,
 #[derive(Debug)]
 pub enum ExitStatusError {
+    /// The subprocess exited with a specific exit code.
     ExitCode(i32),
+    /// The subprocess was exited by a signal. Only available for `Unix` based systems.
     Signal(i32),
+    /// Catchall for general errors. Error code `1`
     Unknown,
 }
 
