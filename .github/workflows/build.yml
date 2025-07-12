@@ -25,9 +25,9 @@ jobs:
     runs-on: "ubuntu-22.04"
     if: ${{ github.event_name == 'pull_request' }}
     steps:
-      - name: 'Checkout Repository'
+      - name: "Checkout Repository"
         uses: actions/checkout@v4
-      - name: 'Dependency Review'
+      - name: "Dependency Review"
         uses: actions/dependency-review-action@v4
 
   lint-rust:
@@ -83,14 +83,8 @@ jobs:
     strategy:
       matrix:
         config:
-          - {
-              arch: "aarch64",
-              target: "aarch64-unknown-linux-musl"
-            }
-          - {
-              arch: "amd64",
-              target: "x86_64-unknown-linux-musl"
-            }
+          - { arch: "aarch64", target: "aarch64-unknown-linux-musl" }
+          - { arch: "amd64", target: "x86_64-unknown-linux-musl" }
     steps:
       - uses: actions/checkout@v3
 
@@ -140,7 +134,6 @@ jobs:
         with:
           name: spin-${{ matrix.os }}
           path: target/release/spin${{ matrix.os == 'windows-latest' && '.exe' || '' }}
-
 
   test-spin:
     name: Test Spin
@@ -198,16 +191,18 @@ jobs:
       - name: Install Rust wasm target
         run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
       - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: "0.14.1"
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.23'
-          cache-dependency-path: "**/go.sum"  # To suppress warning: https://github.com/actions/setup-go/issues/427
+          go-version: "1.23"
+          cache-dependency-path: "**/go.sum" # To suppress warning: https://github.com/actions/setup-go/issues/427
       - uses: acifani/setup-tinygo@v2
         with:
-          tinygo-version: '0.37.0'
+          tinygo-version: "0.37.0"
       - uses: actions/setup-node@v3
         with:
-          node-version: '22.x'
+          node-version: "22.x"
       - name: Install Grain
         run: |
           wget https://github.com/grain-lang/grain/releases/download/grain-v0.6.6/grain-linux-x64
