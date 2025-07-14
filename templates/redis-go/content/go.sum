@@ -1,2 +1,2 @@
-github.com/fermyon/spin/sdk/go/v2 v2.2.0 h1:zHZdIqjbUwyxiwdygHItnM+vUUNSZ3CX43jbIUemBI4=
-github.com/fermyon/spin/sdk/go/v2 v2.2.0/go.mod h1:kfJ+gdf/xIaKrsC6JHCUDYMv2Bzib1ohFIYUzvP+SCw=
+github.com/spinframework/spin-go-sdk/v2 v2.2.1 h1:ceAbRU+D3xmyZ8ScDLeFoT763ikFIUEmSjgsrD11v8k=
+github.com/spinframework/spin-go-sdk/v2 v2.2.1/go.mod h1:vocVZB4qlTG8C5yoliKIAJCuv4x7sqK0GmVkWeD9N/A=
