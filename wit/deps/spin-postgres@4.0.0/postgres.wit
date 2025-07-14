@@ -5,9 +5,27 @@ interface postgres {
   variant error {
       connection-failed(string),
       bad-parameter(string),
-      query-failed(string),
+      query-failed(query-error),
       value-conversion-failed(string),
       other(string)
+  }
+
+  variant query-error {
+      /// An error occurred but we do not have structured info for it
+      text(string),
+      /// Postgres returned a structured database error
+      db-error(db-error),
+  }
+
+  record db-error {
+      /// Stringised version of the error. This is primarily to facilitate migration of older code.
+      as-text: string,
+      severity: string,
+      code: string,
+      message: string,
+      detail: option<string>,
+      /// Any error information provided by Postgres and not captured above.
+      extras: list<tuple<string, string>>,
   }
 
   /// Data types for a database column

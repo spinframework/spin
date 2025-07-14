@@ -29,6 +29,48 @@ pub trait Client {
     ) -> Result<RowSet, v4::Error>;
 }
 
+/// Extract weak-typed error data for WIT purposes
+fn pg_extras(dbe: &tokio_postgres::error::DbError) -> Vec<(String, String)> {
+    let mut extras = vec![];
+
+    macro_rules! pg_extra {
+        ( $n:ident ) => {
+            if let Some(value) = dbe.$n() {
+                extras.push((stringify!($n).to_owned(), value.to_string()));
+            }
+        };
+    }
+
+    pg_extra!(column);
+    pg_extra!(constraint);
+    pg_extra!(routine);
+    pg_extra!(hint);
+    pg_extra!(table);
+    pg_extra!(datatype);
+    pg_extra!(schema);
+    pg_extra!(file);
+    pg_extra!(line);
+    pg_extra!(where_);
+
+    extras
+}
+
+fn query_failed(e: tokio_postgres::error::Error) -> v4::Error {
+    let flattened = format!("{e:?}");
+    let query_error = match e.as_db_error() {
+        None => v4::QueryError::Text(flattened),
+        Some(dbe) => v4::QueryError::DbError(v4::DbError {
+            as_text: flattened,
+            severity: dbe.severity().to_owned(),
+            code: dbe.code().code().to_owned(),
+            message: dbe.message().to_owned(),
+            detail: dbe.detail().map(|s| s.to_owned()),
+            extras: pg_extras(dbe),
+        }),
+    };
+    v4::Error::QueryFailed(query_error)
+}
+
 #[async_trait]
 impl Client for TokioClient {
     async fn build_client(address: &str) -> Result<Self>
@@ -70,7 +112,7 @@ impl Client for TokioClient {
 
         self.execute(&statement, params_refs.as_slice())
             .await
-            .map_err(|e| v4::Error::QueryFailed(format!("{e:?}")))
+            .map_err(query_failed)
     }
 
     async fn query(
@@ -92,7 +134,7 @@ impl Client for TokioClient {
         let results = self
             .query(&statement, params_refs.as_slice())
             .await
-            .map_err(|e| v4::Error::QueryFailed(format!("{e:?}")))?;
+            .map_err(query_failed)?;
 
         if results.is_empty() {
             return Ok(RowSet {
@@ -106,7 +148,7 @@ impl Client for TokioClient {
             .iter()
             .map(convert_row)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| v4::Error::QueryFailed(format!("{e:?}")))?;
+            .map_err(|e| v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}"))))?;
 
         Ok(RowSet { columns, rows })
     }

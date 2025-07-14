@@ -376,7 +376,7 @@ mod rdbms_types {
             match error {
                 pg4::Error::ConnectionFailed(e) => v1::postgres::PgError::ConnectionFailed(e),
                 pg4::Error::BadParameter(e) => v1::postgres::PgError::BadParameter(e),
-                pg4::Error::QueryFailed(e) => v1::postgres::PgError::QueryFailed(e),
+                pg4::Error::QueryFailed(e) => v1::postgres::PgError::QueryFailed(pg_error_text(e)),
                 pg4::Error::ValueConversionFailed(e) => {
                     v1::postgres::PgError::ValueConversionFailed(e)
                 }
@@ -390,7 +390,7 @@ mod rdbms_types {
             match error {
                 pg4::Error::ConnectionFailed(e) => v2::rdbms_types::Error::ConnectionFailed(e),
                 pg4::Error::BadParameter(e) => v2::rdbms_types::Error::BadParameter(e),
-                pg4::Error::QueryFailed(e) => v2::rdbms_types::Error::QueryFailed(e),
+                pg4::Error::QueryFailed(e) => v2::rdbms_types::Error::QueryFailed(pg_error_text(e)),
                 pg4::Error::ValueConversionFailed(e) => {
                     v2::rdbms_types::Error::ValueConversionFailed(e)
                 }
@@ -404,10 +404,17 @@ mod rdbms_types {
             match error {
                 pg4::Error::ConnectionFailed(e) => pg3::Error::ConnectionFailed(e),
                 pg4::Error::BadParameter(e) => pg3::Error::BadParameter(e),
-                pg4::Error::QueryFailed(e) => pg3::Error::QueryFailed(e),
+                pg4::Error::QueryFailed(e) => pg3::Error::QueryFailed(pg_error_text(e)),
                 pg4::Error::ValueConversionFailed(e) => pg3::Error::ValueConversionFailed(e),
                 pg4::Error::Other(e) => pg3::Error::Other(e),
             }
+        }
+    }
+
+    pub fn pg_error_text(error: pg4::QueryError) -> String {
+        match error {
+            pg4::QueryError::Text(text) => text,
+            pg4::QueryError::DbError(e) => e.as_text,
         }
     }
 }
