@@ -4,9 +4,15 @@ use opentelemetry::{
 };
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
+use crate::env::OtelExporterOtlpHeaders;
+
 /// Injects the current W3C TraceContext into the provided request.
 pub fn inject_trace_context<'a>(req: impl Into<HeaderInjector<'a>>) {
     let mut injector = req.into();
+    for (key, value) in OtelExporterOtlpHeaders::headers() {
+        injector.set(&key, value);
+    }
+
     global::get_text_map_propagator(|propagator| {
         let context = tracing::Span::current().context();
         propagator.inject_context(&context, &mut injector);
