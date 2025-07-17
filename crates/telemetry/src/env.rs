@@ -1,9 +1,10 @@
-use std::env::VarError;
+use std::{collections::HashMap, env::VarError};
 
 use opentelemetry_otlp::{
-    OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
-    OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, OTEL_EXPORTER_OTLP_PROTOCOL,
-    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+    OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS, OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+    OTEL_EXPORTER_OTLP_LOGS_HEADERS, OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
+    OTEL_EXPORTER_OTLP_METRICS_HEADERS, OTEL_EXPORTER_OTLP_PROTOCOL,
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_HEADERS,
 };
 
 const OTEL_SDK_DISABLED: &str = "OTEL_SDK_DISABLED";
@@ -74,6 +75,92 @@ fn any_vars_set(enabling_vars: &[&str]) -> bool {
 /// It is considered disabled if the environment variable `OTEL_SDK_DISABLED` is set and not empty.
 pub(crate) fn otel_sdk_disabled() -> bool {
     std::env::var_os(OTEL_SDK_DISABLED).is_some_and(|val| !val.is_empty())
+}
+
+pub(crate) struct OtelExporterOtlpHeaders;
+
+impl OtelExporterOtlpHeaders {
+    /// Returns a list of key value pairs (when provided) for:
+    ///  - `OTEL_EXPORTER_OTLP_HEADERS`
+    ///  - `OTEL_EXPORTER_OTLP_TRACES_HEADERS`,
+    ///  - `OTEL_EXPORTER_OTLP_METRICS_HEADERS`,
+    ///  - `OTEL_EXPORTER_OTLP_LOGS_HEADERS`
+    pub(crate) fn headers() -> HashMap<String, String> {
+        let mut all_headers: HashMap<String, String> = HashMap::new();
+
+        if let Some(otel_exporter_otlp_headers) = Self::otel_exporter_otlp_headers() {
+            all_headers.extend(otel_exporter_otlp_headers);
+        }
+
+        if let Some(otel_exporter_otlp_log_headers) = Self::otel_exporter_otlp_log_headers() {
+            all_headers.extend(otel_exporter_otlp_log_headers);
+        }
+
+        if let Some(otel_exporter_otlp_metrics_headers) = Self::otel_exporter_otlp_metrics_headers()
+        {
+            all_headers.extend(otel_exporter_otlp_metrics_headers);
+        }
+
+        if let Some(otel_exporter_otlp_traces_headers) = Self::otel_exporter_otlp_traces_headers() {
+            all_headers.extend(otel_exporter_otlp_traces_headers);
+        }
+
+        all_headers
+    }
+
+    /// Returns a boolean indicating if the OTEL headers layer should be enabled.
+    ///
+    /// It is considered enabled if `OTEL_EXPORTER_OTLP_HEADERS` is set and not empty.
+    ///
+    /// Note that this is overridden if OTEL_SDK_DISABLED is set and not empty.
+    pub(crate) fn otel_exporter_otlp_headers() -> Option<HashMap<String, String>> {
+        Self::var_get(OTEL_EXPORTER_OTLP_HEADERS)
+    }
+
+    /// Returns a boolean indicating if the OTEL log headers layer should be enabled.
+    ///
+    /// It is considered enabled if `OTEL_EXPORTER_OTLP_LOGS_HEADERS` is set and not empty.
+    ///
+    /// Note that this is overridden if OTEL_SDK_DISABLED is set and not empty.
+    /// Also Note this is only supported for HTTP.
+    pub(crate) fn otel_exporter_otlp_log_headers() -> Option<HashMap<String, String>> {
+        Self::var_get(OTEL_EXPORTER_OTLP_LOGS_HEADERS)
+    }
+
+    /// Returns a boolean indicating if the OTEL metrics headers layer should be enabled.
+    ///
+    /// It is considered enabled if `OTEL_EXPORTER_OTLP_METRICS_HEADERS` is set and not empty.
+    ///
+    /// Note that this is overridden if OTEL_SDK_DISABLED is set and not empty.
+    /// Also Note this is only supported for HTTP.
+    pub(crate) fn otel_exporter_otlp_metrics_headers() -> Option<HashMap<String, String>> {
+        Self::var_get(OTEL_EXPORTER_OTLP_METRICS_HEADERS)
+    }
+
+    /// Returns a boolean indicating if the OTEL traces headers layer should be enabled.
+    ///
+    /// It is considered enabled if `OTEL_EXPORTER_OTLP_TRACES_HEADERS` is set and not empty.
+    ///
+    /// Note that this is overridden if OTEL_SDK_DISABLED is set and not empty.
+    /// Also Note this is only supported for HTTP.
+    pub(crate) fn otel_exporter_otlp_traces_headers() -> Option<HashMap<String, String>> {
+        Self::var_get(OTEL_EXPORTER_OTLP_TRACES_HEADERS)
+    }
+
+    fn var_get(var_name: &str) -> Option<HashMap<String, String>> {
+        match std::env::var(var_name) {
+            Ok(var_value) if !var_value.trim().is_empty() && !otel_sdk_disabled() => {
+                let mut key_pair_header = HashMap::new();
+                for pair in var_value.split(',') {
+                    if let Some((k, v)) = pair.split_once('=') {
+                        key_pair_header.insert(k.trim().to_owned(), v.trim().to_owned());
+                    }
+                }
+                Some(key_pair_header)
+            }
+            _ => None,
+        }
+    }
 }
 
 /// The protocol to use for OTLP exporter.
