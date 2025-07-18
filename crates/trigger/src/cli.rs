@@ -27,6 +27,7 @@ pub use stdio::StdioLoggingExecutorHooks;
 pub use summary::{KeyValueDefaultStoreSummaryHook, SqliteDefaultStoreSummaryHook};
 
 pub const APP_LOG_DIR: &str = "APP_LOG_DIR";
+pub const REFRESH_LOGS: &str = "REFRESH_LOGS";
 pub const DISABLE_WASMTIME_CACHE: &str = "DISABLE_WASMTIME_CACHE";
 pub const FOLLOW_LOG_OPT: &str = "FOLLOW_ID";
 pub const WASMTIME_CACHE_FILE: &str = "WASMTIME_CACHE_FILE";
@@ -53,6 +54,14 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
         env = "SPIN_LOG_DIR",
     )]
     pub log: Option<PathBuf>,
+
+    /// Whether to refresh logs when restarted.
+    #[clap(
+        name = REFRESH_LOGS,
+        short = 'r',
+        long = "refresh-logs",
+    )]
+    pub refresh_logs: bool,
 
     /// Disable Wasmtime cache.
     #[clap(
@@ -139,6 +148,8 @@ pub struct FactorsConfig {
     pub follow_components: FollowComponents,
     /// Log directory for component stdout/stderr.
     pub log_dir: UserProvidedPath,
+    /// Whether to refresh logs when restarted.
+    pub refresh_logs: bool,
 }
 
 /// An empty implementation of clap::Args to be used as TriggerExecutor::RunConfig
@@ -220,6 +231,7 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
             local_app_dir: local_app_dir.clone(),
             follow_components,
             log_dir,
+            refresh_logs: self.refresh_logs,
         };
 
         let run_fut = builder
