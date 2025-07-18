@@ -50,6 +50,7 @@ impl RuntimeFactorsBuilder for FactorsBuilder {
         executor.add_hooks(StdioLoggingExecutorHooks::new(
             config.follow_components.clone(),
             runtime_config.log_dir(),
+            config.truncate_logs,
         ));
         executor.add_hooks(SqlStatementExecutorHook::new(
             args.sqlite_statements.clone(),
