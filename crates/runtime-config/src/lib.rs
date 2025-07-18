@@ -99,6 +99,7 @@ where
         local_app_dir: Option<PathBuf>,
         provided_state_dir: UserProvidedPath,
         provided_log_dir: UserProvidedPath,
+        refresh_logs: bool,
     ) -> anyhow::Result<Self> {
         let toml = match runtime_config_path {
             Some(runtime_config_path) => {
@@ -117,8 +118,13 @@ where
             }
             None => Default::default(),
         };
-        let toml_resolver =
-            TomlResolver::new(&toml, local_app_dir, provided_state_dir, provided_log_dir);
+        let toml_resolver = TomlResolver::new(
+            &toml,
+            local_app_dir,
+            provided_state_dir,
+            provided_log_dir,
+            refresh_logs,
+        );
 
         Self::new(toml_resolver, runtime_config_path)
     }
@@ -192,6 +198,8 @@ pub struct TomlResolver<'a> {
     state_dir: UserProvidedPath,
     /// Explicitly provided log directory.
     log_dir: UserProvidedPath,
+    /// Whether to refresh logs when restarted.
+    refresh_logs: bool,
 }
 
 impl<'a> TomlResolver<'a> {
@@ -201,12 +209,14 @@ impl<'a> TomlResolver<'a> {
         local_app_dir: Option<PathBuf>,
         state_dir: UserProvidedPath,
         log_dir: UserProvidedPath,
+        refresh_logs: bool,
     ) -> Self {
         Self {
             table: TomlKeyTracker::new(table),
             local_app_dir,
             state_dir,
             log_dir,
+            refresh_logs,
         }
     }
 
@@ -268,7 +278,17 @@ impl<'a> TomlResolver<'a> {
         }
 
         match log_dir {
+            UserProvidedPath::Provided(p) if self.refresh_logs => Ok(Some({
+                let _ = std::fs::remove_dir_all(&p);
+
+                std::path::absolute(p)?
+            })),
             UserProvidedPath::Provided(p) => Ok(Some(std::path::absolute(p)?)),
+            UserProvidedPath::Default if self.refresh_logs => Ok(self.state_dir()?.map(|p| {
+                let _ = std::fs::remove_dir_all(&p);
+
+                p.join("logs")
+            })),
             UserProvidedPath::Default => Ok(self.state_dir()?.map(|p| p.join("logs"))),
             UserProvidedPath::Unset => Ok(None),
         }
@@ -619,6 +639,7 @@ mod tests {
             None,
             UserProvidedPath::Default,
             UserProvidedPath::Default,
+            false,
         )
     }
 

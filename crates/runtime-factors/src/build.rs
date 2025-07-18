@@ -28,6 +28,7 @@ impl RuntimeFactorsBuilder for FactorsBuilder {
             config.local_app_dir.clone().map(PathBuf::from),
             config.state_dir.clone(),
             config.log_dir.clone(),
+            config.refresh_logs,
         )?;
 
         runtime_config.summarize(config.runtime_config_file.as_deref());
