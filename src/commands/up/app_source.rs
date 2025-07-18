@@ -56,9 +56,9 @@ impl AppSource {
         }
     }
 
-    pub async fn build(&self) -> anyhow::Result<()> {
+    pub async fn build(&self, cache_root: &Option<PathBuf>) -> anyhow::Result<()> {
         match self {
-            Self::File(path) => spin_build::build(path, &[]).await,
+            Self::File(path) => spin_build::build_default(path, cache_root.clone()).await,
             _ => Ok(()),
         }
     }

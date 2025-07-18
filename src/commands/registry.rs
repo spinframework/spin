@@ -58,7 +58,7 @@ pub struct Push {
     #[clap(long = "compose", default_value_t = true)]
     pub compose: bool,
 
-    /// Specifies to perform `spin build` before pushing the application.
+    /// Specifies to perform `spin build` (with the default options) before pushing the application.
     #[clap(long, takes_value = false, env = ALWAYS_BUILD_ENV)]
     pub build: bool,
 
@@ -84,7 +84,7 @@ impl Push {
         notify_if_nondefault_rel(&app_file, distance);
 
         if self.build {
-            spin_build::build(&app_file, &[]).await?;
+            spin_build::build_default(&app_file, self.cache_dir.clone()).await?;
         }
 
         let annotations = if self.annotations.is_empty() {
