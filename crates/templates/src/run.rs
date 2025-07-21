@@ -84,14 +84,6 @@ impl Run {
         self.build_renderer_raw(interaction).await.into()
     }
 
-    fn allow_overwrite(&self) -> bool {
-        // If the template variant asks to be generated into the app root,
-        // we assume that it knows what it's doing and intends to avoid
-        // overwriting. This is true for the one use case we have, although
-        // we need to track if it's a flawed assumption in general cases.
-        self.options.allow_overwrite || self.template.use_root(&self.options.variant)
-    }
-
     // The 'raw' in this refers to the output type, which is an ugly representation
     // of cancellation: Ok(Some(...)) means a result, Ok(None) means cancelled, Err
     // means error. Why have this ugly representation? Because it makes it terser to
@@ -165,6 +157,14 @@ impl Run {
         }
     }
 
+    fn allow_overwrite(&self) -> bool {
+        // If the template variant asks to be generated into the app root,
+        // we assume that it knows what it's doing and intends to avoid
+        // overwriting. This is true for the one use case we have, although
+        // we need to track if it's a flawed assumption in general cases.
+        self.options.allow_overwrite || self.template.use_root(&self.options.variant)
+    }
+
     fn included_files(
         &self,
         from: &Path,
@@ -202,6 +202,11 @@ impl Run {
         if !path_str.contains("{{") {
             return crate::renderer::TemplateablePath::Plain(path);
         }
+
+        // Windows file paths can't contain the pipe character used in templates.
+        // This masterful workaround will definitely not confuse anybody or cause
+        // any weird hiccups in six months time.
+        let path_str = path_str.replace("!!", "|");
 
         match parser.parse(&path_str) {
             Ok(t) => crate::renderer::TemplateablePath::Template(t),
