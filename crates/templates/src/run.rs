@@ -84,6 +84,14 @@ impl Run {
         self.build_renderer_raw(interaction).await.into()
     }
 
+    fn allow_overwrite(&self) -> bool {
+        // If the template variant asks to be generated into the app root,
+        // we assume that it knows what it's doing and intends to avoid
+        // overwriting. This is true for the one use case we have, although
+        // we need to track if it's a flawed assumption in general cases.
+        self.options.allow_overwrite || self.template.use_root(&self.options.variant)
+    }
+
     // The 'raw' in this refers to the output type, which is an ugly representation
     // of cancellation: Ok(Some(...)) means a result, Ok(None) means cancelled, Err
     // means error. Why have this ugly representation? Because it makes it terser to
@@ -99,7 +107,7 @@ impl Run {
         // TODO: rationalise `path` and `dir`
         let to = self.generation_target_dir();
 
-        if !self.options.allow_overwrite {
+        if !self.allow_overwrite() {
             match interaction.allow_generate_into(&to) {
                 Cancellable::Cancelled => return Ok(None),
                 Cancellable::Ok(_) => (),
@@ -179,9 +187,26 @@ impl Run {
         let outputs = Self::to_output_paths(from, to, template_contents);
         let file_ops = outputs
             .into_iter()
-            .map(|(path, content)| RenderOperation::WriteFile(path, content))
+            .map(|(path, content)| {
+                RenderOperation::WriteFile(Self::templateable_path(path, parser), content)
+            })
             .collect();
         Ok(file_ops)
+    }
+
+    fn templateable_path(
+        path: PathBuf,
+        parser: &liquid::Parser,
+    ) -> crate::renderer::TemplateablePath {
+        let path_str = path.display().to_string();
+        if !path_str.contains("{{") {
+            return crate::renderer::TemplateablePath::Plain(path);
+        }
+
+        match parser.parse(&path_str) {
+            Ok(t) => crate::renderer::TemplateablePath::Template(t),
+            Err(_) => crate::renderer::TemplateablePath::Plain(path),
+        }
     }
 
     async fn special_values(&self) -> HashMap<String, String> {
@@ -206,10 +231,15 @@ impl Run {
     fn generation_target_dir(&self) -> PathBuf {
         match &self.options.variant {
             TemplateVariantInfo::NewApplication => self.options.output_path.clone(),
-            TemplateVariantInfo::AddComponent { manifest_path } => manifest_path
-                .parent()
-                .unwrap()
-                .join(&self.options.output_path),
+            TemplateVariantInfo::AddComponent { manifest_path } => {
+                let root = manifest_path.parent().unwrap();
+
+                if self.template.use_root(&self.options.variant) {
+                    root.to_owned()
+                } else {
+                    root.join(&self.options.output_path)
+                }
+            }
         }
     }
 

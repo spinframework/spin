@@ -11,8 +11,8 @@ use regex::Regex;
 use crate::{
     constraints::StringConstraints,
     reader::{
-        RawCondition, RawConditional, RawExtraOutput, RawParameter, RawTemplateManifest,
-        RawTemplateManifestV1, RawTemplateVariant,
+        RawCondition, RawConditional, RawCopyInto, RawExtraOutput, RawParameter,
+        RawTemplateManifest, RawTemplateManifestV1, RawTemplateVariant,
     },
     run::{Run, RunOptions},
     store::TemplateLayout,
@@ -95,7 +95,15 @@ impl TemplateVariantInfo {
 }
 
 #[derive(Clone, Debug, Default)]
+enum CopyInto {
+    #[default]
+    OwnDirectory,
+    Root,
+}
+
+#[derive(Clone, Debug, Default)]
 pub(crate) struct TemplateVariant {
+    copy_into: CopyInto,
     skip_files: Vec<String>,
     skip_parameters: Vec<String>,
     snippets: HashMap<String, String>,
@@ -385,7 +393,9 @@ impl Template {
     }
 
     fn parse_template_variant(raw: RawTemplateVariant) -> TemplateVariant {
+        let copy_into = raw.copy_into.map(Self::parse_copy_into).unwrap_or_default();
         TemplateVariant {
+            copy_into,
             skip_files: raw.skip_files.unwrap_or_default(),
             skip_parameters: raw.skip_parameters.unwrap_or_default(),
             snippets: raw.snippets.unwrap_or_default(),
@@ -395,6 +405,13 @@ impl Template {
                 .into_values()
                 .map(Self::parse_conditional)
                 .collect(),
+        }
+    }
+
+    fn parse_copy_into(raw: RawCopyInto) -> CopyInto {
+        match raw {
+            RawCopyInto::Root => CopyInto::Root,
+            RawCopyInto::Own => CopyInto::OwnDirectory,
         }
     }
 
@@ -450,6 +467,11 @@ impl Template {
             .into_iter()
             .filter(|path| !variant.skip_file(base, path))
             .collect()
+    }
+
+    pub(crate) fn use_root(&self, variant_info: &TemplateVariantInfo) -> bool {
+        let variant = self.variant(variant_info).unwrap(); // TODO: for now
+        matches!(variant.copy_into, CopyInto::Root)
     }
 
     pub(crate) fn check_compatible_trigger(&self, app_trigger: Option<&str>) -> anyhow::Result<()> {
