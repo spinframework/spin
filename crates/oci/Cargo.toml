@@ -30,6 +30,8 @@ tokio = { workspace = true, features = ["fs"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tracing = { workspace = true }
 walkdir = { workspace = true }
+wasmparser = { workspace = true }
+wat = "1"
 
 [dev-dependencies]
 wasm-encoder = { workspace = true }

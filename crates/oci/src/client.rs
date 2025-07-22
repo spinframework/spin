@@ -24,6 +24,7 @@ use tokio::fs;
 use walkdir::WalkDir;
 
 use crate::auth::AuthConfig;
+use crate::validate;
 
 // TODO: the media types for application, data and archive layer are not final
 /// Media type for a layer representing a locked Spin application configuration
@@ -148,6 +149,12 @@ impl Client {
             None,
         )
         .await?;
+
+        // Ensure that all Spin components specify valid wasm binaries in both the `source`
+        // field and for each dependency.
+        for locked_component in &locked.components {
+            validate::ensure_wasms(locked_component).await?;
+        }
 
         self.push_locked_core(
             locked,

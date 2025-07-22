@@ -8579,6 +8579,8 @@ dependencies = [
  "tracing",
  "walkdir",
  "wasm-encoder 0.235.0",
+ "wasmparser 0.235.0",
+ "wat",
  "wit-component 0.235.0",
  "wit-parser 0.235.0",
 ]

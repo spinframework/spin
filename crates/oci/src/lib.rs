@@ -5,6 +5,7 @@ mod auth;
 pub mod client;
 mod loader;
 pub mod utils;
+mod validate;
 
 pub use client::{Client, ComposeMode};
 pub use loader::OciLoader;
