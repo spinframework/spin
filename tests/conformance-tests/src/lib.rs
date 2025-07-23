@@ -31,6 +31,14 @@ pub fn run_test(
                     return Ok(());
                 }
             }
+            conformance_tests::config::Precondition::Postgres => {
+                if should_run_docker_based_tests() {
+                    services.push("postgres")
+                } else {
+                    // Skip the test if docker is not installed.
+                    return Ok(());
+                }
+            }
             conformance_tests::config::Precondition::KeyValueStore(_) => {}
             conformance_tests::config::Precondition::Sqlite => {}
         }
