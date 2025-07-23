@@ -29,6 +29,16 @@ pub struct BuildCommand {
     #[clap(short = 'c', long, multiple = true)]
     pub component_id: Vec<String>,
 
+    /// By default, if the application manifest specifies one or more deployment targets, Spin
+    /// checks that all components are compatible with those deployment targets. Specify
+    /// this option to bypass those target checks.
+    #[clap(
+        long = "skip-target-checks",
+        alias = "skip-target-check",
+        takes_value = false
+    )]
+    skip_target_checks: bool,
+
     /// Run the application after building.
     #[clap(name = BUILD_UP_OPT, short = 'u', long = "up")]
     pub up: bool,
@@ -43,7 +53,13 @@ impl BuildCommand {
             spin_common::paths::find_manifest_file_path(self.app_source.as_ref())?;
         notify_if_nondefault_rel(&manifest_file, distance);
 
-        spin_build::build(&manifest_file, &self.component_id).await?;
+        spin_build::build(
+            &manifest_file,
+            &self.component_id,
+            self.target_checking(),
+            None,
+        )
+        .await?;
 
         if self.up {
             let mut cmd = UpCommand::parse_from(
@@ -57,6 +73,14 @@ impl BuildCommand {
             cmd.run().await
         } else {
             Ok(())
+        }
+    }
+
+    fn target_checking(&self) -> spin_build::TargetChecking {
+        if self.skip_target_checks {
+            spin_build::TargetChecking::Skip
+        } else {
+            spin_build::TargetChecking::Check
         }
     }
 }

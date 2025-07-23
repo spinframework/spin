@@ -1,0 +1,35 @@
+package spin:test@1.0.0;
+
+interface getter {
+    get: func() -> u32;
+}
+
+interface trigger {
+    run: func();
+}
+
+world simple {
+    import getter;
+    export trigger;
+}
+
+world simple-import-only {
+    import getter;
+}
+
+// These worlds and interface are used for constructing components that
+// *don't* comply with the 'simple' world.
+
+interface evil {
+    cackle: func();
+}
+
+world not-so-simple {
+    import getter;
+    import evil;
+    export trigger;
+}
+
+world too-darn-simple {
+    import getter;
+}
