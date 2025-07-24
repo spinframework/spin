@@ -338,7 +338,7 @@ impl watchexec::handler::Handler<watchexec::action::Action> for NotifyOnFileChan
             _ = self.notifier.send(Uuid::new_v4());
         }
         action.outcome(watchexec::action::Outcome::DoNothing);
-        Ok::<(), Box<(dyn std::error::Error + 'static)>>(())
+        Ok::<(), Box<dyn std::error::Error + 'static>>(())
     }
 }
 

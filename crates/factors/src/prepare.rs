@@ -65,7 +65,7 @@ impl<'a, T: RuntimeFactors, F: Factor> PrepareContext<'a, T, F> {
     }
 
     /// Get the app component.
-    pub fn app_component(&self) -> &'a AppComponent {
+    pub fn app_component(&self) -> &'a AppComponent<'_> {
         self.app_component
     }
 

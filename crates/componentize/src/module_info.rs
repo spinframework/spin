@@ -83,7 +83,7 @@ impl ModuleInfo {
 
     /// Returns the wit-bindgen metadata producers processed-by field, if
     /// present.
-    pub fn bindgen_processors(&self) -> Option<wasm_metadata::ProducersField> {
+    pub fn bindgen_processors(&self) -> Option<wasm_metadata::ProducersField<'_>> {
         self.bindgen
             .as_ref()?
             .producers

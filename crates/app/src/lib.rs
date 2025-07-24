@@ -249,7 +249,7 @@ impl<'a> AppComponent<'a> {
 
     /// Returns an iterator of [`ContentPath`]s for this component's configured
     /// "directory mounts".
-    pub fn files(&self) -> std::slice::Iter<ContentPath> {
+    pub fn files(&self) -> std::slice::Iter<'_, ContentPath> {
         self.locked.files.iter()
     }
 

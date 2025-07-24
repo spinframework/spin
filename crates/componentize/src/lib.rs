@@ -39,7 +39,7 @@ static EXPORT_INTERFACES: &[(&str, &str)] = &[
     ("handle-http-request", "inbound-http"),
 ];
 
-pub fn componentize_if_necessary(module_or_component: &[u8]) -> Result<Cow<[u8]>> {
+pub fn componentize_if_necessary(module_or_component: &[u8]) -> Result<Cow<'_, [u8]>> {
     for payload in Parser::new(0).parse_all(module_or_component) {
         if let Payload::Version { encoding, .. } = payload.context("unable to parse binary")? {
             return match encoding {
