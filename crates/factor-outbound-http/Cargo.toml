@@ -13,6 +13,7 @@ hyper = { workspace = true }
 hyper-util = { workspace = true }
 reqwest = { workspace = true, features = ["gzip"] }
 rustls = { workspace = true }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-telemetry = { path = "../telemetry" }

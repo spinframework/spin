@@ -10,6 +10,7 @@ chrono = { workspace = true }
 native-tls = "0.2"
 postgres-native-tls = "0.5"
 spin-core = { path = "../core" }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-resource-table = { path = "../table" }

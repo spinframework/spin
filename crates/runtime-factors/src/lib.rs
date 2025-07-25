@@ -8,6 +8,7 @@ use anyhow::Context as _;
 use spin_common::arg_parser::parse_kv;
 use spin_factor_key_value::KeyValueFactor;
 use spin_factor_llm::LlmFactor;
+use spin_factor_otel::OtelFactor;
 use spin_factor_outbound_http::OutboundHttpFactor;
 use spin_factor_outbound_mqtt::{NetworkedMqttClient, OutboundMqttFactor};
 use spin_factor_outbound_mysql::OutboundMysqlFactor;
@@ -22,6 +23,7 @@ use spin_runtime_config::{ResolvedRuntimeConfig, TomlRuntimeConfigSource};
 
 #[derive(RuntimeFactors)]
 pub struct TriggerFactors {
+    pub otel: OtelFactor,
     pub wasi: WasiFactor,
     pub variables: VariablesFactor,
     pub key_value: KeyValueFactor,
@@ -42,6 +44,7 @@ impl TriggerFactors {
         allow_transient_writes: bool,
     ) -> anyhow::Result<Self> {
         Ok(Self {
+            otel: OtelFactor::new()?,
             wasi: wasi_factor(working_dir, allow_transient_writes),
             variables: VariablesFactor::default(),
             key_value: KeyValueFactor::new(),
