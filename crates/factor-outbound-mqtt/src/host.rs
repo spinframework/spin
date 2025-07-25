@@ -4,6 +4,7 @@ use anyhow::Result;
 use spin_core::{async_trait, wasmtime::component::Resource};
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
 use spin_world::v2::mqtt::{self as v2, Connection, Error, Qos};
+use spin_factor_otel::OtelContext;
 use tracing::{instrument, Level};
 
 use crate::ClientCreator;

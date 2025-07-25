@@ -3,7 +3,6 @@ use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
 use spin_core::wasmtime::component::Resource;
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
 use spin_factor_otel::OtelContext;
-use spin_factor_outbound_networking::OutboundAllowedHosts;
 use spin_world::v1::{redis as v1, redis_types};
 use spin_world::v2::redis::{
     self as v2, Connection as RedisConnection, Error, RedisParameter, RedisResult,

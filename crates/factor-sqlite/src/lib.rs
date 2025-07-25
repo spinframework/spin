@@ -9,7 +9,6 @@ use host::InstanceState;
 use async_trait::async_trait;
 use spin_factors::{anyhow, Factor, FactorData};
 use spin_factor_otel::OtelContext;
-use spin_factors::{anyhow, Factor};
 use spin_locked_app::MetadataKey;
 use spin_world::spin::sqlite::sqlite as v3;
 use spin_world::v1::sqlite as v1;

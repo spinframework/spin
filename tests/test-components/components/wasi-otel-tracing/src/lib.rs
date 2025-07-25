@@ -5,7 +5,7 @@ use opentelemetry::{
     trace::{TraceContextExt, Tracer},
     Array, Context, ContextGuard, KeyValue, Value,
 };
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_wasi::WasiPropagator;
 use spin_sdk::{
     http::{IntoResponse, Method, Params, Request, Response, Router},
@@ -27,7 +27,7 @@ fn handle(req: Request) -> anyhow::Result<impl IntoResponse> {
 fn setup_tracer(propagate_context: bool) -> (BoxedTracer, Option<ContextGuard>) {
     // Set up a tracer using the WASI processor
     let wasi_processor = opentelemetry_wasi::WasiProcessor::new();
-    let tracer_provider = TracerProvider::builder()
+    let tracer_provider = SdkTracerProvider::builder()
         .with_span_processor(wasi_processor)
         .build();
     global::set_tracer_provider(tracer_provider);

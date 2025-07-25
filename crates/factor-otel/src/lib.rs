@@ -2,7 +2,6 @@ mod host;
 
 use std::{
     sync::{Arc, RwLock},
-    time::Duration,
 };
 
 use anyhow::bail;
@@ -13,16 +12,15 @@ use opentelemetry::{
 };
 use opentelemetry_sdk::{
     resource::{EnvResourceDetector, TelemetryResourceDetector},
-    runtime::Tokio,
     trace::{BatchSpanProcessor, SpanProcessor},
     Resource,
 };
-use spin_factors::{Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder};
+use spin_factors::{Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder};
 use spin_telemetry::{detector::SpinResourceDetector, env::OtlpProtocol};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 pub struct OtelFactor {
-    processor: Arc<BatchSpanProcessor<Tokio>>,
+    processor: Arc<BatchSpanProcessor>,
 }
 
 impl Factor for OtelFactor {
@@ -30,11 +28,8 @@ impl Factor for OtelFactor {
     type AppState = ();
     type InstanceBuilder = InstanceState;
 
-    fn init<T: Send + 'static>(
-        &mut self,
-        mut ctx: spin_factors::InitContext<T, Self>,
-    ) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::wasi::otel::tracing::add_to_linker)?;
+    fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
+        ctx.link_bindings(spin_world::wasi::otel::tracing::add_to_linker::<_, FactorData<Self>>)?;
         Ok(())
     }
 
@@ -71,16 +66,13 @@ impl OtelFactor {
                 .build()?,
             OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
         };
-        let mut processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(
-            exporter,
-            opentelemetry_sdk::runtime::Tokio,
-        )
-        .build();
+
+        let mut processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(exporter).build();
+
         // This is a hack b/c we know the version of this crate will be the same as the version of Spin
         let spin_version = env!("CARGO_PKG_VERSION").to_string();
-        processor.set_resource(&Resource::from_detectors(
-            Duration::from_secs(5),
-            vec![
+
+        let detectors: &[Box<dyn opentelemetry_sdk::resource::ResourceDetector>; 3] = &[
                 // Set service.name from env OTEL_SERVICE_NAME > env OTEL_RESOURCE_ATTRIBUTES > spin
                 // Set service.version from Spin metadata
                 Box::new(SpinResourceDetector::new(spin_version)),
@@ -88,8 +80,10 @@ impl OtelFactor {
                 Box::new(EnvResourceDetector::new()),
                 // Sets telemetry.sdk{name, language, version}
                 Box::new(TelemetryResourceDetector),
-            ],
-        ));
+        ];
+
+        processor.set_resource(&Resource::builder().with_detectors(detectors).build());
+
         Ok(Self {
             processor: Arc::new(processor),
         })
@@ -98,7 +92,7 @@ impl OtelFactor {
 
 pub struct InstanceState {
     pub(crate) state: Arc<RwLock<State>>,
-    pub(crate) processor: Arc<BatchSpanProcessor<Tokio>>,
+    pub(crate) processor: Arc<BatchSpanProcessor>,
 }
 
 impl SelfInstanceBuilder for InstanceState {}

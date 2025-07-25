@@ -562,7 +562,7 @@ mod otel {
     use wasi::clocks0_2_0::wall_clock;
     use wasi::otel::tracing as wasi_otel;
 
-    impl From<wasi_otel::SpanData> for opentelemetry_sdk::export::trace::SpanData {
+    impl From<wasi_otel::SpanData> for opentelemetry_sdk::trace::SpanData {
         fn from(value: wasi_otel::SpanData) -> Self {
             let mut span_events = SpanEvents::default();
             span_events.events = value.events.into_iter().map(Into::into).collect();

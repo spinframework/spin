@@ -83,7 +83,7 @@ openssl = { version = "0.10" }
 anyhow = { workspace = true, features = ["backtrace"] }
 conformance = { path = "tests/conformance-tests" }
 conformance-tests = { workspace = true }
-fake-opentelemetry-collector = "0.21.1"
+fake-opentelemetry-collector = "0.26"
 hex = "0.4"
 http-body-util = { workspace = true }
 hyper = { workspace = true }
@@ -143,6 +143,9 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 indexmap = "2"
 itertools = "0.14"
 lazy_static = "1.5"
+opentelemetry = "0.28"
+opentelemetry-otlp = "0.28"
+opentelemetry_sdk = "0.28"
 path-absolutize = "3"
 quote = "1"
 rand = "0.9"
@@ -169,6 +172,7 @@ toml = "0.8"
 toml_edit = "0.22"
 tower-service = "0.3.3"
 tracing = { version = "0.1.41", features = ["log"] }
+tracing-opentelemetry = "0.29"
 url = "2"
 walkdir = "2"
 wasm-encoder = "0.236.1"
