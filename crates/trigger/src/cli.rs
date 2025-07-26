@@ -27,6 +27,7 @@ pub use stdio::StdioLoggingExecutorHooks;
 pub use summary::{KeyValueDefaultStoreSummaryHook, SqliteDefaultStoreSummaryHook};
 
 pub const APP_LOG_DIR: &str = "APP_LOG_DIR";
+pub const SPIN_TRUNCATE_LOGS: &str = "SPIN_TRUNCATE_LOGS";
 pub const DISABLE_WASMTIME_CACHE: &str = "DISABLE_WASMTIME_CACHE";
 pub const FOLLOW_LOG_OPT: &str = "FOLLOW_ID";
 pub const WASMTIME_CACHE_FILE: &str = "WASMTIME_CACHE_FILE";
@@ -53,6 +54,13 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
         env = "SPIN_LOG_DIR",
     )]
     pub log: Option<PathBuf>,
+
+    /// If set, Spin truncates the log files before starting the application.
+    #[clap(
+        name = SPIN_TRUNCATE_LOGS,
+        long = "truncate-logs",
+    )]
+    pub truncate_logs: bool,
 
     /// Disable Wasmtime cache.
     #[clap(
@@ -139,6 +147,8 @@ pub struct FactorsConfig {
     pub follow_components: FollowComponents,
     /// Log directory for component stdout/stderr.
     pub log_dir: UserProvidedPath,
+    /// If set, Spin truncates the log files before starting the application.
+    pub truncate_logs: bool,
 }
 
 /// An empty implementation of clap::Args to be used as TriggerExecutor::RunConfig
@@ -220,6 +230,7 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
             local_app_dir: local_app_dir.clone(),
             follow_components,
             log_dir,
+            truncate_logs: self.truncate_logs,
         };
 
         let run_fut = builder
