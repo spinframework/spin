@@ -73,8 +73,6 @@ impl RuntimeFactorsBuilder for FactorsBuilder {
         executor.add_hooks(SqliteDefaultStoreSummaryHook);
         executor.add_hooks(KeyValueDefaultStoreSummaryHook);
 
-        executor.add_hooks(EnvVariableHook::new(runtime_config.toml.clone()));
-
         let max_instance_memory = args
             .max_instance_memory
             .or(runtime_config.max_instance_memory());

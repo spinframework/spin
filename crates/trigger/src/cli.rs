@@ -4,7 +4,6 @@ mod max_instance_memory;
 mod sqlite_statements;
 mod stdio;
 mod summary;
-mod variable;
 
 use std::path::PathBuf;
 use std::{future::Future, sync::Arc};
@@ -26,7 +25,6 @@ pub use sqlite_statements::SqlStatementExecutorHook;
 use stdio::FollowComponents;
 pub use stdio::StdioLoggingExecutorHooks;
 pub use summary::{KeyValueDefaultStoreSummaryHook, SqliteDefaultStoreSummaryHook};
-pub use variable::EnvVariableHook;
 
 pub const APP_LOG_DIR: &str = "APP_LOG_DIR";
 pub const SPIN_TRUNCATE_LOGS: &str = "SPIN_TRUNCATE_LOGS";
@@ -236,7 +234,6 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
         };
 
         let run_fut = builder
-        // TODO: Joshua: link 10
             .run(
                 app,
                 common_options,
@@ -334,7 +331,6 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> TriggerAppBuilder<T, B> {
         };
         self.trigger.add_to_linker(core_engine_builder.linker())?;
 
-        // TODO: Joshua: link 8
         let (factors, runtime_config) = B::build(&common_options, &options)?;
 
         let mut executor = FactorsExecutor::new(core_engine_builder, factors)?;
@@ -359,7 +355,6 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> TriggerAppBuilder<T, B> {
         options: B::CliArgs,
         loader: &impl ComponentLoader<B::Factors, T::InstanceState>,
     ) -> anyhow::Result<impl Future<Output = anyhow::Result<()>>> {
-        // TODO: Joshua: link 9
         let configured_app = self.build(app, common_options, options, loader).await?;
         Ok(self.trigger.run(configured_app))
     }

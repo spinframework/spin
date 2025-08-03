@@ -33,7 +33,6 @@ spin-factors = { path = "../factors" }
 spin-factors-executor = { path = "../factors-executor" }
 spin-telemetry = { path = "../telemetry" }
 tokio = { workspace = true, features = ["fs", "rt"] }
-toml = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
