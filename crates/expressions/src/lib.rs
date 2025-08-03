@@ -10,6 +10,7 @@ pub use async_trait;
 pub use provider::Provider;
 use template::Part;
 pub use template::Template;
+use tracing::{info, warn};
 
 /// A [`ProviderResolver`] that can be shared.
 pub type SharedPreparedResolver =
@@ -70,6 +71,7 @@ impl ProviderResolver {
 
     /// Resolves the given template.
     pub async fn resolve_template(&self, template: &Template) -> Result<String> {
+        tracing::info!("Starts here with template: {template:?}");
         let mut resolved_parts: Vec<Cow<str>> = Vec::with_capacity(template.parts().len());
         for part in template.parts() {
             resolved_parts.push(match part {
@@ -82,6 +84,9 @@ impl ProviderResolver {
 
     /// Fully resolve all variables into a [`PreparedResolver`].
     pub async fn prepare(&self) -> Result<PreparedResolver> {
+        // Got here 1
+        tracing::info!("Starts here without");
+        info!("Preparing resolver with {:?} variables", self.internal.variables);
         let mut variables = HashMap::new();
         for name in self.internal.variables.keys() {
             let value = self.resolve_variable(name).await?;
@@ -96,6 +101,9 @@ impl ProviderResolver {
                 return Ok(value);
             }
         }
+
+        // Got here 2
+        warn!("No provider resolved variable {key:?}");
         self.internal.resolve_variable(key)
     }
 }
@@ -174,6 +182,8 @@ impl Resolver {
     }
 
     fn resolve_variable(&self, key: &str) -> Result<String> {
+        // Got here 3
+        info!("Resolving variable {key:?}");
         let var = self
             .variables
             .get(key)

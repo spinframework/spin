@@ -8460,6 +8460,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "toml",
+ "tracing",
 ]
 
 [[package]]
@@ -9176,6 +9177,7 @@ dependencies = [
  "spin-world",
  "tempfile",
  "tokio",
+ "toml",
  "tracing",
 ]
 
