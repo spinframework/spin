@@ -7,7 +7,6 @@ edition = { workspace = true }
 [dependencies]
 spin-expressions = { path = "../expressions" }
 spin-factors = { path = "../factors" }
-spin-locked-app = { path = "../locked-app" }
 spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 tracing = { workspace = true }
