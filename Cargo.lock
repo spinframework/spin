@@ -8100,7 +8100,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "toml",
- "tracing",
 ]
 
 [[package]]
@@ -8292,6 +8291,7 @@ dependencies = [
  "spin-expressions",
  "spin-factors",
  "spin-factors-test",
+ "spin-locked-app",
  "spin-telemetry",
  "spin-world",
  "tokio",
@@ -8501,6 +8501,7 @@ dependencies = [
  "spin-manifest",
  "spin-outbound-networking-config",
  "spin-serde",
+ "spin-variables",
  "tempfile",
  "terminal",
  "tokio",
@@ -8538,6 +8539,7 @@ dependencies = [
  "terminal",
  "thiserror 2.0.12",
  "toml",
+ "tracing",
  "ui-testing",
  "url",
  "wasm-pkg-common",
@@ -8801,7 +8803,6 @@ dependencies = [
  "spin-world",
  "tempfile",
  "tokio",
- "toml",
  "tracing",
 ]
 

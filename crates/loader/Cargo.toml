@@ -20,6 +20,7 @@ spin-locked-app = { path = "../locked-app" }
 spin-manifest = { path = "../manifest" }
 spin-outbound-networking-config = { path = "../outbound-networking-config" }
 spin-serde = { path = "../serde" }
+spin-variables = { path = "../variables" }
 tempfile = { workspace = true }
 terminal = { path = "../terminal" }
 tokio = { workspace = true }

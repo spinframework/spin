@@ -10,12 +10,14 @@ use spin_locked_app::{
         LockedComponentSource, LockedTrigger,
     },
     values::{ValuesMap, ValuesMapBuilder},
+    Variable,
 };
 use spin_manifest::schema::v2::{self, AppManifest, KebabId, WasiFilesMount};
 use spin_outbound_networking_config::allowed_hosts::{
     AllowedHostsConfig, SERVICE_CHAINING_DOMAIN_SUFFIX,
 };
 use spin_serde::DependencyName;
+use spin_variables::DEFAULT_ENV_PREFIX;
 use std::collections::BTreeMap;
 use tokio::{io::AsyncWriteExt, sync::Semaphore};
 
@@ -88,7 +90,7 @@ impl LocalLoader {
 
         let variables = variables
             .into_iter()
-            .map(|(name, v)| Ok((name.to_string(), locked_variable(v)?)))
+            .map(|(name, v)| Self::env_checker((name.to_string(), locked_variable(v)?)))
             .collect::<Result<_>>()?;
 
         let triggers = triggers
@@ -133,6 +135,27 @@ impl LocalLoader {
             triggers,
             components,
         })
+    }
+
+    fn env_key_creator(key: &str) -> String {
+        let upper_key = key.to_ascii_uppercase();
+        let key = format!("{DEFAULT_ENV_PREFIX}_{upper_key}");
+        key
+    }
+
+    fn env_checker((key, val): (String, Variable)) -> anyhow::Result<(String, Variable)> {
+        if val.default.is_none() {
+            if std::env::var(Self::env_key_creator(key.as_ref())).is_err() {
+                Err(anyhow::anyhow!(
+                    "Variable data not provided for {}",
+                    quoted_path(key)
+                ))
+            } else {
+                Ok((key, val))
+            }
+        } else {
+            Ok((key, val))
+        }
     }
 
     // Load the given component into a LockedComponent, ready for execution.

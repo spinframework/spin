@@ -32,7 +32,6 @@ pub fn runtime_config_from_toml(table: &impl GetTomlValue) -> anyhow::Result<Run
     let provider_configs: Vec<VariableProviderConfiguration> = array.clone().try_into()?;
     let mut providers = provider_configs
         .into_iter()
-        // TODO: Joshua: link 3
         .map(VariableProviderConfiguration::into_provider)
         .collect::<anyhow::Result<Vec<_>>>()?;
     providers.extend(var_provider);
@@ -55,7 +54,6 @@ pub enum VariableProviderConfiguration {
 
 impl VariableProviderConfiguration {
     /// Returns the provider for the configuration.
-     // TODO: Joshua: link 2
     pub fn into_provider(self) -> anyhow::Result<Box<dyn Provider>> {
         let provider: Box<dyn Provider> = match self {
             VariableProviderConfiguration::Static(provider) => Box::new(provider),

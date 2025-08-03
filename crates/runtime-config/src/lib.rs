@@ -120,7 +120,6 @@ where
         let toml_resolver =
             TomlResolver::new(&toml, local_app_dir, provided_state_dir, provided_log_dir);
 
-            // TODO: Joshua: link 6
         Self::new(toml_resolver, runtime_config_path)
     }
 
@@ -144,7 +143,6 @@ where
         let log_dir = toml_resolver.log_dir()?;
         let max_instance_memory = toml_resolver.max_instance_memory()?;
 
-        // TODO: Joshua: link 5
         let source = TomlRuntimeConfigSource::new(
             toml_resolver,
             &key_value_resolver,
@@ -344,7 +342,6 @@ impl FactorRuntimeConfigSource<VariablesFactor> for TomlRuntimeConfigSource<'_, 
     fn get_runtime_config(
         &mut self,
     ) -> anyhow::Result<Option<<VariablesFactor as spin_factors::Factor>::RuntimeConfig>> {
-        // TODO: Joshua: link 4
         Ok(Some(spin_variables::runtime_config_from_toml(
             &self.toml.table,
         )?))
