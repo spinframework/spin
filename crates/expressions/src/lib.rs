@@ -96,7 +96,6 @@ impl ProviderResolver {
                 return Ok(value);
             }
         }
-
         self.internal.resolve_variable(key)
     }
 }
