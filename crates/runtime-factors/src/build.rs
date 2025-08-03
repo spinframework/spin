@@ -6,9 +6,7 @@ use anyhow::Context as _;
 use spin_factors_executor::FactorsExecutor;
 use spin_runtime_config::ResolvedRuntimeConfig;
 use spin_trigger::cli::{
-    FactorsConfig, InitialKvSetterHook, KeyValueDefaultStoreSummaryHook, MaxInstanceMemoryHook,
-    RuntimeFactorsBuilder, SqlStatementExecutorHook, SqliteDefaultStoreSummaryHook,
-    StdioLoggingExecutorHooks,
+    EnvVariableHook, FactorsConfig, InitialKvSetterHook, KeyValueDefaultStoreSummaryHook, MaxInstanceMemoryHook, RuntimeFactorsBuilder, SqlStatementExecutorHook, SqliteDefaultStoreSummaryHook, StdioLoggingExecutorHooks
 };
 
 /// A [`RuntimeFactorsBuilder`] for [`TriggerFactors`].
@@ -23,6 +21,7 @@ impl RuntimeFactorsBuilder for FactorsBuilder {
         config: &FactorsConfig,
         args: &Self::CliArgs,
     ) -> anyhow::Result<(Self::Factors, Self::RuntimeConfig)> {
+        // TODO: Joshua: link 7
         let runtime_config = ResolvedRuntimeConfig::<TriggerFactorsRuntimeConfig>::from_file(
             config.runtime_config_file.clone().as_deref(),
             config.local_app_dir.clone().map(PathBuf::from),
@@ -58,6 +57,8 @@ impl RuntimeFactorsBuilder for FactorsBuilder {
         executor.add_hooks(InitialKvSetterHook::new(args.key_values.clone()));
         executor.add_hooks(SqliteDefaultStoreSummaryHook);
         executor.add_hooks(KeyValueDefaultStoreSummaryHook);
+
+        executor.add_hooks(EnvVariableHook::new(runtime_config.toml.clone()));
 
         let max_instance_memory = args
             .max_instance_memory
