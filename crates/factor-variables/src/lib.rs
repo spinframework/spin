@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use runtime_config::RuntimeConfig;
 use spin_expressions::{ProviderResolver as ExpressionResolver, Template};
+use spin_factor_otel::OtelContext;
 use spin_factors::{
     anyhow, ConfigureAppContext, Factor, FactorData, InitContext, PrepareContext, RuntimeFactors,
     SelfInstanceBuilder,
@@ -62,13 +63,15 @@ impl Factor for VariablesFactor {
 
     fn prepare<T: RuntimeFactors>(
         &self,
-        ctx: PrepareContext<T, Self>,
+        mut ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<InstanceState> {
         let component_id = ctx.app_component().id().to_string();
         let expression_resolver = ctx.app_state().expression_resolver.clone();
+        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
         Ok(InstanceState {
             component_id,
             expression_resolver,
+            otel_context,
         })
     }
 }
@@ -90,6 +93,7 @@ impl AppState {
 pub struct InstanceState {
     component_id: String,
     expression_resolver: Arc<ExpressionResolver>,
+    otel_context: OtelContext,
 }
 
 impl InstanceState {

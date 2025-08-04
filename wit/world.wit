@@ -8,6 +8,7 @@ world http-trigger {
 
 /// The imports needed for a guest to run on a Spin host
 world platform {
+  include wasi:otel/imports@0.2.0-draft;
   include fermyon:spin/platform@2.0.0;
   include wasi:keyvalue/imports@0.2.0-draft2;
   import spin:postgres/postgres@3.0.0;
