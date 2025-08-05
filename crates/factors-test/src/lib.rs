@@ -102,7 +102,7 @@ pub async fn build_locked_app(manifest: &toml::Table) -> anyhow::Result<LockedAp
     let toml_str = toml::to_string(manifest).context("failed serializing manifest")?;
     let dir = tempfile::tempdir().context("failed creating tempdir")?;
     // `foo` variable is set to require. As we're not providing a default value, env is checked.
-    _ = std::env::set_var(env_key(None, "foo"), "baz");
+    std::env::set_var(env_key(None, "foo"), "baz");
     let path = dir.path().join("spin.toml");
     std::fs::write(&path, toml_str).context("failed writing manifest")?;
     spin_loader::from_file(&path, FilesMountStrategy::Direct, None).await
