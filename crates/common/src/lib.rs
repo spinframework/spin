@@ -10,6 +10,7 @@
 
 pub mod arg_parser;
 pub mod data_dir;
+pub mod env;
 pub mod paths;
 pub mod sha256;
 pub mod sloth;

@@ -8352,6 +8352,7 @@ name = "spin-factors-test"
 version = "3.4.0-pre0"
 dependencies = [
  "spin-app",
+ "spin-common",
  "spin-factors",
  "spin-loader",
  "spin-telemetry",
@@ -8863,6 +8864,7 @@ dependencies = [
  "azure_security_keyvault",
  "dotenvy",
  "serde",
+ "spin-common",
  "spin-expressions",
  "spin-factor-variables",
  "spin-factors",

@@ -6,6 +6,7 @@ use std::{
 };
 
 use serde::Deserialize;
+use spin_common::env::env_key;
 use spin_expressions::{Key, Provider};
 use spin_factors::anyhow::{self, Context as _};
 use spin_world::async_trait;
@@ -24,8 +25,6 @@ pub struct EnvVariablesConfig {
     #[serde(default)]
     pub dotenv_path: Option<PathBuf>,
 }
-
-pub const DEFAULT_ENV_PREFIX: &str = "SPIN_VARIABLE";
 
 type EnvFetcherFn = Box<dyn Fn(&str) -> Result<String, VarError> + Send + Sync>;
 
@@ -71,14 +70,7 @@ impl EnvVariablesProvider {
 
     /// Gets the value of a variable from the environment.
     fn get_sync(&self, key: &Key) -> anyhow::Result<Option<String>> {
-        let prefix = self
-            .prefix
-            .clone()
-            .unwrap_or_else(|| DEFAULT_ENV_PREFIX.to_string());
-
-        let upper_key = key.as_ref().to_ascii_uppercase();
-        let env_key = format!("{prefix}_{upper_key}");
-
+        let env_key = env_key(self.prefix.clone(), key.as_ref());
         self.query_env(&env_key)
     }
 

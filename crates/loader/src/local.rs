@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use futures::{future::try_join_all, StreamExt};
 use reqwest::Url;
-use spin_common::{paths::parent_dir, sloth, ui::quoted_path};
+use spin_common::{env::env_key, paths::parent_dir, sloth, ui::quoted_path};
 use spin_locked_app::{
     locked::{
         self, ContentPath, ContentRef, LockedApp, LockedComponent, LockedComponentDependency,
@@ -17,7 +17,6 @@ use spin_outbound_networking_config::allowed_hosts::{
     AllowedHostsConfig, SERVICE_CHAINING_DOMAIN_SUFFIX,
 };
 use spin_serde::DependencyName;
-use spin_variables::DEFAULT_ENV_PREFIX;
 use std::collections::BTreeMap;
 use tokio::{io::AsyncWriteExt, sync::Semaphore};
 
@@ -137,15 +136,9 @@ impl LocalLoader {
         })
     }
 
-    fn env_key_creator(key: &str) -> String {
-        let upper_key = key.to_ascii_uppercase();
-        let key = format!("{DEFAULT_ENV_PREFIX}_{upper_key}");
-        key
-    }
-
     fn env_checker((key, val): (String, Variable)) -> anyhow::Result<(String, Variable)> {
         if val.default.is_none() {
-            if std::env::var(Self::env_key_creator(key.as_ref())).is_err() {
+            if std::env::var(env_key(None, key.as_ref())).is_err() {
                 Err(anyhow::anyhow!(
                     "Variable data not provided for {}",
                     quoted_path(key)

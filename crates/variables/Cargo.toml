@@ -14,6 +14,7 @@ azure_identity = { git = "https://github.com/azure/azure-sdk-for-rust", rev = "8
 azure_security_keyvault = { git = "https://github.com/azure/azure-sdk-for-rust", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
 dotenvy = "0.15"
 serde = { workspace = true }
+spin-common = { path = "../common" }
 spin-expressions = { path = "../expressions" }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factors = { path = "../factors" }
