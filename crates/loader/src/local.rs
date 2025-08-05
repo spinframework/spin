@@ -16,7 +16,6 @@ use spin_locked_app::{
 use spin_manifest::schema::v2::{self, AppManifest, KebabId, WasiFilesMount};
 use spin_outbound_networking_config::allowed_hosts::{AllowedHostConfig, AllowedHostsConfig};
 use spin_serde::DependencyName;
-use spin_variables::DEFAULT_ENV_PREFIX;
 use std::collections::BTreeMap;
 use tokio::{io::AsyncWriteExt, sync::Semaphore};
 
@@ -142,15 +141,9 @@ impl LocalLoader {
         })
     }
 
-    fn env_key_creator(key: &str) -> String {
-        let upper_key = key.to_ascii_uppercase();
-        let key = format!("{DEFAULT_ENV_PREFIX}_{upper_key}");
-        key
-    }
-
     fn env_checker((key, val): (String, Variable)) -> anyhow::Result<(String, Variable)> {
         if val.default.is_none() {
-            if std::env::var(Self::env_key_creator(key.as_ref())).is_err() {
+            if std::env::var(env_key(None, key.as_ref())).is_err() {
                 Err(anyhow::anyhow!(
                     "Variable data not provided for {}",
                     quoted_path(key)

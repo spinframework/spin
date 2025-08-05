@@ -8721,6 +8721,7 @@ name = "spin-factors-test"
 version = "3.5.0-pre0"
 dependencies = [
  "spin-app",
+ "spin-common",
  "spin-factors",
  "spin-loader",
  "spin-telemetry",
@@ -9250,6 +9251,7 @@ version = "3.5.0-pre0"
 dependencies = [
  "dotenvy",
  "serde",
+ "spin-common",
  "spin-expressions",
  "spin-factors",
  "spin-world",

@@ -6,6 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 spin-app = { path = "../app" }
+spin-common = { path = "../common" }
 spin-factors = { path = "../factors" }
 spin-loader = { path = "../loader" }
 spin-telemetry = { path = "../telemetry", features = ["testing"] }
