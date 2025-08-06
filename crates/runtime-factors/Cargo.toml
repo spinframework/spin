@@ -32,6 +32,7 @@ spin-factors = { path = "../factors" }
 spin-factors-executor = { path = "../factors-executor" }
 spin-runtime-config = { path = "../runtime-config" }
 spin-trigger = { path = "../trigger" }
+spin-variables-static = { path = "../variables-static" }
 terminal = { path = "../terminal" }
 tracing = { workspace = true }
 

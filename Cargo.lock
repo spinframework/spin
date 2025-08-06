@@ -8766,6 +8766,7 @@ dependencies = [
  "spin-factors-executor",
  "spin-runtime-config",
  "spin-trigger",
+ "spin-variables-static",
  "terminal",
  "tracing",
 ]
@@ -8978,8 +8979,12 @@ name = "spin-variables-static"
 version = "3.4.0-pre0"
 dependencies = [
  "serde",
+ "serde_json",
+ "spin-common",
  "spin-expressions",
  "spin-factors",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]

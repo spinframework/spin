@@ -10,6 +10,7 @@ use spin_trigger::cli::{
     RuntimeFactorsBuilder, SqlStatementExecutorHook, SqliteDefaultStoreSummaryHook,
     StdioLoggingExecutorHooks,
 };
+use spin_variables_static::StaticVariablesProvider;
 
 /// A [`RuntimeFactorsBuilder`] for [`TriggerFactors`].
 pub struct FactorsBuilder;
@@ -23,12 +24,25 @@ impl RuntimeFactorsBuilder for FactorsBuilder {
         config: &FactorsConfig,
         args: &Self::CliArgs,
     ) -> anyhow::Result<(Self::Factors, Self::RuntimeConfig)> {
-        let runtime_config = ResolvedRuntimeConfig::<TriggerFactorsRuntimeConfig>::from_file(
+        let mut runtime_config = ResolvedRuntimeConfig::<TriggerFactorsRuntimeConfig>::from_file(
             config.runtime_config_file.clone().as_deref(),
             config.local_app_dir.clone().map(PathBuf::from),
             config.state_dir.clone(),
             config.log_dir.clone(),
         )?;
+
+        let cli_static_variables = args.get_variables()?.clone();
+        let cli_static_variables_provider = StaticVariablesProvider::new(cli_static_variables);
+
+        // Insert the parsed static variables provided via cli arguments
+        // into the set of variable providers with highest precedence.
+        runtime_config
+            .runtime_config
+            .variables
+            .as_mut()
+            .unwrap()
+            .providers
+            .insert(0, Box::new(cli_static_variables_provider));
 
         runtime_config.summarize(config.runtime_config_file.as_deref());
 
