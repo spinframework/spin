@@ -16,6 +16,7 @@ serde = { workspace = true }
 spin-common = { path = "../common" }
 spin-expressions = { path = "../expressions" }
 spin-factors = { path = "../factors" }
+spin-locked-app = { path = "../locked-app" }
 spin-world = { path = "../world" }
 tracing = { workspace = true }
 

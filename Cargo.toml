@@ -65,12 +65,13 @@ spin-oci = { path = "crates/oci" }
 spin-plugins = { path = "crates/plugins" }
 spin-runtime-factors = { path = "crates/runtime-factors" }
 spin-telemetry = { path = "crates/telemetry", features = [
-  "tracing-log-compat",
+    "tracing-log-compat",
 ] }
 spin-templates = { path = "crates/templates" }
 spin-trigger = { path = "crates/trigger" }
 spin-trigger-http = { path = "crates/trigger-http" }
 spin-trigger-redis = { path = "crates/trigger-redis" }
+spin-variables = { path = "crates/variables" }
 terminal = { path = "crates/terminal" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -96,10 +97,10 @@ testing-framework = { path = "tests/testing-framework" }
 [build-dependencies]
 cargo-target-dep = { git = "https://github.com/fermyon/cargo-target-dep", rev = "482f269eceb7b1a7e8fc618bf8c082dd24979cf1" }
 vergen = { version = "^8.2.1", default-features = false, features = [
-  "build",
-  "git",
-  "gitcl",
-  "cargo",
+    "build",
+    "git",
+    "gitcl",
+    "cargo",
 ] }
 
 [features]
@@ -112,10 +113,10 @@ llm-cublas = ["llm", "spin-runtime-factors/llm-cublas"]
 
 [workspace]
 members = [
-  "crates/*",
-  "tests/conformance-tests",
-  "tests/runtime-tests",
-  "tests/testing-framework",
+    "crates/*",
+    "tests/conformance-tests",
+    "tests/runtime-tests",
+    "tests/testing-framework",
 ]
 
 [workspace.dependencies]

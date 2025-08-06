@@ -1,3 +1,19 @@
+//! The runtime configuration for the variables factor used in the Spin CLI.
+
+mod azure_key_vault;
+mod env;
+mod statik;
+mod vault;
+
+use std::path::PathBuf;
+
+pub use azure_key_vault::*;
+pub use env::*;
+use spin_common::{env::env_key, ui::quoted_path};
+use spin_locked_app::Variable;
+pub use statik::*;
+pub use vault::*;
+
 use serde::Deserialize;
 use spin_expressions::Provider;
 use spin_factor_variables::runtime_config::RuntimeConfig;
@@ -27,6 +43,24 @@ pub fn runtime_config_from_toml(table: &impl GetTomlValue) -> anyhow::Result<Run
         .collect::<anyhow::Result<Vec<_>>>()?;
     providers.extend(var_provider);
     Ok(RuntimeConfig { providers })
+}
+
+pub fn variable_provider_config_from_toml(
+    table: &impl GetTomlValue,
+) -> anyhow::Result<Vec<VariableProviderConfiguration>> {
+    if let Some(array) = table
+        .get("variables_provider")
+        .or_else(|| table.get("config_provider"))
+    {
+        array
+            .clone()
+            .try_into::<Vec<VariableProviderConfiguration>>()
+            .map_err(|e| anyhow::anyhow!("Failed to parse variable provider configuration: {}", e))
+    } else {
+        Ok(vec![VariableProviderConfiguration::Env(
+            EnvVariablesConfig::default(),
+        )])
+    }
 }
 
 /// A runtime configuration used in the Spin CLI for one type of variable provider.
@@ -59,5 +93,40 @@ impl VariableProviderConfiguration {
             ),
         };
         Ok(provider)
+    }
+}
+
+pub trait VariableSourcer {
+    fn variable_env_checker(
+        &self,
+        key: String,
+        val: Variable,
+    ) -> anyhow::Result<(String, Variable)>;
+
+    fn check(
+        &self,
+        key: String,
+        mut val: Variable,
+        dotenv_path: Option<PathBuf>,
+        prefix: Option<String>,
+    ) -> anyhow::Result<(String, Variable)> {
+        if val.default.is_some() {
+            return Ok((key, val));
+        }
+
+        if let Some(path) = dotenv_path {
+            _ = std::env::set_current_dir(path);
+        }
+
+        match std::env::var(env_key(prefix, &key)) {
+            Ok(v) => {
+                val.default = Some(v);
+                Ok((key, val))
+            }
+            Err(_) => Err(anyhow::anyhow!(
+                "Variable data not provided for {}",
+                quoted_path(key)
+            )),
+        }
     }
 }
