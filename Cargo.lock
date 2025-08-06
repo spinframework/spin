@@ -8064,6 +8064,7 @@ dependencies = [
  "spin-trigger",
  "spin-trigger-http",
  "spin-trigger-redis",
+ "spin-variables",
  "subprocess",
  "tempfile",
  "terminal",
@@ -8440,6 +8441,7 @@ name = "spin-factors-test"
 version = "3.4.0-pre0"
 dependencies = [
  "spin-app",
+ "spin-common",
  "spin-factors",
  "spin-loader",
  "spin-telemetry",
@@ -8588,6 +8590,7 @@ dependencies = [
  "spin-manifest",
  "spin-outbound-networking-config",
  "spin-serde",
+ "spin-variables",
  "tempfile",
  "terminal",
  "tokio",
@@ -8885,9 +8888,11 @@ dependencies = [
  "spin-factors",
  "spin-factors-executor",
  "spin-telemetry",
+ "spin-variables",
  "spin-world",
  "tempfile",
  "tokio",
+ "toml",
  "tracing",
 ]
 
@@ -8950,9 +8955,11 @@ dependencies = [
  "azure_security_keyvault",
  "dotenvy",
  "serde",
+ "spin-common",
  "spin-expressions",
  "spin-factor-variables",
  "spin-factors",
+ "spin-locked-app",
  "spin-world",
  "tokio",
  "tracing",
