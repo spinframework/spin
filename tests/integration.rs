@@ -539,7 +539,7 @@ mod integration_tests {
     }
 
     #[test]
-    // #[cfg(feature = "extern-dependencies-tests")]
+    #[cfg(feature = "extern-dependencies-tests")]
     fn test_vault_config_provider() -> anyhow::Result<()> {
         use std::collections::HashMap;
 
