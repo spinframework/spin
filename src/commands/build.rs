@@ -22,6 +22,7 @@ pub struct BuildCommand {
         short = 'f',
         long = "from",
         alias = "file",
+        value_hint = clap::ValueHint::AnyPath,
     )]
     pub app_source: Option<PathBuf>,
 

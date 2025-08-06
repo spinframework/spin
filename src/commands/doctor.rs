@@ -17,7 +17,8 @@ pub struct DoctorCommand {
         name = APP_MANIFEST_FILE_OPT,
         short = 'f',
         long = "from",
-        alias = "file"
+        alias = "file",
+        value_hint = clap::ValueHint::AnyPath,
     )]
     pub app_source: Option<PathBuf>,
 }
