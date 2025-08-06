@@ -539,12 +539,18 @@ mod integration_tests {
     }
 
     #[test]
-    #[cfg(feature = "extern-dependencies-tests")]
+    // #[cfg(feature = "extern-dependencies-tests")]
     fn test_vault_config_provider() -> anyhow::Result<()> {
         use std::collections::HashMap;
 
         use crate::testcases::run_test_inited;
+        use spin_common::env::env_key;
+
         const VAULT_ROOT_TOKEN: &str = "root";
+
+        // `password` variable is set to require. As we're not providing a default value, env is checked.
+        std::env::set_var(env_key(None, "password"), "password");
+
         run_test_inited(
             "vault-variables-test",
             SpinConfig {

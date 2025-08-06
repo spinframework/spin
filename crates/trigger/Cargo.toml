@@ -32,7 +32,9 @@ spin-factor-wasi = { path = "../factor-wasi" }
 spin-factors = { path = "../factors" }
 spin-factors-executor = { path = "../factors-executor" }
 spin-telemetry = { path = "../telemetry" }
+spin-variables = { path = "../variables" }
 tokio = { workspace = true, features = ["fs", "rt"] }
+toml = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

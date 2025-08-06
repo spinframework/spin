@@ -7978,6 +7978,7 @@ dependencies = [
  "spin-trigger",
  "spin-trigger-http",
  "spin-trigger-redis",
+ "spin-variables",
  "subprocess",
  "tempfile",
  "terminal",
@@ -8799,9 +8800,11 @@ dependencies = [
  "spin-factors",
  "spin-factors-executor",
  "spin-telemetry",
+ "spin-variables",
  "spin-world",
  "tempfile",
  "tokio",
+ "toml",
  "tracing",
 ]
 
@@ -8868,6 +8871,7 @@ dependencies = [
  "spin-expressions",
  "spin-factor-variables",
  "spin-factors",
+ "spin-locked-app",
  "spin-world",
  "tokio",
  "tracing",

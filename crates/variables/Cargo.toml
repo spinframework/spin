@@ -18,6 +18,7 @@ spin-common = { path = "../common" }
 spin-expressions = { path = "../expressions" }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factors = { path = "../factors" }
+spin-locked-app = { path = "../locked-app" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }

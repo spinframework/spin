@@ -3,14 +3,13 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use futures::{future::try_join_all, StreamExt};
 use reqwest::Url;
-use spin_common::{env::env_key, paths::parent_dir, sloth, ui::quoted_path};
+use spin_common::{paths::parent_dir, sloth, ui::quoted_path};
 use spin_locked_app::{
     locked::{
         self, ContentPath, ContentRef, LockedApp, LockedComponent, LockedComponentDependency,
         LockedComponentSource, LockedTrigger,
     },
     values::{ValuesMap, ValuesMapBuilder},
-    Variable,
 };
 use spin_manifest::schema::v2::{self, AppManifest, KebabId, WasiFilesMount};
 use spin_outbound_networking_config::allowed_hosts::{
@@ -89,7 +88,7 @@ impl LocalLoader {
 
         let variables = variables
             .into_iter()
-            .map(|(name, v)| Self::env_checker((name.to_string(), locked_variable(v)?)))
+            .map(|(name, v)| Ok((name.to_string(), locked_variable(v)?)))
             .collect::<Result<_>>()?;
 
         let triggers = triggers
@@ -134,21 +133,6 @@ impl LocalLoader {
             triggers,
             components,
         })
-    }
-
-    fn env_checker((key, val): (String, Variable)) -> anyhow::Result<(String, Variable)> {
-        if val.default.is_none() {
-            if std::env::var(env_key(None, key.as_ref())).is_err() {
-                Err(anyhow::anyhow!(
-                    "Variable data not provided for {}",
-                    quoted_path(key)
-                ))
-            } else {
-                Ok((key, val))
-            }
-        } else {
-            Ok((key, val))
-        }
     }
 
     // Load the given component into a LockedComponent, ready for execution.
