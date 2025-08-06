@@ -94,11 +94,7 @@ impl VariableProviderConfiguration {
 }
 
 pub trait VariableSourcer {
-    fn variable_env_checker(
-        &self,
-        key: String,
-        val: Variable,
-    ) -> anyhow::Result<(String, Variable)>;
+    fn variable_env_checker(&self, key: String, val: Variable) -> anyhow::Result<()>;
 
     fn check(
         &self,
@@ -106,9 +102,9 @@ pub trait VariableSourcer {
         mut val: Variable,
         dotenv_path: Option<PathBuf>,
         prefix: Option<String>,
-    ) -> anyhow::Result<(String, Variable)> {
+    ) -> anyhow::Result<()> {
         if val.default.is_some() {
-            return Ok((key, val));
+            return Ok(());
         }
 
         if let Some(path) = dotenv_path {
@@ -118,7 +114,7 @@ pub trait VariableSourcer {
         match std::env::var(env_key(prefix, &key)) {
             Ok(v) => {
                 val.default = Some(v);
-                Ok((key, val))
+                Ok(())
             }
             Err(_) => Err(anyhow::anyhow!(
                 "Variable data not provided for {}",
