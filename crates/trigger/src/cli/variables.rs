@@ -28,11 +28,7 @@ impl<F: RuntimeFactors, U> ExecutorHooks<F, U> for VariableSorterExecutorHooks {
 }
 
 impl VariableSourcer for VariableSorterExecutorHooks {
-    fn variable_env_checker(
-        &self,
-        key: String,
-        val: spin_app::Variable,
-    ) -> anyhow::Result<(String, spin_app::Variable)> {
+    fn variable_env_checker(&self, key: String, val: spin_app::Variable) -> anyhow::Result<()> {
         let configs = spin_variables::variable_provider_config_from_toml(&self.table)?;
 
         if let Some(config) = configs.into_iter().next() {
