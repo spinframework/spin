@@ -1,20 +1,11 @@
-//! The runtime configuration for the variables factor used in the Spin CLI.
-
-mod azure_key_vault;
-mod env;
-mod statik;
-mod vault;
-
-pub use azure_key_vault::*;
-pub use env::*;
-pub use statik::*;
-pub use vault::*;
-
 use serde::Deserialize;
 use spin_expressions::Provider;
-use spin_factors::{anyhow, runtime_config::toml::GetTomlValue};
-
 use spin_factor_variables::runtime_config::RuntimeConfig;
+use spin_factors::runtime_config::toml::GetTomlValue;
+use spin_variables_azure::{AzureKeyVaultProvider, AzureKeyVaultVariablesConfig};
+use spin_variables_env::{EnvVariablesConfig, EnvVariablesProvider};
+use spin_variables_static::StaticVariablesProvider;
+use spin_variables_vault::VaultVariablesProvider;
 
 /// Resolves a runtime configuration for the variables factor from a TOML table.
 pub fn runtime_config_from_toml(table: &impl GetTomlValue) -> anyhow::Result<RuntimeConfig> {
@@ -57,7 +48,7 @@ impl VariableProviderConfiguration {
     pub fn into_provider(self) -> anyhow::Result<Box<dyn Provider>> {
         let provider: Box<dyn Provider> = match self {
             VariableProviderConfiguration::Static(provider) => Box::new(provider),
-            VariableProviderConfiguration::Env(config) => Box::new(env::EnvVariablesProvider::new(
+            VariableProviderConfiguration::Env(config) => Box::new(EnvVariablesProvider::new(
                 config.prefix,
                 |s| std::env::var(s),
                 config.dotenv_path,

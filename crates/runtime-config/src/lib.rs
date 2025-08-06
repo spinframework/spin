@@ -24,6 +24,8 @@ use spin_sqlite as sqlite;
 use spin_trigger::cli::UserProvidedPath;
 use toml::Value;
 
+pub mod variables;
+
 /// The default state directory for the trigger.
 pub const DEFAULT_STATE_DIR: &str = ".spin";
 
@@ -342,9 +344,7 @@ impl FactorRuntimeConfigSource<VariablesFactor> for TomlRuntimeConfigSource<'_, 
     fn get_runtime_config(
         &mut self,
     ) -> anyhow::Result<Option<<VariablesFactor as spin_factors::Factor>::RuntimeConfig>> {
-        Ok(Some(spin_variables::runtime_config_from_toml(
-            &self.toml.table,
-        )?))
+        Ok(Some(variables::runtime_config_from_toml(&self.toml.table)?))
     }
 }
 

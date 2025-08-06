@@ -1,0 +1,17 @@
+[package]
+name = "spin-variables-static"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+spin-expressions = { path = "../expressions" }
+spin-factors = { path = "../factors" }
+
+[lints]
+workspace = true

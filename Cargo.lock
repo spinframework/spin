@@ -8712,7 +8712,9 @@ name = "spin-runtime-config"
 version = "3.4.0-pre0"
 dependencies = [
  "anyhow",
+ "serde",
  "spin-common",
+ "spin-expressions",
  "spin-factor-key-value",
  "spin-factor-llm",
  "spin-factor-outbound-http",
@@ -8732,7 +8734,10 @@ dependencies = [
  "spin-key-value-spin",
  "spin-sqlite",
  "spin-trigger",
- "spin-variables",
+ "spin-variables-azure",
+ "spin-variables-env",
+ "spin-variables-static",
+ "spin-variables-vault",
  "spin-world",
  "tempfile",
  "tokio",
@@ -8942,19 +8947,48 @@ dependencies = [
 ]
 
 [[package]]
-name = "spin-variables"
+name = "spin-variables-azure"
 version = "3.4.0-pre0"
 dependencies = [
  "azure_core 0.20.0",
  "azure_identity 0.20.0",
  "azure_security_keyvault",
+ "serde",
+ "spin-expressions",
+ "spin-factors",
+ "spin-world",
+ "tracing",
+]
+
+[[package]]
+name = "spin-variables-env"
+version = "3.4.0-pre0"
+dependencies = [
  "dotenvy",
  "serde",
  "spin-expressions",
- "spin-factor-variables",
  "spin-factors",
  "spin-world",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "spin-variables-static"
+version = "3.4.0-pre0"
+dependencies = [
+ "serde",
+ "spin-expressions",
+ "spin-factors",
+]
+
+[[package]]
+name = "spin-variables-vault"
+version = "3.4.0-pre0"
+dependencies = [
+ "serde",
+ "spin-expressions",
+ "spin-factors",
  "tracing",
  "vaultrs",
 ]

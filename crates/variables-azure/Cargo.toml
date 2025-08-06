@@ -1,0 +1,22 @@
+[package]
+name = "spin-variables-azure"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+azure_core = { git = "https://github.com/azure/azure-sdk-for-rust", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
+azure_identity = { git = "https://github.com/azure/azure-sdk-for-rust", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
+azure_security_keyvault = { git = "https://github.com/azure/azure-sdk-for-rust", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
+serde = { workspace = true }
+spin-expressions = { path = "../expressions" }
+spin-factors = { path = "../factors" }
+spin-world = { path = "../world" }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

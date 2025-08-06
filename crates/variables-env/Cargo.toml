@@ -1,5 +1,5 @@
 [package]
-name = "spin-variables"
+name = "spin-variables-env"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -9,18 +9,13 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-azure_core = { git = "https://github.com/azure/azure-sdk-for-rust", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
-azure_identity = { git = "https://github.com/azure/azure-sdk-for-rust", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
-azure_security_keyvault = { git = "https://github.com/azure/azure-sdk-for-rust", rev = "8c4caa251c3903d5eae848b41bb1d02a4d65231c" }
 dotenvy = "0.15"
 serde = { workspace = true }
 spin-expressions = { path = "../expressions" }
-spin-factor-variables = { path = "../factor-variables" }
 spin-factors = { path = "../factors" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }
-vaultrs = "0.7"
 
 [lints]
 workspace = true

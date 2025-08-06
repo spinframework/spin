@@ -10,7 +10,9 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 spin-common = { path = "../common" }
+spin-expressions = { path = "../expressions" }
 spin-factor-key-value = { path = "../factor-key-value" }
 spin-factor-llm = { path = "../factor-llm" }
 spin-factor-outbound-http = { path = "../factor-outbound-http" }
@@ -29,7 +31,10 @@ spin-key-value-redis = { path = "../key-value-redis" }
 spin-key-value-spin = { path = "../key-value-spin" }
 spin-sqlite = { path = "../sqlite" }
 spin-trigger = { path = "../trigger" }
-spin-variables = { path = "../variables" }
+spin-variables-azure = { path = "../variables-azure" }
+spin-variables-env = { path = "../variables-env" }
+spin-variables-static = { path = "../variables-static" }
+spin-variables-vault = { path = "../variables-vault" }
 toml = { workspace = true }
 
 [dev-dependencies]
