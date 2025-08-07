@@ -11,6 +11,13 @@ use super::json_schema;
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Variable {
+    /// A brief description of the variable.
+    ///
+    /// Example: `description = "This is a variable"`
+    ///
+    /// Learn more: https://spinframework.dev/variables#adding-variables-to-your-applications
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Whether a value must be supplied at runtime. If not specified, required defaults
     /// to `false`, and `default` must be provided.
     ///

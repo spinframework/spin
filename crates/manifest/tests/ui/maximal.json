@@ -21,6 +21,7 @@
   },
   "variables": {
     "var_one": {
+      "description": "Test me like one of your French strings!",
       "default": "Default"
     },
     "var_two": {

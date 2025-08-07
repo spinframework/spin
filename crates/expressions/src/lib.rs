@@ -330,6 +330,7 @@ mod tests {
             (
                 "required".into(),
                 Variable {
+                    description: None,
                     default: None,
                     secret: false,
                 },
@@ -337,6 +338,7 @@ mod tests {
             (
                 "default".into(),
                 Variable {
+                    description: None,
                     default: Some("default-value".into()),
                     secret: false,
                 },

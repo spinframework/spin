@@ -342,6 +342,9 @@ pub struct LockedTrigger {
 /// A Variable specifies a custom configuration variable.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Variable {
+    /// A brief description of the variable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// The variable's default value. If unset, the variable is required.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,

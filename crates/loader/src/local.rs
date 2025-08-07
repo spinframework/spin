@@ -764,6 +764,7 @@ fn locked_variable(variable: v2::Variable) -> Result<locked::Variable> {
         "must be `required` OR have a `default`"
     );
     Ok(locked::Variable {
+        description: variable.description,
         default: variable.default.clone(),
         secret: variable.secret,
     })
