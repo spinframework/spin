@@ -54,7 +54,7 @@ impl Checkup {
     }
 
     /// Returns the next detected problem.
-    pub async fn next_diagnosis(&mut self) -> Result<Option<PatientDiagnosis>> {
+    pub async fn next_diagnosis(&mut self) -> Result<Option<PatientDiagnosis<'_>>> {
         while self.unprocessed_diagnoses.is_empty() {
             let Some(diagnostic) = self.diagnostics.pop_front() else {
                 return Ok(None);

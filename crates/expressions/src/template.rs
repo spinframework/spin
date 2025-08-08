@@ -46,7 +46,7 @@ impl Template {
         self.parts.iter().all(|p| matches!(p, Part::Lit(_)))
     }
 
-    pub(crate) fn parts(&self) -> std::slice::Iter<Part> {
+    pub(crate) fn parts(&self) -> std::slice::Iter<'_, Part> {
         self.parts.iter()
     }
 }

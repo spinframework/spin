@@ -158,7 +158,7 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutorApp<T, U> {
     }
 
     /// Returns an instance builder for the given component ID.
-    pub fn prepare(&self, component_id: &str) -> anyhow::Result<FactorsInstanceBuilder<T, U>> {
+    pub fn prepare(&self, component_id: &str) -> anyhow::Result<FactorsInstanceBuilder<'_, T, U>> {
         let app_component = self
             .configured_app
             .app()
@@ -204,7 +204,7 @@ pub struct FactorsInstanceBuilder<'a, F: RuntimeFactors, U: 'static> {
 
 impl<T: RuntimeFactors, U: 'static> FactorsInstanceBuilder<'_, T, U> {
     /// Returns the app component for the instance.
-    pub fn app_component(&self) -> &AppComponent {
+    pub fn app_component(&self) -> &AppComponent<'_> {
         &self.app_component
     }
 
