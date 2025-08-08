@@ -55,6 +55,7 @@ pub struct UpCommand {
         short = 'f',
         long = "from",
         group = "source",
+        value_hint = clap::ValueHint::AnyPath, // it accepts other things, but this is a good hint
     )]
     pub app_source: Option<String>,
 
@@ -66,6 +67,7 @@ pub struct UpCommand {
         long = "from-file",
         alias = "file",
         group = "source",
+        value_hint = clap::ValueHint::AnyPath,
     )]
     pub file_source: Option<PathBuf>,
 
@@ -93,11 +95,11 @@ pub struct UpCommand {
     pub env: Vec<(String, String)>,
 
     /// Temporary directory for the static assets of the components.
-    #[clap(long = "temp", alias = "tmp")]
+    #[clap(long = "temp", alias = "tmp", value_hint = clap::ValueHint::DirPath)]
     pub tmp: Option<PathBuf>,
 
     /// Cache directory for downloaded components and assets.
-    #[clap(long)]
+    #[clap(long, value_hint = clap::ValueHint::DirPath)]
     pub cache_dir: Option<PathBuf>,
 
     /// For local apps with directory mounts and no excluded files, mount them directly instead of using a temporary
