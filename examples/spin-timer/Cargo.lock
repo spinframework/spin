@@ -3452,6 +3452,9 @@ dependencies = [
  "chrono",
  "fallible-iterator 0.2.0",
  "postgres-protocol",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -4734,6 +4737,7 @@ dependencies = [
  "moka",
  "native-tls",
  "postgres-native-tls",
+ "serde_json",
  "spin-core",
  "spin-factor-outbound-networking",
  "spin-factors",
@@ -4742,6 +4746,7 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "tracing",
+ "uuid",
 ]
 
 [[package]]

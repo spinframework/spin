@@ -1,6 +1,7 @@
 use anyhow::Result;
 use spin_core::wasmtime::component::Resource;
-use spin_world::spin::postgres::postgres::{self as v3};
+use spin_world::spin::postgres3_0_0::postgres::{self as v3};
+use spin_world::spin::postgres4_0_0::postgres::{self as v4};
 use spin_world::v1::postgres as v1;
 use spin_world::v1::rdbms_types as v1_types;
 use spin_world::v2::postgres::{self as v2};
@@ -16,25 +17,25 @@ impl<CF: ClientFactory> InstanceState<CF> {
     async fn open_connection<Conn: 'static>(
         &mut self,
         address: &str,
-    ) -> Result<Resource<Conn>, v3::Error> {
+    ) -> Result<Resource<Conn>, v4::Error> {
         self.connections
             .push(
                 self.client_factory
                     .get_client(address)
                     .await
-                    .map_err(|e| v3::Error::ConnectionFailed(format!("{e:?}")))?,
+                    .map_err(|e| v4::Error::ConnectionFailed(format!("{e:?}")))?,
             )
-            .map_err(|_| v3::Error::ConnectionFailed("too many connections".into()))
+            .map_err(|_| v4::Error::ConnectionFailed("too many connections".into()))
             .map(Resource::new_own)
     }
 
     async fn get_client<Conn: 'static>(
         &self,
         connection: Resource<Conn>,
-    ) -> Result<&CF::Client, v3::Error> {
+    ) -> Result<&CF::Client, v4::Error> {
         self.connections
             .get(connection.rep())
-            .ok_or_else(|| v3::Error::ConnectionFailed("no connection found".into()))
+            .ok_or_else(|| v4::Error::ConnectionFailed("no connection found".into()))
     }
 
     async fn is_address_allowed(&self, address: &str) -> Result<bool> {
@@ -68,11 +69,15 @@ impl<CF: ClientFactory> InstanceState<CF> {
 
 fn v2_params_to_v3(
     params: Vec<v2_types::ParameterValue>,
-) -> Result<Vec<v3::ParameterValue>, v2::Error> {
+) -> Result<Vec<v4::ParameterValue>, v2::Error> {
     params.into_iter().map(|p| p.try_into()).collect()
 }
 
-impl<CF: ClientFactory> spin_world::spin::postgres::postgres::HostConnection for InstanceState<CF> {
+fn v3_params_to_v4(params: Vec<v3::ParameterValue>) -> Vec<v4::ParameterValue> {
+    params.into_iter().map(|p| p.into()).collect()
+}
+
+impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
     #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v3::Connection>, v3::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
@@ -86,7 +91,7 @@ impl<CF: ClientFactory> spin_world::spin::postgres::postgres::HostConnection for
                 "address {address} is not permitted"
             )));
         }
-        self.open_connection(&address).await
+        Ok(self.open_connection(&address).await?)
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
@@ -96,10 +101,11 @@ impl<CF: ClientFactory> spin_world::spin::postgres::postgres::HostConnection for
         statement: String,
         params: Vec<v3::ParameterValue>,
     ) -> Result<u64, v3::Error> {
-        self.get_client(connection)
+        Ok(self
+            .get_client(connection)
             .await?
-            .execute(statement, params)
-            .await
+            .execute(statement, v3_params_to_v4(params))
+            .await?)
     }
 
     #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
@@ -109,13 +115,64 @@ impl<CF: ClientFactory> spin_world::spin::postgres::postgres::HostConnection for
         statement: String,
         params: Vec<v3::ParameterValue>,
     ) -> Result<v3::RowSet, v3::Error> {
+        Ok(self
+            .get_client(connection)
+            .await?
+            .query(statement, v3_params_to_v4(params))
+            .await?
+            .into())
+    }
+
+    async fn drop(&mut self, connection: Resource<v3::Connection>) -> anyhow::Result<()> {
+        self.connections.remove(connection.rep());
+        Ok(())
+    }
+}
+
+impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
+    #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
+    async fn open(&mut self, address: String) -> Result<Resource<v4::Connection>, v4::Error> {
+        spin_factor_outbound_networking::record_address_fields(&address);
+
+        if !self
+            .is_address_allowed(&address)
+            .await
+            .map_err(|e| v4::Error::Other(e.to_string()))?
+        {
+            return Err(v4::Error::ConnectionFailed(format!(
+                "address {address} is not permitted"
+            )));
+        }
+        self.open_connection(&address).await
+    }
+
+    #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
+    async fn execute(
+        &mut self,
+        connection: Resource<v4::Connection>,
+        statement: String,
+        params: Vec<v4::ParameterValue>,
+    ) -> Result<u64, v4::Error> {
+        self.get_client(connection)
+            .await?
+            .execute(statement, params)
+            .await
+    }
+
+    #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
+    async fn query(
+        &mut self,
+        connection: Resource<v4::Connection>,
+        statement: String,
+        params: Vec<v4::ParameterValue>,
+    ) -> Result<v4::RowSet, v4::Error> {
         self.get_client(connection)
             .await?
             .query(statement, params)
             .await
     }
 
-    async fn drop(&mut self, connection: Resource<v3::Connection>) -> anyhow::Result<()> {
+    async fn drop(&mut self, connection: Resource<v4::Connection>) -> anyhow::Result<()> {
         self.connections.remove(connection.rep());
         Ok(())
     }
@@ -133,10 +190,16 @@ impl<CF: ClientFactory> v3::Host for InstanceState<CF> {
     }
 }
 
+impl<CF: ClientFactory> v4::Host for InstanceState<CF> {
+    fn convert_error(&mut self, error: v4::Error) -> Result<v4::Error> {
+        Ok(error)
+    }
+}
+
 /// Delegate a function call to the v3::HostConnection implementation
 macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
-        if !$self.is_address_allowed(&$address).await.map_err(|e| v3::Error::Other(e.to_string()))? {
+        if !$self.is_address_allowed(&$address).await.map_err(|e| v4::Error::Other(e.to_string()))? {
             return Err(v1::PgError::ConnectionFailed(format!(
                 "address {} is not permitted", $address
             )));
@@ -145,7 +208,7 @@ macro_rules! delegate {
             Ok(c) => c,
             Err(e) => return Err(e.into()),
         };
-        <Self as v3::HostConnection>::$name($self, connection, $($arg),*)
+        <Self as v4::HostConnection>::$name($self, connection, $($arg),*)
             .await
             .map_err(|e| e.into())
     }};
