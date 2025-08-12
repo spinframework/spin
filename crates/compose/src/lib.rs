@@ -133,7 +133,8 @@ impl ComponentSourceLoaderFs {
             )
         })?;
 
-        let component = spin_componentize::componentize_if_necessary(&bytes)?;
+        let component = spin_componentize::componentize_if_necessary(&bytes)
+            .with_context(|| format!("failed to componentize {}", quoted_path(&path)))?;
 
         Ok(component.into())
     }

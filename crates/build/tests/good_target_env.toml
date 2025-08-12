@@ -1,0 +1,8 @@
+spin_manifest_version = 2
+
+[application]
+name = "good"
+targets = [{ path = "env/wasi-all.toml" }]
+
+[[trigger.command]]
+component = { source = "test-components/test-command.wasm" }

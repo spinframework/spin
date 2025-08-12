@@ -1,0 +1,2 @@
+[triggers]
+command = { worlds = [{ path = "../wit/cmd-full", world = "wasi:cli/command@0.2.0"}] }

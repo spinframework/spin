@@ -188,8 +188,11 @@ impl<'a> spin_compose::ComponentSourceLoader for ComponentSourceLoader<'a> {
             .wasm_loader
             .load_component_source(source.id, source.source)
             .await?;
-        let bytes = tokio::fs::read(&path).await?;
-        let component = spin_componentize::componentize_if_necessary(&bytes)?;
+        let bytes = tokio::fs::read(&path)
+            .await
+            .with_context(|| format!("reading {}", quoted_path(&path)))?;
+        let component = spin_componentize::componentize_if_necessary(&bytes)
+            .with_context(|| format!("componentizing {}", quoted_path(&path)))?;
         Ok(component.into())
     }
 
@@ -198,8 +201,11 @@ impl<'a> spin_compose::ComponentSourceLoader for ComponentSourceLoader<'a> {
             .wasm_loader
             .load_component_dependency(&source.name, &source.dependency)
             .await?;
-        let bytes = tokio::fs::read(&path).await?;
-        let component = spin_componentize::componentize_if_necessary(&bytes)?;
+        let bytes = tokio::fs::read(&path)
+            .await
+            .with_context(|| format!("reading {}", quoted_path(&path)))?;
+        let component = spin_componentize::componentize_if_necessary(&bytes)
+            .with_context(|| format!("componentizing {}", quoted_path(&path)))?;
         Ok(component.into())
     }
 }

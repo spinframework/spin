@@ -246,4 +246,56 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[tokio::test]
+    async fn succeeds_if_target_env_matches() {
+        let manifest_path = test_data_root().join("good_target_env.toml");
+        build(&manifest_path, &[], TargetChecking::Check, None)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn fails_if_target_env_does_not_match() {
+        let manifest_path = test_data_root().join("bad_target_env.toml");
+        let err = build(&manifest_path, &[], TargetChecking::Check, None)
+            .await
+            .expect_err("should have failed")
+            .to_string();
+
+        // build prints validation errors rather than returning them to top level
+        // (because there could be multiple errors) - see has_meaningful_error_if_target_env_does_not_match
+        assert!(
+            err.contains("one or more was incompatible with one or more of the deployment targets")
+        );
+    }
+
+    #[tokio::test]
+    async fn has_meaningful_error_if_target_env_does_not_match() {
+        let manifest_file = test_data_root().join("bad_target_env.toml");
+        let manifest = spin_manifest::manifest_from_file(&manifest_file).unwrap();
+        let application = spin_environments::ApplicationToValidate::new(
+            manifest.clone(),
+            manifest_file.parent().unwrap(),
+        )
+        .await
+        .context("unable to load application for checking against deployment targets")
+        .unwrap();
+
+        let target_validation = spin_environments::validate_application_against_environment_ids(
+            &application,
+            &manifest.application.targets,
+            None,
+            manifest_file.parent().unwrap(),
+        )
+        .await
+        .context("unable to check if the application is compatible with deployment targets")
+        .unwrap();
+
+        assert_eq!(1, target_validation.errors().len());
+
+        let err = target_validation.errors()[0].to_string();
+
+        assert!(err.contains("world wasi:cli/command@0.2.0 does not provide an import named"));
+    }
 }
