@@ -1,0 +1,30 @@
+[package]
+name = "spin-factor-blobstore"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+lru = "0.12"
+serde = { workspace = true }
+spin-core = { path = "../core" }
+spin-factor-wasi = { path = "../factor-wasi" }
+spin-factors = { path = "../factors" }
+spin-locked-app = { path = "../locked-app" }
+spin-resource-table = { path = "../table" }
+spin-world = { path = "../world" }
+tokio = { workspace = true, features = ["macros", "sync", "rt", "io-util"] }
+toml = { workspace = true }
+tracing = { workspace = true }
+wasmtime-wasi = { workspace = true }
+
+[dev-dependencies]
+spin-factors-test = { path = "../factors-test" }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

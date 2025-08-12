@@ -135,6 +135,18 @@ pub enum AllowedOutboundHost {
     Host(String),
 }
 
+/// The blob storage containers which the component is allowed to access. Containers are identified
+/// by label e.g. "default" or "analytics". Containers must be mapped
+/// to a backing store in the runtime config.
+///
+/// Example: `blob_containers = ["cache", "my-container"]`
+#[allow(dead_code)]
+#[derive(JsonSchema)]
+#[serde(untagged)]
+pub enum BlobContainer {
+    Label(String),
+}
+
 /// The AI models which the component is allowed to access. For local execution, you must
 /// download all models; for hosted execution, you should check which models are available
 /// in your target environment.
