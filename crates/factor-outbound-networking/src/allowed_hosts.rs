@@ -1,6 +1,6 @@
 use anyhow::Context as _;
+use spin_app::MetadataKey;
 use spin_factors::{App, AppComponent};
-use spin_locked_app::MetadataKey;
 use spin_outbound_networking_config::allowed_hosts::parse_service_chaining_target;
 
 const ALLOWED_HOSTS_KEY: MetadataKey<Vec<String>> = MetadataKey::new("allowed_outbound_hosts");

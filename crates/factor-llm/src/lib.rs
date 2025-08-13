@@ -5,10 +5,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use spin_app::MetadataKey;
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
 };
-use spin_locked_app::MetadataKey;
 use spin_world::v1::llm::{self as v1};
 use spin_world::v2::llm::{self as v2};
 use tokio::sync::Mutex;

@@ -7,8 +7,8 @@ use std::sync::Arc;
 use host::InstanceState;
 
 use async_trait::async_trait;
+use spin_app::MetadataKey;
 use spin_factors::{anyhow, Factor, FactorData};
-use spin_locked_app::MetadataKey;
 use spin_world::spin::sqlite::sqlite as v3;
 use spin_world::v1::sqlite as v1;
 use spin_world::v2::sqlite as v2;

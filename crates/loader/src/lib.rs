@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use local::LocalLoader;
+use spin_app::locked::LockedApp;
 use spin_common::paths::parent_dir;
-use spin_locked_app::locked::LockedApp;
 
 pub mod cache;
 mod fs;

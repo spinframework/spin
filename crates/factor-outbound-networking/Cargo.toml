@@ -15,7 +15,7 @@ serde = { workspace = true }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factor-wasi = { path = "../factor-wasi" }
 spin-factors = { path = "../factors" }
-spin-locked-app = { path = "../locked-app" }
+spin-app = { path = "../app" }
 spin-manifest = { path = "../manifest" }
 spin-outbound-networking-config = { path = "../outbound-networking-config" }
 spin-serde = { path = "../serde" }

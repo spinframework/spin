@@ -57,16 +57,14 @@ pub trait MetadataExt {
         self.get_value(key.as_ref())
             .map(T::deserialize)
             .transpose()
-            .map_err(|err| {
-                Error::MetadataError(format!("invalid metadata value for {key:?}: {err:?}"))
-            })
+            .map_err(|err| Error::Metadata(format!("invalid metadata value for {key:?}: {err:?}")))
     }
 
     /// Get a required value from a metadata map, returning an error
     /// if it is not present
     fn require_typed<'a, T: Deserialize<'a>>(&'a self, key: MetadataKey<T>) -> Result<T> {
         self.get_typed(key)?
-            .ok_or_else(|| Error::MetadataError(format!("missing required metadata {key:?}")))
+            .ok_or_else(|| Error::Metadata(format!("missing required metadata {key:?}")))
     }
 }
 
