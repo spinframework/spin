@@ -19,6 +19,7 @@ spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["macros", "rt", "net"] }
 tokio-rustls = { workspace = true }
+tower-service = { workspace = true }
 tracing = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }

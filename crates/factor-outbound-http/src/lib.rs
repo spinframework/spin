@@ -67,6 +67,7 @@ impl Factor for OutboundHttpFactor {
             self_request_origin: None,
             request_interceptor: None,
             spin_http_client: None,
+            wasi_http_clients: None,
         })
     }
 }
@@ -80,6 +81,8 @@ pub struct InstanceState {
     request_interceptor: Option<Arc<dyn OutboundHttpInterceptor>>,
     // Connection-pooling client for 'fermyon:spin/http' interface
     spin_http_client: Option<reqwest::Client>,
+    // Connection pooling client for `wasi:http/outgoing-handler` interface
+    wasi_http_clients: Option<wasi::HttpClients>,
 }
 
 impl InstanceState {

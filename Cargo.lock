@@ -8439,6 +8439,7 @@ dependencies = [
  "spin-world",
  "tokio",
  "tokio-rustls 0.26.0",
+ "tower-service",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
