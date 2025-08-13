@@ -58,7 +58,6 @@ spin-doctor = { path = "crates/doctor" }
 spin-factor-outbound-networking = { path = "crates/factor-outbound-networking" }
 spin-http = { path = "crates/http" }
 spin-loader = { path = "crates/loader" }
-spin-locked-app = { path = "crates/locked-app" }
 spin-manifest = { path = "crates/manifest" }
 spin-oci = { path = "crates/oci" }
 spin-plugins = { path = "crates/plugins" }

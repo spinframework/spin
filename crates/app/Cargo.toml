@@ -6,9 +6,11 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+itertools = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-spin-locked-app = { path = "../locked-app" }
+spin-serde = { path = "../serde" }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 toml = { workspace = true }

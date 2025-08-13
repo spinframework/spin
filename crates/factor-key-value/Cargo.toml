@@ -9,7 +9,7 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 spin-core = { path = "../core" }
 spin-factors = { path = "../factors" }
-spin-locked-app = { path = "../locked-app" }
+spin-app = { path = "../app" }
 spin-resource-table = { path = "../table" }
 spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }

@@ -24,7 +24,7 @@ serde_json = { workspace = true }
 spin-common = { path = "../common" }
 spin-compose = { path = "../compose" }
 spin-loader = { path = "../loader" }
-spin-locked-app = { path = "../locked-app" }
+spin-app = { path = "../app" }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tokio-util = { version = "0.7", features = ["compat"] }

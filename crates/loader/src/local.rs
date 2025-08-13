@@ -3,15 +3,15 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use futures::{future::try_join_all, StreamExt};
 use reqwest::Url;
-use spin_common::{paths::parent_dir, sloth, ui::quoted_path};
-use spin_expressions::Resolver;
-use spin_locked_app::{
+use spin_app::{
     locked::{
         self, ContentPath, ContentRef, LockedApp, LockedComponent, LockedComponentDependency,
         LockedComponentSource, LockedTrigger,
     },
     values::{ValuesMap, ValuesMapBuilder},
 };
+use spin_common::{paths::parent_dir, sloth, ui::quoted_path};
+use spin_expressions::Resolver;
 use spin_manifest::schema::v2::{self, AppManifest, KebabId, WasiFilesMount};
 use spin_outbound_networking_config::allowed_hosts::{AllowedHostConfig, AllowedHostsConfig};
 use spin_serde::DependencyName;
@@ -114,15 +114,14 @@ impl LocalLoader {
         }))
         .await?;
 
-        let host_requirements = spin_locked_app::values::ValuesMap::new();
+        let host_requirements = spin_app::values::ValuesMap::new();
 
         let mut must_understand = vec![];
         if !host_requirements.is_empty() {
-            must_understand.push(spin_locked_app::locked::MustUnderstand::HostRequirements);
+            must_understand.push(spin_app::locked::MustUnderstand::HostRequirements);
         }
         if components.iter().any(|c| !c.host_requirements.is_empty()) {
-            must_understand
-                .push(spin_locked_app::locked::MustUnderstand::ComponentHostRequirements);
+            must_understand.push(spin_app::locked::MustUnderstand::ComponentHostRequirements);
         }
 
         drop(sloth_guard);
@@ -219,8 +218,8 @@ impl LocalLoader {
         let mut host_requirements = ValuesMapBuilder::new();
         if component_requires_service_chaining {
             host_requirements.string(
-                spin_locked_app::locked::SERVICE_CHAINING_KEY,
-                spin_locked_app::locked::HOST_REQ_REQUIRED,
+                spin_app::locked::SERVICE_CHAINING_KEY,
+                spin_app::locked::HOST_REQ_REQUIRED,
             );
         }
         let host_requirements = host_requirements.build();

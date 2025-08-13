@@ -3,8 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use spin_app::locked::LockedApp;
 use spin_common::ui::quoted_path;
-use spin_locked_app::locked::LockedApp;
 use spin_manifest::schema::v2::AppManifest;
 
 /// A source from which an App may be loaded.
