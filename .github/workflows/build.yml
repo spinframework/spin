@@ -194,6 +194,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: setup dependencies
+        uses: ./.github/actions/spin-ci-dependencies
+        with:
+          rust: true
+
       # Install all the toolchain dependencies
       - name: Install Rust wasm target
         run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
