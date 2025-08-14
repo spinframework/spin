@@ -8214,7 +8214,6 @@ dependencies = [
  "itertools 0.14.0",
  "serde",
  "serde_json",
- "spin-factors-test",
  "spin-serde",
  "thiserror 2.0.12",
  "tokio",
@@ -8720,6 +8719,7 @@ dependencies = [
  "spin-loader",
  "spin-telemetry",
  "tempfile",
+ "tokio",
  "toml",
 ]
 
