@@ -2,6 +2,7 @@ use crate::build_info::*;
 use crate::commands::plugins::{update, Install};
 use crate::opts::PLUGIN_OVERRIDE_COMPATIBILITY_CHECK_FLAG;
 use anyhow::{anyhow, Result};
+use clap::CommandFactory;
 use spin_common::ui::quoted_path;
 use spin_plugins::{
     badger::BadgerChecker, error::Error as PluginError, manifest::warn_unsupported_version,
@@ -52,19 +53,11 @@ pub fn predefined_externals() -> Vec<(String, String)> {
 /// Executes a Spin plugin as a subprocess, expecting the first argument to
 /// indicate the plugin to execute. Passes all subsequent arguments on to the
 /// subprocess.
-pub async fn execute_external_subcommand(
-    subcmd: Vec<String>,
-    cmd: clap::Command<'_>,
-) -> anyhow::Result<()> {
-    let (plugin_name, args, override_compatibility_check) = parse_subcommand(subcmd)?;
+pub async fn execute_external_subcommand(args: Vec<String>) -> anyhow::Result<()> {
+    let (plugin_name, args, override_compatibility_check) = parse_subcommand(args)?;
     let plugin_store = PluginStore::try_default()?;
-    let plugin_version = ensure_plugin_available(
-        &plugin_name,
-        &plugin_store,
-        cmd,
-        override_compatibility_check,
-    )
-    .await?;
+    let plugin_version =
+        ensure_plugin_available(&plugin_name, &plugin_store, override_compatibility_check).await?;
 
     let binary = plugin_store.installed_binary_path(&plugin_name);
     if !binary.exists() {
@@ -115,7 +108,6 @@ fn set_kill_on_ctrl_c(child: &tokio::process::Child) {
 async fn ensure_plugin_available(
     plugin_name: &str,
     plugin_store: &PluginStore,
-    cmd: clap::Command<'_>,
     override_compatibility_check: bool,
 ) -> anyhow::Result<Option<String>> {
     let plugin_version = match plugin_store.read_plugin_manifest(plugin_name) {
@@ -129,9 +121,7 @@ async fn ensure_plugin_available(
             }
             Some(manifest.version().to_owned())
         }
-        Err(PluginError::NotFound(e)) => {
-            consider_install(plugin_name, plugin_store, cmd, &e).await?
-        }
+        Err(PluginError::NotFound(e)) => consider_install(plugin_name, plugin_store, &e).await?,
         Err(e) => return Err(e.into()),
     };
     Ok(plugin_version)
@@ -140,7 +130,6 @@ async fn ensure_plugin_available(
 async fn consider_install(
     plugin_name: &str,
     plugin_store: &PluginStore,
-    cmd: clap::Command<'_>,
     e: &spin_plugins::error::NotFoundError,
 ) -> anyhow::Result<Option<String>> {
     if predefined_externals()
@@ -176,7 +165,7 @@ async fn consider_install(
 
     tracing::debug!("Tried to resolve {plugin_name} to plugin, got {e}");
     terminal::error!("'{plugin_name}' is not a known Spin command. See spin --help.\n");
-    print_similar_commands(cmd, plugin_name);
+    print_similar_commands(plugin_name);
     process::exit(2);
 }
 
@@ -280,8 +269,8 @@ async fn report_badger_result(badger: tokio::task::JoinHandle<BadgerChecker>) {
     }
 }
 
-fn print_similar_commands(cmd: clap::Command, plugin_name: &str) {
-    let similar = similar_commands(cmd, plugin_name);
+fn print_similar_commands(plugin_name: &str) {
+    let similar = similar_commands(plugin_name);
     match similar.len() {
         0 => (),
         1 => eprintln!("The most similar command is:"),
@@ -295,8 +284,9 @@ fn print_similar_commands(cmd: clap::Command, plugin_name: &str) {
     }
 }
 
-fn similar_commands(cmd: clap::Command, target: &str) -> Vec<String> {
-    cmd.get_subcommands()
+fn similar_commands(target: &str) -> Vec<String> {
+    crate::SpinApp::command()
+        .get_subcommands()
         .filter_map(|sc| {
             let actual_name = undecorate(sc.get_name());
             if levenshtein::levenshtein(&actual_name, target) <= 2 {

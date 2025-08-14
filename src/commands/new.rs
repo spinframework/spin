@@ -33,7 +33,7 @@ pub struct TemplateNewCommandCore {
     pub template_id: Option<String>,
 
     /// Filter templates to select by tags.
-    #[clap(long = "tag", conflicts_with = "template-id")]
+    #[clap(long = "tag", conflicts_with = "template_id")]
     pub tags: Vec<String>,
 
     /// The directory in which to create the new application or component.
@@ -42,7 +42,7 @@ pub struct TemplateNewCommandCore {
     pub output_path: Option<PathBuf>,
 
     /// Create the new application or component in the current directory.
-    #[clap(long = "init", takes_value = false, group = "location")]
+    #[clap(long, group = "location")]
     pub init: bool,
 
     /// Parameter values to be passed to the template (in name=value format).
@@ -52,25 +52,21 @@ pub struct TemplateNewCommandCore {
     /// A TOML file which contains parameter values in name = "value" format.
     /// Parameters passed as CLI option overwrite parameters specified in the
     /// file.
-    #[clap(long = "values-file")]
+    #[clap(long)]
     pub values_file: Option<PathBuf>,
 
     /// An optional argument that allows to skip prompts for the manifest file
     /// by accepting the defaults if available on the template
-    #[clap(short = 'a', long = "accept-defaults", takes_value = false)]
+    #[clap(short = 'a', long)]
     pub accept_defaults: bool,
 
     /// An optional argument that allows to skip creating .gitignore
-    #[clap(long = "no-vcs", takes_value = false)]
+    #[clap(long)]
     pub no_vcs: bool,
 
     /// If the output directory already contains files, generate the new files into
     /// it without confirming, overwriting any existing files with the same names.
-    #[clap(
-        long = "allow-overwrite",
-        alias = "allow-overwrites",
-        takes_value = false
-    )]
+    #[clap(long, alias = "allow-overwrites")]
     pub allow_overwrite: bool,
 }
 
@@ -251,7 +247,7 @@ impl TemplateNewCommandCore {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ParameterValue {
     pub name: String,
     pub value: String,

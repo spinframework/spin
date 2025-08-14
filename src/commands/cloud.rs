@@ -35,24 +35,24 @@ const DEFAULT_DEPLOY_PLUGIN: &str = "cloud";
 const DEPLOY_PLUGIN_ENV: &str = "SPIN_DEPLOY_PLUGIN";
 
 impl DeployCommand {
-    pub async fn run(self, cmd: clap::Command<'_>) -> Result<()> {
+    pub async fn run(self) -> Result<()> {
         const SUBCMD: &str = "deploy";
 
         let deploy_plugin = deployment_plugin(SUBCMD)?;
         let mut subcmd = vec![deploy_plugin, SUBCMD.to_string()];
         subcmd.append(&mut self.args.clone());
-        execute_external_subcommand(subcmd, cmd).await
+        execute_external_subcommand(subcmd).await
     }
 }
 
 impl LoginCommand {
-    pub async fn run(self, cmd: clap::Command<'_>) -> Result<()> {
+    pub async fn run(self) -> Result<()> {
         const SUBCMD: &str = "login";
 
         let deploy_plugin = deployment_plugin(SUBCMD)?;
-        let mut subcmd = vec![deploy_plugin, SUBCMD.to_string()];
-        subcmd.append(&mut self.args.clone());
-        execute_external_subcommand(subcmd, cmd).await
+        let mut args = vec![deploy_plugin, SUBCMD.to_string()];
+        args.append(&mut self.args.clone());
+        execute_external_subcommand(args).await
     }
 }
 

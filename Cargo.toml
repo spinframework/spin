@@ -18,8 +18,8 @@ rust-version = "1.86"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
-# 'deprecated' enables deprecation warnings
-clap = { workspace = true, features = ["deprecated", "derive", "env"] }
+clap = { workspace = true, features = ["derive", "env", "string", "wrap_help"] }
+clap_lex = "0.7.5"
 clearscreen = "4"
 comfy-table = "7"
 command-group = "2"
@@ -125,7 +125,7 @@ async-trait = "0.1"
 base64 = "0.22"
 bytes = "1"
 chrono = "0.4"
-clap = "3.2"
+clap = "4.5.45"
 conformance-tests = { git = "https://github.com/fermyon/conformance-tests", rev = "61f2799f92b5d85f342cc07e3f5dec5cd0a7bc9c" }
 ctrlc = { version = "3.4", features = ["termination"] }
 dialoguer = "0.11"

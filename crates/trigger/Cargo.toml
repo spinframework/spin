@@ -16,7 +16,7 @@ unsafe-aot-compilation = []
 
 [dependencies]
 anyhow = { workspace = true }
-clap = { workspace = true, features = ["derive", "env"] }
+clap = { workspace = true, features = ["derive", "env", "wrap_help"] }
 ctrlc = { workspace = true }
 futures = { workspace = true }
 sanitize-filename = "0.5"

@@ -1,4 +1,5 @@
 mod app_source;
+mod parsing;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -37,13 +38,48 @@ const MULTI_TRIGGER_START_OFFSET: tokio::time::Duration = tokio::time::Duration:
 const MULTI_TRIGGER_LET_ALL_START: tokio::time::Duration = tokio::time::Duration::from_millis(500);
 
 /// Start the Fermyon runtime.
+// NOTE: Most of the messy clap parsing details are in the child parsing module.
+pub struct UpCommand(UpCommandInner);
+
+impl UpCommand {
+    pub async fn run(self) -> Result<()> {
+        // For displaying help, first print `spin up`'s own usage text, then
+        // attempt to load an app and print trigger-type-specific usage.
+        let help = self.0.help;
+        if help {
+            UpCommandInner::command()
+                .name("spin-up")
+                .bin_name("spin up")
+                .styles(spin_common::cli::CLAP_STYLES)
+                .print_help()?;
+            println!();
+        }
+        self.0.run().await.or_else(|err| {
+            if help {
+                tracing::warn!("Error resolving trigger-specific help: {err:?}");
+                Ok(())
+            } else {
+                Err(err)
+            }
+        })
+    }
+
+    /// Runs the command as called by e.g. `spin build --up`
+    pub async fn run_as_flag(
+        manifest_file: PathBuf,
+        up_args: Vec<OsString>,
+    ) -> std::result::Result<(), anyhow::Error> {
+        let args = [OsString::from("spin up")].into_iter().chain(up_args);
+        let mut cmd = UpCommand::parse_from(args);
+        cmd.0.file_source = Some(manifest_file);
+        cmd.0.run().await
+    }
+}
+
+/// Argument parser for UpCommand.
 #[derive(Parser, Debug, Default)]
-#[clap(
-    about = "Start the Spin application",
-    allow_hyphen_values = true,
-    disable_help_flag = true
-)]
-pub struct UpCommand {
+#[clap(about = "Start the Spin application", disable_help_flag = true)]
+struct UpCommandInner {
     #[clap(short = 'h', long = "help")]
     pub help: bool,
 
@@ -83,8 +119,7 @@ pub struct UpCommand {
     #[clap(
         name = INSECURE_OPT,
         short = 'k',
-        long = "insecure",
-        takes_value = false,
+        long,
     )]
     pub insecure: bool,
 
@@ -105,13 +140,13 @@ pub struct UpCommand {
     ///
     /// This allows you to update the assets on the host filesystem such that the updates are visible to the guest
     /// without a restart.  This cannot be used with registry apps or apps which use file patterns and/or exclusions.
-    #[clap(long, takes_value = false)]
+    #[clap(long)]
     pub direct_mounts: bool,
 
     /// For local apps, specifies to perform `spin build` (with the default options) before running the application.
     ///
     /// This is ignored on remote applications, as they are already built.
-    #[clap(long, takes_value = false, env = ALWAYS_BUILD_ENV)]
+    #[clap(long, env = ALWAYS_BUILD_ENV)]
     pub build: bool,
 
     /// [Experimental] Component ID to run. This can be specified multiple times. The default is all components.
@@ -119,33 +154,12 @@ pub struct UpCommand {
     pub components: Vec<String>,
 
     /// All other args, to be passed through to the trigger
-    #[clap(hide = true)]
+    #[clap(skip)]
     pub trigger_args: Vec<OsString>,
 }
 
-impl UpCommand {
-    pub async fn run(self) -> Result<()> {
-        // For displaying help, first print `spin up`'s own usage text, then
-        // attempt to load an app and print trigger-type-specific usage.
-        let help = self.help;
-        if help {
-            Self::command()
-                .name("spin-up")
-                .bin_name("spin up")
-                .print_help()?;
-            println!();
-        }
-        self.run_inner().await.or_else(|err| {
-            if help {
-                tracing::warn!("Error resolving trigger-specific help: {err:?}");
-                Ok(())
-            } else {
-                Err(err)
-            }
-        })
-    }
-
-    async fn run_inner(self) -> Result<()> {
+impl UpCommandInner {
+    async fn run(self) -> Result<()> {
         let app_source = self.app_source();
 
         if app_source == AppSource::None {
@@ -696,7 +710,7 @@ mod test {
     fn can_infer_files() {
         let file = repo_path("examples/http-rust/spin.toml");
 
-        let source = UpCommand {
+        let source = UpCommandInner {
             app_source: Some(file.clone()),
             ..Default::default()
         }
@@ -709,7 +723,7 @@ mod test {
     fn can_infer_directories() {
         let dir = repo_path("examples/http-rust");
 
-        let source = UpCommand {
+        let source = UpCommandInner {
             app_source: Some(dir.clone()),
             ..Default::default()
         }
@@ -725,7 +739,7 @@ mod test {
     fn reject_nonexistent_files() {
         let file = repo_path("src/commands/biscuits.toml");
 
-        let source = UpCommand {
+        let source = UpCommandInner {
             app_source: Some(file),
             ..Default::default()
         }
@@ -738,7 +752,7 @@ mod test {
     fn reject_nonexistent_files_relative_path() {
         let file = "zoink/honk/biscuits.toml".to_owned(); // NOBODY CREATE THIS OKAY
 
-        let source = UpCommand {
+        let source = UpCommandInner {
             app_source: Some(file),
             ..Default::default()
         }
@@ -751,7 +765,7 @@ mod test {
     fn reject_unsuitable_directories() {
         let dir = repo_path("src/commands");
 
-        let source = UpCommand {
+        let source = UpCommandInner {
             app_source: Some(dir),
             ..Default::default()
         }
@@ -764,7 +778,7 @@ mod test {
     fn can_infer_oci_registry_reference() {
         let reference = "ghcr.io/fermyon/noodles:v1".to_owned();
 
-        let source = UpCommand {
+        let source = UpCommandInner {
             app_source: Some(reference.clone()),
             ..Default::default()
         }
@@ -778,7 +792,7 @@ mod test {
         // Testing that the magic docker heuristic doesn't misfire here.
         let reference = "docker.io/fermyon/noodles".to_owned();
 
-        let source = UpCommand {
+        let source = UpCommandInner {
             app_source: Some(reference.clone()),
             ..Default::default()
         }
@@ -791,7 +805,7 @@ mod test {
     fn can_reject_complete_gibberish() {
         let garbage = repo_path("ftp://🤡***🤡 HELLO MR CLOWN?!");
 
-        let source = UpCommand {
+        let source = UpCommandInner {
             app_source: Some(garbage),
             ..Default::default()
         }
@@ -850,7 +864,7 @@ mod test {
     #[test]
     fn group_no_args_is_empty() {
         let cmd = UpCommand::try_parse_from(["up"]).unwrap();
-        let groups = cmd.group_trigger_args();
+        let groups = cmd.0.group_trigger_args();
         assert!(groups.is_empty());
     }
 
@@ -858,7 +872,7 @@ mod test {
     fn can_group_valueful_flags() {
         let cmd =
             UpCommand::try_parse_from(["up", "--listen", "127.0.0.1:39453", "-L", "/fie"]).unwrap();
-        let groups = cmd.group_trigger_args();
+        let groups = cmd.0.group_trigger_args();
         assert_eq!(2, groups.len());
         assert_eq!(2, groups[0].len());
         assert_eq!("--listen", groups[0][0]);
@@ -880,7 +894,7 @@ mod test {
             "/fie",
         ])
         .unwrap();
-        let groups = cmd.group_trigger_args();
+        let groups = cmd.0.group_trigger_args();
         assert_eq!(4, groups.len());
         assert_eq!(2, groups[0].len());
         assert_eq!("--listen", groups[0][0]);
@@ -905,7 +919,7 @@ mod test {
             "/fie",
         ])
         .unwrap();
-        let groups = cmd.group_trigger_args();
+        let groups = cmd.0.group_trigger_args();
         assert_eq!(3, groups.len());
         assert_eq!(2, groups[0].len());
         assert_eq!("--listen", groups[0][0]);
