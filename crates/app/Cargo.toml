@@ -14,5 +14,4 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 toml = { workspace = true }
-spin-factors-test = { path = "../factors-test" }
 tokio = { workspace = true }
