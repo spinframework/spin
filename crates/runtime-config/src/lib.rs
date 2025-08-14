@@ -379,8 +379,10 @@ impl FactorRuntimeConfigSource<WasiFactor> for TomlRuntimeConfigSource<'_, '_> {
 }
 
 impl FactorRuntimeConfigSource<OutboundHttpFactor> for TomlRuntimeConfigSource<'_, '_> {
-    fn get_runtime_config(&mut self) -> anyhow::Result<Option<()>> {
-        Ok(None)
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<<OutboundHttpFactor as spin_factors::Factor>::RuntimeConfig>> {
+        spin_factor_outbound_http::runtime_config::spin::config_from_table(&self.toml.table)
     }
 }
 

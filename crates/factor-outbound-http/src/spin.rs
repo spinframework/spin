@@ -90,7 +90,13 @@ impl spin_http::Host for crate::InstanceState {
 
         // Allow reuse of Client's internal connection pool for multiple requests
         // in a single component execution
-        let client = self.spin_http_client.get_or_insert_with(Default::default);
+        let client = self.spin_http_client.get_or_insert_with(|| {
+            let mut builder = reqwest::Client::builder();
+            if !self.connection_pooling {
+                builder = builder.pool_max_idle_per_host(0);
+            }
+            builder.build().unwrap()
+        });
 
         let resp = client.execute(req).await.map_err(log_reqwest_error)?;
 

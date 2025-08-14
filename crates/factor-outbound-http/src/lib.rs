@@ -1,4 +1,5 @@
 pub mod intercept;
+pub mod runtime_config;
 mod spin;
 mod wasi;
 pub mod wasi_2023_10_18;
@@ -12,6 +13,7 @@ use http::{
     HeaderValue, Uri,
 };
 use intercept::OutboundHttpInterceptor;
+use runtime_config::RuntimeConfig;
 use spin_factor_outbound_networking::{
     config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
     ComponentTlsClientConfigs, OutboundNetworkingFactor,
@@ -34,8 +36,8 @@ pub struct OutboundHttpFactor {
 }
 
 impl Factor for OutboundHttpFactor {
-    type RuntimeConfig = ();
-    type AppState = ();
+    type RuntimeConfig = RuntimeConfig;
+    type AppState = AppState;
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
@@ -46,9 +48,14 @@ impl Factor for OutboundHttpFactor {
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        _ctx: ConfigureAppContext<T, Self>,
+        mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        Ok(())
+        Ok(AppState {
+            connection_pooling: ctx
+                .take_runtime_config()
+                .unwrap_or_default()
+                .connection_pooling,
+        })
     }
 
     fn prepare<T: RuntimeFactors>(
@@ -68,6 +75,7 @@ impl Factor for OutboundHttpFactor {
             request_interceptor: None,
             spin_http_client: None,
             wasi_http_clients: None,
+            connection_pooling: ctx.app_state().connection_pooling,
         })
     }
 }
@@ -83,6 +91,7 @@ pub struct InstanceState {
     spin_http_client: Option<reqwest::Client>,
     // Connection pooling client for `wasi:http/outgoing-handler` interface
     wasi_http_clients: Option<wasi::HttpClients>,
+    connection_pooling: bool,
 }
 
 impl InstanceState {
@@ -159,4 +168,8 @@ impl std::fmt::Display for SelfRequestOrigin {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}://{}", self.scheme, self.authority)
     }
+}
+
+pub struct AppState {
+    connection_pooling: bool,
 }

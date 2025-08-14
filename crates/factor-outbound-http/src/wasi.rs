@@ -135,15 +135,22 @@ impl WasiHttpView for WasiHttpImplInner<'_> {
         request: Request<wasmtime_wasi_http::body::HyperOutgoingBody>,
         config: wasmtime_wasi_http::types::OutgoingRequestConfig,
     ) -> wasmtime_wasi_http::HttpResult<wasmtime_wasi_http::types::HostFutureIncomingResponse> {
+        let connection_pooling = self.state.connection_pooling;
+        let builder = move || {
+            let mut builder = Client::builder(TokioExecutor::new());
+            if !connection_pooling {
+                builder.pool_max_idle_per_host(0);
+            }
+            builder
+        };
+
         let http_clients = self
             .state
             .wasi_http_clients
             .get_or_insert_with(|| HttpClients {
-                http1: Client::builder(TokioExecutor::new()).build(HttpConnector),
-                http2: Client::builder(TokioExecutor::new())
-                    .http2_only(true)
-                    .build(HttpConnector),
-                https: Client::builder(TokioExecutor::new()).build(HttpsConnector),
+                http1: builder().build(HttpConnector),
+                http2: builder().http2_only(true).build(HttpConnector),
+                https: builder().build(HttpsConnector),
             })
             .clone();
 

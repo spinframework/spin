@@ -13,6 +13,7 @@ hyper = { workspace = true }
 hyper-util = { workspace = true }
 reqwest = { workspace = true, features = ["gzip"] }
 rustls = { workspace = true }
+serde = { workspace = true }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-telemetry = { path = "../telemetry" }
@@ -28,6 +29,11 @@ wasmtime-wasi-http = { workspace = true }
 [dev-dependencies]
 spin-factor-variables = { path = "../factor-variables" }
 spin-factors-test = { path = "../factors-test" }
+
+[features]
+default = ["spin-cli"]
+# Includes the runtime configuration handling used by the Spin CLI
+spin-cli = []
 
 [lints]
 workspace = true
