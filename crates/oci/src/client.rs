@@ -13,13 +13,13 @@ use oci_distribution::{
     token_cache::RegistryTokenType, Reference, RegistryOperation,
 };
 use reqwest::Url;
+use spin_app::locked::{ContentPath, ContentRef, LockedApp, LockedComponent};
 use spin_common::sha256;
 use spin_common::ui::quoted_path;
 use spin_common::url::parse_file_url;
 use spin_compose::ComponentSourceLoaderFs;
 use spin_loader::cache::Cache;
 use spin_loader::FilesMountStrategy;
-use spin_locked_app::locked::{ContentPath, ContentRef, LockedApp, LockedComponent};
 use tokio::fs;
 use walkdir::WalkDir;
 
@@ -835,7 +835,7 @@ fn all_annotations(
     explicit: Option<BTreeMap<String, String>>,
     predefined: InferPredefinedAnnotations,
 ) -> Option<BTreeMap<String, String>> {
-    use spin_locked_app::{MetadataKey, APP_DESCRIPTION_KEY, APP_NAME_KEY, APP_VERSION_KEY};
+    use spin_app::{MetadataKey, APP_DESCRIPTION_KEY, APP_NAME_KEY, APP_VERSION_KEY};
     const APP_AUTHORS_KEY: MetadataKey<Vec<String>> = MetadataKey::new("authors");
 
     if predefined == InferPredefinedAnnotations::None {
@@ -989,7 +989,7 @@ mod test {
 
     #[tokio::test]
     async fn can_assemble_layers() {
-        use spin_locked_app::locked::LockedComponent;
+        use spin_app::locked::LockedComponent;
         use tokio::io::AsyncWriteExt;
 
         let working_dir = tempfile::tempdir().unwrap();
@@ -1353,7 +1353,7 @@ mod test {
     }
 
     fn annotatable_app() -> LockedApp {
-        let mut meta_builder = spin_locked_app::values::ValuesMapBuilder::new();
+        let mut meta_builder = spin_app::values::ValuesMapBuilder::new();
         meta_builder
             .string("name", "this-is-spinal-tap")
             .string("version", "11.11.11")

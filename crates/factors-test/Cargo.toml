@@ -11,6 +11,7 @@ spin-loader = { path = "../loader" }
 spin-telemetry = { path = "../telemetry", features = ["testing"] }
 tempfile = { workspace = true }
 toml = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true
