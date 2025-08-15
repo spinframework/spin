@@ -33,11 +33,7 @@ pub struct TemplateNewCommandCore {
     pub template_id: Option<String>,
 
     /// Filter templates to select by tags.
-    #[clap(
-        long = "tag",
-        multiple_occurrences = true,
-        conflicts_with = "template-id"
-    )]
+    #[clap(long = "tag", conflicts_with = "template-id")]
     pub tags: Vec<String>,
 
     /// The directory in which to create the new application or component.
@@ -50,7 +46,7 @@ pub struct TemplateNewCommandCore {
     pub init: bool,
 
     /// Parameter values to be passed to the template (in name=value format).
-    #[clap(short = 'v', long = "value", multiple_occurrences = true)]
+    #[clap(short = 'v', long = "value")]
     pub values: Vec<ParameterValue>,
 
     /// A TOML file which contains parameter values in name = "value" format.

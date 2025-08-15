@@ -41,7 +41,7 @@ pub const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
 /// A command that runs a TriggerExecutor.
 #[derive(Parser, Debug)]
 #[clap(
-    usage = "spin [COMMAND] [OPTIONS]",
+    override_usage = "spin [COMMAND] [OPTIONS]",
     next_help_heading = help_heading::<T, B::Factors>()
 )]
 pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> {
@@ -89,7 +89,6 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
     #[clap(
         name = FOLLOW_LOG_OPT,
         long = "follow",
-        multiple_occurrences = true,
     )]
     pub follow_components: Vec<String>,
 
