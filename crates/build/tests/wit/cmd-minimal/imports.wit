@@ -1,0 +1,5 @@
+package wasi:cli@0.2.0;
+
+world imports {
+  import environment;
+}
