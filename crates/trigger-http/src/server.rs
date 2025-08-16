@@ -14,10 +14,12 @@ use http::{
 use http_body_util::BodyExt;
 use hyper::{
     body::{Bytes, Incoming},
-    server::conn::http1,
     service::service_fn,
 };
-use hyper_util::rt::TokioIo;
+use hyper_util::{
+    rt::{TokioExecutor, TokioIo},
+    server::conn::auto::Builder,
+};
 use spin_app::{APP_DESCRIPTION_KEY, APP_NAME_KEY};
 use spin_factor_outbound_http::{OutboundHttpFactor, SelfRequestOrigin};
 use spin_factors::RuntimeFactors;
@@ -410,8 +412,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         client_addr: SocketAddr,
     ) {
         task::spawn(async move {
-            if let Err(err) = http1::Builder::new()
-                .keep_alive(true)
+            if let Err(err) = Builder::new(TokioExecutor::new())
                 .serve_connection(
                     TokioIo::new(stream),
                     service_fn(move |request| {
