@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use spin_factors::runtime_config::toml::GetTomlValue;
-use spin_llm_remote_http::RemoteHttpLlmEngine;
+use spin_llm_remote_http::{ApiType, RemoteHttpLlmEngine};
 use spin_world::async_trait;
 use spin_world::v1::llm::{self as v1};
 use spin_world::v2::llm::{self as v2};
@@ -122,6 +122,7 @@ impl LlmCompute {
             LlmCompute::RemoteHttp(config) => Arc::new(Mutex::new(RemoteHttpLlmEngine::new(
                 config.url,
                 config.auth_token,
+                config.api_type,
             ))),
         };
         Ok(engine)
@@ -132,6 +133,8 @@ impl LlmCompute {
 pub struct RemoteHttpCompute {
     url: Url,
     auth_token: String,
+    #[serde(default)]
+    api_type: ApiType,
 }
 
 /// A noop engine used when the local engine feature is disabled.
