@@ -19,7 +19,7 @@ spin-componentize = { path = "../componentize" }
 spin-serde = { path = "../serde" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
-wac-graph = "0.6"
+wac-graph = "0.8"
 
 [lints]
 workspace = true
