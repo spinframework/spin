@@ -64,10 +64,7 @@ impl RuntimeConfigResolver {
             .insert(T::RUNTIME_CONFIG_TYPE, store_from_toml_fn(store_type))
             .is_some()
         {
-            anyhow::bail!(
-                "duplicate key value store type {:?}",
-                T::RUNTIME_CONFIG_TYPE
-            );
+            anyhow::bail!("duplicate blob store type {:?}", T::RUNTIME_CONFIG_TYPE);
         }
         Ok(())
     }

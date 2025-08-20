@@ -228,6 +228,17 @@ struct BlobContent {
     end: u64,
 }
 
+impl BlobContent {
+    fn len(&self) -> u64 {
+        let excl_end = if self.end == u64::MAX {
+            self.end
+        } else {
+            self.end + 1
+        };
+        excl_end - self.start
+    }
+}
+
 #[async_trait]
 impl spin_factor_blobstore::IncomingData for BlobContent {
     async fn consume_sync(&mut self) -> anyhow::Result<Vec<u8>> {
@@ -238,9 +249,7 @@ impl spin_factor_blobstore::IncomingData for BlobContent {
         let mut buf = Vec::with_capacity(1000);
 
         file.seek(std::io::SeekFrom::Start(self.start)).await?;
-        file.take(self.end - self.start)
-            .read_to_end(&mut buf)
-            .await?;
+        file.take(self.len()).read_to_end(&mut buf).await?;
 
         Ok(buf)
     }
@@ -253,7 +262,7 @@ impl spin_factor_blobstore::IncomingData for BlobContent {
         let file = self.file.take().unwrap();
         let stm = tokio_util::io::ReaderStream::new(file)
             .skip(self.start.try_into().unwrap())
-            .take((self.end - self.start).try_into().unwrap());
+            .take(self.len().try_into().unwrap());
 
         let ar = stm.into_async_read().compat();
         wasmtime_wasi::p2::pipe::AsyncReadStream::new(ar)
