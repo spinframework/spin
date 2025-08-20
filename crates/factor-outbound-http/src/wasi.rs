@@ -425,6 +425,14 @@ async fn send_request_impl(
         *request.uri_mut() = origin.into_uri(path_and_query);
     }
 
+    // Some servers (looking at you nginx) don't like a host header even though
+    // http/2 allows it: https://github.com/hyperium/hyper/issues/3298.
+    //
+    // Note that we do this _before_ invoking the request interceptor.  It may
+    // decide to add the `host` header back in, regardless of the nginx bug, in
+    // which case we'll let it do so without interferring.
+    request.headers_mut().remove(HOST);
+
     if let Some(interceptor) = request_interceptor {
         let intercept_request = std::mem::take(&mut request).into();
         match interceptor.intercept(intercept_request).await? {
@@ -459,7 +467,7 @@ async fn send_request_impl(
 }
 
 async fn send_request_handler(
-    mut request: http::Request<HyperOutgoingBody>,
+    request: http::Request<HyperOutgoingBody>,
     wasmtime_wasi_http::types::OutgoingRequestConfig {
         use_tls,
         connect_timeout,
@@ -470,10 +478,6 @@ async fn send_request_handler(
     blocked_networks: BlockedNetworks,
     http_clients: HttpClients,
 ) -> Result<wasmtime_wasi_http::types::IncomingResponse, ErrorCode> {
-    // Some servers (looking at you nginx) don't like a host header even though
-    // http/2 allows it: https://github.com/hyperium/hyper/issues/3298
-    request.headers_mut().remove(HOST);
-
     let resp = CONNECT_OPTIONS.scope(
         ConnectOptions {
             blocked_networks,
