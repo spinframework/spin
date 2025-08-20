@@ -50,11 +50,13 @@ impl Factor for OutboundHttpFactor {
         &self,
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
+        let connection_pooling = ctx
+            .take_runtime_config()
+            .unwrap_or_default()
+            .connection_pooling;
         Ok(AppState {
-            connection_pooling: ctx
-                .take_runtime_config()
-                .unwrap_or_default()
-                .connection_pooling,
+            wasi_http_clients: wasi::HttpClients::new(connection_pooling),
+            connection_pooling,
         })
     }
 
@@ -74,7 +76,7 @@ impl Factor for OutboundHttpFactor {
             self_request_origin: None,
             request_interceptor: None,
             spin_http_client: None,
-            wasi_http_clients: None,
+            wasi_http_clients: ctx.app_state().wasi_http_clients.clone(),
             connection_pooling: ctx.app_state().connection_pooling,
         })
     }
@@ -88,9 +90,16 @@ pub struct InstanceState {
     self_request_origin: Option<SelfRequestOrigin>,
     request_interceptor: Option<Arc<dyn OutboundHttpInterceptor>>,
     // Connection-pooling client for 'fermyon:spin/http' interface
+    //
+    // TODO: We could move this to `AppState` to like the
+    // `wasi:http/outgoing-handler` pool for consistency, although it's probably
+    // not a high priority given that `fermyon:spin/http` is deprecated anyway.
     spin_http_client: Option<reqwest::Client>,
-    // Connection pooling client for `wasi:http/outgoing-handler` interface
-    wasi_http_clients: Option<wasi::HttpClients>,
+    // Connection pooling clients for `wasi:http/outgoing-handler` interface
+    //
+    // This is a clone of `AppState::wasi_http_clients`, meaning it is shared
+    // among all instances of the app.
+    wasi_http_clients: wasi::HttpClients,
     connection_pooling: bool,
 }
 
@@ -171,5 +180,7 @@ impl std::fmt::Display for SelfRequestOrigin {
 }
 
 pub struct AppState {
+    // Connection pooling clients for `wasi:http/outgoing-handler` interface
+    wasi_http_clients: wasi::HttpClients,
     connection_pooling: bool,
 }

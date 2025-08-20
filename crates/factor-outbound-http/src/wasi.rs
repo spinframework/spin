@@ -101,6 +101,23 @@ pub(super) struct HttpClients {
     https: HttpsClient,
 }
 
+impl HttpClients {
+    pub(super) fn new(enable_pooling: bool) -> Self {
+        let builder = move || {
+            let mut builder = Client::builder(TokioExecutor::new());
+            if !enable_pooling {
+                builder.pool_max_idle_per_host(0);
+            }
+            builder
+        };
+        Self {
+            http1: builder().build(HttpConnector),
+            http2: builder().http2_only(true).build(HttpConnector),
+            https: builder().build(HttpsConnector),
+        }
+    }
+}
+
 pub(crate) struct WasiHttpImplInner<'a> {
     state: &'a mut InstanceState,
     table: &'a mut ResourceTable,
@@ -135,25 +152,6 @@ impl WasiHttpView for WasiHttpImplInner<'_> {
         request: Request<wasmtime_wasi_http::body::HyperOutgoingBody>,
         config: wasmtime_wasi_http::types::OutgoingRequestConfig,
     ) -> wasmtime_wasi_http::HttpResult<wasmtime_wasi_http::types::HostFutureIncomingResponse> {
-        let connection_pooling = self.state.connection_pooling;
-        let builder = move || {
-            let mut builder = Client::builder(TokioExecutor::new());
-            if !connection_pooling {
-                builder.pool_max_idle_per_host(0);
-            }
-            builder
-        };
-
-        let http_clients = self
-            .state
-            .wasi_http_clients
-            .get_or_insert_with(|| HttpClients {
-                http1: builder().build(HttpConnector),
-                http2: builder().http2_only(true).build(HttpConnector),
-                https: builder().build(HttpsConnector),
-            })
-            .clone();
-
         Ok(HostFutureIncomingResponse::Pending(
             wasmtime_wasi::runtime::spawn(
                 send_request_impl(
@@ -164,7 +162,7 @@ impl WasiHttpView for WasiHttpImplInner<'_> {
                     self.state.request_interceptor.clone(),
                     self.state.self_request_origin.clone(),
                     self.state.blocked_networks.clone(),
-                    http_clients,
+                    self.state.wasi_http_clients.clone(),
                 )
                 .in_current_span(),
             ),
