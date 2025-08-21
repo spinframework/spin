@@ -89,6 +89,10 @@ impl WorldName {
         &self.package
     }
 
+    pub fn name(&self) -> &str {
+        &self.world
+    }
+
     pub fn package_namespaced_name(&self) -> String {
         format!("{}:{}", self.package.namespace, self.package.name)
     }

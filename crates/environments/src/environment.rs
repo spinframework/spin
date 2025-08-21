@@ -150,6 +150,11 @@ impl CandidateWorld {
         &self.package_bytes
     }
 
+    /// Returns the world name (e.g. `command` in `wasi:cli/command`).
+    pub fn world_name(&self) -> &str {
+        self.world.name()
+    }
+
     fn from_package_bytes(world: &WorldName, bytes: Vec<u8>) -> anyhow::Result<Self> {
         let decoded = wit_component::decode(&bytes)
             .with_context(|| format!("Failed to decode package for environment {world}"))?;

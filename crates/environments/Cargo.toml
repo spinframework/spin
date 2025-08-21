@@ -26,8 +26,7 @@ spin-serde = { path = "../serde" }
 toml = { workspace = true }
 tokio = { version = "1.23", features = ["fs"] }
 tracing = { workspace = true }
-wac-parser = "0.8"
-wac-resolver = "0.8"
+wac-graph = "0.8"
 wac-types = "0.8"
 wasm-pkg-client = { workspace = true }
 wasmparser = { workspace = true }

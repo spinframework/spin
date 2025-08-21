@@ -163,61 +163,61 @@ async fn validate_wasm_against_world(
     target_world: &CandidateWorld,
     component: &ComponentToValidate<'_>,
 ) -> anyhow::Result<()> {
-    // Because we are abusing a composition tool to do validation, we have to
-    // provide a name by which to refer to the component in the dummy composition.
-    let component_name = "root:component";
-    let component_key = wac_types::BorrowedPackageKey::from_name_and_version(component_name, None);
+    use wac_types::{validate_target, ItemKind, Package as WacPackage, Types as WacTypes, WorldId};
 
-    // wac is going to get the world from the environment package bytes.
-    // This constructs a key for that mapping.
-    let env_pkg_name = target_world.package_namespaced_name();
-    let env_pkg_key = wac_types::BorrowedPackageKey::from_name_and_version(
-        &env_pkg_name,
+    // Gets the selected world from the component encoded WIT package
+    // TODO: make this an export on `wac_types::Types`.
+    fn get_wit_world(
+        types: &WacTypes,
+        top_level_world: WorldId,
+        world_name: &str,
+    ) -> anyhow::Result<WorldId> {
+        let top_level_world = &types[top_level_world];
+        let world = top_level_world
+            .exports
+            .get(world_name)
+            .with_context(|| format!("wit package did not contain a world named '{world_name}'"))?;
+
+        let ItemKind::Type(wac_types::Type::World(world_id)) = world else {
+            // We expect the top-level world to export a world type
+            anyhow::bail!("wit package was not encoded properly")
+        };
+        let wit_world = &types[*world_id];
+        let world = wit_world.exports.values().next();
+        let Some(ItemKind::Component(w)) = world else {
+            // We expect the nested world type to export a component
+            anyhow::bail!("wit package was not encoded properly")
+        };
+        Ok(*w)
+    }
+
+    let mut types = WacTypes::default();
+
+    let target_world_package = WacPackage::from_bytes(
+        &target_world.package_namespaced_name(),
         target_world.package_version(),
-    );
+        target_world.package_bytes(),
+        &mut types,
+    )?;
 
-    let env_name = env.name();
+    let target_world_id =
+        get_wit_world(&types, target_world_package.ty(), target_world.world_name())?;
 
-    let wac_text = format!(
-        r#"
-    package validate:component@1.0.0 targets {target_world};
-    let c = new {component_name} {{ ... }};
-    export c...;
-    "#
-    );
+    let component_package =
+        WacPackage::from_bytes(component.id(), None, component.wasm_bytes(), &mut types)?;
 
-    let doc = wac_parser::Document::parse(&wac_text)
-        .context("Internal error constructing WAC document for target checking")?;
+    let target_result = validate_target(&types, target_world_id, component_package.ty());
 
-    let mut packages: indexmap::IndexMap<wac_types::BorrowedPackageKey, Vec<u8>> =
-        Default::default();
-
-    packages.insert(env_pkg_key, target_world.package_bytes().to_vec());
-    packages.insert(component_key, component.wasm_bytes().to_vec());
-
-    match doc.resolve(packages) {
+    match target_result {
         Ok(_) => Ok(()),
-        Err(wac_parser::resolution::Error::TargetMismatch { kind, name, world, .. }) => {
-            // This one doesn't seem to get hit at the moment - we get MissingTargetExport or ImportNotInTarget instead
-            Err(anyhow!("Component {} ({}) can't run in environment {env_name} because world {world} expects an {} named {name}", component.id(), component.source_description(), kind.to_string().to_lowercase()))
-        }
-        Err(wac_parser::resolution::Error::MissingTargetExport { name, world, .. }) => {
-            Err(anyhow!("Component {} ({}) can't run in environment {env_name} because world {world} requires an export named {name}, which the component does not provide", component.id(), component.source_description()))
-        }
-        Err(wac_parser::resolution::Error::PackageMissingExport { export, .. }) => {
-            // TODO: The export here seems wrong - it seems to contain the world name rather than the interface name
-            Err(anyhow!("Component {} ({}) can't run in environment {env_name} because world {target_world} requires an export named {export}, which the component does not provide", component.id(), component.source_description()))
-        }
-        Err(wac_parser::resolution::Error::ImportNotInTarget { name, world, .. }) => {
-            Err(anyhow!("Component {} ({}) can't run in environment {env_name} because world {world} does not provide an import named {name}, which the component requires", component.id(), component.source_description()))
-        }
-        Err(wac_parser::resolution::Error::SpreadExportNoEffect { .. }) => {
-            // We don't have any name info in this case, but it *may* indicate that the component doesn't provide any export at all
-            Err(anyhow!("Component {} ({}) can't run in environment {env_name} because it requires an export which the component does not provide", component.id(), component.source_description()))
-        }
-        Err(e) => {
-            Err(anyhow!(e))
-        },
+        Err(report) => Err(format_target_result_error(
+            &types,
+            env.name(),
+            target_world.to_string(),
+            component.id(),
+            component.source_description(),
+            &report,
+        )),
     }
 }
 
@@ -241,4 +241,47 @@ fn validate_host_reqs(
 
 fn satisfies(host_caps: &[String], host_req: &String) -> bool {
     host_caps.contains(host_req)
+}
+
+fn format_target_result_error(
+    types: &wac_types::Types,
+    env_name: &str,
+    target_world_name: String,
+    component_id: &str,
+    source_description: &str,
+    report: &wac_types::TargetValidationReport,
+) -> anyhow::Error {
+    let mut error_string = format!(
+        "Component {} ({}) can't run in environment {} because world {} ...\n",
+        component_id, source_description, env_name, target_world_name
+    );
+
+    for (idx, import) in report.imports_not_in_target().enumerate() {
+        if idx == 0 {
+            error_string.push_str("... requires imports named\n  - ");
+        } else {
+            error_string.push_str("  - ");
+        }
+        error_string.push_str(import);
+        error_string.push('\n');
+    }
+
+    for (idx, (export, export_kind)) in report.missing_exports().enumerate() {
+        if idx == 0 {
+            error_string.push_str("... requires exports named\n  - ");
+        } else {
+            error_string.push_str("  - ");
+        }
+        error_string.push_str(export);
+        error_string.push_str(" (");
+        error_string.push_str(export_kind.desc(types));
+        error_string.push_str(")\n");
+    }
+
+    for (name, extern_kind, error) in report.mismatched_types() {
+        error_string.push_str("... found a type mismatch for ");
+        error_string.push_str(&format!("{extern_kind} {name}: {error}"));
+    }
+
+    anyhow!(error_string)
 }

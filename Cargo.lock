@@ -5103,7 +5103,6 @@ checksum = "4edc8853320c2a0dab800fbda86253c8938f6ea88510dc92c5f1ed20e794afc1"
 dependencies = [
  "cfg-if",
  "miette-derive 7.2.0",
- "serde",
  "thiserror 1.0.69",
  "unicode-width 0.1.14",
 ]
@@ -8141,8 +8140,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "wac-parser",
- "wac-resolver",
+ "wac-graph",
  "wac-types",
  "wasm-pkg-client",
  "wasmparser 0.235.0",
@@ -10182,49 +10180,6 @@ dependencies = [
  "wasm-encoder 0.235.0",
  "wasm-metadata 0.235.0",
  "wasmparser 0.235.0",
-]
-
-[[package]]
-name = "wac-parser"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37077f3951f01f32c496a7f54ac93e9e26bf6860fe461552aab3f12d753ddf10"
-dependencies = [
- "anyhow",
- "id-arena",
- "indexmap 2.7.1",
- "log",
- "logos",
- "miette 7.2.0",
- "semver",
- "serde",
- "thiserror 1.0.69",
- "wac-graph",
- "wasm-encoder 0.235.0",
- "wasm-metadata 0.235.0",
- "wasmparser 0.235.0",
-]
-
-[[package]]
-name = "wac-resolver"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00089c18bdb399f998c3fa9723a7678cb5c5cc61995702d96f66ac4d634aa886"
-dependencies = [
- "anyhow",
- "futures",
- "indexmap 2.7.1",
- "log",
- "miette 7.2.0",
- "semver",
- "thiserror 1.0.69",
- "tokio",
- "wac-parser",
- "wac-types",
- "warg-client",
- "warg-crypto",
- "warg-protocol",
- "wit-component 0.235.0",
 ]
 
 [[package]]
