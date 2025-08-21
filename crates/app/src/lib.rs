@@ -341,3 +341,90 @@ pub fn retain_components(
 ) -> Result<LockedApp> {
     App::new("unused", locked).retain_components(components, validators)
 }
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashSet;
+
+    use spin_manifest::schema::v2::{self, ComponentSpec, Trigger};
+
+    use super::*;
+
+    fn locked_trigger(
+        trigger_type: String,
+        mut trigger: v2::Trigger,
+    ) -> anyhow::Result<LockedTrigger> {
+        fn reference_id(spec: v2::ComponentSpec) -> toml::Value {
+            let v2::ComponentSpec::Reference(id) = spec else {
+                unreachable!("should have already been normalized");
+            };
+            id.as_ref().into()
+        }
+
+        if let Some(id) = trigger.component.map(reference_id) {
+            trigger.config.insert("component".into(), id);
+        }
+
+        Ok(LockedTrigger {
+            id: trigger.id,
+            trigger_type,
+            trigger_config: trigger.config.try_into()?,
+        })
+    }
+
+    pub fn locked_app() -> LockedApp {
+        LockedApp {
+            spin_lock_version: Default::default(),
+            must_understand: Default::default(),
+            metadata: Default::default(),
+            host_requirements: Default::default(),
+            variables: Default::default(),
+            triggers: vec![locked_trigger(
+                "http".to_owned(),
+                Trigger {
+                    id: Default::default(),
+                    component: Some(ComponentSpec::Reference(
+                        "empty".to_string().try_into().unwrap(),
+                    )),
+                    components: Default::default(),
+                    config: Default::default(),
+                },
+            )
+            .unwrap()],
+            components: vec![LockedComponent {
+                id: "empty".to_owned(),
+                metadata: Default::default(),
+                source: LockedComponentSource {
+                    content_type: "application/wasm".to_owned(),
+                    content: locked::ContentRef {
+                        source: Some("does-not-exist.wasm".to_owned()),
+                        inline: None,
+                        digest: None,
+                    },
+                },
+                env: Default::default(),
+                files: Default::default(),
+                config: Default::default(),
+                dependencies: Default::default(),
+                host_requirements: Default::default(),
+            }],
+        }
+    }
+
+    fn does_nothing_validator(_: &App, _: &[&str]) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_retain_components_filtering_for_only_component_works() {
+        let mut locked_app = locked_app();
+        locked_app = retain_components(locked_app, &["empty"], &[&does_nothing_validator]).unwrap();
+        let components = locked_app
+            .components
+            .iter()
+            .map(|c| c.id.to_string())
+            .collect::<HashSet<_>>();
+        assert!(components.contains("empty"));
+        assert!(components.len() == 1);
+    }
+}
