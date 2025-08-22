@@ -8,7 +8,7 @@ use crate::writer::{TemplateOutput, TemplateOutputs};
 // it needs to render.
 pub(crate) struct TemplateRenderer {
     pub render_operations: Vec<RenderOperation>,
-    pub parameter_values: HashMap<String, String>,
+    pub parameter_values: HashMap<String, liquid_core::model::Scalar>,
 }
 
 pub(crate) enum TemplateContent {
@@ -50,7 +50,7 @@ impl TemplateRenderer {
         for (k, v) in &self.parameter_values {
             object.insert(
                 k.to_owned().into(),
-                liquid_core::Value::Scalar(v.to_owned().into()),
+                liquid_core::Value::Scalar(v.to_owned()),
             );
         }
 
