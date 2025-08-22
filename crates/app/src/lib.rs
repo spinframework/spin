@@ -346,31 +346,7 @@ pub fn retain_components(
 mod test {
     use std::collections::HashSet;
 
-    use spin_manifest::schema::v2::{self, ComponentSpec, Trigger};
-
     use super::*;
-
-    fn locked_trigger(
-        trigger_type: String,
-        mut trigger: v2::Trigger,
-    ) -> anyhow::Result<LockedTrigger> {
-        fn reference_id(spec: v2::ComponentSpec) -> toml::Value {
-            let v2::ComponentSpec::Reference(id) = spec else {
-                unreachable!("should have already been normalized");
-            };
-            id.as_ref().into()
-        }
-
-        if let Some(id) = trigger.component.map(reference_id) {
-            trigger.config.insert("component".into(), id);
-        }
-
-        Ok(LockedTrigger {
-            id: trigger.id,
-            trigger_type,
-            trigger_config: trigger.config.try_into()?,
-        })
-    }
 
     pub fn locked_app() -> LockedApp {
         LockedApp {
@@ -379,28 +355,17 @@ mod test {
             metadata: Default::default(),
             host_requirements: Default::default(),
             variables: Default::default(),
-            triggers: vec![locked_trigger(
-                "http".to_owned(),
-                Trigger {
-                    id: Default::default(),
-                    component: Some(ComponentSpec::Reference(
-                        "empty".to_string().try_into().unwrap(),
-                    )),
-                    components: Default::default(),
-                    config: Default::default(),
-                },
-            )
-            .unwrap()],
+            triggers: vec![LockedTrigger {
+                id: "trigger".into(),
+                trigger_type: "dummy".into(),
+                trigger_config: toml::from_str(r#"component = "empty""#).unwrap(),
+            }],
             components: vec![LockedComponent {
                 id: "empty".to_owned(),
                 metadata: Default::default(),
                 source: LockedComponentSource {
                     content_type: "application/wasm".to_owned(),
-                    content: locked::ContentRef {
-                        source: Some("does-not-exist.wasm".to_owned()),
-                        inline: None,
-                        digest: None,
-                    },
+                    content: Default::default(),
                 },
                 env: Default::default(),
                 files: Default::default(),

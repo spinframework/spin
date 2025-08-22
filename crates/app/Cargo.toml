@@ -13,6 +13,5 @@ spin-serde = { path = "../serde" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-spin-manifest = { path = "../manifest" }
 toml = { workspace = true }
 tokio = { workspace = true }
