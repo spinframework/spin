@@ -37,6 +37,7 @@ pub struct Push {
         short = 'f',
         long = "from",
         alias = "file",
+        value_hint = clap::ValueHint::AnyPath,
     )]
     pub app_source: Option<PathBuf>,
 
@@ -68,7 +69,7 @@ pub struct Push {
     pub reference: String,
 
     /// Cache directory for downloaded registry data.
-    #[clap(long)]
+    #[clap(long,         value_hint = clap::ValueHint::DirPath)]
     pub cache_dir: Option<PathBuf>,
 
     /// Specifies the OCI image manifest annotations (in key=value format).
@@ -138,7 +139,7 @@ pub struct Pull {
     pub reference: String,
 
     /// Cache directory for downloaded registry data.
-    #[clap(long)]
+    #[clap(long,        value_hint = clap::ValueHint::DirPath)]
     pub cache_dir: Option<PathBuf>,
 }
 
