@@ -97,6 +97,38 @@ mod integration_tests {
     }
 
     #[test]
+    fn blobstore_smoke_test() -> anyhow::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+
+        let rt_file = temp_dir.path().join("rt.toml");
+        std::fs::write(
+            &rt_file,
+            format!(
+                "[blob_store.default]\ntype = \"file_system\"\npath = \"{}\"",
+                temp_dir.path().display()
+            ),
+        )?;
+
+        run_test(
+            "blobstore",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: vec![
+                    "--runtime-config-file".into(),
+                    rt_file.display().to_string(),
+                ],
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(spin, Request::new(Method::Get, "/"), Response::new(200))
+            },
+        )?;
+        Ok(())
+    }
+
+    #[test]
     #[cfg(feature = "extern-dependencies-tests")]
     #[allow(dependency_on_unit_never_type_fallback)]
     /// Test that if you have an app where some but not all components use service

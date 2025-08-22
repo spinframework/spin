@@ -364,6 +364,14 @@ pub struct Component {
     )]
     #[schemars(with = "Vec<json_schema::SqliteDatabase>")]
     pub sqlite_databases: Vec<String>,
+    /// `blob_containers = ["default", "my-container"]`
+    #[serde(
+        default,
+        with = "kebab_or_snake_case",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    #[schemars(with = "Vec<json_schema::BlobContainer>")]
+    pub blob_containers: Vec<String>,
     /// The AI models which the component is allowed to access. For local execution, you must
     /// download all models; for hosted execution, you should check which models are available
     /// in your target environment.
@@ -759,7 +767,8 @@ mod tests {
             allowed_http_hosts: vec![],
             allowed_outbound_hosts: vec![],
             key_value_stores: labels.clone(),
-            sqlite_databases: labels,
+            sqlite_databases: labels.clone(),
+            blob_containers: labels,
             ai_models: vec![],
             build: None,
             tool: Map::new(),

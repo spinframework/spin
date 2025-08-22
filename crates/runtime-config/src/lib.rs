@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use spin_common::ui::quoted_path;
+use spin_factor_blobstore::BlobStoreFactor;
 use spin_factor_key_value::runtime_config::spin::{self as key_value};
 use spin_factor_key_value::KeyValueFactor;
 use spin_factor_llm::{spin as llm, LlmFactor};
@@ -140,6 +141,7 @@ where
         let key_value_resolver = key_value_config_resolver(runtime_config_dir, state_dir.clone());
         let sqlite_resolver = sqlite_config_resolver(state_dir.clone())
             .context("failed to resolve sqlite runtime config")?;
+        let blobstore_config_resolver = blobstore_config_resolver(toml_resolver.state_dir()?);
 
         let toml = toml_resolver.toml();
         let log_dir = toml_resolver.log_dir()?;
@@ -150,6 +152,7 @@ where
             &key_value_resolver,
             outbound_networking.as_ref(),
             &sqlite_resolver,
+            &blobstore_config_resolver,
         );
 
         // Note: all valid fields in the runtime config must have been referenced at
@@ -302,6 +305,7 @@ pub struct TomlRuntimeConfigSource<'a, 'b> {
     key_value: &'a key_value::RuntimeConfigResolver,
     outbound_networking: Option<&'a OutboundNetworkingSpinRuntimeConfig>,
     sqlite: &'a sqlite::RuntimeConfigResolver,
+    blob_store: &'a spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver,
 }
 
 impl<'a, 'b> TomlRuntimeConfigSource<'a, 'b> {
@@ -310,12 +314,14 @@ impl<'a, 'b> TomlRuntimeConfigSource<'a, 'b> {
         key_value: &'a key_value::RuntimeConfigResolver,
         outbound_networking: Option<&'a OutboundNetworkingSpinRuntimeConfig>,
         sqlite: &'a sqlite::RuntimeConfigResolver,
+        blob_store: &'a spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver,
     ) -> Self {
         Self {
             toml: toml_resolver,
             key_value,
             outbound_networking,
             sqlite,
+            blob_store,
         }
     }
 }
@@ -398,6 +404,15 @@ impl FactorRuntimeConfigSource<SqliteFactor> for TomlRuntimeConfigSource<'_, '_>
     }
 }
 
+impl FactorRuntimeConfigSource<BlobStoreFactor> for TomlRuntimeConfigSource<'_, '_> {
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<spin_factor_blobstore::RuntimeConfig>> {
+        // TODO: actually
+        Ok(Some(self.blob_store.resolve(Some(&self.toml.table))?))
+    }
+}
+
 impl RuntimeConfigSourceFinalizer for TomlRuntimeConfigSource<'_, '_> {
     fn finalize(&mut self) -> anyhow::Result<()> {
         Ok(self.toml.validate_all_keys_used()?)
@@ -463,6 +478,29 @@ fn sqlite_config_resolver(
         default_database_dir,
         local_database_dir,
     ))
+}
+
+/// The blob store runtime configuration resolver.
+pub fn blobstore_config_resolver(
+    // local_store_base_path: Option<PathBuf>,
+    _default_store_base_path: Option<PathBuf>, // TODO: used?
+) -> spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver {
+    let mut blobstore_resolver =
+        spin_factor_blobstore::runtime_config::spin::RuntimeConfigResolver::new();
+
+    // Register the supported store types.
+    // Unwraps are safe because the store types are known to not overlap.
+    blobstore_resolver
+        .register_store_type(spin_blobstore_fs::FileSystemBlobStore::new())
+        .unwrap();
+    blobstore_resolver
+        .register_store_type(spin_blobstore_azure::AzureBlobStoreBuilder::new())
+        .unwrap();
+    blobstore_resolver
+        .register_store_type(spin_blobstore_s3::S3BlobStore::new())
+        .unwrap();
+
+    blobstore_resolver
 }
 
 #[cfg(test)]

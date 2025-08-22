@@ -160,6 +160,7 @@ impl LocalLoader {
             .string_array("allowed_outbound_hosts", allowed_outbound_hosts)
             .string_array("key_value_stores", component.key_value_stores)
             .string_array("databases", component.sqlite_databases)
+            .string_array("blob_containers", component.blob_containers)
             .string_array("ai_models", component.ai_models)
             .serializable("build", component.build)?
             .take();

@@ -1,0 +1,66 @@
+// a Container is a collection of objects
+interface container {
+  use wasi:io/streams@0.2.0.{
+    input-stream,
+    output-stream,
+  };
+
+  use types.{
+    container-metadata,
+    error,
+    incoming-value,
+    object-metadata,
+    object-name,
+    outgoing-value,
+  };
+
+  // this defines the `container` resource
+  resource container {
+    // returns container name
+    name: func() -> result<string, error>;
+
+    // returns container metadata
+    info: func() -> result<container-metadata, error>;
+
+    // retrieves an object or portion of an object, as a resource.
+    // Start and end offsets are inclusive.
+    // Once a data-blob resource has been created, the underlying bytes are held by the blobstore service for the lifetime
+    // of the data-blob resource, even if the object they came from is later deleted.
+    get-data: func(name: object-name, start: u64, end: u64) -> result<incoming-value, error>;
+
+    // creates or replaces an object with the data blob.
+    write-data: func(name: object-name, data: borrow<outgoing-value>) -> result<_, error>;
+
+    // returns list of objects in the container. Order is undefined.
+    list-objects: func() -> result<stream-object-names, error>;
+
+    // deletes object.
+    // does not return error if object did not exist.
+    delete-object: func(name: object-name) -> result<_, error>;
+
+    // deletes multiple objects in the container
+    delete-objects: func(names: list<object-name>) -> result<_, error>;
+
+    // returns true if the object exists in this container
+    has-object: func(name: object-name) -> result<bool, error>;
+
+    // returns metadata for the object
+    object-info: func(name: object-name) -> result<object-metadata, error>;
+
+    // removes all objects within the container, leaving the container empty.
+    clear: func() -> result<_, error>;
+  }
+
+  // this defines the `stream-object-names` resource which is a representation of stream<object-name>
+  resource stream-object-names {
+    // reads the next number of objects from the stream
+    //
+    // This function returns the list of objects read, and a boolean indicating if the end of the stream was reached.
+    read-stream-object-names: func(len: u64) -> result<tuple<list<object-name>, bool>, error>;
+
+    // skip the next number of objects in the stream
+    //
+    // This function returns the number of objects skipped, and a boolean indicating if the end of the stream was reached.
+    skip-stream-object-names: func(num: u64) -> result<tuple<u64, bool>, error>;
+  }
+}

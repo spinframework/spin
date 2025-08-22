@@ -1,0 +1,91 @@
+// Types used by blobstore
+interface types {
+  use wasi:io/streams@0.2.0.{input-stream, output-stream};
+
+  // name of a container, a collection of objects.
+  // The container name may be any valid UTF-8 string.
+  type container-name = string;
+
+  // name of an object within a container
+  // The object name may be any valid UTF-8 string.
+  type object-name = string;
+
+  // TODO: define timestamp to include seconds since
+  // Unix epoch and nanoseconds
+  // https://github.com/WebAssembly/wasi-blob-store/issues/7
+  type timestamp = u64;
+
+  // size of an object, in bytes
+  type object-size = u64;
+
+  type error = string;
+
+  // information about a container
+  record container-metadata {
+    // the container's name
+    name: container-name,
+    // date and time container was created
+    created-at: timestamp,
+  }
+
+  // information about an object
+  record object-metadata {
+    // the object's name
+    name: object-name,
+    // the object's parent container
+    container: container-name,
+    // date and time the object was created
+    created-at: timestamp,
+    // size of the object, in bytes
+    size: object-size,
+  }
+
+  // identifier for an object that includes its container name
+  record object-id {
+    container: container-name,
+    object: object-name
+  }
+
+  /// A data is the data stored in a data blob. The value can be of any type
+  /// that can be represented in a byte array. It provides a way to write the value
+  /// to the output-stream defined in the `wasi-io` interface.
+  // Soon: switch to `resource value { ... }`
+  resource outgoing-value {
+    new-outgoing-value: static func() -> outgoing-value;
+
+    /// Returns a stream for writing the value contents.
+    ///
+    /// The returned `output-stream` is a child resource: it must be dropped
+    /// before the parent `outgoing-value` resource is dropped (or finished),
+    /// otherwise the `outgoing-value` drop or `finish` will trap.
+    ///
+    /// Returns success on the first call: the `output-stream` resource for
+    /// this `outgoing-value` may be retrieved at most once. Subsequent calls
+    /// will return error.
+    outgoing-value-write-body: func() -> result<output-stream>;
+
+    /// Finalize an outgoing value. This must be
+    /// called to signal that the outgoing value is complete. If the `outgoing-value`
+    /// is dropped without calling `outgoing-value.finalize`, the implementation
+    /// should treat the value as corrupted.
+    finish: static func(this: outgoing-value) -> result<_, error>;
+  }
+
+  /// A incoming-value is a wrapper around a value. It provides a way to read the value
+  /// from the input-stream defined in the `wasi-io` interface.
+  ///
+  /// The incoming-value provides two ways to consume the value:
+  /// 1. `incoming-value-consume-sync` consumes the value synchronously and returns the
+  ///    value as a list of bytes.
+  /// 2. `incoming-value-consume-async` consumes the value asynchronously and returns the
+  ///    value as an input-stream.
+  // Soon: switch to `resource incoming-value { ... }`
+  resource incoming-value {
+      incoming-value-consume-sync: static func(this: incoming-value) -> result<incoming-value-sync-body, error>;
+      incoming-value-consume-async: static func(this: incoming-value) -> result<incoming-value-async-body, error>;
+      size: func() -> u64;
+  }
+
+  type incoming-value-async-body = input-stream;
+  type incoming-value-sync-body = list<u8>;
+}

@@ -1,0 +1,5 @@
+package wasi:blobstore@0.2.0-draft-2024-09-01;
+
+world imports {
+	import blobstore;
+}

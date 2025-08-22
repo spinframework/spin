@@ -121,6 +121,12 @@ members = [
 [workspace.dependencies]
 anyhow = "1"
 async-trait = "0.1"
+azure_core = "0.21.0"
+azure_data_cosmos = "0.21.0"
+azure_identity = "0.21.0"
+azure_security_keyvault = "0.21.0"
+azure_storage = "0.21.0"
+azure_storage_blobs = "0.21.0"
 base64 = "0.22"
 bytes = "1"
 chrono = "0.4"

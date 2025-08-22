@@ -38,8 +38,12 @@ wasmtime::component::bindgen!({
         "wasi:config/store@0.2.0-draft-2024-09-27/error" => wasi::config::store::Error,
         "wasi:keyvalue/store/error" => wasi::keyvalue::store::Error,
         "wasi:keyvalue/atomics/cas-error" => wasi::keyvalue::atomics::CasError,
+        "wasi:blobstore/types@0.2.0-draft-2024-09-01/error" => wasi::blobstore::types::Error,
     },
     trappable_imports: true,
+    with: {
+        "wasi:io": wasmtime_wasi::p2::bindings::io,
+    },
 });
 
 pub use fermyon::spin as v1;

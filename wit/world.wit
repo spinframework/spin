@@ -13,5 +13,6 @@ world platform {
   import spin:postgres/postgres@3.0.0;
   import spin:postgres/postgres@4.0.0;
   import spin:sqlite/sqlite@3.0.0;
+  import wasi:blobstore/blobstore@0.2.0-draft-2024-09-01;
   import wasi:config/store@0.2.0-draft-2024-09-27;
 }
