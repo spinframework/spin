@@ -35,24 +35,24 @@ const DEFAULT_DEPLOY_PLUGIN: &str = "cloud";
 const DEPLOY_PLUGIN_ENV: &str = "SPIN_DEPLOY_PLUGIN";
 
 impl DeployCommand {
-    pub async fn run(self, app: clap::App<'_>) -> Result<()> {
-        const CMD: &str = "deploy";
+    pub async fn run(self, cmd: clap::Command<'_>) -> Result<()> {
+        const SUBCMD: &str = "deploy";
 
-        let deploy_plugin = deployment_plugin(CMD)?;
-        let mut cmd = vec![deploy_plugin, CMD.to_string()];
-        cmd.append(&mut self.args.clone());
-        execute_external_subcommand(cmd, app).await
+        let deploy_plugin = deployment_plugin(SUBCMD)?;
+        let mut subcmd = vec![deploy_plugin, SUBCMD.to_string()];
+        subcmd.append(&mut self.args.clone());
+        execute_external_subcommand(subcmd, cmd).await
     }
 }
 
 impl LoginCommand {
-    pub async fn run(self, app: clap::App<'_>) -> Result<()> {
-        const CMD: &str = "login";
+    pub async fn run(self, cmd: clap::Command<'_>) -> Result<()> {
+        const SUBCMD: &str = "login";
 
-        let deploy_plugin = deployment_plugin(CMD)?;
-        let mut cmd = vec![deploy_plugin, CMD.to_string()];
-        cmd.append(&mut self.args.clone());
-        execute_external_subcommand(cmd, app).await
+        let deploy_plugin = deployment_plugin(SUBCMD)?;
+        let mut subcmd = vec![deploy_plugin, SUBCMD.to_string()];
+        subcmd.append(&mut self.args.clone());
+        execute_external_subcommand(subcmd, cmd).await
     }
 }
 

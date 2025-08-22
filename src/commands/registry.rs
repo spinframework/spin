@@ -73,7 +73,7 @@ pub struct Push {
 
     /// Specifies the OCI image manifest annotations (in key=value format).
     /// Any existing value will be overwritten. Can be used multiple times.
-    #[clap(long = "annotation", parse(try_from_str = parse_kv))]
+    #[clap(long = "annotation", value_parser = parse_kv)]
     pub annotations: Vec<(String, String)>,
 }
 

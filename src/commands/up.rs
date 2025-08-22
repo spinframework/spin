@@ -89,7 +89,7 @@ pub struct UpCommand {
     pub insecure: bool,
 
     /// Pass an environment variable (key=value) to all components of the application.
-    #[clap(short = 'e', long = "env", parse(try_from_str = parse_env_var))]
+    #[clap(short = 'e', long = "env", value_parser = parse_env_var)]
     pub env: Vec<(String, String)>,
 
     /// Temporary directory for the static assets of the components.

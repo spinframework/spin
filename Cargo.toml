@@ -18,7 +18,8 @@ rust-version = "1.86"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
-clap = { workspace = true, features = ["derive", "env"] }
+# 'deprecated' enables deprecation warnings
+clap = { workspace = true, features = ["deprecated", "derive", "env"] }
 clearscreen = "4"
 comfy-table = "7"
 command-group = "2"

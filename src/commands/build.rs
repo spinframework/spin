@@ -26,7 +26,7 @@ pub struct BuildCommand {
     pub app_source: Option<PathBuf>,
 
     /// Component ID to build. This can be specified multiple times. The default is all components.
-    #[clap(short = 'c', long, multiple = true)]
+    #[clap(short = 'c', long)]
     pub component_id: Vec<String>,
 
     /// By default, if the application manifest specifies one or more deployment targets, Spin
