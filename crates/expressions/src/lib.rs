@@ -3,7 +3,7 @@ mod template;
 
 use std::{borrow::Cow, collections::HashMap, fmt::Debug};
 
-use spin_locked_app::Variable;
+use spin_app::Variable;
 
 pub use async_trait;
 

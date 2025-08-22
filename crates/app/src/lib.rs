@@ -11,15 +11,22 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::Value;
-use spin_locked_app::MetadataExt;
 
-use locked::{ContentPath, LockedApp, LockedComponent, LockedComponentSource, LockedTrigger};
+use crate::locked::{
+    ContentPath, LockedApp, LockedComponent, LockedComponentSource, LockedTrigger,
+};
 
-pub use spin_locked_app::locked;
-pub use spin_locked_app::values;
-pub use spin_locked_app::{Error, MetadataKey, Result};
+pub use crate::locked::Variable;
 
-pub use locked::Variable;
+use crate::error::{Error, Result};
+use crate::metadata::MetadataExt as _;
+
+mod error;
+pub mod locked;
+mod metadata;
+pub mod values;
+
+pub use metadata::MetadataKey;
 
 /// MetadataKey for extracting the application name.
 pub const APP_NAME_KEY: MetadataKey = MetadataKey::new("name");
@@ -121,7 +128,7 @@ impl App {
             return Ok(None);
         };
         let metadata = T::deserialize(value).map_err(|err| {
-            Error::MetadataError(format!(
+            Error::Metadata(format!(
                 "invalid metadata value for {trigger_type:?}: {err:?}"
             ))
         })?;
@@ -186,7 +193,7 @@ impl App {
     ) -> Result<LockedApp> {
         self.validate_retained_components_exist(retained_components)?;
         for validator in validators {
-            validator(&self, retained_components).map_err(Error::ValidationError)?;
+            validator(&self, retained_components).map_err(Error::Validation)?;
         }
         let (component_ids, trigger_ids): (HashSet<String>, HashSet<String>) = self
             .triggers()
@@ -211,7 +218,7 @@ impl App {
             .collect::<HashSet<_>>();
         for c in retained_components {
             if !app_components.contains(*c) {
-                return Err(Error::ValidationError(anyhow::anyhow!(
+                return Err(Error::Validation(anyhow::anyhow!(
                     "Specified component \"{c}\" not found in application"
                 )));
             }
@@ -310,10 +317,10 @@ impl<'a> AppTrigger<'a> {
         let id = &self.locked.id;
         let common_config: CommonTriggerConfig = self.typed_config()?;
         let component_id = common_config.component.ok_or_else(|| {
-            Error::MetadataError(format!("trigger {id:?} missing 'component' config field"))
+            Error::Metadata(format!("trigger {id:?} missing 'component' config field"))
         })?;
         self.app.get_component(&component_id).ok_or_else(|| {
-            Error::MetadataError(format!(
+            Error::Metadata(format!(
                 "missing component {component_id:?} configured for trigger {id:?}"
             ))
         })
@@ -337,9 +344,37 @@ pub fn retain_components(
 
 #[cfg(test)]
 mod test {
-    use spin_factors_test::build_locked_app;
+    use std::collections::HashSet;
 
     use super::*;
+
+    pub fn locked_app() -> LockedApp {
+        LockedApp {
+            spin_lock_version: Default::default(),
+            must_understand: Default::default(),
+            metadata: Default::default(),
+            host_requirements: Default::default(),
+            variables: Default::default(),
+            triggers: vec![LockedTrigger {
+                id: "trigger".into(),
+                trigger_type: "dummy".into(),
+                trigger_config: toml::from_str(r#"component = "empty""#).unwrap(),
+            }],
+            components: vec![LockedComponent {
+                id: "empty".to_owned(),
+                metadata: Default::default(),
+                source: LockedComponentSource {
+                    content_type: "application/wasm".to_owned(),
+                    content: Default::default(),
+                },
+                env: Default::default(),
+                files: Default::default(),
+                config: Default::default(),
+                dependencies: Default::default(),
+                host_requirements: Default::default(),
+            }],
+        }
+    }
 
     fn does_nothing_validator(_: &App, _: &[&str]) -> anyhow::Result<()> {
         Ok(())
@@ -347,19 +382,7 @@ mod test {
 
     #[tokio::test]
     async fn test_retain_components_filtering_for_only_component_works() {
-        let manifest = toml::toml! {
-            spin_manifest_version = 2
-
-            [application]
-            name = "test-app"
-
-            [[trigger.test-trigger]]
-            component = "empty"
-
-            [component.empty]
-            source = "does-not-exist.wasm"
-        };
-        let mut locked_app = build_locked_app(&manifest).await.unwrap();
+        let mut locked_app = locked_app();
         locked_app = retain_components(locked_app, &["empty"], &[&does_nothing_validator]).unwrap();
         let components = locked_app
             .components

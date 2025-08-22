@@ -5,10 +5,10 @@ use std::{
 
 use anyhow::Context;
 use serde_json::json;
+use spin_app::locked::LockedApp;
 use spin_core::{AsState, Component, Config, Engine, State, Store, StoreBuilder, Trap};
 use spin_factor_wasi::{DummyFilesMounter, WasiFactor};
 use spin_factors::{App, AsInstanceState, RuntimeFactors};
-use spin_locked_app::locked::LockedApp;
 use tokio::{fs, io::AsyncWrite};
 use wasmtime_wasi::I32Exit;
 

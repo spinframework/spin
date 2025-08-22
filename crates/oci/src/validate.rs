@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
+use spin_app::locked::{LockedComponent, LockedComponentSource};
 use spin_common::{ui::quoted_path, url::parse_file_url};
-use spin_locked_app::locked::{LockedComponent, LockedComponentSource};
 
 /// Validate that all Spin components specify valid wasm binaries in both the `source`
 /// field and for each dependency.
@@ -56,7 +56,7 @@ async fn read_component_source(source: &LockedComponentSource) -> Result<Vec<u8>
 mod test {
     use super::*;
     use crate::from_json;
-    use spin_locked_app::locked::LockedComponent;
+    use spin_app::locked::LockedComponent;
     use tokio::io::AsyncWriteExt;
 
     #[tokio::test]
