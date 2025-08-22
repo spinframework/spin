@@ -1,0 +1,14 @@
+manifest_version = "1"
+id = "http-rust-workspace"
+description = "HTTP request handler using Rust with shared workspace"
+tags = ["http", "rust"]
+
+[add_component]
+copy_into = "root"
+skip_files = ["spin.toml", "Cargo.toml.tmpl"]
+[add_component.snippets]
+component = "component.txt"
+
+[parameters]
+project-description = { type = "string",  prompt = "Description", default = "" }
+http-path = { type = "string", prompt = "HTTP path", default = "/...", pattern = "^/\\S*$" }
