@@ -148,7 +148,7 @@ impl LocalLlmEngine {
             Entry::Vacant(v) => {
                 let (model_dir, arch) =
                     walk_registry_for_model(&self.registry, model.clone()).await?;
-                let model = match arch {
+                let model: Arc<dyn InferencingModel> = match arch {
                     InferencingModelArch::Llama => Arc::new(
                         llama::LlamaModels::new(&model_dir)
                             .await

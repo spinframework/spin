@@ -122,6 +122,7 @@ impl LlmCompute {
             LlmCompute::RemoteHttp(config) => Arc::new(Mutex::new(RemoteHttpLlmEngine::new(
                 config.url,
                 config.auth_token,
+                config.custom_llm.and_then(|c| c.as_str().try_into().ok()),
             ))),
         };
         Ok(engine)
@@ -132,6 +133,7 @@ impl LlmCompute {
 pub struct RemoteHttpCompute {
     url: Url,
     auth_token: String,
+    custom_llm: Option<String>,
 }
 
 /// A noop engine used when the local engine feature is disabled.
