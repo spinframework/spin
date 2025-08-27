@@ -9,9 +9,10 @@ use anyhow::Context;
 /// - Inline components in trigger configs are moved into top-level
 ///   components and replaced with a reference.
 /// - Any triggers without an ID are assigned a generated ID.
-pub fn normalize_manifest(manifest: &mut AppManifest) -> anyhow::Result<()> {
+pub fn normalize_manifest(manifest: &mut AppManifest, profile: Option<&str>) -> anyhow::Result<()> {
     normalize_trigger_ids(manifest);
     normalize_inline_components(manifest);
+    apply_profile_overrides(manifest, profile);
     normalize_dependency_component_refs(manifest)?;
     Ok(())
 }
@@ -107,6 +108,44 @@ fn normalize_trigger_ids(manifest: &mut AppManifest) {
     }
 }
 
+fn apply_profile_overrides(manifest: &mut AppManifest, profile: Option<&str>) {
+    let Some(profile) = profile else {
+        return;
+    };
+
+    for (_, component) in &mut manifest.components {
+        let Some(overrides) = component.profile.get(profile) else {
+            continue;
+        };
+
+        if let Some(profile_build) = overrides.build.as_ref() {
+            match component.build.as_mut() {
+                None => {
+                    component.build = Some(crate::schema::v2::ComponentBuildConfig {
+                        command: profile_build.command.clone(),
+                        workdir: None,
+                        watch: vec![],
+                    })
+                }
+                Some(build) => {
+                    build.command = profile_build.command.clone();
+                }
+            }
+        }
+
+        if let Some(source) = overrides.source.as_ref() {
+            component.source = source.clone();
+        }
+
+        component.environment.extend(overrides.environment.clone());
+
+        component
+            .dependencies
+            .inner
+            .extend(overrides.dependencies.inner.clone());
+    }
+}
+
 use crate::schema::v2::{Component, ComponentDependency, ComponentSource};
 
 fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Result<()> {
@@ -192,6 +231,7 @@ fn ensure_is_acceptable_dependency(
         tool: _,
         dependencies_inherit_configuration: _,
         dependencies,
+        profile: _,
     } = component;
 
     if !ai_models.is_empty() {
@@ -262,7 +302,7 @@ mod test {
         })
         .unwrap();
 
-        normalize_manifest(&mut manifest).unwrap();
+        normalize_manifest(&mut manifest, None).unwrap();
 
         let dep = manifest
             .components
@@ -302,7 +342,7 @@ mod test {
         })
         .unwrap();
 
-        normalize_manifest(&mut manifest).unwrap();
+        normalize_manifest(&mut manifest, None).unwrap();
 
         let dep = manifest
             .components
@@ -348,7 +388,7 @@ mod test {
         })
         .unwrap();
 
-        normalize_manifest(&mut manifest).unwrap();
+        normalize_manifest(&mut manifest, None).unwrap();
 
         let dep = manifest
             .components

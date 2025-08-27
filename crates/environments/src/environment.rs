@@ -391,7 +391,7 @@ mod test {
         )
         .unwrap();
 
-        let application = crate::ApplicationToValidate::new(manifest, temp_dir.path())
+        let application = crate::ApplicationToValidate::new(manifest, None, temp_dir.path())
             .await
             .unwrap();
 
@@ -457,7 +457,7 @@ mod test {
         )
         .unwrap();
 
-        let application = crate::ApplicationToValidate::new(manifest, temp_dir.path())
+        let application = crate::ApplicationToValidate::new(manifest, None, temp_dir.path())
             .await
             .unwrap();
 

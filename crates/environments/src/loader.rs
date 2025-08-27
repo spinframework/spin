@@ -54,9 +54,10 @@ pub struct ApplicationToValidate {
 impl ApplicationToValidate {
     pub async fn new(
         mut manifest: spin_manifest::schema::v2::AppManifest,
+        profile: Option<&str>,
         base_dir: impl AsRef<Path>,
     ) -> anyhow::Result<Self> {
-        spin_manifest::normalize::normalize_manifest(&mut manifest)?;
+        spin_manifest::normalize::normalize_manifest(&mut manifest, profile)?;
         let wasm_loader =
             spin_loader::WasmLoader::new(base_dir.as_ref().to_owned(), None, None).await?;
         Ok(Self {
