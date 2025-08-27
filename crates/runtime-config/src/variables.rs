@@ -1,18 +1,9 @@
 //! The runtime configuration for the variables factor used in the Spin CLI.
 
-mod azure_key_vault;
-mod env;
-mod statik;
-mod vault;
-
 use std::path::PathBuf;
 
-pub use azure_key_vault::*;
-pub use env::*;
 use spin_common::{env::env_key, ui::quoted_path};
 use spin_locked_app::Variable;
-pub use statik::*;
-pub use vault::*;
 
 use serde::Deserialize;
 use spin_expressions::Provider;

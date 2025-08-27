@@ -4,7 +4,6 @@ mod max_instance_memory;
 mod sqlite_statements;
 mod stdio;
 mod summary;
-mod variables;
 
 use std::path::PathBuf;
 use std::{future::Future, sync::Arc};
@@ -26,7 +25,6 @@ pub use sqlite_statements::SqlStatementExecutorHook;
 use stdio::FollowComponents;
 pub use stdio::StdioLoggingExecutorHooks;
 pub use summary::{KeyValueDefaultStoreSummaryHook, SqliteDefaultStoreSummaryHook};
-pub use variables::VariableSorterExecutorHooks;
 
 pub const APP_LOG_DIR: &str = "APP_LOG_DIR";
 pub const SPIN_TRUNCATE_LOGS: &str = "SPIN_TRUNCATE_LOGS";

@@ -29,6 +29,7 @@ spin-key-value-aws = { path = "../key-value-aws" }
 spin-key-value-azure = { path = "../key-value-azure" }
 spin-key-value-redis = { path = "../key-value-redis" }
 spin-key-value-spin = { path = "../key-value-spin" }
+spin-locked-app = { path = "../locked-app" }
 spin-sqlite = { path = "../sqlite" }
 spin-trigger = { path = "../trigger" }
 spin-variables-azure = { path = "../variables-azure" }

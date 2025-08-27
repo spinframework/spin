@@ -71,7 +71,6 @@ spin-templates = { path = "crates/templates" }
 spin-trigger = { path = "crates/trigger" }
 spin-trigger-http = { path = "crates/trigger-http" }
 spin-trigger-redis = { path = "crates/trigger-redis" }
-spin-variables = { path = "crates/variables" }
 terminal = { path = "crates/terminal" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
