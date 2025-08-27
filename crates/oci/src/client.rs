@@ -128,6 +128,7 @@ impl Client {
     pub async fn push(
         &mut self,
         manifest_path: &Path,
+        profile: Option<&str>,
         reference: impl AsRef<str>,
         annotations: Option<BTreeMap<String, String>>,
         infer_annotations: InferPredefinedAnnotations,
@@ -146,6 +147,7 @@ impl Client {
         let locked = spin_loader::from_file(
             manifest_path,
             FilesMountStrategy::Copy(working_dir.path().into()),
+            profile,
             None,
         )
         .await?;

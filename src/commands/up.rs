@@ -79,6 +79,11 @@ pub struct UpCommand {
     )]
     pub registry_source: Option<String>,
 
+    /// The build profile to run. The default is the anonymous profile (usually
+    /// the release build).
+    #[clap(long)]
+    pub profile: Option<String>,
+
     /// Ignore server certificate errors from a registry
     #[clap(
         name = INSECURE_OPT,
@@ -169,6 +174,8 @@ impl UpCommand {
             .context("Could not canonicalize working directory")?;
 
         let resolved_app_source = self.resolve_app_source(&app_source, &working_dir).await?;
+        resolved_app_source.ensure_profile(self.profile())?;
+
         if self.help {
             let trigger_cmds =
                 trigger_commands_for_trigger_types(resolved_app_source.trigger_types())
@@ -191,8 +198,11 @@ impl UpCommand {
         }
 
         if self.build {
-            app_source.build(&self.cache_dir).await?;
+            app_source.build(self.profile(), &self.cache_dir).await?;
+        } else {
+            app_source.warn_if_not_latest_build(self.profile());
         }
+
         let mut locked_app = self
             .load_resolved_app_source(resolved_app_source, &working_dir)
             .await
@@ -493,14 +503,19 @@ impl UpCommand {
                 } else {
                     FilesMountStrategy::Copy(working_dir.join("assets"))
                 };
-                spin_loader::from_file(&manifest_path, files_mount_strategy, self.cache_dir.clone())
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "Failed to load manifest from {}",
-                            quoted_path(&manifest_path)
-                        )
-                    })
+                spin_loader::from_file(
+                    &manifest_path,
+                    files_mount_strategy,
+                    self.profile(),
+                    self.cache_dir.clone(),
+                )
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to load manifest from {}",
+                        quoted_path(&manifest_path)
+                    )
+                })
             }
             ResolvedAppSource::OciRegistry { locked_app } => Ok(locked_app),
             ResolvedAppSource::BareWasm { wasm_path } => spin_loader::from_wasm_file(&wasm_path)
@@ -547,6 +562,10 @@ impl UpCommand {
         }
 
         groups
+    }
+
+    fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
     }
 }
 

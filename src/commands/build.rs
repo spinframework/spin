@@ -25,6 +25,11 @@ pub struct BuildCommand {
     )]
     pub app_source: Option<PathBuf>,
 
+    /// The build profile to build. The default is the anonymous profile (usually
+    /// the release build).
+    #[clap(long)]
+    pub profile: Option<String>,
+
     /// Component ID to build. This can be specified multiple times. The default is all components.
     #[clap(short = 'c', long)]
     pub component_id: Vec<String>,
@@ -55,6 +60,7 @@ impl BuildCommand {
 
         spin_build::build(
             &manifest_file,
+            self.profile(),
             &self.component_id,
             self.target_checking(),
             None,
@@ -82,5 +88,9 @@ impl BuildCommand {
         } else {
             spin_build::TargetChecking::Check
         }
+    }
+
+    fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
     }
 }
