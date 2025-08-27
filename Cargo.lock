@@ -8232,6 +8232,7 @@ dependencies = [
  "terminal",
  "tokio",
  "toml",
+ "tracing",
 ]
 
 [[package]]

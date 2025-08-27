@@ -14,3 +14,4 @@ subprocess = "0.2"
 terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }
+tracing = { workspace = true }
