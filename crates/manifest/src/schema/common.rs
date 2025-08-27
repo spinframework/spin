@@ -161,10 +161,10 @@ pub enum WasiFilesMount {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentBuildConfig {
-    /// The command or commands to build the application. If multiple commands
+    /// The command or commands to build the component. If multiple commands
     /// are specified, they are run sequentially from left to right.
     ///
-    /// Example: `command = "cargo build"`, `command = ["npm install", "npm run build"]`
+    /// Example: `command = "cargo build --release"`, `command = ["npm install", "npm run build"]`
     ///
     /// Learn more: https://spinframework.dev/build#setting-up-for-spin-build
     pub command: Commands,
@@ -190,12 +190,8 @@ pub struct ComponentBuildConfig {
 
 impl ComponentBuildConfig {
     /// The commands to execute for the build
-    pub fn commands(&self) -> impl ExactSizeIterator<Item = &String> {
-        let as_vec = match &self.command {
-            Commands::Single(cmd) => vec![cmd],
-            Commands::Multiple(cmds) => cmds.iter().collect(),
-        };
-        as_vec.into_iter()
+    pub fn commands(&self) -> Vec<&String> {
+        self.command.as_vec()
     }
 }
 
@@ -214,6 +210,15 @@ pub enum Commands {
     /// `command = ["cargo build", "wac encode compose-deps.wac -d my:pkg=app.wasm --registry fermyon.com"]`
     #[schemars(description = "")] // schema docs are on the parent
     Multiple(Vec<String>),
+}
+
+impl Commands {
+    pub(crate) fn as_vec(&self) -> Vec<&String> {
+        match self {
+            Self::Single(cmd) => vec![cmd],
+            Self::Multiple(cmds) => cmds.iter().collect(),
+        }
+    }
 }
 
 fn is_false(v: &bool) -> bool {

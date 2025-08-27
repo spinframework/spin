@@ -1159,7 +1159,8 @@ route = "/..."
             .components
             .iter()
             .map(|(id, component)| {
-                let spin_manifest::schema::v2::ComponentSource::Local(file) = &component.source
+                let spin_manifest::schema::v2::ComponentSource::Local(file) =
+                    &component.source(None)
                 else {
                     panic!(
                         "{}.{}: source is not a file reference",

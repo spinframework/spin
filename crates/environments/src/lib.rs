@@ -39,13 +39,14 @@ pub async fn validate_application_against_environment_ids(
     env_ids: &[TargetEnvironmentRef],
     cache_root: Option<std::path::PathBuf>,
     app_dir: &std::path::Path,
+    profile: Option<&str>,
 ) -> anyhow::Result<TargetEnvironmentValidation> {
     if env_ids.is_empty() {
         return Ok(Default::default());
     }
 
     let envs = TargetEnvironment::load_all(env_ids, cache_root, app_dir).await?;
-    validate_application_against_environments(application, &envs).await
+    validate_application_against_environments(application, &envs, profile).await
 }
 
 /// Validates *all* application components against the list of (realised) target enviroments. Each component must conform
@@ -55,6 +56,7 @@ pub async fn validate_application_against_environment_ids(
 async fn validate_application_against_environments(
     application: &ApplicationToValidate,
     envs: &[TargetEnvironment],
+    profile: Option<&str>,
 ) -> anyhow::Result<TargetEnvironmentValidation> {
     for trigger_type in application.trigger_types() {
         if let Some(env) = envs.iter().find(|e| !e.supports_trigger_type(trigger_type)) {
@@ -65,7 +67,7 @@ async fn validate_application_against_environments(
         }
     }
 
-    let components_by_trigger_type = application.components_by_trigger_type().await?;
+    let components_by_trigger_type = application.components_by_trigger_type(profile).await?;
 
     let mut errs = vec![];
 

@@ -26,12 +26,14 @@ pub struct LocalLoader {
     files_mount_strategy: FilesMountStrategy,
     file_loading_permits: std::sync::Arc<Semaphore>,
     wasm_loader: WasmLoader,
+    profile: Option<String>,
 }
 
 impl LocalLoader {
     pub async fn new(
         app_root: &Path,
         files_mount_strategy: FilesMountStrategy,
+        profile: Option<&str>,
         cache_root: Option<PathBuf>,
     ) -> Result<Self> {
         let app_root = safe_canonicalize(app_root)
@@ -44,6 +46,7 @@ impl LocalLoader {
             // Limit concurrency to avoid hitting system resource limits
             file_loading_permits: file_loading_permits.clone(),
             wasm_loader: WasmLoader::new(app_root, cache_root, Some(file_loading_permits)).await?,
+            profile: profile.map(|s| s.to_owned()),
         })
     }
 
@@ -67,6 +70,13 @@ impl LocalLoader {
         locked
             .metadata
             .insert("origin".into(), file_url(path)?.into());
+
+        // Set build profile metadata
+        if let Some(profile) = self.profile.as_ref() {
+            locked
+                .metadata
+                .insert("profile".into(), profile.as_str().into());
+        }
 
         Ok(locked)
     }
@@ -155,29 +165,34 @@ impl LocalLoader {
 
         let component_requires_service_chaining = requires_service_chaining(&component);
 
-        let metadata = ValuesMapBuilder::new()
-            .string("description", component.description)
-            .string_array("allowed_outbound_hosts", allowed_outbound_hosts)
-            .string_array("key_value_stores", component.key_value_stores)
-            .string_array("databases", component.sqlite_databases)
-            .string_array("ai_models", component.ai_models)
-            .serializable("build", component.build)?
-            .take();
-
         let source = self
-            .load_component_source(id, component.source.clone())
+            .load_component_source(id, component.source(self.profile()).clone())
             .await
-            .with_context(|| format!("Failed to load Wasm source {}", component.source))?;
+            .with_context(|| {
+                format!(
+                    "Failed to load Wasm source {}",
+                    component.source(self.profile())
+                )
+            })?;
+
+        let metadata = ValuesMapBuilder::new()
+            .string("description", component.description.clone())
+            .string_array("allowed_outbound_hosts", allowed_outbound_hosts)
+            .string_array("key_value_stores", component.key_value_stores.clone())
+            .string_array("databases", component.sqlite_databases.clone())
+            .string_array("ai_models", component.ai_models.clone())
+            .serializable("build", component.build(self.profile()))?
+            .take();
 
         let dependencies = self
             .load_component_dependencies(
                 id,
                 component.dependencies_inherit_configuration,
-                &component.dependencies,
+                &component.dependencies(self.profile()),
             )
             .await?;
 
-        let env = component.environment.into_iter().collect();
+        let env = component.environment(self.profile()).into_iter().collect();
 
         let files = if component.files.is_empty() {
             vec![]
@@ -537,6 +552,10 @@ impl LocalLoader {
             content: file_content_ref(src)?,
             path: dest.into(),
         })
+    }
+
+    fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
     }
 }
 
@@ -924,6 +943,7 @@ mod test {
         let loader = LocalLoader::new(
             &app_root,
             FilesMountStrategy::Copy(wd.path().to_owned()),
+            None,
             None,
         )
         .await?;
