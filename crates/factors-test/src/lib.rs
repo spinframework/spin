@@ -102,5 +102,5 @@ pub async fn build_locked_app(manifest: &toml::Table) -> anyhow::Result<LockedAp
     let dir = tempfile::tempdir().context("failed creating tempdir")?;
     let path = dir.path().join("spin.toml");
     std::fs::write(&path, toml_str).context("failed writing manifest")?;
-    spin_loader::from_file(&path, FilesMountStrategy::Direct, None).await
+    spin_loader::from_file(&path, FilesMountStrategy::Direct, None, None).await
 }
