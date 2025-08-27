@@ -16,6 +16,7 @@ pub(crate) trait FilterFactory: Send + Sync {
         manifest_file: &Path,
         manifest_dir: &Path,
         manifest: &v2::AppManifest,
+        profile: Option<&str>,
     ) -> anyhow::Result<Arc<dyn Filterer>>;
 }
 
@@ -34,6 +35,7 @@ impl FilterFactory for ArtifactFilterFactory {
         manifest_file: &Path,
         manifest_dir: &Path,
         manifest: &v2::AppManifest,
+        profile: Option<&str>,
     ) -> anyhow::Result<Arc<dyn Filterer>> {
         let manifest_glob = if self.skip_build {
             vec![manifest_path_to_watch(manifest_file)?]
@@ -43,7 +45,7 @@ impl FilterFactory for ArtifactFilterFactory {
         let wasm_globs = manifest
             .components
             .values()
-            .filter_map(|c| match &c.source {
+            .filter_map(|c| match c.source(profile) {
                 v2::ComponentSource::Local(path) => Some(path.clone()),
                 _ => None,
             });
@@ -88,6 +90,7 @@ impl FilterFactory for BuildFilterFactory {
         manifest_file: &Path,
         manifest_dir: &Path,
         manifest: &v2::AppManifest,
+        _profile: Option<&str>,
     ) -> anyhow::Result<Arc<dyn Filterer>> {
         let mut filterers: Vec<Box<dyn Filterer>> =
             Vec::with_capacity(manifest.components.len() + 1);
@@ -158,6 +161,7 @@ impl FilterFactory for ManifestFilterFactory {
         manifest_file: &Path,
         manifest_dir: &Path,
         _: &v2::AppManifest,
+        _: Option<&str>,
     ) -> anyhow::Result<Arc<dyn Filterer>> {
         let manifest_glob = manifest_path_to_watch(manifest_file)?;
 

@@ -395,6 +395,34 @@ pub struct Component {
     /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
     #[serde(default, skip_serializing_if = "ComponentDependencies::is_empty")]
     pub dependencies: ComponentDependencies,
+    /// TODO: profile docs
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub profile: Map<String, ComponentProfileUp>,
+}
+
+/// Customisations for running a Spin component in a non-default profile.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentProfileUp {
+    /// The file, package, or URL containing the component Wasm binary.
+    ///
+    /// Example: `source = "bin/cart.wasm"`
+    ///
+    /// Learn more: https://spinframework.dev/writing-apps#the-component-source
+    pub source: ComponentSource,
+}
+
+impl Component {
+    /// TODO: docs! docs! docs!
+    pub fn source(&self, profile: Option<impl AsRef<str>>) -> ComponentSource {
+        let Some(profile) = profile.as_ref() else {
+            return self.source.clone();
+        };
+        let Some(source) = self.profile.get(profile.as_ref()) else {
+            return self.source.clone();
+        };
+        source.source.clone()
+    }
 }
 
 /// Component dependencies
@@ -765,6 +793,7 @@ mod tests {
             tool: Map::new(),
             dependencies_inherit_configuration: false,
             dependencies: Default::default(),
+            profile: Default::default(),
         }
     }
 
