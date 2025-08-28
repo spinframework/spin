@@ -20,7 +20,7 @@ use crate::{
 pub struct SpinHttpExecutor;
 
 impl HttpExecutor for SpinHttpExecutor {
-    #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.component_id())))]
+    #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.lookup_key().to_string())))]
     async fn execute<F: RuntimeFactors>(
         &self,
         instance_builder: TriggerInstanceBuilder<'_, F>,
@@ -28,7 +28,10 @@ impl HttpExecutor for SpinHttpExecutor {
         req: Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<Response<Body>> {
-        let component_id = route_match.component_id();
+        let spin_http::routes::TriggerLookupKey::Component(component_id) = route_match.lookup_key()
+        else {
+            anyhow::bail!("INCONCEIVABLE");
+        };
 
         tracing::trace!("Executing request using the Spin executor for component {component_id}");
 

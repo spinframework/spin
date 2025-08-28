@@ -1463,6 +1463,46 @@ route = "/..."
     }
 
     #[test]
+    fn test_static_response() -> anyhow::Result<()> {
+        run_test(
+            "static-response",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::full(Method::Get, "/users/42", &[], Some("")),
+                    Response::new_with_body(200, "42:"),
+                )?;
+                assert_spin_request(
+                    spin,
+                    Request::full(Method::Get, "/default-code", &[], Some("")),
+                    Response::new_with_body(200, "should be 200"),
+                )?;
+                assert_spin_request(
+                    spin,
+                    Request::full(Method::Get, "/non-existtent", &[], Some("")),
+                    Response::new_with_body(404, "not found"),
+                )?;
+                // The test framework automatically follows redirects so we can't check the status code and
+                // headers directly. But we can see the result of the redirect!
+                assert_spin_request(
+                    spin,
+                    Request::full(Method::Get, "/bob", &[], Some("")),
+                    Response::new_with_body(200, "bob:"),
+                )?;
+                Ok(())
+            },
+        )?;
+        Ok(())
+    }
+
+    #[test]
     fn test_outbound_post() -> anyhow::Result<()> {
         run_test(
             "wasi-http-outbound-post",
