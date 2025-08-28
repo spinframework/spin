@@ -1,0 +1,39 @@
+name: Bump Spin Rust Templates SDK Dependency
+
+on:
+  repository_dispatch:
+    types:
+      - rust-sdk-release
+
+jobs:
+  create-pr:
+    name: Create PR with Spin Rust Templates SDK Dependency Bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump Rust Templates SDK Dependency
+        shell: bash
+        run: ./scripts/bump-rust-template-sdk.sh ${{ github.event.client_payload.version }}
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(rust-templates): bump Spin Rust SDK to ${{ github.event.client_payload.version }}"
+          title: "chore(rust-templates): bump Spin Rust SDK to ${{ github.event.client_payload.version }}"
+          body: Update the Spin Rust Templates SDK dependency to ${{ github.event.client_payload.version }}
+          branch: bump-spin-rust-sdk-${{ github.event.client_payload.version }}
+          base: main
+          delete-branch: true
+          committer: spinframeworkbot <202838904+spinframeworkbot@users.noreply.github.com>
+          author: spinframeworkbot <202838904+spinframeworkbot@users.noreply.github.com>
+          signoff: true
+          token: ${{ secrets.PAT }}
