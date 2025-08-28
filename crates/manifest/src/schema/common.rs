@@ -161,13 +161,18 @@ pub enum WasiFilesMount {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentBuildConfig {
-    /// The command or commands to build the application. If multiple commands
+    /// The command or commands to build the component. If multiple commands
     /// are specified, they are run sequentially from left to right.
     ///
-    /// Example: `command = "cargo build"`, `command = ["npm install", "npm run build"]`
+    /// Example: `command = "cargo build --release"`, `command = ["npm install", "npm run build"]`
     ///
     /// Learn more: https://spinframework.dev/build#setting-up-for-spin-build
     pub command: Commands,
+    /// The command or commands for building the component in non-default profiles.
+    /// If a component has no special build instructions for a profile, the
+    /// default build command is used.
+    #[serde(default, skip_serializing_if = "super::v2::Map::is_empty")]
+    pub profile: super::v2::Map<String, ComponentProfileBuildCommand>,
     /// The working directory for the build command. If omitted, the build working
     /// directory is the directory containing `spin.toml`.
     ///
@@ -188,14 +193,28 @@ pub struct ComponentBuildConfig {
     pub watch: Vec<String>,
 }
 
+/// Component build configuration
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentProfileBuildCommand {
+    /// The command or commands to build the component in a named profile. If multiple commands
+    /// are specified, they are run sequentially from left to right.
+    ///
+    /// Example: `profile.debug.command = "cargo build"`
+    ///
+    /// Learn more: https://spinframework.dev/build#setting-up-for-spin-build
+    pub command: Commands,
+}
+
 impl ComponentBuildConfig {
     /// The commands to execute for the build
-    pub fn commands(&self) -> impl ExactSizeIterator<Item = &String> {
-        let as_vec = match &self.command {
-            Commands::Single(cmd) => vec![cmd],
-            Commands::Multiple(cmds) => cmds.iter().collect(),
-        };
-        as_vec.into_iter()
+    pub fn commands(&self, profile: Option<&str>) -> Vec<&String> {
+        if let Some(profile) = profile {
+            if let Some(profile_cmd) = self.profile.get(profile) {
+                return profile_cmd.command.as_vec();
+            }
+        }
+        self.command.as_vec()
     }
 }
 
@@ -214,6 +233,15 @@ pub enum Commands {
     /// `command = ["cargo build", "wac encode compose-deps.wac -d my:pkg=app.wasm --registry fermyon.com"]`
     #[schemars(description = "")] // schema docs are on the parent
     Multiple(Vec<String>),
+}
+
+impl Commands {
+    fn as_vec(&self) -> Vec<&String> {
+        match self {
+            Self::Single(cmd) => vec![cmd],
+            Self::Multiple(cmds) => cmds.iter().collect(),
+        }
+    }
 }
 
 fn is_false(v: &bool) -> bool {

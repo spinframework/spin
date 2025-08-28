@@ -56,10 +56,20 @@ impl AppSource {
         }
     }
 
-    pub async fn build(&self, cache_root: &Option<PathBuf>) -> anyhow::Result<()> {
+    pub async fn build(
+        &self,
+        profile: Option<&str>,
+        cache_root: &Option<PathBuf>,
+    ) -> anyhow::Result<()> {
         match self {
-            Self::File(path) => spin_build::build_default(path, cache_root.clone()).await,
+            Self::File(path) => spin_build::build_default(path, profile, cache_root.clone()).await,
             _ => Ok(()),
+        }
+    }
+
+    pub fn warn_if_not_latest_build(&self, profile: Option<&str>) {
+        if let Self::File(path) = self {
+            spin_build::warn_if_not_latest_build(path, profile);
         }
     }
 }

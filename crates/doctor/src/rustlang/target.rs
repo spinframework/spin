@@ -19,7 +19,7 @@ impl Diagnostic for TargetDiagnostic {
         let uses_rust = manifest.components.values().any(|c| {
             c.build
                 .as_ref()
-                .map(|b| b.commands().any(|c| c.starts_with("cargo")))
+                .map(|b| b.commands(None).iter().any(|c| c.starts_with("cargo")))
                 .unwrap_or_default()
         });
 

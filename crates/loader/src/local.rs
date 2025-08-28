@@ -26,12 +26,14 @@ pub struct LocalLoader {
     files_mount_strategy: FilesMountStrategy,
     file_loading_permits: std::sync::Arc<Semaphore>,
     wasm_loader: WasmLoader,
+    profile: Option<String>,
 }
 
 impl LocalLoader {
     pub async fn new(
         app_root: &Path,
         files_mount_strategy: FilesMountStrategy,
+        profile: Option<&str>,
         cache_root: Option<PathBuf>,
     ) -> Result<Self> {
         let app_root = safe_canonicalize(app_root)
@@ -44,6 +46,7 @@ impl LocalLoader {
             // Limit concurrency to avoid hitting system resource limits
             file_loading_permits: file_loading_permits.clone(),
             wasm_loader: WasmLoader::new(app_root, cache_root, Some(file_loading_permits)).await?,
+            profile: profile.map(|s| s.to_owned()),
         })
     }
 
@@ -67,6 +70,13 @@ impl LocalLoader {
         locked
             .metadata
             .insert("origin".into(), file_url(path)?.into());
+
+        // Set build profile metadata
+        if let Some(profile) = self.profile.as_ref() {
+            locked
+                .metadata
+                .insert("profile".into(), profile.as_str().into());
+        }
 
         Ok(locked)
     }
@@ -155,6 +165,11 @@ impl LocalLoader {
 
         let component_requires_service_chaining = requires_service_chaining(&component);
 
+        let source = self
+            .load_component_source(id, component.source(self.profile.as_ref()))
+            .await
+            .with_context(|| format!("Failed to load Wasm source {}", component.source))?;
+
         let metadata = ValuesMapBuilder::new()
             .string("description", component.description)
             .string_array("allowed_outbound_hosts", allowed_outbound_hosts)
@@ -163,11 +178,6 @@ impl LocalLoader {
             .string_array("ai_models", component.ai_models)
             .serializable("build", component.build)?
             .take();
-
-        let source = self
-            .load_component_source(id, component.source.clone())
-            .await
-            .with_context(|| format!("Failed to load Wasm source {}", component.source))?;
 
         let dependencies = self
             .load_component_dependencies(
@@ -924,6 +934,7 @@ mod test {
         let loader = LocalLoader::new(
             &app_root,
             FilesMountStrategy::Copy(wd.path().to_owned()),
+            None,
             None,
         )
         .await?;
