@@ -27,6 +27,7 @@ wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
 
 [dev-dependencies]
+spin-common = { path = "../common" }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factors-test = { path = "../factors-test" }
 
