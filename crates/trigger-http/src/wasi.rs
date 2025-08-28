@@ -91,6 +91,7 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
             HandlerType::Wasi0_2(indices) => Handler::Latest(indices.load(&mut store, &instance)?),
             HandlerType::Spin => unreachable!("should have used SpinHttpExecutor"),
             HandlerType::Wagi(_) => unreachable!("should have used WagiExecutor instead"),
+            HandlerType::Intrinsic => todo!(),
         };
 
         let span = tracing::debug_span!("execute_wasi");

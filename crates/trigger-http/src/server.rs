@@ -83,7 +83,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 .app()
                 .trigger_configs::<HttpTriggerConfig>("http")?
                 .into_iter()
-                .map(|(_, config)| (config.component.clone(), config)),
+                .map(|(trigger_id, config)| (config.handler.id(trigger_id), config)),
         );
 
         // Build router
@@ -121,23 +121,17 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
         let component_handler_types = component_trigger_configs
             .iter()
-            .map(|(component_id, trigger_config)| {
-                let pre = trigger_app.get_instance_pre(component_id)?;
-                let handler_type = match &trigger_config.executor {
-                    None | Some(HttpExecutorType::Http) => {
-                        HandlerType::from_instance_pre(pre)?
+            .map(
+                |(component_id, trigger_config)| match &trigger_config.handler {
+                    spin_http::config::HttpTriggerHandler::Component {
+                        component,
+                        executor,
+                    } => Self::handler_type_for_component(&trigger_app, component, executor),
+                    spin_http::config::HttpTriggerHandler::StaticResponse { .. } => {
+                        Ok((component_id.clone(), HandlerType::Intrinsic))
                     }
-                    Some(HttpExecutorType::Wagi(wagi_config)) => {
-                        anyhow::ensure!(
-                            wagi_config.entrypoint == "_start",
-                            "Wagi component '{component_id}' cannot use deprecated 'entrypoint' field"
-                        );
-                        HandlerType::Wagi(CommandIndices::new(pre)
-                            .context("failed to find wasi command interface for wagi executor")?)
-                    }
-                };
-                Ok((component_id.clone(), handler_type))
-            })
+                },
+            )
             .collect::<anyhow::Result<_>>()?;
         Ok(Self {
             listen_addr,
@@ -148,6 +142,28 @@ impl<F: RuntimeFactors> HttpServer<F> {
             component_trigger_configs,
             component_handler_types,
         })
+    }
+
+    fn handler_type_for_component(
+        trigger_app: &TriggerApp<F>,
+        component_id: &str,
+        executor: &Option<HttpExecutorType>,
+    ) -> anyhow::Result<(String, HandlerType)> {
+        let pre = trigger_app.get_instance_pre(component_id)?;
+        let handler_type = match executor {
+            None | Some(HttpExecutorType::Http) => HandlerType::from_instance_pre(pre)?,
+            Some(HttpExecutorType::Wagi(wagi_config)) => {
+                anyhow::ensure!(
+                    wagi_config.entrypoint == "_start",
+                    "Wagi component '{component_id}' cannot use deprecated 'entrypoint' field"
+                );
+                HandlerType::Wagi(
+                    CommandIndices::new(pre)
+                        .context("failed to find wasi command interface for wagi executor")?,
+                )
+            }
+        };
+        Ok((component_id.to_string(), handler_type))
     }
 
     /// Serve incoming requests over the provided [`TcpListener`].
@@ -293,6 +309,39 @@ impl<F: RuntimeFactors> HttpServer<F> {
             component_id = component_id
         );
 
+        let trigger_config = self.component_trigger_configs.get(component_id).unwrap();
+
+        match &trigger_config.handler {
+            spin_http::config::HttpTriggerHandler::Component {
+                component,
+                executor,
+            } => {
+                Self::respond_wasm_component(
+                    self,
+                    req,
+                    route_match,
+                    server_scheme,
+                    client_addr,
+                    component,
+                    executor,
+                )
+                .await
+            }
+            spin_http::config::HttpTriggerHandler::StaticResponse { static_response } => {
+                Self::respond_static_response(static_response)
+            }
+        }
+    }
+
+    async fn respond_wasm_component(
+        self: &Arc<Self>,
+        req: Request<Body>,
+        route_match: RouteMatch<'_, '_>,
+        server_scheme: Scheme,
+        client_addr: SocketAddr,
+        component_id: &str,
+        executor: &Option<HttpExecutorType>,
+    ) -> anyhow::Result<Response<Body>> {
         let mut instance_builder = self.trigger_app.prepare(component_id)?;
 
         // Set up outbound HTTP request origin and service chaining
@@ -309,12 +358,8 @@ impl<F: RuntimeFactors> HttpServer<F> {
         outbound_http.set_request_interceptor(OutboundHttpInterceptor::new(self.clone()))?;
 
         // Prepare HTTP executor
-        let trigger_config = self.component_trigger_configs.get(component_id).unwrap();
         let handler_type = self.component_handler_types.get(component_id).unwrap();
-        let executor = trigger_config
-            .executor
-            .as_ref()
-            .unwrap_or(&HttpExecutorType::Http);
+        let executor = executor.as_ref().unwrap_or(&HttpExecutorType::Http);
 
         let res = match executor {
             HttpExecutorType::Http => match handler_type {
@@ -331,6 +376,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                         .await
                 }
                 HandlerType::Wagi(_) => unreachable!(),
+                HandlerType::Intrinsic => unreachable!(),
             },
             HttpExecutorType::Wagi(wagi_config) => {
                 let indices = match handler_type {
@@ -357,6 +403,24 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 Self::internal_error(None, route_match.raw_route())
             }
         }
+    }
+
+    fn respond_static_response(
+        sr: &spin_http::config::StaticResponse,
+    ) -> anyhow::Result<Response<Body>> {
+        let mut response = Response::builder();
+
+        response = response.status(sr.status());
+        for (header_name, header_value) in sr.headers() {
+            response = response.header(header_name, header_value);
+        }
+
+        let body = match sr.body() {
+            Some(b) => body::full(b.clone().into()),
+            None => body::empty(),
+        };
+
+        Ok(response.body(body)?)
     }
 
     /// Returns spin status information.
