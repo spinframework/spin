@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::{future::Future, sync::Arc};
 
 use anyhow::{Context, Result};
-use clap::{Args, IntoApp, Parser};
+use clap::{Args, CommandFactory, Parser};
 use spin_app::App;
 use spin_common::sloth;
 use spin_common::ui::quoted_path;
@@ -41,6 +41,7 @@ pub const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
 /// A command that runs a TriggerExecutor.
 #[derive(Parser, Debug)]
 #[clap(
+    styles = spin_common::cli::CLAP_STYLES,
     override_usage = "spin [COMMAND] [OPTIONS]",
     next_help_heading = help_heading::<T, B::Factors>()
 )]
@@ -68,7 +69,6 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
         long = "disable-cache",
         env = DISABLE_WASMTIME_CACHE,
         conflicts_with = WASMTIME_CACHE_FILE,
-        takes_value = false,
     )]
     pub disable_cache: bool,
 
@@ -287,9 +287,9 @@ fn warn_if_wasm_build_slothful() -> sloth::SlothGuard {
 
 fn help_heading<T: Trigger<F>, F: RuntimeFactors>() -> Option<&'static str> {
     if T::TYPE == <help::HelpArgsOnlyTrigger as Trigger<F>>::TYPE {
-        Some("TRIGGER OPTIONS")
+        Some("Trigger Options")
     } else {
-        let heading = format!("{} TRIGGER OPTIONS", T::TYPE.to_uppercase());
+        let heading = format!("{} Trigger Options", T::TYPE.to_uppercase());
         let as_str = Box::new(heading).leak();
         Some(as_str)
     }

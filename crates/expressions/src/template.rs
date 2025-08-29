@@ -98,10 +98,7 @@ mod tests {
             let template = Template::new(tmpl).unwrap();
             assert!(
                 template.parts().eq(&expected),
-                "{:?} -> {:?} != {:?}",
-                tmpl,
-                template,
-                expected,
+                "{tmpl:?} -> {template:?} != {expected:?}",
             );
         }
     }

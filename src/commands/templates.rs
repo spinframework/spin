@@ -479,11 +479,11 @@ pub struct List {
     pub tags: Vec<String>,
 
     /// The format in which to list the templates.
-    #[clap(value_enum, long = "format", default_value = "table", hide = true)]
+    #[clap(value_enum, long, default_value = "table", hide = true)]
     pub format: ListFormat,
 
     /// Whether to show additional template details in the list.
-    #[clap(long = "verbose", takes_value = false)]
+    #[clap(long)]
     pub verbose: bool,
 }
 

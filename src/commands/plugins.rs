@@ -92,11 +92,11 @@ pub struct Install {
     pub remote_manifest_src: Option<Url>,
 
     /// Skips prompt to accept the installation of the plugin.
-    #[clap(short = 'y', long = "yes", takes_value = false)]
+    #[clap(short = 'y', long = "yes")]
     pub yes_to_all: bool,
 
     /// Overrides a failed compatibility check of the plugin with the current version of Spin.
-    #[clap(long = PLUGIN_OVERRIDE_COMPATIBILITY_CHECK_FLAG, takes_value = false)]
+    #[clap(long = PLUGIN_OVERRIDE_COMPATIBILITY_CHECK_FLAG)]
     pub override_compatibility_check: bool,
 
     /// Provide the value for the authorization header to be able to install a plugin from a private repository.
@@ -189,7 +189,6 @@ pub struct Upgrade {
         conflicts_with = PLUGIN_NAME_OPT,
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
-        takes_value = false,
     )]
     pub all: bool,
 
@@ -212,22 +211,22 @@ pub struct Upgrade {
     pub remote_manifest_src: Option<Url>,
 
     /// Skips prompt to accept the installation of the plugin[s].
-    #[clap(short = 'y', long = "yes", takes_value = false)]
+    #[clap(short = 'y', long = "yes")]
     pub yes_to_all: bool,
 
     /// Provide the value for the authorization header to be able to install a plugin from a private repository.
     /// (e.g) --auth-header-value "Bearer <token>"
-    #[clap(long = "auth-header-value", requires = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT)]
+    #[clap(long, requires = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT)]
     pub auth_header_value: Option<String>,
 
     /// Overrides a failed compatibility check of the plugin with the current version of Spin.
-    #[clap(long = PLUGIN_OVERRIDE_COMPATIBILITY_CHECK_FLAG, takes_value = false)]
+    #[clap(long)]
     pub override_compatibility_check: bool,
 
     /// Specific version of a plugin to be install from the centralized plugins
     /// repository.
     #[clap(
-        long = "version",
+        long,
         short = 'v',
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
@@ -237,7 +236,7 @@ pub struct Upgrade {
     pub version: Option<Version>,
 
     /// Allow downgrading a plugin's version.
-    #[clap(short = 'd', long = "downgrade", takes_value = false)]
+    #[clap(long, short = 'd')]
     pub downgrade: bool,
 }
 
@@ -603,23 +602,23 @@ fn latest_and_rest(
 #[derive(Parser, Debug)]
 pub struct List {
     /// List only installed plugins.
-    #[clap(long = "installed", takes_value = false, group = "which")]
+    #[clap(long, group = "which")]
     pub installed: bool,
 
     /// List all versions of plugins. This is the default behaviour.
-    #[clap(long = "all", takes_value = false, group = "which")]
+    #[clap(long, group = "which")]
     pub all: bool,
 
     /// List latest and installed versions of plugins.
-    #[clap(long = "summary", takes_value = false, group = "which")]
+    #[clap(long, group = "which")]
     pub summary: bool,
 
     /// Filter the list to plugins containing this string.
-    #[clap(long = "filter")]
+    #[clap(long)]
     pub filter: Option<String>,
 
     /// The format in which to list the templates.
-    #[clap(value_enum, long = "format", default_value = "plain")]
+    #[clap(value_enum, default_value = "plain")]
     pub format: ListFormat,
 }
 
