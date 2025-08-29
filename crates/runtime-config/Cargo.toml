@@ -15,6 +15,7 @@ spin-common = { path = "../common" }
 spin-expressions = { path = "../expressions" }
 spin-factor-key-value = { path = "../factor-key-value" }
 spin-factor-llm = { path = "../factor-llm" }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-http = { path = "../factor-outbound-http" }
 spin-factor-outbound-mqtt = { path = "../factor-outbound-mqtt" }
 spin-factor-outbound-mysql = { path = "../factor-outbound-mysql" }

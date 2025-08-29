@@ -4,7 +4,9 @@ mod types;
 
 use std::sync::Arc;
 
+use client::Client;
 use client::ClientFactory;
+use spin_factor_otel::OtelContext;
 use spin_factor_outbound_networking::{
     config::allowed_hosts::OutboundAllowedHosts, OutboundNetworkingFactor,
 };
@@ -48,10 +50,13 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
         let allowed_hosts = ctx
             .instance_builder::<OutboundNetworkingFactor>()?
             .allowed_hosts();
+        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
+
         Ok(InstanceState {
             allowed_hosts,
             client_factory: ctx.app_state().clone(),
             connections: Default::default(),
+            otel_context,
         })
     }
 }
@@ -74,6 +79,7 @@ pub struct InstanceState<CF: ClientFactory> {
     allowed_hosts: OutboundAllowedHosts,
     client_factory: Arc<CF>,
     connections: spin_resource_table::Table<CF::Client>,
+    otel_context: OtelContext,
 }
 
 impl<CF: ClientFactory> SelfInstanceBuilder for InstanceState<CF> {}

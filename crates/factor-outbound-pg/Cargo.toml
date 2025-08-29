@@ -16,6 +16,7 @@ postgres_range = "0.11"
 rust_decimal = { version = "1.37", features = ["db-tokio-postgres"] }
 serde_json = { workspace = true }
 spin-core = { path = "../core" }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-resource-table = { path = "../table" }

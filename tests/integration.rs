@@ -1,6 +1,7 @@
-mod testcases;
+pub mod testcases;
 
 mod integration_tests {
+    use anyhow::Context;
     use sha2::Digest;
     use std::collections::HashMap;
     use test_environment::{
@@ -9,13 +10,12 @@ mod integration_tests {
     };
     use testing_framework::runtimes::{spin_cli::SpinConfig, SpinAppType};
 
-    use super::testcases::{
+    pub use super::testcases::{
         assert_spin_request, bootstap_env, http_smoke_test_template, run_test, spin_binary,
     };
-    use anyhow::Context;
 
-    /// Helper macro to assert that a condition is true eventually
     #[cfg(feature = "extern-dependencies-tests")]
+    /// Helper macro to assert that a condition is true eventually
     macro_rules! assert_eventually {
         ($e:expr, $t:expr) => {
             let mut i = 0;
@@ -1579,6 +1579,435 @@ route = "/..."
                 Ok(())
             },
         )?;
+        Ok(())
+    }
+}
+
+mod otel_integration_tests {
+    use fake_opentelemetry_collector::FakeCollectorServer;
+    use std::time::Duration;
+    use test_environment::{
+        http::{Method, Request, Response},
+        services::ServicesConfig,
+    };
+    use testing_framework::runtimes::{spin_cli::SpinConfig, SpinAppType};
+
+    use crate::testcases::run_test_inited;
+
+    use super::testcases::{assert_spin_request, spin_binary};
+
+    #[test]
+    // Test that basic otel tracing and inbound/outbound context propagation works
+    fn otel_smoke_test() -> anyhow::Result<()> {
+        let rt = tokio::runtime::Runtime::new()?;
+        let mut collector = rt
+            .block_on(FakeCollectorServer::start())
+            .expect("fake collector server should start");
+        let collector_endpoint = collector.endpoint().clone();
+
+        run_test_inited(
+            "otel-smoke-test",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            |env| {
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", collector_endpoint);
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+                env.set_env_var("OTEL_BSP_SCHEDULE_DELAY", "5");
+                Ok(())
+            },
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(spin, Request::new(Method::Get, "/one"), Response::new(200))?;
+
+                let spans = rt.block_on(collector.exported_spans(5, Duration::from_secs(5)));
+
+                assert_eq!(spans.len(), 5);
+
+                // They're all part of the same trace which implies context propagation is working
+                assert!(spans
+                    .iter()
+                    .map(|s| s.trace_id.clone())
+                    .all(|t| t == spans[0].trace_id));
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn wasi_otel_nested_spans() -> anyhow::Result<()> {
+        let rt = tokio::runtime::Runtime::new()?;
+        let mut collector = rt
+            .block_on(FakeCollectorServer::start())
+            .expect("fake collector server should start");
+        let collector_endpoint = collector.endpoint().clone();
+
+        run_test_inited(
+            "wasi-otel-tracing",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            |env| {
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", collector_endpoint);
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+                env.set_env_var("OTEL_BSP_SCHEDULE_DELAY", "5");
+                Ok(())
+            },
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::new(Method::Get, "/nested-spans"),
+                    Response::new(200),
+                )?;
+
+                let spans = rt.block_on(collector.exported_spans(4, Duration::from_secs(5)));
+
+                assert_eq!(spans.len(), 4);
+
+                let handle_request_span = spans
+                    .iter()
+                    .find(|s| s.name == "GET /...")
+                    .expect("'GET /...' span should exist");
+                let exec_component_span = spans
+                    .iter()
+                    .find(|s| s.name == "execute_wasm_component wasi-otel-tracing")
+                    .expect("'execute_wasm_component wasi-otel-tracing' span should exist");
+                let outer_span = spans
+                    .iter()
+                    .find(|s| s.name == "outer_func")
+                    .expect("'outer_func' span should exist");
+                let inner_span = spans
+                    .iter()
+                    .find(|s| s.name == "inner_func")
+                    .expect("'inner_func' span should exist");
+
+                assert!(
+                    handle_request_span.trace_id == exec_component_span.trace_id
+                        && exec_component_span.trace_id == outer_span.trace_id
+                        && outer_span.trace_id == inner_span.trace_id
+                );
+                assert_eq!(
+                    exec_component_span.parent_span_id,
+                    handle_request_span.span_id
+                );
+                assert_eq!(outer_span.parent_span_id, exec_component_span.span_id);
+                assert_eq!(inner_span.parent_span_id, outer_span.span_id);
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn wasi_otel_setting_attributes() -> anyhow::Result<()> {
+        let rt = tokio::runtime::Runtime::new()?;
+        let mut collector = rt
+            .block_on(FakeCollectorServer::start())
+            .expect("fake collector server should start");
+        let collector_endpoint = collector.endpoint().clone();
+
+        run_test_inited(
+            "wasi-otel-tracing",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            |env| {
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", collector_endpoint);
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+                env.set_env_var("OTEL_BSP_SCHEDULE_DELAY", "5");
+                Ok(())
+            },
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::new(Method::Get, "/setting-attributes"),
+                    Response::new(200),
+                )?;
+
+                let spans = rt.block_on(collector.exported_spans(3, Duration::from_secs(5)));
+
+                assert_eq!(spans.len(), 3);
+
+                let attr_span = spans
+                    .iter()
+                    .find(|s| s.name == "setting_attributes")
+                    .expect("'setting_attributes' span should exist");
+
+                // There are some other attributes already set on the span
+                assert_eq!(attr_span.attributes.len(), 2);
+
+                assert_eq!(
+                    attr_span
+                        .attributes
+                        .get("foo")
+                        .expect("'foo' attribute should exist"),
+                    "Some(AnyValue { value: Some(StringValue(\"baz\")) })"
+                );
+                assert_eq!(
+                        attr_span.attributes.get("qux").expect("'qux' attribute should exist"),
+                        "Some(AnyValue { value: Some(ArrayValue(ArrayValue { values: [AnyValue { value: Some(StringValue(\"qaz\")) }, AnyValue { value: Some(StringValue(\"thud\")) }] })) })"
+                    );
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn wasi_otel_host_guest_host() -> anyhow::Result<()> {
+        let rt = tokio::runtime::Runtime::new()?;
+        let mut collector = rt
+            .block_on(FakeCollectorServer::start())
+            .expect("fake collector server should start");
+        let collector_endpoint = collector.endpoint().clone();
+
+        run_test_inited(
+            "wasi-otel-tracing",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            |env| {
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", collector_endpoint);
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+                env.set_env_var("OTEL_BSP_SCHEDULE_DELAY", "5");
+                Ok(())
+            },
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::new(Method::Get, "/host-guest-host"),
+                    Response::new(200),
+                )?;
+
+                let spans = rt.block_on(collector.exported_spans(4, Duration::from_secs(5)));
+
+                assert_eq!(spans.len(), 4);
+
+                assert!(spans
+                    .iter()
+                    .map(|s| s.trace_id.clone())
+                    .all(|t| t == spans[0].trace_id));
+
+                let exec_component_span = spans
+                    .iter()
+                    .find(|s| s.name == "execute_wasm_component wasi-otel-tracing")
+                    .expect("'execute_wasm_component wasi-otel-tracing' span should exist");
+                let guest_span = spans
+                    .iter()
+                    .find(|s| s.name == "guest")
+                    .expect("'guest' span should exist");
+                let get_span = spans
+                    .iter()
+                    .find(|s| s.name == "GET")
+                    .expect("'GET' span should exist");
+
+                assert_eq!(guest_span.parent_span_id, exec_component_span.span_id);
+                assert_eq!(get_span.parent_span_id, guest_span.span_id);
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn wasi_otel_events() -> anyhow::Result<()> {
+        let rt = tokio::runtime::Runtime::new()?;
+        let mut collector = rt
+            .block_on(FakeCollectorServer::start())
+            .expect("fake collector server should start");
+        let collector_endpoint = collector.endpoint().clone();
+
+        run_test_inited(
+            "wasi-otel-tracing",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            |env| {
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", collector_endpoint);
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+                env.set_env_var("OTEL_BSP_SCHEDULE_DELAY", "5");
+                Ok(())
+            },
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::new(Method::Get, "/events"),
+                    Response::new(200),
+                )?;
+
+                let spans = rt.block_on(collector.exported_spans(3, Duration::from_secs(5)));
+
+                assert_eq!(spans.len(), 3);
+
+                let event_span = spans
+                    .iter()
+                    .find(|s| s.name == "events")
+                    .expect("'events' span should exist");
+
+                let events = event_span.events.clone();
+                assert_eq!(events.len(), 3);
+
+                let basic_event = events
+                    .iter()
+                    .find(|e| e.name == "basic-event")
+                    .expect("'basic' event should exist");
+                let event_with_attributes = events
+                    .iter()
+                    .find(|e| e.name == "event-with-attributes")
+                    .expect("'event_with_attributes' event should exist");
+                let event_with_timestamp = events
+                    .iter()
+                    .find(|e| e.name == "event-with-timestamp")
+                    .expect("'event_with_timestamp' event should exist");
+
+                assert!(basic_event.time_unix_nano < event_with_attributes.time_unix_nano);
+                assert_eq!(event_with_attributes.attributes.len(), 1);
+                assert!(event_with_attributes.time_unix_nano < event_with_timestamp.time_unix_nano);
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn wasi_otel_links() -> anyhow::Result<()> {
+        let rt = tokio::runtime::Runtime::new()?;
+        let mut collector = rt
+            .block_on(FakeCollectorServer::start())
+            .expect("fake collector server should start");
+        let collector_endpoint = collector.endpoint().clone();
+
+        run_test_inited(
+            "wasi-otel-tracing",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            |env| {
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", collector_endpoint);
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+                env.set_env_var("OTEL_BSP_SCHEDULE_DELAY", "5");
+                Ok(())
+            },
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::new(Method::Get, "/links"),
+                    Response::new(200),
+                )?;
+
+                let spans = rt.block_on(collector.exported_spans(4, Duration::from_secs(5)));
+
+                assert_eq!(spans.len(), 4);
+
+                let first_span = spans
+                    .iter()
+                    .find(|s| s.name == "first")
+                    .expect("'first' span should exist");
+                let second_span = spans
+                    .iter()
+                    .find(|s| s.name == "second")
+                    .expect("'second' span should exist");
+
+                assert_eq!(first_span.links.len(), 0);
+                assert_eq!(second_span.links.len(), 1);
+                assert_eq!(
+                    second_span.links.first().unwrap().span_id,
+                    first_span.span_id
+                );
+                assert_eq!(second_span.links.first().unwrap().attributes.len(), 1);
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn wasi_otel_root_span() -> anyhow::Result<()> {
+        let rt = tokio::runtime::Runtime::new()?;
+        let mut collector = rt
+            .block_on(FakeCollectorServer::start())
+            .expect("fake collector server should start");
+        let collector_endpoint = collector.endpoint().clone();
+
+        run_test_inited(
+            "wasi-otel-tracing",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            |env| {
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", collector_endpoint);
+                env.set_env_var("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+                env.set_env_var("OTEL_BSP_SCHEDULE_DELAY", "5");
+                Ok(())
+            },
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::new(Method::Get, "/root-span"),
+                    Response::new(200),
+                )?;
+
+                let spans = rt.block_on(collector.exported_spans(7, Duration::from_secs(5)));
+
+                assert_eq!(spans.len(), 4);
+
+                let root_span = spans
+                    .iter()
+                    .find(|s| s.name == "root")
+                    .expect("'root' span should exist");
+                let request_span = spans
+                    .iter()
+                    .find(|s| s.name == "GET")
+                    .expect("'GET' span should exist");
+
+                assert_eq!(root_span.trace_id, request_span.trace_id);
+                assert_eq!(root_span.span_id, request_span.parent_span_id);
+                assert_eq!(root_span.parent_span_id, "".to_string());
+
+                Ok(())
+            },
+        )?;
+
         Ok(())
     }
 }
