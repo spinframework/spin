@@ -42,11 +42,6 @@ pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Erro
             .map(|(key, var)| Ok((id_from_string(key)?, var)))
             .collect::<Result<_, Error>>()?;
 
-        let ai_models = component
-            .ai_models
-            .into_iter()
-            .map(id_from_string)
-            .collect::<Result<_, Error>>()?;
         let allowed_http = convert_allowed_http_to_allowed_hosts(
             &component.allowed_http_hosts,
             component.allowed_outbound_hosts.is_none(),
@@ -71,7 +66,7 @@ pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Erro
                 exclude_files: component.exclude_files,
                 key_value_stores: component.key_value_stores,
                 sqlite_databases: component.sqlite_databases,
-                ai_models,
+                ai_models: component.ai_models,
                 build: component.build,
                 tool: Default::default(),
                 allowed_outbound_hosts,

@@ -2,5 +2,5 @@ TOML parse error at line 7, column 13
   |
 7 | component = "1-2-3"
   |             ^^^^^^^
-'-'-separated words must start with an ASCII letter or digit; got '1'
+'-'-separated words must start with an ASCII letter; got '1'
 

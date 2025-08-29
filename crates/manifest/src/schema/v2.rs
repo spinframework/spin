@@ -797,21 +797,6 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_kebab_ids() {
-        for valid in [
-            "default",
-            "mixed-case-words",
-            "letters1-then2-numbers345",
-            "gpt-oss:20b",
-            "gpt-4",
-        ] {
-            if let Err(err) = KebabId::try_from(valid.to_string()) {
-                panic!("{valid:?} should be value: {err:?}");
-            }
-        }
-    }
-
-    #[test]
     fn test_invalid_snake_ids() {
         for invalid in [
             "",
