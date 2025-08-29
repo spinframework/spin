@@ -107,3 +107,4 @@ There are a handful of projects that use Spin and would appreciate notification 
      - [spin-trigger-command](https://github.com/spinframework/spin-trigger-command)
      - [spin-trigger-sqs](https://github.com/spinframework/spin-trigger-sqs)
      - [spin-trigger-mqtt](https://github.com/spinframework/spin-trigger-mqtt)
+     - [spin-trigger-cron](https://github.com/spinframework/spin-trigger-cron)
