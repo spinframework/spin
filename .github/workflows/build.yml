@@ -201,7 +201,7 @@ jobs:
 
       # Install all the toolchain dependencies
       - name: Install Rust wasm target
-        run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
+        run: rustup target add wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown
       - uses: mlugg/setup-zig@v2
         with:
           version: '0.14.1'
@@ -289,7 +289,7 @@ jobs:
         run: rustup target add --toolchain ${{ env.RUST_VERSION }} ${{ matrix.config.target }}
 
       - name: "Install Wasm Rust target"
-        run: rustup target add wasm32-wasip1 wasm32-unknown-unknown --toolchain ${{ env.RUST_VERSION }}
+        run: rustup target add wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown --toolchain ${{ env.RUST_VERSION }}
 
       - name: setup for cross-compiled linux aarch64 build
         if: matrix.config.target == 'aarch64-unknown-linux-gnu'
