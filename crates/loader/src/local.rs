@@ -116,7 +116,16 @@ impl LocalLoader {
         }))
         .await?;
 
-        let host_requirements = spin_locked_app::values::ValuesMap::new();
+        let mut host_requirements = spin_locked_app::values::ValuesMapBuilder::new();
+
+        if triggers.iter().any(requires_static_responses) {
+            host_requirements.string(
+                spin_locked_app::locked::STATIC_RESPONSES_KEY,
+                spin_locked_app::locked::HOST_REQ_REQUIRED,
+            );
+        }
+
+        let host_requirements = host_requirements.build();
 
         let mut must_understand = vec![];
         if !host_requirements.is_empty() {
@@ -902,6 +911,11 @@ pub fn requires_service_chaining(component: &spin_manifest::schema::v2::Componen
 
 fn is_chaining_host(pattern: &str) -> bool {
     AllowedHostConfig::parse(pattern).is_ok_and(|config| config.is_for_service_chaining())
+}
+
+/// Determines if a trigger requires the host to support static responses.
+pub fn requires_static_responses(trigger: &spin_locked_app::locked::LockedTrigger) -> bool {
+    trigger.trigger_config.get("static_response").is_some()
 }
 
 const SLOTH_WARNING_DELAY_MILLIS: u64 = 1250;

@@ -24,6 +24,8 @@ pub enum HandlerType {
     Wasi0_2(ProxyIndices),
     Wasi2023_11_10(ProxyIndices2023_11_10),
     Wasi2023_10_18(ProxyIndices2023_10_18),
+    // Handled by host rather than guest
+    Intrinsic,
 }
 
 /// The `incoming-handler` export for `wasi:http` version rc-2023-10-18

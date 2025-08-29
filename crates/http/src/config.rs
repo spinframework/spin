@@ -2,16 +2,39 @@ use serde::{Deserialize, Serialize};
 use spin_http_routes::HttpTriggerRouteConfig;
 
 /// Configuration for the HTTP trigger
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct HttpTriggerConfig {
-    /// Component ID to invoke
-    pub component: String,
     /// HTTP route the component will be invoked for
     pub route: HttpTriggerRouteConfig,
-    /// The HTTP executor the component requires
-    #[serde(default)]
-    pub executor: Option<HttpExecutorType>,
+    /// How to handle requests to this route
+    #[serde(flatten)]
+    pub handler: HttpTriggerHandler,
+}
+
+/// Configuration for the HTTP trigger
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", untagged, deny_unknown_fields)]
+pub enum HttpTriggerHandler {
+    Component {
+        /// Component ID to invoke
+        component: String,
+        /// The HTTP executor the component requires
+        #[serde(default)]
+        executor: Option<HttpExecutorType>,
+    },
+    StaticResponse {
+        /// Static response to send
+        static_response: StaticResponse,
+    },
+}
+
+impl HttpTriggerHandler {
+    pub fn id(&self, trigger_id: &str) -> String {
+        match self {
+            HttpTriggerHandler::Component { component, .. } => component.clone(),
+            HttpTriggerHandler::StaticResponse { .. } => format!("{trigger_id}-static-response"),
+        }
+    }
 }
 
 /// The executor for the HTTP component.
@@ -62,6 +85,32 @@ impl Default for WagiTriggerConfig {
             entrypoint: WAGI_DEFAULT_ENTRYPOINT.to_owned(),
             argv: WAGI_DEFAULT_ARGV.to_owned(),
         }
+    }
+}
+
+/// A static response to be served directly by the host
+/// without instantiating a component.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct StaticResponse {
+    #[serde(default)]
+    status_code: Option<u16>,
+    #[serde(default)]
+    headers: indexmap::IndexMap<String, String>,
+    #[serde(default)]
+    body: Option<String>,
+}
+
+impl StaticResponse {
+    pub fn status(&self) -> u16 {
+        self.status_code.unwrap_or(200)
+    }
+
+    pub fn headers(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.headers.iter()
+    }
+
+    pub fn body(&self) -> Option<&String> {
+        self.body.as_ref()
     }
 }
 

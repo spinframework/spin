@@ -20,6 +20,10 @@ pub type LockedMap<T> = std::collections::BTreeMap<String, T>;
 /// local service chaining (*.spin.internal) or reject the app.
 pub const SERVICE_CHAINING_KEY: &str = "local_service_chaining";
 
+/// If present and required in `host_requirements`, the host must support
+/// static response (trigger.static_response) or reject the app.
+pub const STATIC_RESPONSES_KEY: &str = "static_responses";
+
 /// Indicates that a host feature is optional. This is the default and is
 /// equivalent to omitting the feature from `host_requirements`.
 pub const HOST_REQ_OPTIONAL: &str = "optional";
@@ -114,7 +118,7 @@ where
     }
 }
 
-const SUPPORTED_HOST_REQS: &[&str] = &[SERVICE_CHAINING_KEY];
+const SUPPORTED_HOST_REQS: &[&str] = &[SERVICE_CHAINING_KEY, STATIC_RESPONSES_KEY];
 
 impl Serialize for LockedApp {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
