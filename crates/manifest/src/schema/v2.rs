@@ -373,7 +373,7 @@ pub struct Component {
     /// Learn more: https://spinframework.dev/serverless-ai-api-guide#using-serverless-ai-from-applications
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(with = "Vec<json_schema::AIModel>")]
-    pub ai_models: Vec<KebabId>,
+    pub ai_models: Vec<String>,
     /// The component build configuration.
     ///
     /// Learn more: https://spinframework.dev/build
