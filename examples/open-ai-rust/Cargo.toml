@@ -1,0 +1,16 @@
+[package]
+name = "open-ai-rust"
+authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+description = "Example showing using openAI with Spin"
+version = "0.1.0"
+rust-version = "1.78"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1"
+spin-sdk = "3.1.0"
+
+[workspace]
