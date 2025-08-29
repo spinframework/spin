@@ -17,15 +17,15 @@ interval_secs = 10
 component = "five"
 
 [component.three]
-source = "target/wasm32-wasip1/release/timer_app_example.wasm"
+source = "target/wasm32-wasip2/release/timer_app_example.wasm"
 [component.three.variables]
 message = "Fizz"
 [component.three.build]
-command = "cargo build --target wasm32-wasip1 --release"
+command = "cargo build --target wasm32-wasip2 --release"
 
 [component.five]
-source = "target/wasm32-wasip1/release/timer_app_example.wasm"
+source = "target/wasm32-wasip2/release/timer_app_example.wasm"
 [component.five.variables]
 message = "Buzz"
 [component.five.build]
-command = "cargo build --target wasm32-wasip1 --release"
+command = "cargo build --target wasm32-wasip2 --release"
