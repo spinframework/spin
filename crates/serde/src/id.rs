@@ -44,23 +44,23 @@ impl<const DELIM: char, const LOWER: bool> TryFrom<String> for Id<DELIM, LOWER> 
                 ));
             }
         }
-        for word in id.split(DELIM) {
+        for (i, word) in id.split(DELIM).enumerate() {
             if word.is_empty() {
                 return Err(format!("{DELIM:?}-separated words must not be empty"));
             }
             let mut chars = word.chars();
             let first = chars.next().unwrap();
-            if !first.is_ascii_alphabetic() {
+            if !(first.is_ascii_alphabetic() || (i > 0 && first.is_ascii_digit())) {
                 return Err(format!(
-                    "{DELIM:?}-separated words must start with an ASCII letter; got {first:?}"
+                    "{DELIM:?}-separated words must start with an ASCII letter or digit; got {first:?}"
                 ));
             }
             let word_is_uppercase = first.is_ascii_uppercase();
             for ch in chars {
-                if ch.is_ascii_digit() {
+                if ch.is_ascii_digit() || ch == ':' {
                 } else if !ch.is_ascii_alphanumeric() {
                     return Err(format!(
-                        "{DELIM:?}-separated words may only contain alphanumeric ASCII; got {ch:?}"
+                        "{DELIM:?}-separated words may only contain alphanumeric ASCII (plus ':' inside words); got {ch:?}"
                     ));
                 } else if ch.is_ascii_uppercase() != word_is_uppercase {
                     return Err(format!("{DELIM:?}-separated words must be all lowercase or all UPPERCASE; got {word:?}"));
