@@ -53,15 +53,15 @@ pub fn predefined_externals() -> Vec<(String, String)> {
 /// indicate the plugin to execute. Passes all subsequent arguments on to the
 /// subprocess.
 pub async fn execute_external_subcommand(
-    cmd: Vec<String>,
-    app: clap::App<'_>,
+    subcmd: Vec<String>,
+    cmd: clap::Command<'_>,
 ) -> anyhow::Result<()> {
-    let (plugin_name, args, override_compatibility_check) = parse_subcommand(cmd)?;
+    let (plugin_name, args, override_compatibility_check) = parse_subcommand(subcmd)?;
     let plugin_store = PluginStore::try_default()?;
     let plugin_version = ensure_plugin_available(
         &plugin_name,
         &plugin_store,
-        app,
+        cmd,
         override_compatibility_check,
     )
     .await?;
@@ -115,7 +115,7 @@ fn set_kill_on_ctrl_c(child: &tokio::process::Child) {
 async fn ensure_plugin_available(
     plugin_name: &str,
     plugin_store: &PluginStore,
-    app: clap::App<'_>,
+    cmd: clap::Command<'_>,
     override_compatibility_check: bool,
 ) -> anyhow::Result<Option<String>> {
     let plugin_version = match plugin_store.read_plugin_manifest(plugin_name) {
@@ -130,7 +130,7 @@ async fn ensure_plugin_available(
             Some(manifest.version().to_owned())
         }
         Err(PluginError::NotFound(e)) => {
-            consider_install(plugin_name, plugin_store, app, &e).await?
+            consider_install(plugin_name, plugin_store, cmd, &e).await?
         }
         Err(e) => return Err(e.into()),
     };
@@ -140,7 +140,7 @@ async fn ensure_plugin_available(
 async fn consider_install(
     plugin_name: &str,
     plugin_store: &PluginStore,
-    app: clap::App<'_>,
+    cmd: clap::Command<'_>,
     e: &spin_plugins::error::NotFoundError,
 ) -> anyhow::Result<Option<String>> {
     if predefined_externals()
@@ -176,7 +176,7 @@ async fn consider_install(
 
     tracing::debug!("Tried to resolve {plugin_name} to plugin, got {e}");
     terminal::error!("'{plugin_name}' is not a known Spin command. See spin --help.\n");
-    print_similar_commands(app, plugin_name);
+    print_similar_commands(cmd, plugin_name);
     process::exit(2);
 }
 
@@ -280,8 +280,8 @@ async fn report_badger_result(badger: tokio::task::JoinHandle<BadgerChecker>) {
     }
 }
 
-fn print_similar_commands(app: clap::App, plugin_name: &str) {
-    let similar = similar_commands(app, plugin_name);
+fn print_similar_commands(cmd: clap::Command, plugin_name: &str) {
+    let similar = similar_commands(cmd, plugin_name);
     match similar.len() {
         0 => (),
         1 => eprintln!("The most similar command is:"),
@@ -295,8 +295,8 @@ fn print_similar_commands(app: clap::App, plugin_name: &str) {
     }
 }
 
-fn similar_commands(app: clap::App, target: &str) -> Vec<String> {
-    app.get_subcommands()
+fn similar_commands(cmd: clap::Command, target: &str) -> Vec<String> {
+    cmd.get_subcommands()
         .filter_map(|sc| {
             let actual_name = undecorate(sc.get_name());
             if levenshtein::levenshtein(&actual_name, target) <= 2 {

@@ -3,7 +3,7 @@
 //! the upstream crate because it is Clap 4 only. When we move to Clap 4
 //! we should shift to using the original crate (and upstream changes such
 //! as alphabetisation). See licences in this directory and NOTICES.md.
-//! 
+//!
 //! Autogenerate Markdown documentation for clap command-line tools
 //!
 //! See [**Examples**][Examples] for examples of the content `clap-markdown`
@@ -79,9 +79,7 @@ pub fn help_markdown<C: clap::CommandFactory>() -> String {
 }
 
 /// Format the help information for `command` as Markdown, with custom options.
-pub fn help_markdown_custom<C: clap::CommandFactory>(
-    options: &MarkdownOptions,
-) -> String {
+pub fn help_markdown_custom<C: clap::CommandFactory>(options: &MarkdownOptions) -> String {
     let command = C::command();
 
     return help_markdown_command_custom(&command, options);
@@ -93,10 +91,7 @@ pub fn help_markdown_command(command: &clap::Command) -> String {
 }
 
 /// Format the help information for `command` as Markdown, with custom options.
-pub fn help_markdown_command_custom(
-    command: &clap::Command,
-    options: &MarkdownOptions,
-) -> String {
+pub fn help_markdown_command_custom(command: &clap::Command, options: &MarkdownOptions) -> String {
     let mut buffer = String::with_capacity(100);
 
     write_help_markdown(&mut buffer, &command, options);
@@ -121,11 +116,7 @@ pub fn print_help_markdown<C: clap::CommandFactory>() {
     println!("{}", buffer);
 }
 
-fn write_help_markdown(
-    buffer: &mut String,
-    command: &clap::Command,
-    options: &MarkdownOptions,
-) {
+fn write_help_markdown(buffer: &mut String, command: &clap::Command, options: &MarkdownOptions) {
     //----------------------------------
     // Write the document title
     //----------------------------------
@@ -142,7 +133,8 @@ fn write_help_markdown(
         buffer,
         "This document contains the help content for the `{}` command-line program.\n",
         title_name
-    ).unwrap();
+    )
+    .unwrap();
 
     //----------------------------------
     // Write the table of contents
@@ -155,8 +147,7 @@ fn write_help_markdown(
     if options.show_table_of_contents {
         writeln!(buffer, "**Command Overview:**\n").unwrap();
 
-        build_table_of_contents_markdown(buffer, Vec::new(), command, 0)
-            .unwrap();
+        build_table_of_contents_markdown(buffer, Vec::new(), command, 0).unwrap();
 
         write!(buffer, "\n").unwrap();
     }
@@ -171,13 +162,17 @@ fn write_help_markdown(
     // Write the footer
     //-----------------
     if options.show_footer {
-        write!(buffer, r#"<hr/>
+        write!(
+            buffer,
+            r#"<hr/>
 
 <small><i>
     This document was generated automatically by
     <a href="https://crates.io/crates/clap-markdown"><code>clap-markdown</code></a>.
 </i></small>
-"#).unwrap();
+"#
+        )
+        .unwrap();
     }
 }
 
@@ -215,12 +210,7 @@ fn build_table_of_contents_markdown(
     //----------------------------------
 
     for subcommand in command.get_subcommands().sorted_by_key(|c| c.get_name()) {
-        build_table_of_contents_markdown(
-            buffer,
-            command_path.clone(),
-            subcommand,
-            depth + 1,
-        )?;
+        build_table_of_contents_markdown(buffer, command_path.clone(), subcommand, depth + 1)?;
     }
 
     Ok(())
@@ -418,12 +408,7 @@ fn build_command_markdown(
     write!(buffer, "\n\n")?;
 
     for subcommand in command.get_subcommands().sorted_by_key(|c| c.get_name()) {
-        build_command_markdown(
-            buffer,
-            command_path.clone(),
-            subcommand,
-            depth + 1,
-        )?;
+        build_command_markdown(buffer, command_path.clone(), subcommand, depth + 1)?;
     }
 
     Ok(())
@@ -447,9 +432,7 @@ fn write_arg_markdown(buffer: &mut String, arg: &clap::Arg) -> fmt::Result {
     let value_name: String = match arg.get_value_names() {
         // TODO: What if multiple names are provided?
         Some([name, ..]) => name.to_string(),
-        Some([]) => unreachable!(
-            "clap Arg::get_value_names() returned Some(..) of empty list"
-        ),
+        Some([]) => unreachable!("clap Arg::get_value_names() returned Some(..) of empty list"),
         None => arg.get_id().to_string().to_ascii_uppercase(),
     };
 
@@ -460,26 +443,29 @@ fn write_arg_markdown(buffer: &mut String, arg: &clap::Arg) -> fmt::Result {
             } else {
                 write!(buffer, "`-{short}`, `--{long}`")?
             }
-        },
+        }
         (Some(short), None) => {
             if arg.get_action().takes_values() {
                 write!(buffer, "`-{short} <{value_name}>`")?
             } else {
                 write!(buffer, "`-{short}`")?
             }
-        },
+        }
         (None, Some(long)) => {
             if arg.get_action().takes_values() {
                 write!(buffer, "`--{} <{value_name}>`", long)?
             } else {
                 write!(buffer, "`--{}`", long)?
             }
-        },
+        }
         (None, None) => {
-            debug_assert!(arg.is_positional(), "unexpected non-positional Arg with neither short nor long name: {arg:?}");
+            debug_assert!(
+                arg.is_positional(),
+                "unexpected non-positional Arg with neither short nor long name: {arg:?}"
+            );
 
             write!(buffer, "`<{value_name}>`",)?;
-        },
+        }
     }
 
     if let Some(help) = arg.get_long_help() {
@@ -517,19 +503,17 @@ fn write_arg_markdown(buffer: &mut String, arg: &clap::Arg) -> fmt::Result {
     //--------------------
 
     let possible_values = arg
-        .get_possible_values()
-        .unwrap_or_default()
+        .get_value_parser()
+        .possible_values()
         .into_iter()
+        .flatten()
         .filter(|pv| !pv.is_hide_set())
         .collect::<Vec<_>>();
 
     // Print possible values for options that take a value, but not for flags
     // that can only be either present or absent and do not take a value.
-    if !possible_values.is_empty()
-        && !matches!(arg.get_action(), clap::ArgAction::SetTrue)
-    {
-        let any_have_help: bool =
-            possible_values.iter().any(|pv| pv.get_help().is_some());
+    if !possible_values.is_empty() && !matches!(arg.get_action(), clap::ArgAction::SetTrue) {
+        let any_have_help: bool = possible_values.iter().any(|pv| pv.get_help().is_some());
 
         if any_have_help {
             // If any of the possible values have help text, print them
@@ -548,7 +532,7 @@ fn write_arg_markdown(buffer: &mut String, arg: &clap::Arg) -> fmt::Result {
                 .map(|pv| match pv.get_help() {
                     Some(help) => {
                         format!("  - `{}`:\n    {}\n", pv.get_name(), help)
-                    },
+                    }
                     None => format!("  - `{}`\n", pv.get_name()),
                 })
                 .collect::<Vec<String>>()
