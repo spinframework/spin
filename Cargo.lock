@@ -8721,6 +8721,7 @@ name = "spin-factors-test"
 version = "3.5.0-pre0"
 dependencies = [
  "spin-app",
+ "spin-common",
  "spin-factors",
  "spin-loader",
  "spin-telemetry",
@@ -9014,6 +9015,7 @@ dependencies = [
  "spin-key-value-azure",
  "spin-key-value-redis",
  "spin-key-value-spin",
+ "spin-locked-app",
  "spin-sqlite",
  "spin-trigger",
  "spin-variables-azure",
@@ -9237,8 +9239,10 @@ dependencies = [
  "azure_identity 0.20.0",
  "azure_security_keyvault",
  "serde",
+ "spin-common",
  "spin-expressions",
  "spin-factors",
+ "spin-locked-app",
  "spin-world",
  "tracing",
 ]
@@ -9249,6 +9253,7 @@ version = "3.5.0-pre0"
 dependencies = [
  "dotenvy",
  "serde",
+ "spin-common",
  "spin-expressions",
  "spin-factors",
  "spin-world",
