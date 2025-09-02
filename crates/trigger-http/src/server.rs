@@ -63,10 +63,10 @@ pub struct HttpServer<F: RuntimeFactors> {
     router: Router,
     /// The app being triggered.
     trigger_app: TriggerApp<F>,
-    // Component ID -> component trigger config
-    component_trigger_configs: HashMap<spin_http::routes::TriggerLookupKey, HttpTriggerConfig>,
-    // Component ID -> handler type
-    component_handler_types: HashMap<String, HandlerType>,
+    // Component ID -> handler info
+    component_handler_types: HashMap<String, (HandlerType, Option<HttpExecutorType>)>,
+    // Trigger ID -> static response
+    static_response_lookup: HashMap<String, spin_http::config::StaticResponse>,
 }
 
 impl<F: RuntimeFactors> HttpServer<F> {
@@ -116,7 +116,8 @@ impl<F: RuntimeFactors> HttpServer<F> {
         );
 
         // Now that router is built we can merge duplicate routes by component
-        let component_trigger_configs = HashMap::from_iter(component_trigger_configs);
+        let component_trigger_configs: HashMap<_, _> =
+            HashMap::from_iter(component_trigger_configs);
 
         let component_handler_types = component_trigger_configs
             .iter()
@@ -127,19 +128,31 @@ impl<F: RuntimeFactors> HttpServer<F> {
                         component,
                         &trigger_config.executor,
                     )
-                    .map(|ht| (component.clone(), ht)),
+                    .map(|ht| (component.clone(), (ht, trigger_config.executor.clone()))),
                 ),
                 spin_http::routes::TriggerLookupKey::Trigger(_) => None,
             })
             .collect::<anyhow::Result<_>>()?;
+
+        let static_response_lookup = component_trigger_configs
+            .iter()
+            .filter_map(|(key, trigger_config)| match key {
+                spin_http::routes::TriggerLookupKey::Component(_) => None,
+                spin_http::routes::TriggerLookupKey::Trigger(trigger) => trigger_config
+                    .static_response
+                    .as_ref()
+                    .map(|sr| (trigger.clone(), sr.clone())),
+            })
+            .collect();
+
         Ok(Self {
             listen_addr,
             tls_config,
             find_free_port,
             router,
             trigger_app,
-            component_trigger_configs,
             component_handler_types,
+            static_response_lookup,
         })
     }
 
@@ -299,7 +312,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
             .get_metadata(APP_NAME_KEY)?
             .unwrap_or_else(|| "<unnamed>".into());
 
-        let lookup_key = route_match.lookup_key();
+        let lookup_key = route_match.lookup_key().clone();
 
         spin_telemetry::metrics::monotonic_counter!(
             spin.request_count = 1,
@@ -308,29 +321,29 @@ impl<F: RuntimeFactors> HttpServer<F> {
             component_id = lookup_key.to_string()
         );
 
-        let trigger_config = self.component_trigger_configs.get(lookup_key).unwrap();
-
-        match (&trigger_config.component, &trigger_config.static_response) {
-            (Some(component), None) => {
+        match &lookup_key {
+            spin_http::routes::TriggerLookupKey::Component(component_id) => {
+                let (handler_type, executor) =
+                    self.component_handler_types.get(component_id).unwrap();
                 self.respond_wasm_component(
                     req,
                     route_match,
                     server_scheme,
                     client_addr,
-                    component,
-                    &trigger_config.executor,
+                    component_id,
+                    handler_type,
+                    executor,
                 )
                 .await
             }
-            (None, Some(static_response)) => {
-                Self::respond_static_response(static_response)
-            },
-            // These error cases should have been ruled out by this point but belt and braces
-            (None, None) => Err(anyhow::anyhow!("Triggers must specify either component or static_response - neither is specified for {}", route_match.raw_route())),
-            (Some(_), Some(_)) => Err(anyhow::anyhow!("Triggers must specify either component or static_response - both are specified for {}", route_match.raw_route())),
+            spin_http::routes::TriggerLookupKey::Trigger(trigger_id) => {
+                let sr = self.static_response_lookup.get(trigger_id).unwrap();
+                Self::respond_static_response(sr)
+            }
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn respond_wasm_component(
         self: &Arc<Self>,
         req: Request<Body>,
@@ -338,6 +351,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         server_scheme: Scheme,
         client_addr: SocketAddr,
         component_id: &str,
+        handler_type: &HandlerType,
         executor: &Option<HttpExecutorType>,
     ) -> anyhow::Result<Response<Body>> {
         let mut instance_builder = self.trigger_app.prepare(component_id)?;
@@ -356,7 +370,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         outbound_http.set_request_interceptor(OutboundHttpInterceptor::new(self.clone()))?;
 
         // Prepare HTTP executor
-        let handler_type = self.component_handler_types.get(component_id).unwrap();
+        // let handler_type = self.component_handler_types.get(component_id).unwrap();
         let executor = executor.as_ref().unwrap_or(&HttpExecutorType::Http);
 
         let res = match executor {
