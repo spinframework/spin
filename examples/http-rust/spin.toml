@@ -11,8 +11,8 @@ route = "/hello"
 component = "hello"
 
 [component.hello]
-source = "target/wasm32-wasip1/release/http_rust.wasm"
+source = "target/wasm32-wasip2/release/http_rust.wasm"
 description = "A simple component that returns hello."
 [component.hello.build]
-command = "cargo build --target wasm32-wasip1 --release"
+command = "cargo build --target wasm32-wasip2 --release"
 watch = ["src/**/*.rs", "Cargo.toml"]

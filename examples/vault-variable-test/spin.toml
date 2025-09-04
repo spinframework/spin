@@ -14,12 +14,12 @@ component = "vault-variable-test"
 secret = { required = true }
 
 [component.vault-variable-test]
-source = "target/wasm32-wasip1/release/vault_variable_test.wasm"
+source = "target/wasm32-wasip2/release/vault_variable_test.wasm"
 allowed_outbound_hosts = []
 
 [component.vault-variable-test.variables]
 token = "{{ secret }}"
 
 [component.vault-variable-test.build]
-command = "cargo build --target wasm32-wasip1 --release"
+command = "cargo build --target wasm32-wasip2 --release"
 watch = ["src/**/*.rs", "Cargo.toml"]
