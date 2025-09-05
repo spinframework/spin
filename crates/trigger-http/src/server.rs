@@ -309,7 +309,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
         outbound_http.set_request_interceptor(OutboundHttpInterceptor::new(self.clone()))?;
 
         // Prepare HTTP executor
-        let trigger_config = self.component_trigger_configs.get(component_id).unwrap();
+        let trigger_config = self
+            .component_trigger_configs
+            .get(component_id)
+            .with_context(|| format!("unknown component ID {component_id:?}"))?;
         let handler_type = self.component_handler_types.get(component_id).unwrap();
         let executor = trigger_config
             .executor
