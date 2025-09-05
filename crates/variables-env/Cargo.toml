@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 dotenvy = "0.15"
 serde = { workspace = true }
+spin-common = { path = "../common" }
 spin-expressions = { path = "../expressions" }
 spin-factors = { path = "../factors" }
 spin-world = { path = "../world" }
