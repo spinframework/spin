@@ -66,12 +66,17 @@ impl ManifestBuildInfo {
 /// given (v1 or v2) manifest path. If the manifest cannot be loaded, the
 /// function attempts fallback: if fallback succeeds, result is Ok but the load error
 /// is also returned via the second part of the return value tuple.
-pub async fn component_build_configs(manifest_file: impl AsRef<Path>) -> Result<ManifestBuildInfo> {
+pub async fn component_build_configs(
+    manifest_file: impl AsRef<Path>,
+    profile: Option<&str>,
+) -> Result<ManifestBuildInfo> {
     let manifest = spin_manifest::manifest_from_file(&manifest_file);
     match manifest {
         Ok(mut manifest) => {
+            manifest.ensure_profile(profile)?;
+
             spin_manifest::normalize::normalize_manifest(&mut manifest);
-            let components = build_configs_from_manifest(&manifest);
+            let components = build_configs_from_manifest(&manifest, profile);
             let deployment_targets = deployment_targets_from_manifest(&manifest);
             Ok(ManifestBuildInfo::Loadable {
                 components,
@@ -101,13 +106,14 @@ pub async fn component_build_configs(manifest_file: impl AsRef<Path>) -> Result<
 
 fn build_configs_from_manifest(
     manifest: &spin_manifest::schema::v2::AppManifest,
+    profile: Option<&str>,
 ) -> Vec<ComponentBuildInfo> {
     manifest
         .components
         .iter()
         .map(|(id, c)| ComponentBuildInfo {
             id: id.to_string(),
-            build: c.build.clone(),
+            build: c.build(profile),
         })
         .collect()
 }

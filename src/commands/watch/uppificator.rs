@@ -6,6 +6,7 @@ pub(crate) struct Uppificator {
     pub spin_bin: PathBuf,
     pub up_args: Vec<String>,
     pub manifest: PathBuf,
+    pub profile: Option<String>,
     pub clear_screen: bool,
     pub watched_changes: tokio::sync::watch::Receiver<Uuid>,
     pub pause_feed: tokio::sync::mpsc::Receiver<Pause>,
@@ -42,6 +43,9 @@ impl Uppificator {
                 .arg("-f")
                 .arg(&self.manifest)
                 .args(&self.up_args);
+            if let Some(profile) = &self.profile {
+                cmd.arg("--profile").arg(profile);
+            }
             let mut child = match cmd.group_spawn() {
                 Ok(ch) => ch,
                 Err(e) => {

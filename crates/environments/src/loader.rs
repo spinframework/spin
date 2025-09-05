@@ -67,6 +67,7 @@ impl ApplicationToValidate {
     fn component_source<'a>(
         &'a self,
         trigger: &'a spin_manifest::schema::v2::Trigger,
+        profile: Option<&str>,
     ) -> anyhow::Result<ComponentSource<'a>> {
         let component_spec = trigger
             .component
@@ -75,8 +76,8 @@ impl ApplicationToValidate {
         let (id, source, dependencies, service_chaining) = match component_spec {
             spin_manifest::schema::v2::ComponentSpec::Inline(c) => (
                 trigger.id.as_str(),
-                &c.source,
-                &c.dependencies,
+                &c.source(profile),
+                &c.dependencies(profile),
                 spin_loader::requires_service_chaining(c),
             ),
             spin_manifest::schema::v2::ComponentSpec::Reference(r) => {
@@ -89,8 +90,8 @@ impl ApplicationToValidate {
                 };
                 (
                     id,
-                    &component.source,
-                    &component.dependencies,
+                    &component.source(profile),
+                    &component.dependencies(profile),
                     spin_loader::requires_service_chaining(component),
                 )
             }
@@ -116,11 +117,12 @@ impl ApplicationToValidate {
 
     pub(crate) async fn components_by_trigger_type(
         &self,
+        profile: Option<&str>,
     ) -> anyhow::Result<Vec<(String, Vec<ComponentToValidate<'_>>)>> {
         use futures::FutureExt;
 
         let components_by_trigger_type_futs = self.triggers().map(|(ty, ts)| {
-            self.components_for_trigger(ts)
+            self.components_for_trigger(ts, profile)
                 .map(|css| css.map(|css| (ty.to_owned(), css)))
         });
         let components_by_trigger_type = try_join_all(components_by_trigger_type_futs)
@@ -132,16 +134,20 @@ impl ApplicationToValidate {
     async fn components_for_trigger<'a>(
         &'a self,
         triggers: &'a [spin_manifest::schema::v2::Trigger],
+        profile: Option<&str>,
     ) -> anyhow::Result<Vec<ComponentToValidate<'a>>> {
-        let component_futures = triggers.iter().map(|t| self.load_and_resolve_trigger(t));
+        let component_futures = triggers
+            .iter()
+            .map(|t| self.load_and_resolve_trigger(t, profile));
         try_join_all(component_futures).await
     }
 
     async fn load_and_resolve_trigger<'a>(
         &'a self,
         trigger: &'a spin_manifest::schema::v2::Trigger,
+        profile: Option<&str>,
     ) -> anyhow::Result<ComponentToValidate<'a>> {
-        let component = self.component_source(trigger)?;
+        let component = self.component_source(trigger, profile)?;
 
         let loader = ComponentSourceLoader::new(&self.wasm_loader);
 

@@ -52,6 +52,25 @@ impl AppManifest {
         }
         Ok(())
     }
+
+    /// Whether any component in the application defines the given profile.
+    /// Not every component defines every profile, and components intentionally
+    /// fall back to the anonymouse profile if they are asked for a profile
+    /// they don't define. So this can be used to detect that a user might have
+    /// mistyped a profile (e.g. `spin up --profile deugb`).
+    pub fn ensure_profile(&self, profile: Option<&str>) -> anyhow::Result<()> {
+        let Some(p) = profile else {
+            return Ok(());
+        };
+
+        let is_defined = self.components.values().any(|c| c.profile.contains_key(p));
+
+        if is_defined {
+            Ok(())
+        } else {
+            Err(anyhow!("Profile {p} is not defined in this application"))
+        }
+    }
 }
 
 /// App details
@@ -279,7 +298,7 @@ pub struct Component {
     /// Example: `source = "bin/cart.wasm"`
     ///
     /// Learn more: https://spinframework.dev/writing-apps#the-component-source
-    pub source: ComponentSource,
+    pub(crate) source: ComponentSource,
     /// A human-readable description of the component.
     ///
     /// Example: `description = "Shopping cart"`
@@ -298,7 +317,7 @@ pub struct Component {
     ///
     /// `environment = { DB_URL = "mysql://spin:spin@localhost/dev" }`
     #[serde(default, skip_serializing_if = "Map::is_empty")]
-    pub environment: Map<String, String>,
+    pub(crate) environment: Map<String, String>,
     /// The files the component is allowed to read. Each list entry is either:
     ///
     /// - a glob pattern (e.g. "assets/**/*.jpg"); or
@@ -378,7 +397,7 @@ pub struct Component {
     ///
     /// Learn more: https://spinframework.dev/build
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub build: Option<ComponentBuildConfig>,
+    pub(crate) build: Option<ComponentBuildConfig>,
     /// Settings for custom tools or plugins. Spin ignores this field.
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     #[schemars(schema_with = "json_schema::map_of_toml_tables")]
@@ -394,7 +413,141 @@ pub struct Component {
     ///
     /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
     #[serde(default, skip_serializing_if = "ComponentDependencies::is_empty")]
-    pub dependencies: ComponentDependencies,
+    pub(crate) dependencies: ComponentDependencies,
+    /// Override values to use when building or running a named build profile.
+    ///
+    /// Example: `profile.debug.build.command = "npm run build-debug"`
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub(crate) profile: Map<String, ComponentProfileOverride>,
+}
+
+/// Customisations for a Spin component in a non-default profile.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentProfileOverride {
+    /// The file, package, or URL containing the component Wasm binary.
+    ///
+    /// Example: `source = "bin/debug/cart.wasm"`
+    ///
+    /// Learn more: https://spinframework.dev/writing-apps#the-component-source
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<ComponentSource>,
+
+    /// Environment variables for the Wasm module to be overridden in this profile.
+    /// Environment variables specified in the default profile will still be set
+    /// if not overridden here.
+    ///
+    /// `environment = { DB_URL = "mysql://spin:spin@localhost/dev" }`
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    environment: Map<String, String>,
+
+    /// Wasm Component Model imports to be overridden in this profile.
+    /// Dependencies specified in the default profile will still be composed
+    /// if not overridden here.
+    ///
+    /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
+    #[serde(default, skip_serializing_if = "ComponentDependencies::is_empty")]
+    dependencies: ComponentDependencies,
+
+    /// The command or commands for building the component in non-default profiles.
+    /// If a component has no special build instructions for a profile, the
+    /// default build command is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    build: Option<ComponentProfileBuildOverride>,
+}
+
+/// Customisations for a Spin component build in a non-default profile.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentProfileBuildOverride {
+    /// The command or commands to build the component in a named profile. If multiple commands
+    /// are specified, they are run sequentially from left to right.
+    ///
+    /// Example: `build.command = "cargo build"`
+    ///
+    /// Learn more: https://spinframework.dev/build#setting-up-for-spin-build
+    command: super::common::Commands,
+}
+
+impl Component {
+    fn profile(&self, profile: Option<impl AsRef<str>>) -> Option<&ComponentProfileOverride> {
+        profile.and_then(|p| self.profile.get(p.as_ref()))
+    }
+
+    /// The commands to execute for the build
+    pub fn build_commands(&self, profile: Option<&str>) -> Vec<&String> {
+        let profile_build = self.profile(profile).and_then(|o| o.build.as_ref());
+
+        match profile_build {
+            None => match &self.build {
+                Some(b) => b.command.as_vec(),
+                None => vec![],
+            },
+            Some(b) => b.command.as_vec(),
+        }
+    }
+
+    /// The build configuration for the component
+    pub fn build(&self, profile: Option<&str>) -> Option<ComponentBuildConfig> {
+        let build_config = self.build.clone();
+        let build_profile = self.profile(profile).and_then(|o| o.build.as_ref());
+
+        let Some(build_profile) = build_profile else {
+            return build_config;
+        };
+
+        let Some(mut build_config) = build_config else {
+            return Some(ComponentBuildConfig {
+                command: build_profile.command.clone(),
+                workdir: None,
+                watch: vec![],
+            });
+        };
+
+        build_config.command = build_profile.command.clone();
+
+        Some(build_config)
+    }
+
+    /// The source for the component Wasm binary (e.g. local file, registry reference, etc.).
+    pub fn source(&self, profile: Option<&str>) -> &ComponentSource {
+        let profile_source = self.profile(profile).and_then(|o| o.source.as_ref());
+
+        match profile_source {
+            Some(s) => s,
+            None => &self.source,
+        }
+    }
+
+    /// The component's environment variables
+    pub fn environment(&self, profile: Option<&str>) -> Map<String, String> {
+        let mut environment = self.environment.clone();
+
+        let Some(overrides) = self.profile(profile).map(|o| o.environment.clone()) else {
+            return environment;
+        };
+
+        for (name, value) in overrides {
+            environment.insert(name, value);
+        }
+
+        environment
+    }
+
+    /// The component's dependencies
+    pub fn dependencies(&self, profile: Option<&str>) -> ComponentDependencies {
+        let mut dependencies = self.dependencies.clone();
+
+        let Some(overrides) = self.profile(profile).map(|o| o.dependencies.clone()) else {
+            return dependencies;
+        };
+
+        for (itf, dep) in overrides.inner {
+            dependencies.inner.insert(itf, dep);
+        }
+
+        dependencies
+    }
 }
 
 /// Component dependencies
@@ -765,6 +918,7 @@ mod tests {
             tool: Map::new(),
             dependencies_inherit_configuration: false,
             dependencies: Default::default(),
+            profile: Default::default(),
         }
     }
 
@@ -956,5 +1110,214 @@ mod tests {
         .unwrap()
         .validate()
         .is_err());
+    }
+
+    #[test]
+    fn profiles_override_source() {
+        let manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+            [application]
+            name = "trigger-configs"
+            [[trigger.fake]]
+            component = "profile-test"
+            [component.profile-test]
+            source = "original"
+            [component.profile-test.profile.fancy]
+            source = "fancy-schmancy"
+        })
+        .expect("manifest should be valid");
+
+        let id = KebabId::try_from("profile-test".to_owned())
+            .expect("profile-test should have been kebab");
+        let component = manifest
+            .components
+            .get(&id)
+            .expect("should have compopnent with id profile-test");
+
+        assert!(matches!(component.source(None), ComponentSource::Local(p) if p == "original"));
+        assert!(
+            matches!(component.source(Some("fancy")), ComponentSource::Local(p) if p == "fancy-schmancy")
+        );
+        assert!(
+            matches!(component.source(Some("non-existent")), ComponentSource::Local(p) if p == "original")
+        );
+    }
+
+    #[test]
+    fn profiles_override_build_command() {
+        let manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+            [application]
+            name = "trigger-configs"
+            [[trigger.fake]]
+            component = "profile-test"
+            [component.profile-test]
+            source = "original"
+            build.command = "buildme --release"
+            [component.profile-test.profile.fancy]
+            source = "fancy-schmancy"
+            build.command = ["buildme --fancy", "lintme"]
+        })
+        .expect("manifest should be valid");
+
+        let id = KebabId::try_from("profile-test".to_owned())
+            .expect("profile-test should have been kebab");
+        let component = manifest
+            .components
+            .get(&id)
+            .expect("should have compopnent with id profile-test");
+
+        assert_eq!(
+            1,
+            component
+                .build(None)
+                .expect("should have default build")
+                .commands()
+                .len()
+        );
+        assert_eq!(
+            "buildme --release",
+            component
+                .build(None)
+                .expect("should have default build")
+                .commands()[0]
+        );
+
+        assert_eq!(
+            2,
+            component
+                .build(Some("fancy"))
+                .expect("should have fancy build")
+                .commands()
+                .len()
+        );
+        assert_eq!(
+            "buildme --fancy",
+            component
+                .build(Some("fancy"))
+                .expect("should have fancy build")
+                .commands()[0]
+        );
+        assert_eq!(
+            "lintme",
+            component
+                .build(Some("fancy"))
+                .expect("should have fancy build")
+                .commands()[1]
+        );
+
+        assert_eq!(
+            1,
+            component
+                .build(Some("non-existent"))
+                .expect("should fall back to default build")
+                .commands()
+                .len()
+        );
+        assert_eq!(
+            "buildme --release",
+            component
+                .build(Some("non-existent"))
+                .expect("should fall back to default build")
+                .commands()[0]
+        );
+    }
+
+    #[test]
+    fn profiles_can_have_build_command_when_default_doesnt() {
+        let manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+            [application]
+            name = "trigger-configs"
+            [[trigger.fake]]
+            component = "profile-test"
+            [component.profile-test]
+            source = "original"
+            [component.profile-test.profile.fancy]
+            source = "fancy-schmancy"
+            build.command = ["buildme --fancy", "lintme"]
+        })
+        .expect("manifest should be valid");
+
+        let id = KebabId::try_from("profile-test".to_owned())
+            .expect("profile-test should have been kebab");
+        let component = manifest
+            .components
+            .get(&id)
+            .expect("should have compopnent with id profile-test");
+
+        assert!(component.build(None).is_none());
+
+        assert_eq!(
+            2,
+            component
+                .build(Some("fancy"))
+                .expect("should have fancy build")
+                .commands()
+                .len()
+        );
+        assert_eq!(
+            "buildme --fancy",
+            component
+                .build(Some("fancy"))
+                .expect("should have fancy build")
+                .commands()[0]
+        );
+        assert_eq!(
+            "lintme",
+            component
+                .build(Some("fancy"))
+                .expect("should have fancy build")
+                .commands()[1]
+        );
+    }
+
+    #[test]
+    fn profiles_override_env_vars() {
+        let manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+            [application]
+            name = "trigger-configs"
+            [[trigger.fake]]
+            component = "profile-test"
+            [component.profile-test]
+            source = "original"
+            environment = { DB_URL = "pg://production" }
+            [component.profile-test.profile.fancy]
+            environment = { DB_URL = "pg://fancy", FANCINESS = "1" }
+        })
+        .expect("manifest should be valid");
+
+        let id = KebabId::try_from("profile-test".to_owned())
+            .expect("profile-test should have been kebab");
+        let component = manifest
+            .components
+            .get(&id)
+            .expect("should have compopnent with id profile-test");
+
+        assert_eq!(1, component.environment(None).len());
+        assert_eq!(
+            "pg://production",
+            component
+                .environment(None)
+                .get("DB_URL")
+                .expect("DB_URL should have been set")
+        );
+
+        assert_eq!(2, component.environment(Some("fancy")).len());
+        assert_eq!(
+            "pg://fancy",
+            component
+                .environment(Some("fancy"))
+                .get("DB_URL")
+                .expect("DB_URL should have been set")
+        );
+        assert_eq!(
+            "1",
+            component
+                .environment(Some("fancy"))
+                .get("FANCINESS")
+                .expect("FANCINESS should have been set")
+        );
     }
 }

@@ -33,14 +33,14 @@ impl PatientWasm {
     }
 
     pub fn source_path(&self) -> Option<&Path> {
-        match &self.component.source {
+        match &self.component.source(None) {
             v2::ComponentSource::Local(path) => Some(Path::new(path)),
             _ => None,
         }
     }
 
     pub fn abs_source_path(&self) -> Option<PathBuf> {
-        match &self.component.source {
+        match &self.component.source(None) {
             v2::ComponentSource::Local(path) => {
                 // TODO: We probably need a doctor check to see if the path can be expanded!
                 // For now, fall back to the literal path.
@@ -54,7 +54,7 @@ impl PatientWasm {
     }
 
     pub fn has_build(&self) -> bool {
-        self.component.build.is_some()
+        self.component.build(None).is_some()
     }
 }
 
