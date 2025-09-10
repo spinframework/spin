@@ -1,7 +1,7 @@
 pub mod provider;
 mod template;
 
-use std::{borrow::Cow, collections::HashMap, fmt::Debug};
+use std::{borrow::Cow, collections::HashMap, fmt::Debug, vec};
 
 use spin_locked_app::Variable;
 
@@ -10,6 +10,8 @@ pub use async_trait;
 pub use provider::Provider;
 use template::Part;
 pub use template::Template;
+
+use crate::provider::ProviderVariableKind;
 
 /// A [`ProviderResolver`] that can be shared.
 pub type SharedPreparedResolver =
@@ -88,6 +90,54 @@ impl ProviderResolver {
             variables.insert(name.clone(), value);
         }
         Ok(PreparedResolver { variables })
+    }
+
+    /// Ensures that all required variables are resolvable at startup
+    pub async fn ensure_required_variables_resolvable(&self) -> Result<()> {
+        // If a dynamic provider is available, skip validation.
+        if self
+            .providers
+            .iter()
+            .any(|p| p.kind() == ProviderVariableKind::Dynamic)
+        {
+            return Ok(());
+        }
+
+        let mut unvalidated_keys = vec![];
+        for key in self.internal.variables.keys() {
+            // If default value is provided, skip validation.
+            if let Some(value) = self.internal.variables.get(key) {
+                if value.default.is_some() {
+                    continue;
+                }
+            }
+
+            let mut resolved = false;
+
+            for provider in &self.providers {
+                if provider
+                    .get(&Key(key))
+                    .await
+                    .map_err(Error::Provider)?
+                    .is_some()
+                {
+                    resolved = true;
+                    break;
+                }
+            }
+
+            if !resolved {
+                unvalidated_keys.push(key);
+            }
+        }
+
+        if unvalidated_keys.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Provider(anyhow::anyhow!(
+                "no provider resolved required variable(s): {unvalidated_keys:?}",
+            )))
+        }
     }
 
     async fn resolve_variable(&self, key: &str) -> Result<String> {
@@ -310,6 +360,7 @@ mod tests {
     use async_trait::async_trait;
 
     use super::*;
+    use crate::provider::ProviderVariableKind;
 
     #[derive(Debug)]
     struct TestProvider;
@@ -322,6 +373,10 @@ mod tests {
                 "broken" => anyhow::bail!("broken"),
                 _ => Ok(None),
             }
+        }
+
+        fn kind(&self) -> ProviderVariableKind {
+            ProviderVariableKind::Static
         }
     }
 
