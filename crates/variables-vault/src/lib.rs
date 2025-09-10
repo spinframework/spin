@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use spin_expressions::async_trait::async_trait;
+use spin_expressions::{async_trait::async_trait, provider::ProviderVariableKind};
 use spin_factors::anyhow::{self, Context as _};
 use tracing::{instrument, Level};
 use vaultrs::{
@@ -23,6 +23,7 @@ pub struct VaultVariablesProvider {
     /// The optional prefix to use for all keys.
     #[serde(default)]
     prefix: Option<String>,
+    kind: ProviderVariableKind,
 }
 
 #[async_trait]
@@ -51,5 +52,9 @@ impl Provider for VaultVariablesProvider {
             // Other Vault error so bail rather than looking elsewhere
             Err(e) => Err(e).context("Failed to check Vault for config"),
         }
+    }
+
+    fn kind(&self) -> &ProviderVariableKind {
+        &self.kind
     }
 }

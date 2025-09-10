@@ -93,6 +93,7 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
             HandlerType::Wagi(_) => unreachable!("should have used WagiExecutor instead"),
         };
 
+        let span = tracing::debug_span!("execute_wasi");
         let handle = task::spawn(
             async move {
                 let result = match handler {
@@ -100,21 +101,21 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
                         handler
                             .wasi_http_incoming_handler()
                             .call_handle(&mut store, request, response)
-                            .in_current_span()
+                            .instrument(span)
                             .await
                     }
                     Handler::Handler2023_10_18(handler) => {
                         handler
                             .wasi_http0_2_0_rc_2023_10_18_incoming_handler()
                             .call_handle(&mut store, request, response)
-                            .in_current_span()
+                            .instrument(span)
                             .await
                     }
                     Handler::Handler2023_11_10(handler) => {
                         handler
                             .wasi_http0_2_0_rc_2023_11_10_incoming_handler()
                             .call_handle(&mut store, request, response)
-                            .in_current_span()
+                            .instrument(span)
                             .await
                     }
                 };

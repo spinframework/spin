@@ -145,7 +145,7 @@ lazy_static = "1.5"
 path-absolutize = "3"
 quote = "1"
 rand = "0.9"
-redis = "0.32.5"
+redis = "0.29"
 regex = "1"
 reqwest = { version = "0.12", features = ["stream", "blocking"] }
 rusqlite = "0.34"

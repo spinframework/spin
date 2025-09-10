@@ -9,7 +9,6 @@
 // - Code should have at least 2 dependents
 
 pub mod arg_parser;
-pub mod assert;
 pub mod data_dir;
 pub mod paths;
 pub mod sha256;

@@ -1,4 +1,4 @@
-use spin_expressions::{Key, Provider};
+use spin_expressions::{provider::ProviderVariableKind, Key, Provider};
 use spin_factor_variables::{runtime_config::RuntimeConfig, VariablesFactor};
 use spin_factors::{anyhow, RuntimeFactors};
 use spin_factors_test::{toml, TestEnvironment};
@@ -45,5 +45,9 @@ impl Provider for MockProvider {
             "foo" => Ok(Some("bar".to_string())),
             _ => Ok(None),
         }
+    }
+
+    fn kind(&self) -> &ProviderVariableKind {
+        &ProviderVariableKind::Static
     }
 }

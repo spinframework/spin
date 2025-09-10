@@ -85,6 +85,10 @@ impl AppState {
         let template = Template::new(expr)?;
         self.expression_resolver.resolve_template(&template).await
     }
+
+    pub fn expression_resolver(&self) -> &Arc<ExpressionResolver> {
+        &self.expression_resolver
+    }
 }
 
 pub struct InstanceState {

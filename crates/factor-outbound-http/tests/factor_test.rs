@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use anyhow::bail;
 use http::{Request, Uri};
-use spin_common::{assert_matches, assert_not_matches};
 use spin_factor_outbound_http::{OutboundHttpFactor, SelfRequestOrigin};
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_variables::VariablesFactor;
@@ -32,10 +31,10 @@ async fn allowed_host_is_allowed() -> anyhow::Result<()> {
 
     // Different systems handle the discard prefix differently; some will
     // immediately reject it while others will silently let it time out
-    assert_matches!(
-        future_resp.unwrap_ready().unwrap(),
-        Err(ErrorCode::ConnectionRefused | ErrorCode::ConnectionTimeout),
-    );
+    match future_resp.unwrap_ready().unwrap() {
+        Err(ErrorCode::ConnectionRefused | ErrorCode::ConnectionTimeout) => (),
+        other => bail!("expected Err(ConnectionRefused | ConnectionTimeout), got {other:?}"),
+    };
     Ok(())
 }
 
@@ -53,10 +52,10 @@ async fn self_request_smoke_test() -> anyhow::Result<()> {
 
     // Different systems handle the discard prefix differently; some will
     // immediately reject it while others will silently let it time out
-    assert_matches!(
-        future_resp.unwrap_ready().unwrap(),
-        Err(ErrorCode::ConnectionRefused | ErrorCode::ConnectionTimeout),
-    );
+    match future_resp.unwrap_ready().unwrap() {
+        Err(ErrorCode::ConnectionRefused | ErrorCode::ConnectionTimeout) => (),
+        other => bail!("expected Err(ConnectionRefused | ConnectionTimeout), got {other:?}"),
+    };
     Ok(())
 }
 
@@ -68,10 +67,10 @@ async fn disallowed_host_fails() -> anyhow::Result<()> {
     let req = Request::get("https://denied.test").body(Default::default())?;
     let mut future_resp = wasi_http.send_request(req, test_request_config())?;
     future_resp.ready().await;
-    assert_matches!(
-        future_resp.unwrap_ready().unwrap(),
-        Err(ErrorCode::HttpRequestDenied),
-    );
+    match future_resp.unwrap_ready().unwrap() {
+        Ok(_) => bail!("expected Err, got Ok"),
+        Err(err) => assert!(matches!(err, ErrorCode::HttpRequestDenied)),
+    };
     Ok(())
 }
 
@@ -90,11 +89,11 @@ async fn disallowed_private_ips_fails() -> anyhow::Result<()> {
             Ok(_) => {}
             // If private IPs are disallowed, we should get an error saying the destination is prohibited
             Err(err) if !allow_private_ips => {
-                assert_matches!(err, ErrorCode::DestinationIpProhibited);
+                assert!(matches!(err, ErrorCode::DestinationIpProhibited))
             }
             // Otherwise, we should get some non-DestinationIpProhibited error
             Err(err) => {
-                assert_not_matches!(err, ErrorCode::DestinationIpProhibited);
+                assert!(!matches!(err, ErrorCode::DestinationIpProhibited))
             }
         };
         Ok(())

@@ -6,7 +6,7 @@ use std::{
 };
 
 use serde::Deserialize;
-use spin_expressions::{Key, Provider};
+use spin_expressions::{provider::ProviderVariableKind, Key, Provider};
 use spin_factors::anyhow::{self, Context as _};
 use spin_world::async_trait;
 use tracing::{instrument, Level};
@@ -35,6 +35,7 @@ pub struct EnvVariablesProvider {
     env_fetcher: EnvFetcherFn,
     dotenv_path: Option<PathBuf>,
     dotenv_cache: OnceLock<HashMap<String, String>>,
+    kind: ProviderVariableKind,
 }
 
 impl Default for EnvVariablesProvider {
@@ -44,6 +45,7 @@ impl Default for EnvVariablesProvider {
             env_fetcher: Box::new(|s| std::env::var(s)),
             dotenv_path: Some(".env".into()),
             dotenv_cache: Default::default(),
+            kind: Default::default(),
         }
     }
 }
@@ -66,6 +68,7 @@ impl EnvVariablesProvider {
             dotenv_path,
             env_fetcher: Box::new(env_fetcher),
             dotenv_cache: Default::default(),
+            kind: ProviderVariableKind::Static,
         }
     }
 
@@ -131,6 +134,10 @@ impl Provider for EnvVariablesProvider {
     #[instrument(name = "spin_variables.get_from_env", level = Level::DEBUG, skip(self), err(level = Level::INFO))]
     async fn get(&self, key: &Key) -> anyhow::Result<Option<String>> {
         tokio::task::block_in_place(|| self.get_sync(key))
+    }
+
+    fn kind(&self) -> &ProviderVariableKind {
+        &self.kind
     }
 }
 

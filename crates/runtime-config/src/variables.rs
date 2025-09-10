@@ -1,3 +1,5 @@
+//! The runtime configuration for the variables factor used in the Spin CLI.
+
 use serde::Deserialize;
 use spin_expressions::Provider;
 use spin_factor_variables::runtime_config::RuntimeConfig;

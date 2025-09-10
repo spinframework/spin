@@ -4079,7 +4079,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2",
  "tokio",
  "tower-service",
  "tracing",
@@ -4214,7 +4214,7 @@ dependencies = [
  "http-body 1.0.1",
  "hyper 1.5.0",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2",
  "tokio",
  "tower-service",
  "tracing",
@@ -5401,7 +5401,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "socket2 0.5.7",
+ "socket2",
  "thiserror 2.0.12",
  "tokio",
  "tokio-native-tls",
@@ -6771,7 +6771,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls 0.23.18",
- "socket2 0.5.7",
+ "socket2",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -6803,7 +6803,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.7",
+ "socket2",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -7005,14 +7005,36 @@ checksum = "03251193000f4bd3b042892be858ee50e8b3719f2b08e5833ac4353724632430"
 
 [[package]]
 name = "redis"
-version = "0.32.5"
+version = "0.25.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cd3650deebc68526b304898b192fa4102a4ef0b9ada24da096559cb60e0eef8"
+checksum = "e0d7a6955c7511f60f3ba9e86c6d02b3c3f144f8c24b288d1f4e18074ab8bbec"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "combine",
+ "futures-util",
+ "itoa",
+ "native-tls",
+ "percent-encoding",
+ "pin-project-lite",
+ "ryu",
+ "sha1_smol",
+ "socket2",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "redis"
+version = "0.29.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bc42f3a12fd4408ce64d8efef67048a924e543bd35c6591c0447fda9054695f"
 dependencies = [
  "arc-swap",
  "backon",
  "bytes",
- "cfg-if",
  "combine",
  "futures-channel",
  "futures-util",
@@ -7023,7 +7045,7 @@ dependencies = [
  "pin-project-lite",
  "ryu",
  "sha1_smol",
- "socket2 0.6.0",
+ "socket2",
  "tokio",
  "tokio-native-tls",
  "tokio-util",
@@ -8179,16 +8201,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "socket2"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "233504af464074f9d066d7b5416c5f9b894a5862a6506e306f7b816cdd6f1807"
-dependencies = [
- "libc",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "spdx"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8264,7 +8276,7 @@ dependencies = [
  "openssl",
  "path-absolutize",
  "pretty_assertions",
- "redis",
+ "redis 0.29.5",
  "regex",
  "reqwest 0.12.9",
  "rpassword",
@@ -8444,6 +8456,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "serde",
  "spin-locked-app",
  "thiserror 2.0.12",
  "tokio",
@@ -8505,7 +8518,6 @@ dependencies = [
  "reqwest 0.12.9",
  "rustls 0.23.18",
  "serde",
- "spin-common",
  "spin-factor-outbound-networking",
  "spin-factor-variables",
  "spin-factors",
@@ -8616,7 +8628,7 @@ name = "spin-factor-outbound-redis"
 version = "3.5.0-pre0"
 dependencies = [
  "anyhow",
- "redis",
+ "redis 0.25.4",
  "spin-core",
  "spin-factor-outbound-networking",
  "spin-factor-variables",
@@ -8785,7 +8797,7 @@ name = "spin-key-value-redis"
 version = "3.5.0-pre0"
 dependencies = [
  "anyhow",
- "redis",
+ "redis 0.29.5",
  "serde",
  "spin-core",
  "spin-factor-key-value",
@@ -9158,6 +9170,7 @@ dependencies = [
  "spin-core",
  "spin-factor-key-value",
  "spin-factor-sqlite",
+ "spin-factor-variables",
  "spin-factor-wasi",
  "spin-factors",
  "spin-factors-executor",
@@ -9207,7 +9220,7 @@ version = "3.5.0-pre0"
 dependencies = [
  "anyhow",
  "futures",
- "redis",
+ "redis 0.29.5",
  "serde",
  "spin-factor-variables",
  "spin-factors",
@@ -9860,7 +9873,7 @@ dependencies = [
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.5.7",
+ "socket2",
  "tokio-macros",
  "windows-sys 0.52.0",
 ]
@@ -9906,7 +9919,7 @@ dependencies = [
  "postgres-protocol",
  "postgres-types",
  "rand 0.8.5",
- "socket2 0.5.7",
+ "socket2",
  "tokio",
  "tokio-util",
  "whoami",
@@ -10037,7 +10050,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost 0.13.3",
- "socket2 0.5.7",
+ "socket2",
  "tokio",
  "tokio-stream",
  "tower 0.4.13",

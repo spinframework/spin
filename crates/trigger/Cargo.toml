@@ -28,6 +28,7 @@ spin-compose = { path = "../compose" }
 spin-core = { path = "../core" }
 spin-factor-key-value = { path = "../factor-key-value" }
 spin-factor-sqlite = { path = "../factor-sqlite" }
+spin-factor-variables = { path = "../factor-variables" }
 spin-factor-wasi = { path = "../factor-wasi" }
 spin-factors = { path = "../factors" }
 spin-factors-executor = { path = "../factors-executor" }

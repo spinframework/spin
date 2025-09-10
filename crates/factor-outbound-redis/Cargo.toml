@@ -6,7 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-redis = { workspace = true , features = ["tokio-comp", "tokio-native-tls-comp", "aio"] }
+redis = { version = "0.25", features = ["tokio-comp", "tokio-native-tls-comp", "aio"] }
 spin-core = { path = "../core" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
