@@ -465,12 +465,14 @@ impl AllowedHostsConfig {
     pub fn parse<S: AsRef<str>>(
         hosts: &[S],
         resolver: &spin_expressions::PreparedResolver,
+        component_ids: &[String],
     ) -> anyhow::Result<AllowedHostsConfig> {
         let partial = Self::parse_partial(hosts)?;
         let allowed = partial
             .into_iter()
             .map(|p| p.resolve(resolver))
             .collect::<anyhow::Result<Vec<_>>>()?;
+        let allowed = Self::expand_wildcard_service_chaining(allowed, component_ids);
         Ok(Self::SpecificHosts(allowed))
     }
 
@@ -500,6 +502,28 @@ impl AllowedHostsConfig {
             }
         }
         Ok(allowed)
+    }
+
+    fn expand_wildcard_service_chaining(
+        hosts: Vec<AllowedHostConfig>,
+        component_ids: &[String],
+    ) -> Vec<AllowedHostConfig> {
+        let expand_one = |host: AllowedHostConfig| match host.host() {
+            HostConfig::AnySubdomain(domain) if domain == SERVICE_CHAINING_DOMAIN_SUFFIX => {
+                let expanded_domains = component_ids
+                    .iter()
+                    .map(|c| format!("{c}{SERVICE_CHAINING_DOMAIN_SUFFIX}"));
+                let expanded_hosts = expanded_domains.map(|d| {
+                    let mut hh = host.clone();
+                    hh.host = HostConfig::Literal(url::Host::Domain(d));
+                    hh
+                });
+                expanded_hosts.collect()
+            }
+            _ => vec![host],
+        };
+
+        hosts.into_iter().flat_map(expand_one).collect()
     }
 
     /// Returns true if the given url is allowed.
@@ -901,10 +925,13 @@ mod test {
 
     #[test]
     fn test_allowed_hosts_respects_allow_all() {
-        assert!(AllowedHostsConfig::parse(&["insecure:allow-all"], &dummy_resolver()).is_err());
+        assert!(
+            AllowedHostsConfig::parse(&["insecure:allow-all"], &dummy_resolver(), &[]).is_err()
+        );
         assert!(AllowedHostsConfig::parse(
             &["spin.fermyon.dev", "insecure:allow-all"],
-            &dummy_resolver()
+            &dummy_resolver(),
+            &[]
         )
         .is_err());
     }
@@ -927,6 +954,7 @@ mod test {
         let allowed = AllowedHostsConfig::parse(
             &["*://spin.fermyon.dev:443", "http://example.com:8383"],
             &dummy_resolver(),
+            &[],
         )
         .unwrap();
         assert!(
@@ -944,7 +972,7 @@ mod test {
     #[test]
     fn test_allowed_hosts_with_trailing_slash() {
         let allowed =
-            AllowedHostsConfig::parse(&["https://my.api.com/"], &dummy_resolver()).unwrap();
+            AllowedHostsConfig::parse(&["https://my.api.com/"], &dummy_resolver(), &[]).unwrap();
         assert!(allowed.allows(&OutboundUrl::parse("https://my.api.com", "https").unwrap()));
         assert!(allowed.allows(&OutboundUrl::parse("https://my.api.com/", "https").unwrap()));
     }
@@ -954,6 +982,7 @@ mod test {
         let allowed = AllowedHostsConfig::parse(
             &["http://*.example.com", "http://*.example2.com:8383"],
             &dummy_resolver(),
+            &[],
         )
         .unwrap();
         assert!(
@@ -976,7 +1005,8 @@ mod test {
 
     #[test]
     fn test_hash_char_in_db_password() {
-        let allowed = AllowedHostsConfig::parse(&["mysql://xyz.com"], &dummy_resolver()).unwrap();
+        let allowed =
+            AllowedHostsConfig::parse(&["mysql://xyz.com"], &dummy_resolver(), &[]).unwrap();
         assert!(
             allowed.allows(&OutboundUrl::parse("mysql://user:pass#word@xyz.com", "mysql").unwrap())
         );
@@ -988,7 +1018,66 @@ mod test {
     #[test]
     fn test_cidr() {
         let allowed =
-            AllowedHostsConfig::parse(&["*://127.0.0.1/24:63551"], &dummy_resolver()).unwrap();
+            AllowedHostsConfig::parse(&["*://127.0.0.1/24:63551"], &dummy_resolver(), &[]).unwrap();
         assert!(allowed.allows(&OutboundUrl::parse("tcp://127.0.0.1:63551", "tcp").unwrap()));
+    }
+
+    fn exact_host(ahc: &AllowedHostConfig) -> String {
+        match ahc.host() {
+            HostConfig::Literal(host) => host.to_string(),
+            _ => panic!("expected host {:?} to be a literal", ahc.host()),
+        }
+    }
+
+    #[test]
+    fn expand_wildcard_service_chaining_lists_all_components() {
+        let component_ids = ["first", "second", "third"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        let allowed = AllowedHostsConfig::parse(
+            &["http://*.spin.internal"],
+            &dummy_resolver(),
+            &component_ids,
+        )
+        .unwrap();
+        let AllowedHostsConfig::SpecificHosts(allowed) = allowed else {
+            panic!("expanded AllowedHostsConfig should be specific hosts");
+        };
+
+        assert_eq!(3, allowed.len());
+
+        assert_eq!("first.spin.internal", exact_host(&allowed[0]));
+        assert_eq!("second.spin.internal", exact_host(&allowed[1]));
+        assert_eq!("third.spin.internal", exact_host(&allowed[2]));
+    }
+
+    #[test]
+    fn expand_wildcard_service_chaining_leaves_others_untouched() {
+        let component_ids = ["first", "second", "third"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        let allowed = AllowedHostsConfig::parse(
+            &[
+                "pg://localhost:5656",
+                "http://*.spin.internal",
+                "https://spinframework.dev",
+            ],
+            &dummy_resolver(),
+            &component_ids,
+        )
+        .unwrap();
+        let AllowedHostsConfig::SpecificHosts(allowed) = allowed else {
+            panic!("expanded AllowedHostsConfig should be specific hosts");
+        };
+
+        assert_eq!(5, allowed.len());
+
+        assert_eq!("localhost", exact_host(&allowed[0]));
+        assert_eq!("first.spin.internal", exact_host(&allowed[1]));
+        assert_eq!("second.spin.internal", exact_host(&allowed[2]));
+        assert_eq!("third.spin.internal", exact_host(&allowed[3]));
+        assert_eq!("spinframework.dev", exact_host(&allowed[4]));
     }
 }

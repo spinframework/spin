@@ -94,6 +94,12 @@ impl Factor for OutboundNetworkingFactor {
             .instance_builder::<VariablesFactor>()?
             .expression_resolver()
             .clone();
+        let component_ids = ctx
+            .app_component()
+            .app
+            .components()
+            .map(|c| c.id().to_string())
+            .collect::<Vec<_>>();
         let allowed_hosts_future = async move {
             let prepared = resolver.prepare().await.inspect_err(|err| {
                 tracing::error!(
@@ -101,7 +107,7 @@ impl Factor for OutboundNetworkingFactor {
                     "Error resolving variables when checking request against allowed outbound hosts",
                 );
             })?;
-            AllowedHostsConfig::parse(&hosts, &prepared).inspect_err(|err| {
+            AllowedHostsConfig::parse(&hosts, &prepared, &component_ids).inspect_err(|err| {
                 tracing::error!(
                     %err, "error.type" = "invalid_allowed_hosts",
                     "Error parsing allowed outbound hosts",
