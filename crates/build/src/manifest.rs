@@ -70,7 +70,7 @@ pub async fn component_build_configs(manifest_file: impl AsRef<Path>) -> Result<
     let manifest = spin_manifest::manifest_from_file(&manifest_file);
     match manifest {
         Ok(mut manifest) => {
-            spin_manifest::normalize::normalize_manifest(&mut manifest);
+            spin_manifest::normalize::normalize_manifest(&mut manifest)?;
             let components = build_configs_from_manifest(&manifest);
             let deployment_targets = deployment_targets_from_manifest(&manifest);
             Ok(ManifestBuildInfo::Loadable {
