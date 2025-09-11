@@ -11,3 +11,6 @@ schemars = { version = "0.8.21", features = ["indexmap2", "semver"] }
 semver = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 wasm-pkg-common = { workspace = true }
+
+[dev-dependencies]
+indexmap = { workspace = true }

@@ -187,6 +187,13 @@ impl TryFrom<toml::Value> for ComponentSpec {
 ///
 /// Example: `"my:dependency" = { path = "path/to/component.wasm", export = "my-export" }`
 ///
+/// - A component in the application. The referenced component binary is composed: additional
+///   configuration such as files, networking, storage, etc. are ignored. This is intended
+///   primarily as a convenience for including dependencies in the manifest so that they
+///   can be built using `spin build`.
+///
+/// Example: `"my:dependency" = { component = "my-dependency", export = "my-export" }`
+///
 /// - A package from an HTTP URL.
 ///
 /// Example: `"my:import" = { url = "https://example.com/component.wasm", sha256 = "sha256:..." }`
@@ -266,6 +273,22 @@ pub enum ComponentDependency {
         /// Example: `"my:dep/import" = { export = "your:impl/export", ... }`
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-url
+        export: Option<String>,
+    },
+    /// `... = { component = "my-dependency" }`
+    #[schemars(description = "")] // schema docs are on the parent
+    AppComponent {
+        /// The ID of the component which implements the dependency.
+        ///
+        /// Example: `"my:dep/import" = { component = "my-dependency" }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
+        component: KebabId,
+        /// The name of the export in the package. If omitted, this defaults to the name of the import.
+        ///
+        /// Example: `"my:dep/import" = { export = "your:impl/export", component = "my-dependency" }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
         export: Option<String>,
     },
 }
