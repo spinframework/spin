@@ -6302,9 +6302,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-lite"
-version = "0.2.15"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "915a1e146535de9163f3987b8944ed8cf49a18bb0056bcebcdcece385cece4ff"
+checksum = "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b"
 
 [[package]]
 name = "pin-utils"
@@ -8484,9 +8484,11 @@ dependencies = [
  "anyhow",
  "bytes",
  "http 1.1.0",
+ "http-body 1.0.1",
  "http-body-util",
  "hyper 1.5.0",
  "hyper-util",
+ "pin-project-lite",
  "reqwest 0.12.9",
  "rustls 0.23.18",
  "serde",
@@ -9175,6 +9177,7 @@ dependencies = [
  "spin-factor-outbound-networking",
  "spin-factor-wasi",
  "spin-factors",
+ "spin-factors-executor",
  "spin-http",
  "spin-telemetry",
  "spin-trigger",
@@ -11042,9 +11045,11 @@ dependencies = [
  "async-trait",
  "bitflags 2.6.0",
  "bumpalo",
+ "bytes",
  "cc",
  "cfg-if",
  "encoding_rs",
+ "futures",
  "fxprof-processed-profile",
  "gimli 0.32.0",
  "hashbrown 0.15.2",
@@ -11332,6 +11337,7 @@ dependencies = [
  "rustls 0.22.4",
  "tokio",
  "tokio-rustls 0.25.0",
+ "tokio-util",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",

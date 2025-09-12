@@ -8,9 +8,11 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 bytes = { workspace = true }
 http = { workspace = true }
+http-body = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
+pin-project-lite = { workspace = true }
 reqwest = { workspace = true, features = ["gzip"] }
 rustls = { workspace = true }
 serde = { workspace = true }

@@ -136,6 +136,7 @@ futures-util = "0.3"
 glob = "0.3"
 heck = "0.5"
 http = "1"
+http-body = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -143,6 +144,7 @@ indexmap = "2"
 itertools = "0.14"
 lazy_static = "1.5"
 path-absolutize = "3"
+pin-project-lite = "0.2.16"
 quote = "1"
 rand = "0.9"
 redis = "0.32.5"
@@ -175,9 +177,9 @@ wasm-metadata = "0.239.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 wasmparser = "0.239.0"
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0" }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0" }
-wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0" }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0", features = ["component-model-async"] }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0", features = ["p3"] }
+wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0", features = ["p3"] }
 wit-component = "0.239.0"
 wit-parser = "0.239.0"
 
