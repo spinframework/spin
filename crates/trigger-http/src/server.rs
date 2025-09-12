@@ -46,6 +46,7 @@ use crate::{
     spin::SpinHttpExecutor,
     wagi::WagiHttpExecutor,
     wasi::WasiHttpExecutor,
+    wasip3::Wasip3HttpExecutor,
     Body, NotFoundRouteKind, TlsConfig, TriggerApp, TriggerInstanceBuilder,
 };
 
@@ -372,6 +373,11 @@ impl<F: RuntimeFactors> HttpServer<F> {
                         .execute(instance_builder, &route_match, req, client_addr)
                         .await
                 }
+                HandlerType::Wasi0_3(indices) => {
+                    Wasip3HttpExecutor(indices)
+                        .execute(instance_builder, &route_match, req, client_addr)
+                        .await
+                }
                 HandlerType::Wasi0_2(_)
                 | HandlerType::Wasi2023_11_10(_)
                 | HandlerType::Wasi2023_10_18(_) => {
@@ -464,7 +470,9 @@ impl<F: RuntimeFactors> HttpServer<F> {
             if !SHOWN_GENERIC_404_WARNING.fetch_or(true, Ordering::Relaxed)
                 && std::io::stderr().is_terminal()
             {
-                terminal::warn!("Request to {route} matched no pattern, and received a generic 404 response. To serve a more informative 404 page, add a catch-all (/...) route.");
+                terminal::warn!(
+                    "Request to {route} matched no pattern, and received a generic 404 response. To serve a more informative 404 page, add a catch-all (/...) route."
+                );
             }
         }
         Ok(Response::builder()

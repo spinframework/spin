@@ -25,6 +25,7 @@ spin-factor-outbound-http = { path = "../factor-outbound-http" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factor-wasi = { path = "../factor-wasi" }
 spin-factors = { path = "../factors" }
+spin-factors-executor = { path = "../factors-executor" }
 spin-http = { path = "../http" }
 spin-telemetry = { path = "../telemetry" }
 spin-trigger = { path = "../trigger" }

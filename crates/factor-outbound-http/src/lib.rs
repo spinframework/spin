@@ -31,6 +31,8 @@ pub use wasmtime_wasi_http::{
     HttpResult,
 };
 
+pub use wasi::{p2_to_p3_error_code, p3_to_p2_error_code};
+
 #[derive(Default)]
 pub struct OutboundHttpFactor {
     _priv: (),
