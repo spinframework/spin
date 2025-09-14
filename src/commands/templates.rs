@@ -79,6 +79,7 @@ pub struct Install {
         long = "dir",
         conflicts_with = INSTALL_FROM_GIT_OPT,
         conflicts_with = INSTALL_FROM_TAR_OPT,
+        value_hint = clap::ValueHint::DirPath,
     )]
     pub dir: Option<PathBuf>,
 
@@ -490,6 +491,7 @@ pub struct List {
 #[derive(ValueEnum, Clone, Debug)]
 pub enum ListFormat {
     Table,
+    NamesOnly,
     Json,
 }
 
@@ -508,6 +510,7 @@ impl List {
                 prompt_install_default_templates(&template_manager).await?;
             }
             ListFormat::Table => self.print_templates_table(&list_results),
+            ListFormat::NamesOnly => self.print_templates_plain(&list_results),
             ListFormat::Json => self.print_templates_json(&list_results)?,
         };
 
@@ -562,6 +565,12 @@ impl List {
                     list_warn_reason_text(warning)
                 );
             }
+        }
+    }
+
+    fn print_templates_plain(&self, list_results: &ListResults) {
+        for template in &list_results.templates {
+            println!("{}", template.id());
         }
     }
 
