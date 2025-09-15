@@ -127,6 +127,7 @@ where
     wasi::clocks::wall_clock::add_to_linker::<_, HasClocks>(linker, clocks_closure)?;
     wasi::filesystem::types::add_to_linker::<_, HasFilesystem>(linker, filesystem_closure)?;
     wasi::filesystem::preopens::add_to_linker::<_, HasFilesystem>(linker, filesystem_closure)?;
+    wasi::io::error::add_to_linker::<_, HasWasi>(linker, closure)?;
     wasi::io::poll::add_to_linker::<_, HasWasi>(linker, closure)?;
     wasi::io::streams::add_to_linker::<_, HasWasi>(linker, closure)?;
     wasi::random::random::add_to_linker::<_, HasWasi>(linker, closure)?;
