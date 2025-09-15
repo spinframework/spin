@@ -9,7 +9,7 @@ use spin_core::{AsState, Component, Config, Engine, State, Store, StoreBuilder, 
 use spin_factor_wasi::{DummyFilesMounter, WasiFactor};
 use spin_factors::{App, AsInstanceState, RuntimeFactors};
 use spin_locked_app::locked::LockedApp;
-use tokio::{fs, io::AsyncWrite};
+use tokio::fs;
 use wasmtime_wasi::I32Exit;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -168,45 +168,4 @@ async fn run_test(
         .await?
         .0
         .map_err(|()| anyhow::anyhow!("command failed"))
-}
-
-// Write with `print!`, required for test output capture
-struct TestWriter(tokio::io::Stdout);
-
-impl std::io::Write for TestWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        print!("{}", String::from_utf8_lossy(buf));
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-impl AsyncWrite for TestWriter {
-    fn poll_write(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &[u8],
-    ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        let this = self.get_mut();
-        std::pin::Pin::new(&mut this.0).poll_write(cx, buf)
-    }
-
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        let this = self.get_mut();
-        std::pin::Pin::new(&mut this.0).poll_flush(cx)
-    }
-
-    fn poll_shutdown(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        let this = self.get_mut();
-        std::pin::Pin::new(&mut this.0).poll_shutdown(cx)
-    }
 }

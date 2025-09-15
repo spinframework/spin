@@ -5,7 +5,7 @@ use spin_factor_wasi::{DummyFilesMounter, WasiFactor};
 use spin_factors::{anyhow, RuntimeFactors};
 use spin_factors_test::{toml, TestEnvironment};
 use wasmtime_wasi::p2::bindings::sockets::instance_network::Host;
-use wasmtime_wasi::SocketAddrUse;
+use wasmtime_wasi::sockets::SocketAddrUse;
 
 #[derive(RuntimeFactors)]
 struct TestFactors {
@@ -35,10 +35,10 @@ async fn configures_wasi_socket_addr_check() -> anyhow::Result<()> {
             ..Default::default()
         })?;
     let mut state = env.build_instance_state().await?;
-    let mut wasi = WasiFactor::get_wasi_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
 
-    let network_resource = wasi.instance_network()?;
-    let network = wasi.table.get(&network_resource)?;
+    let network_resource = sockets.instance_network()?;
+    let network = sockets.table.get(&network_resource)?;
 
     network
         .check_socket_addr(

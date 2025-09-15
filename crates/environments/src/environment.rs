@@ -459,7 +459,7 @@ mod test {
         let mut resolve = wit_parser::Resolve::default();
         let package_id = resolve.push_str("test", wit).expect("should parse WIT");
         let world_id = resolve
-            .select_world(package_id, Some(world))
+            .select_world(&[package_id], Some(world))
             .expect("should select world");
 
         let mut wasm = wit_component::dummy_module(
