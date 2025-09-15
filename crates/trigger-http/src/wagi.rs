@@ -19,7 +19,7 @@ pub struct WagiHttpExecutor<'a> {
 }
 
 impl HttpExecutor for WagiHttpExecutor<'_> {
-    #[instrument(name = "spin_trigger_http.execute_wagi", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wagi_component {}", route_match.component_id())))]
+    #[instrument(name = "spin_trigger_http.execute_wagi", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wagi_component {}", route_match.lookup_key().to_string())))]
     async fn execute<F: RuntimeFactors>(
         &self,
         mut instance_builder: TriggerInstanceBuilder<'_, F>,
@@ -27,7 +27,10 @@ impl HttpExecutor for WagiHttpExecutor<'_> {
         req: Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<Response<Body>> {
-        let component = route_match.component_id();
+        let spin_http::routes::TriggerLookupKey::Component(component) = route_match.lookup_key()
+        else {
+            anyhow::bail!("INCONCEIVABLE");
+        };
 
         tracing::trace!(
             "Executing request using the Wagi executor for component {}",

@@ -1,0 +1,25 @@
+spin_manifest_version = 2
+
+[application]
+name = "static-response"
+authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+version = "0.1.0"
+
+[[trigger.http]]
+route = "/users/:userid/..."
+component = "http-routing"
+
+[component.http-routing]
+source = "%{source=http-routing}"
+
+[[trigger.http]]
+route = "/..."
+static_response = { status_code = 404, body = "not found" }
+
+[[trigger.http]]
+route = "/default-code"
+static_response = { body = "should be 200" }
+
+[[trigger.http]]
+route = "/bob"
+static_response = { status_code = 302, headers = { location = "/users/bob" } }

@@ -21,8 +21,8 @@ pub struct Router {
 /// What a route maps to
 #[derive(Clone, Debug)]
 struct RouteHandler {
-    /// The component ID that the route maps to.
-    component_id: String,
+    /// The handler identifier (typically component ID) that the route maps to.
+    lookup_key: TriggerLookupKey,
     /// The route, including any application base.
     based_route: Cow<'static, str>,
     /// The route, not including any application base.
@@ -30,6 +30,25 @@ struct RouteHandler {
     /// The route, including any application base and capturing information about whether it has a trailing wildcard.
     /// (This avoids re-parsing the route string.)
     parsed_based_route: ParsedRoute,
+}
+
+/// An identifier that can be returned from a RouteMatch and used to look up the trigger
+/// that handles the route.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum TriggerLookupKey {
+    /// The route is handled by the specified Wasm component.
+    Component(String),
+    /// The route is handled directly within the specified trigger.
+    Trigger(String),
+}
+
+impl std::fmt::Display for TriggerLookupKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Component(id) => f.write_str(id),
+            Self::Trigger(id) => f.write_str(id),
+        }
+    }
 }
 
 /// A detected duplicate route.
@@ -50,31 +69,31 @@ impl Router {
     /// that will be populated with any duplicate routes found during the build process.
     pub fn build<'a>(
         base: &str,
-        component_routes: impl IntoIterator<Item = (&'a str, &'a HttpTriggerRouteConfig)>,
+        trigger_routes: impl IntoIterator<Item = (&'a TriggerLookupKey, &'a HttpTriggerRouteConfig)>,
         mut duplicate_routes: Option<&mut Vec<DuplicateRoute>>,
     ) -> Result<Self> {
         // Some information we need to carry between stages of the builder.
         struct RoutingEntry<'a> {
             based_route: String,
             raw_route: &'a str,
-            component_id: &'a str,
+            lookup_key: &'a TriggerLookupKey,
         }
 
-        let mut routes = IndexMap::new();
+        let mut routes: IndexMap<&str, RoutingEntry> = IndexMap::new();
 
         // Filter out private endpoints and capture the routes.
-        let routes_iter = component_routes
+        let routes_iter = trigger_routes
             .into_iter()
-            .filter_map(|(component_id, route)| {
+            .filter_map(|(lookup_key, route)| {
                 match route {
                     HttpTriggerRouteConfig::Route(raw_route) => {
                         let based_route = sanitize_with_base(base, raw_route);
-                        Some(Ok(RoutingEntry { based_route, raw_route, component_id }))
+                        Some(Ok(RoutingEntry { based_route, raw_route, lookup_key }))
                     }
                     HttpTriggerRouteConfig::Private(endpoint) => if endpoint.private {
                         None
                     } else {
-                        Some(Err(anyhow!("route must be a string pattern or '{{ private = true }}': component '{component_id}' has {{ private = false }}")))
+                        Some(Err(anyhow!("route must be a string pattern or '{{ private = true }}': '{lookup_key}' has {{ private = false }}")))
                     }
                 }
             });
@@ -87,11 +106,11 @@ impl Router {
                     let effective_id = routes
                         .get(replaced.raw_route)
                         .unwrap() // Safe because we just inserted it
-                        .component_id
-                        .to_owned();
+                        .lookup_key
+                        .to_string();
                     duplicate_routes.push(DuplicateRoute {
                         route: replaced.based_route,
-                        replaced_id: replaced.component_id.to_owned(),
+                        replaced_id: replaced.lookup_key.to_string(),
                         effective_id,
                     });
                 }
@@ -107,12 +126,12 @@ impl Router {
                 anyhow!(
                     "Error parsing route {} associated with component {}: {e}",
                     re.based_route,
-                    re.component_id
+                    re.lookup_key,
                 )
             })?;
 
             let handler = RouteHandler {
-                component_id: re.component_id.to_string(),
+                lookup_key: re.lookup_key.clone(),
                 based_route: re.based_route.into(),
                 raw_route: re.raw_route.to_string().into(),
                 parsed_based_route: parsed,
@@ -145,10 +164,12 @@ impl Router {
     }
 
     /// Returns the constructed routes.
-    pub fn routes(&self) -> impl Iterator<Item = (&(impl fmt::Display + fmt::Debug), &String)> {
+    pub fn routes(
+        &self,
+    ) -> impl Iterator<Item = (&(impl fmt::Display + fmt::Debug), &TriggerLookupKey)> {
         self.router
             .iter()
-            .map(|(_spec, handler)| (&handler.parsed_based_route, &handler.component_id))
+            .map(|(_spec, handler)| (&handler.parsed_based_route, &handler.lookup_key))
     }
 
     /// true if one or more routes is under the reserved `/.well-known/spin/*`
@@ -230,12 +251,12 @@ pub struct RouteMatch<'router, 'path> {
 
 impl RouteMatch<'_, '_> {
     /// A synthetic match as if the given path was matched against the wildcard route.
-    /// Used in service chaining.
+    /// Used in service chaining; always directs to a component.
     pub fn synthetic(component_id: String, path: String) -> Self {
         Self {
             inner: RouteMatchKind::Synthetic {
                 route_handler: RouteHandler {
-                    component_id,
+                    lookup_key: TriggerLookupKey::Component(component_id),
                     based_route: "/...".into(),
                     raw_route: "/...".into(),
                     parsed_based_route: ParsedRoute::TrailingWildcard(String::new()),
@@ -245,9 +266,9 @@ impl RouteMatch<'_, '_> {
         }
     }
 
-    /// The matched component.
-    pub fn component_id(&self) -> &str {
-        &self.inner.route_handler().component_id
+    /// An identifier for looking up the matched handler.
+    pub fn lookup_key(&self) -> &TriggerLookupKey {
+        &self.inner.route_handler().lookup_key
     }
 
     /// The matched route, as originally written in the manifest, combined with the base.
@@ -419,13 +440,49 @@ impl<T: Into<String>> From<T> for HttpTriggerRouteConfig {
 mod route_tests {
     use super::*;
 
+    fn component_key(value: &str) -> TriggerLookupKey {
+        TriggerLookupKey::Component(value.to_string())
+    }
+
+    fn trigger_key(value: &str) -> TriggerLookupKey {
+        TriggerLookupKey::Trigger(value.to_string())
+    }
+
+    impl TriggerLookupKey {
+        fn component_id(&self) -> &str {
+            match self {
+                TriggerLookupKey::Component(id) => id,
+                TriggerLookupKey::Trigger(_) => {
+                    panic!("expected component ref but was trigger ref")
+                }
+            }
+        }
+    }
+
+    /// Produces a router using component routes only
+    fn component_router<'a>(
+        base: &str,
+        components: impl IntoIterator<Item = (&'a str, &'a str)>,
+        duplicate_routes: Option<&mut Vec<DuplicateRoute>>,
+    ) -> anyhow::Result<Router> {
+        let owned_routes = components
+            .into_iter()
+            .map(|(cid, path)| (component_key(cid), HttpTriggerRouteConfig::from(path)))
+            .collect::<Vec<_>>();
+        let routes = owned_routes.iter().map(|(k, v)| (k, v)); // Yes, I'm afraid this is necessary
+
+        Router::build(base, routes, duplicate_routes)
+    }
+
+    impl RouteMatch<'_, '_> {
+        fn component_id(&self) -> &str {
+            self.lookup_key().component_id()
+        }
+    }
+
     #[test]
     fn test_router_exact() -> Result<()> {
-        let r = Router::build(
-            "/",
-            [("foo", &"/foo".into()), ("foobar", &"/foo/bar".into())],
-            None,
-        )?;
+        let r = component_router("/", [("foo", "/foo"), ("foobar", "/foo/bar")], None)?;
 
         assert_eq!(r.route("/foo")?.component_id(), "foo");
         assert_eq!(r.route("/foo/bar")?.component_id(), "foobar");
@@ -433,12 +490,28 @@ mod route_tests {
     }
 
     #[test]
-    fn test_router_respects_base() -> Result<()> {
+    fn router_returns_trigger_or_component() -> Result<()> {
         let r = Router::build(
-            "/base",
-            [("foo", &"/foo".into()), ("foobar", &"/foo/bar".into())],
+            "/",
+            [
+                (&component_key("compy"), &"/foo".into()),
+                (&trigger_key("triggy"), &"/foo/bar".into()),
+            ],
             None,
         )?;
+
+        assert!(
+            matches!(r.route("/foo")?.lookup_key(), TriggerLookupKey::Component(c) if c == "compy")
+        );
+        assert!(
+            matches!(r.route("/foo/bar")?.lookup_key(), TriggerLookupKey::Trigger(t) if t == "triggy")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_router_respects_base() -> Result<()> {
+        let r = component_router("/base", [("foo", "/foo"), ("foobar", "/foo/bar")], None)?;
 
         assert_eq!(r.route("/base/foo")?.component_id(), "foo");
         assert_eq!(r.route("/base/foo/bar")?.component_id(), "foobar");
@@ -447,7 +520,7 @@ mod route_tests {
 
     #[test]
     fn test_router_wildcard() -> Result<()> {
-        let r = Router::build("/", [("all", &"/...".into())], None)?;
+        let r = component_router("/", [("all", "/...")], None)?;
 
         assert_eq!(r.route("/foo/bar")?.component_id(), "all");
         assert_eq!(r.route("/abc/")?.component_id(), "all");
@@ -461,22 +534,22 @@ mod route_tests {
 
     #[test]
     fn wildcard_routes_use_custom_display() {
-        let routes = Router::build("/", vec![("comp", &"/whee/...".into())], None).unwrap();
+        let routes = component_router("/", vec![("comp", "/whee/...")], None).unwrap();
 
-        let (route, component_id) = routes.routes().next().unwrap();
+        let (route, rh) = routes.routes().next().unwrap();
 
-        assert_eq!("comp", component_id);
+        assert_eq!("comp", rh.component_id());
         assert_eq!("/whee (wildcard)", format!("{route}"));
     }
 
     #[test]
     fn test_router_respects_longest_match() -> Result<()> {
-        let r = Router::build(
+        let r = component_router(
             "/",
             [
-                ("one_wildcard", &"/one/...".into()),
-                ("onetwo_wildcard", &"/one/two/...".into()),
-                ("onetwothree_wildcard", &"/one/two/three/...".into()),
+                ("one_wildcard", "/one/..."),
+                ("onetwo_wildcard", "/one/two/..."),
+                ("onetwothree_wildcard", "/one/two/three/..."),
             ],
             None,
         )?;
@@ -487,12 +560,12 @@ mod route_tests {
         );
 
         // ...regardless of order
-        let r = Router::build(
+        let r = component_router(
             "/",
             [
-                ("onetwothree_wildcard", &"/one/two/three/...".into()),
-                ("onetwo_wildcard", &"/one/two/...".into()),
-                ("one_wildcard", &"/one/...".into()),
+                ("onetwothree_wildcard", "/one/two/three/..."),
+                ("onetwo_wildcard", "/one/two/..."),
+                ("one_wildcard", "/one/..."),
             ],
             None,
         )?;
@@ -506,11 +579,7 @@ mod route_tests {
 
     #[test]
     fn test_router_exact_beats_wildcard() -> Result<()> {
-        let r = Router::build(
-            "/",
-            [("one_exact", &"/one".into()), ("wildcard", &"/...".into())],
-            None,
-        )?;
+        let r = component_router("/", [("one_exact", "/one"), ("wildcard", "/...")], None)?;
 
         assert_eq!(r.route("/one")?.component_id(), "one_exact");
 
@@ -520,13 +589,13 @@ mod route_tests {
     #[test]
     fn sensible_routes_are_reachable() {
         let mut duplicates = Vec::new();
-        let routes = Router::build(
+        let routes = component_router(
             "/",
-            vec![
-                ("/", &"/".into()),
-                ("/foo", &"/foo".into()),
-                ("/bar", &"/bar".into()),
-                ("/whee/...", &"/whee/...".into()),
+            [
+                ("/", "/"),
+                ("/foo", "/foo"),
+                ("/bar", "/bar"),
+                ("/whee/...", "/whee/..."),
             ],
             Some(&mut duplicates),
         )
@@ -538,34 +607,43 @@ mod route_tests {
 
     #[test]
     fn order_of_reachable_routes_is_preserved() {
-        let routes = Router::build(
+        let routes = component_router(
             "/",
-            vec![
-                ("comp-/", &"/".into()),
-                ("comp-/foo", &"/foo".into()),
-                ("comp-/bar", &"/bar".into()),
-                ("comp-/whee/...", &"/whee/...".into()),
+            [
+                ("comp-/", "/"),
+                ("comp-/foo", "/foo"),
+                ("comp-/bar", "/bar"),
+                ("comp-/whee/...", "/whee/..."),
             ],
             None,
         )
         .unwrap();
 
-        assert_eq!("comp-/", routes.routes().next().unwrap().1);
-        assert_eq!("comp-/foo", routes.routes().nth(1).unwrap().1);
-        assert_eq!("comp-/bar", routes.routes().nth(2).unwrap().1);
-        assert_eq!("comp-/whee/...", routes.routes().nth(3).unwrap().1);
+        assert_eq!("comp-/", routes.routes().next().unwrap().1.component_id());
+        assert_eq!(
+            "comp-/foo",
+            routes.routes().nth(1).unwrap().1.component_id()
+        );
+        assert_eq!(
+            "comp-/bar",
+            routes.routes().nth(2).unwrap().1.component_id()
+        );
+        assert_eq!(
+            "comp-/whee/...",
+            routes.routes().nth(3).unwrap().1.component_id()
+        );
     }
 
     #[test]
     fn duplicate_routes_are_unreachable() {
         let mut duplicates = Vec::new();
-        let routes = Router::build(
+        let routes = component_router(
             "/",
-            vec![
-                ("comp-/", &"/".into()),
-                ("comp-first /foo", &"/foo".into()),
-                ("comp-second /foo", &"/foo".into()),
-                ("comp-/whee/...", &"/whee/...".into()),
+            [
+                ("comp-/", "/"),
+                ("comp-first /foo", "/foo"),
+                ("comp-second /foo", "/foo"),
+                ("comp-/whee/...", "/whee/..."),
             ],
             Some(&mut duplicates),
         )
@@ -578,19 +656,22 @@ mod route_tests {
     #[test]
     fn duplicate_routes_last_one_wins() {
         let mut duplicates = Vec::new();
-        let routes = Router::build(
+        let routes = component_router(
             "/",
-            vec![
-                ("comp-/", &"/".into()),
-                ("comp-first /foo", &"/foo".into()),
-                ("comp-second /foo", &"/foo".into()),
-                ("comp-/whee/...", &"/whee/...".into()),
+            [
+                ("comp-/", "/"),
+                ("comp-first /foo", "/foo"),
+                ("comp-second /foo", "/foo"),
+                ("comp-/whee/...", "/whee/..."),
             ],
             Some(&mut duplicates),
         )
         .unwrap();
 
-        assert_eq!("comp-second /foo", routes.routes().nth(1).unwrap().1);
+        assert_eq!(
+            "comp-second /foo",
+            routes.routes().nth(1).unwrap().1.component_id()
+        );
         assert_eq!("comp-first /foo", duplicates[0].replaced_id);
         assert_eq!("comp-second /foo", duplicates[0].effective_id);
     }
@@ -598,17 +679,17 @@ mod route_tests {
     #[test]
     fn duplicate_routes_reporting_is_faithful() {
         let mut duplicates = Vec::new();
-        let _ = Router::build(
+        let _ = component_router(
             "/",
-            vec![
-                ("comp-first /", &"/".into()),
-                ("comp-second /", &"/".into()),
-                ("comp-first /foo", &"/foo".into()),
-                ("comp-second /foo", &"/foo".into()),
-                ("comp-first /...", &"/...".into()),
-                ("comp-second /...", &"/...".into()),
-                ("comp-first /whee/...", &"/whee/...".into()),
-                ("comp-second /whee/...", &"/whee/...".into()),
+            [
+                ("comp-first /", "/"),
+                ("comp-second /", "/"),
+                ("comp-first /foo", "/foo"),
+                ("comp-second /foo", "/foo"),
+                ("comp-first /...", "/..."),
+                ("comp-second /...", "/..."),
+                ("comp-first /whee/...", "/whee/..."),
+                ("comp-second /whee/...", "/whee/..."),
             ],
             Some(&mut duplicates),
         )
@@ -631,21 +712,23 @@ mod route_tests {
     fn unroutable_routes_are_skipped() {
         let routes = Router::build(
             "/",
-            vec![
-                ("comp-/", &"/".into()),
-                ("comp-/foo", &"/foo".into()),
+            [
+                (&component_key("comp-/"), &"/".into()),
+                (&component_key("comp-/foo"), &"/foo".into()),
                 (
-                    "comp-private",
+                    &component_key("comp-private"),
                     &HttpTriggerRouteConfig::Private(HttpPrivateEndpoint { private: true }),
                 ),
-                ("comp-/whee/...", &"/whee/...".into()),
+                (&component_key("comp-/whee/..."), &"/whee/...".into()),
             ],
             None,
         )
         .unwrap();
 
         assert_eq!(3, routes.routes().count());
-        assert!(!routes.routes().any(|(_r, c)| c == "comp-private"));
+        assert!(!routes
+            .routes()
+            .any(|(_r, tcr)| tcr.component_id() == "comp-private"));
     }
 
     #[test]
@@ -653,13 +736,13 @@ mod route_tests {
         let e = Router::build(
             "/",
             vec![
-                ("comp-/", &"/".into()),
-                ("comp-/foo", &"/foo".into()),
+                (&component_key("comp-/"), &"/".into()),
+                (&component_key("comp-/foo"), &"/foo".into()),
                 (
-                    "comp-bad component",
+                    &component_key("comp-bad component"),
                     &HttpTriggerRouteConfig::Private(HttpPrivateEndpoint { private: false }),
                 ),
-                ("comp-/whee/...", &"/whee/...".into()),
+                (&component_key("comp-/whee/..."), &"/whee/...".into()),
             ],
             None,
         )
@@ -670,11 +753,11 @@ mod route_tests {
 
     #[test]
     fn trailing_wildcard_is_captured() {
-        let routes = Router::build("/", vec![("comp", &"/...".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/...")], None).unwrap();
         let m = routes.route("/1/2/3").expect("/1/2/3 should have matched");
         assert_eq!("/1/2/3", m.trailing_wildcard());
 
-        let routes = Router::build("/", vec![("comp", &"/1/...".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/1/...")], None).unwrap();
         let m = routes.route("/1/2/3").expect("/1/2/3 should have matched");
         assert_eq!("/2/3", m.trailing_wildcard());
     }
@@ -684,7 +767,7 @@ mod route_tests {
         // We test this because it is the existing Spin behaviour but is *not*
         // how routefinder behaves by default (routefinder prefers to ignore trailing
         // slashes).
-        let routes = Router::build("/", vec![("comp", &"/test/...".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/test/...")], None).unwrap();
         let m = routes.route("/test").expect("/test should have matched");
         assert_eq!("", m.trailing_wildcard());
         let m = routes.route("/test/").expect("/test/ should have matched");
@@ -701,41 +784,33 @@ mod route_tests {
 
     #[test]
     fn named_wildcard_is_captured() {
-        let routes = Router::build("/", vec![("comp", &"/1/:two/3".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/1/:two/3")], None).unwrap();
         let m = routes.route("/1/2/3").expect("/1/2/3 should have matched");
         assert_eq!("2", m.named_wildcards()["two"]);
 
-        let routes = Router::build("/", vec![("comp", &"/1/:two/...".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/1/:two/...")], None).unwrap();
         let m = routes.route("/1/2/3").expect("/1/2/3 should have matched");
         assert_eq!("2", m.named_wildcards()["two"]);
     }
 
     #[test]
     fn reserved_routes_are_reserved() {
-        let routes =
-            Router::build("/", vec![("comp", &"/.well-known/spin/...".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/.well-known/spin/...")], None).unwrap();
         assert!(routes.contains_reserved_route());
 
-        let routes =
-            Router::build("/", vec![("comp", &"/.well-known/spin/fie".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/.well-known/spin/fie")], None).unwrap();
         assert!(routes.contains_reserved_route());
     }
 
     #[test]
     fn unreserved_routes_are_unreserved() {
-        let routes = Router::build(
-            "/",
-            vec![("comp", &"/.well-known/spindle/...".into())],
-            None,
-        )
-        .unwrap();
+        let routes = component_router("/", [("comp", "/.well-known/spindle/...")], None).unwrap();
         assert!(!routes.contains_reserved_route());
 
-        let routes =
-            Router::build("/", vec![("comp", &"/.well-known/spi/...".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/.well-known/spi/...")], None).unwrap();
         assert!(!routes.contains_reserved_route());
 
-        let routes = Router::build("/", vec![("comp", &"/.well-known/spin".into())], None).unwrap();
+        let routes = component_router("/", [("comp", "/.well-known/spin")], None).unwrap();
         assert!(!routes.contains_reserved_route());
     }
 }

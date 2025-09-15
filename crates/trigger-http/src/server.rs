@@ -64,7 +64,7 @@ pub struct HttpServer<F: RuntimeFactors> {
     /// The app being triggered.
     trigger_app: TriggerApp<F>,
     // Component ID -> component trigger config
-    component_trigger_configs: HashMap<String, HttpTriggerConfig>,
+    component_trigger_configs: HashMap<spin_http::routes::TriggerLookupKey, HttpTriggerConfig>,
     // Component ID -> handler type
     component_handler_types: HashMap<String, HandlerType>,
 }
@@ -78,18 +78,17 @@ impl<F: RuntimeFactors> HttpServer<F> {
         trigger_app: TriggerApp<F>,
     ) -> anyhow::Result<Self> {
         // This needs to be a vec before building the router to handle duplicate routes
-        let component_trigger_configs = Vec::from_iter(
-            trigger_app
-                .app()
-                .trigger_configs::<HttpTriggerConfig>("http")?
-                .into_iter()
-                .map(|(_, config)| (config.component.clone(), config)),
-        );
+        let component_trigger_configs = trigger_app
+            .app()
+            .trigger_configs::<HttpTriggerConfig>("http")?
+            .into_iter()
+            .map(|(trigger_id, config)| (config.lookup_key(trigger_id).map(|k| (k, config))))
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Build router
         let component_routes = component_trigger_configs
             .iter()
-            .map(|(component_id, config)| (component_id.as_str(), &config.route));
+            .map(|(key, config)| (key, &config.route));
         let mut duplicate_routes = Vec::new();
         let router = Router::build("/", component_routes, Some(&mut duplicate_routes))?;
         if !duplicate_routes.is_empty() {
@@ -121,22 +120,16 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
         let component_handler_types = component_trigger_configs
             .iter()
-            .map(|(component_id, trigger_config)| {
-                let pre = trigger_app.get_instance_pre(component_id)?;
-                let handler_type = match &trigger_config.executor {
-                    None | Some(HttpExecutorType::Http) => {
-                        HandlerType::from_instance_pre(pre)?
-                    }
-                    Some(HttpExecutorType::Wagi(wagi_config)) => {
-                        anyhow::ensure!(
-                            wagi_config.entrypoint == "_start",
-                            "Wagi component '{component_id}' cannot use deprecated 'entrypoint' field"
-                        );
-                        HandlerType::Wagi(CommandIndices::new(pre)
-                            .context("failed to find wasi command interface for wagi executor")?)
-                    }
-                };
-                Ok((component_id.clone(), handler_type))
+            .filter_map(|(key, trigger_config)| match key {
+                spin_http::routes::TriggerLookupKey::Component(component) => Some(
+                    Self::handler_type_for_component(
+                        &trigger_app,
+                        component,
+                        &trigger_config.executor,
+                    )
+                    .map(|ht| (component.clone(), ht)),
+                ),
+                spin_http::routes::TriggerLookupKey::Trigger(_) => None,
             })
             .collect::<anyhow::Result<_>>()?;
         Ok(Self {
@@ -148,6 +141,28 @@ impl<F: RuntimeFactors> HttpServer<F> {
             component_trigger_configs,
             component_handler_types,
         })
+    }
+
+    fn handler_type_for_component(
+        trigger_app: &TriggerApp<F>,
+        component_id: &str,
+        executor: &Option<HttpExecutorType>,
+    ) -> anyhow::Result<HandlerType> {
+        let pre = trigger_app.get_instance_pre(component_id)?;
+        let handler_type = match executor {
+            None | Some(HttpExecutorType::Http) => HandlerType::from_instance_pre(pre)?,
+            Some(HttpExecutorType::Wagi(wagi_config)) => {
+                anyhow::ensure!(
+                    wagi_config.entrypoint == "_start",
+                    "Wagi component '{component_id}' cannot use deprecated 'entrypoint' field"
+                );
+                HandlerType::Wagi(
+                    CommandIndices::new(pre)
+                        .context("failed to find wasi command interface for wagi executor")?,
+                )
+            }
+        };
+        Ok(handler_type)
     }
 
     /// Serve incoming requests over the provided [`TcpListener`].
@@ -284,15 +299,50 @@ impl<F: RuntimeFactors> HttpServer<F> {
             .get_metadata(APP_NAME_KEY)?
             .unwrap_or_else(|| "<unnamed>".into());
 
-        let component_id = route_match.component_id();
+        let lookup_key = route_match.lookup_key();
 
         spin_telemetry::metrics::monotonic_counter!(
             spin.request_count = 1,
             trigger_type = "http",
             app_id = app_id,
-            component_id = component_id
+            component_id = lookup_key.to_string()
         );
 
+        let trigger_config = self
+            .component_trigger_configs
+            .get(lookup_key)
+            .with_context(|| format!("unknown routing destination '{lookup_key}'"))?;
+
+        match (&trigger_config.component, &trigger_config.static_response) {
+            (Some(component), None) => {
+                self.respond_wasm_component(
+                    req,
+                    route_match,
+                    server_scheme,
+                    client_addr,
+                    component,
+                    &trigger_config.executor,
+                )
+                .await
+            }
+            (None, Some(static_response)) => {
+                Self::respond_static_response(static_response)
+            },
+            // These error cases should have been ruled out by this point but belt and braces
+            (None, None) => Err(anyhow::anyhow!("Triggers must specify either component or static_response - neither is specified for {}", route_match.raw_route())),
+            (Some(_), Some(_)) => Err(anyhow::anyhow!("Triggers must specify either component or static_response - both are specified for {}", route_match.raw_route())),
+        }
+    }
+
+    async fn respond_wasm_component(
+        self: &Arc<Self>,
+        req: Request<Body>,
+        route_match: RouteMatch<'_, '_>,
+        server_scheme: Scheme,
+        client_addr: SocketAddr,
+        component_id: &str,
+        executor: &Option<HttpExecutorType>,
+    ) -> anyhow::Result<Response<Body>> {
         let mut instance_builder = self.trigger_app.prepare(component_id)?;
 
         // Set up outbound HTTP request origin and service chaining
@@ -309,15 +359,11 @@ impl<F: RuntimeFactors> HttpServer<F> {
         outbound_http.set_request_interceptor(OutboundHttpInterceptor::new(self.clone()))?;
 
         // Prepare HTTP executor
-        let trigger_config = self
-            .component_trigger_configs
+        let handler_type = self
+            .component_handler_types
             .get(component_id)
             .with_context(|| format!("unknown component ID {component_id:?}"))?;
-        let handler_type = self.component_handler_types.get(component_id).unwrap();
-        let executor = trigger_config
-            .executor
-            .as_ref()
-            .unwrap_or(&HttpExecutorType::Http);
+        let executor = executor.as_ref().unwrap_or(&HttpExecutorType::Http);
 
         let res = match executor {
             HttpExecutorType::Http => match handler_type {
@@ -360,6 +406,24 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 Self::internal_error(None, route_match.raw_route())
             }
         }
+    }
+
+    fn respond_static_response(
+        sr: &spin_http::config::StaticResponse,
+    ) -> anyhow::Result<Response<Body>> {
+        let mut response = Response::builder();
+
+        response = response.status(sr.status());
+        for (header_name, header_value) in sr.headers() {
+            response = response.header(header_name, header_value);
+        }
+
+        let body = match sr.body() {
+            Some(b) => body::full(b.clone().into()),
+            None => body::empty(),
+        };
+
+        Ok(response.body(body)?)
     }
 
     /// Returns spin status information.
@@ -465,11 +529,13 @@ impl<F: RuntimeFactors> HttpServer<F> {
         tracing::info!("Serving {base_url}");
 
         println!("Available Routes:");
-        for (route, component_id) in self.router.routes() {
-            println!("  {component_id}: {base_url}{route}");
-            if let Some(component) = self.trigger_app.app().get_component(component_id) {
-                if let Some(description) = component.get_metadata(APP_DESCRIPTION_KEY)? {
-                    println!("    {description}");
+        for (route, key) in self.router.routes() {
+            println!("  {key}: {base_url}{route}");
+            if let spin_http::routes::TriggerLookupKey::Component(component_id) = &key {
+                if let Some(component) = self.trigger_app.app().get_component(component_id) {
+                    if let Some(description) = component.get_metadata(APP_DESCRIPTION_KEY)? {
+                        println!("    {description}");
+                    }
                 }
             }
         }
