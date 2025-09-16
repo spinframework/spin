@@ -1,0 +1,48 @@
+interface types {
+    /// A key-value pair describing an attribute.
+    record key-value {
+        /// The attribute name.
+        key: key,
+        /// The attribute value.
+        value: value,
+    }
+
+    /// The key part of attribute `key-value` pairs.
+    type key = string;
+
+    /// The value part of attribute `key-value` pairs.
+    variant value {
+        /// A string value.
+        %string(string),
+        /// A boolean value.
+        %bool(bool),
+        /// A double precision floating point value.
+        %f64(f64),
+        /// A signed 64 bit integer value.
+        %s64(s64),
+        /// A homogeneous array of string values.
+        string-array(list<string>),
+        /// A homogeneous array of boolean values.
+        bool-array(list<bool>),
+        /// A homogeneous array of double precision floating point values.
+        f64-array(list<f64>),
+        /// A homogeneous array of 64 bit integer values.
+        s64-array(list<s64>),
+    }
+
+    /// Describes the instrumentation scope that produced telemetry.
+    record instrumentation-scope {
+        /// Name of the instrumentation scope.
+        name: string,
+
+        /// The library version.
+        version: option<string>,
+
+        /// Schema URL used by this library.
+        /// https://github.com/open-telemetry/opentelemetry-specification/blob/v1.9.0/specification/schemas/overview.md#schema-url
+        schema-url: option<string>,
+
+        /// Specifies the instrumentation scope attributes to associate with emitted telemetry.
+        attributes: list<key-value>,
+    }
+}

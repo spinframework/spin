@@ -1,5 +1,9 @@
 package wasi:otel@0.2.0-draft;
 
 world imports {
+    import types;
     import tracing;
+    import metrics;
 }
+
+// TODO: Switch to using wkg

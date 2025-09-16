@@ -1,26 +1,26 @@
 mod host;
 
-use std::{
-    sync::{Arc, RwLock},
-};
-
 use anyhow::bail;
 use indexmap::IndexMap;
 use opentelemetry::{
     trace::{SpanContext, SpanId, TraceContextExt},
     Context,
 };
+use opentelemetry_otlp::MetricExporter;
 use opentelemetry_sdk::{
-    resource::{EnvResourceDetector, TelemetryResourceDetector},
-    trace::{BatchSpanProcessor, SpanProcessor},
+    resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
+    runtime::Tokio,
+    trace::{span_processor_with_async_runtime::BatchSpanProcessor, SpanProcessor},
     Resource,
 };
 use spin_factors::{Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder};
 use spin_telemetry::{detector::SpinResourceDetector, env::OtlpProtocol};
+use std::sync::{Arc, RwLock};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 pub struct OtelFactor {
-    processor: Arc<BatchSpanProcessor>,
+    span_processor: Arc<BatchSpanProcessor<Tokio>>,
+    metric_exporter: Arc<MetricExporter>,
 }
 
 impl Factor for OtelFactor {
@@ -30,6 +30,7 @@ impl Factor for OtelFactor {
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
         ctx.link_bindings(spin_world::wasi::otel::tracing::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(spin_world::wasi::otel::metrics::add_to_linker::<_, FactorData<Self>>)?;
         Ok(())
     }
 
@@ -49,15 +50,31 @@ impl Factor for OtelFactor {
                 guest_span_contexts: Default::default(),
                 original_host_span_id: None,
             })),
-            processor: self.processor.clone(),
+            span_processor: self.span_processor.clone(),
+            metric_exporter: self.metric_exporter.clone(),
         })
     }
 }
 
 impl OtelFactor {
     pub fn new() -> anyhow::Result<Self> {
+        // This is a hack b/c we know the version of this crate will be the same as the version of Spin
+        let spin_version = env!("CARGO_PKG_VERSION").to_string();
+
+        let resource = Resource::builder()
+            .with_detectors(&[
+                // Set service.name from env OTEL_SERVICE_NAME > env OTEL_RESOURCE_ATTRIBUTES > spin
+                // Set service.version from Spin metadata
+                Box::new(SpinResourceDetector::new(spin_version)) as Box<dyn ResourceDetector>,
+                // Sets fields from env OTEL_RESOURCE_ATTRIBUTES
+                Box::new(EnvResourceDetector::new()),
+                // Sets telemetry.sdk{name, language, version}
+                Box::new(TelemetryResourceDetector),
+            ])
+            .build();
+
         // This will configure the exporter based on the OTEL_EXPORTER_* environment variables.
-        let exporter = match OtlpProtocol::traces_protocol_from_env() {
+        let span_exporter = match OtlpProtocol::traces_protocol_from_env() {
             OtlpProtocol::Grpc => opentelemetry_otlp::SpanExporter::builder()
                 .with_tonic()
                 .build()?,
@@ -67,32 +84,31 @@ impl OtelFactor {
             OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
         };
 
-        let mut processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(exporter).build();
+        let mut span_processor = BatchSpanProcessor::builder(span_exporter, Tokio).build();
 
-        // This is a hack b/c we know the version of this crate will be the same as the version of Spin
-        let spin_version = env!("CARGO_PKG_VERSION").to_string();
+        span_processor.set_resource(&resource);
 
-        let detectors: &[Box<dyn opentelemetry_sdk::resource::ResourceDetector>; 3] = &[
-                // Set service.name from env OTEL_SERVICE_NAME > env OTEL_RESOURCE_ATTRIBUTES > spin
-                // Set service.version from Spin metadata
-                Box::new(SpinResourceDetector::new(spin_version)),
-                // Sets fields from env OTEL_RESOURCE_ATTRIBUTES
-                Box::new(EnvResourceDetector::new()),
-                // Sets telemetry.sdk{name, language, version}
-                Box::new(TelemetryResourceDetector),
-        ];
-
-        processor.set_resource(&Resource::builder().with_detectors(detectors).build());
+        let metric_exporter = match OtlpProtocol::metrics_protocol_from_env() {
+            OtlpProtocol::Grpc => opentelemetry_otlp::MetricExporter::builder()
+                .with_tonic()
+                .build()?,
+            OtlpProtocol::HttpProtobuf => opentelemetry_otlp::MetricExporter::builder()
+                .with_http()
+                .build()?,
+            OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
+        };
 
         Ok(Self {
-            processor: Arc::new(processor),
+            span_processor: Arc::new(span_processor),
+            metric_exporter: Arc::new(metric_exporter),
         })
     }
 }
 
 pub struct InstanceState {
     pub(crate) state: Arc<RwLock<State>>,
-    pub(crate) processor: Arc<BatchSpanProcessor>,
+    pub(crate) span_processor: Arc<BatchSpanProcessor<Tokio>>,
+    pub(crate) metric_exporter: Arc<MetricExporter>,
 }
 
 impl SelfInstanceBuilder for InstanceState {}
