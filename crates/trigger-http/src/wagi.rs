@@ -29,7 +29,7 @@ impl HttpExecutor for WagiHttpExecutor<'_> {
     ) -> Result<Response<Body>> {
         let spin_http::routes::TriggerLookupKey::Component(component) = route_match.lookup_key()
         else {
-            anyhow::bail!("INCONCEIVABLE");
+            unreachable!()
         };
 
         tracing::trace!(

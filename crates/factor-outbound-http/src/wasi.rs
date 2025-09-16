@@ -728,6 +728,8 @@ fn dns_error(rcode: String, info_code: u16) -> ErrorCode {
     })
 }
 
+// TODO: Remove this (and uses of it) once
+// https://github.com/spinframework/spin/issues/3274 has been addressed.
 pub fn p2_to_p3_error_code(code: p2_types::ErrorCode) -> p3_types::ErrorCode {
     match code {
         p2_types::ErrorCode::DnsTimeout => p3_types::ErrorCode::DnsTimeout,
@@ -828,6 +830,8 @@ pub fn p2_to_p3_error_code(code: p2_types::ErrorCode) -> p3_types::ErrorCode {
     }
 }
 
+// TODO: Remove this (and uses of it) once
+// https://github.com/spinframework/spin/issues/3274 has been addressed.
 pub fn p3_to_p2_error_code(code: p3_types::ErrorCode) -> p2_types::ErrorCode {
     match code {
         p3_types::ErrorCode::DnsTimeout => p2_types::ErrorCode::DnsTimeout,
