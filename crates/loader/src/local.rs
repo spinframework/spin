@@ -607,8 +607,8 @@ fn locked_metadata(
 
 fn locked_variable(variable: v2::Variable) -> Result<locked::Variable> {
     ensure!(
-        variable.required ^ variable.default.is_some(),
-        "must be `required` OR have a `default`"
+        variable.required ^ variable.default.is_some() ^ variable.allow_unset,
+        "must be `required` OR have a `default` OR set to `allow_unset`"
     );
     Ok(locked::Variable {
         description: variable.description,
