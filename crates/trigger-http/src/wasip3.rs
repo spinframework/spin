@@ -1,7 +1,6 @@
-use crate::{headers, server::HttpExecutor, TriggerInstanceBuilder};
+use crate::{server::HttpExecutor, TriggerInstanceBuilder};
 use anyhow::{Context, Result};
 use futures::{channel::oneshot, FutureExt};
-use http::{HeaderName, HeaderValue};
 use http_body_util::BodyExt;
 use spin_factors::RuntimeFactors;
 use spin_factors_executor::InstanceState;
@@ -29,27 +28,9 @@ impl HttpExecutor for Wasip3HttpExecutor<'_> {
         mut req: http::Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<http::Response<Body>> {
-        let spin_http::routes::TriggerLookupKey::Component(component_id) = route_match.lookup_key()
-        else {
-            anyhow::bail!("INCONCEIVABLE");
-        };
-
-        tracing::trace!("Executing request using the Wasi executor for component {component_id}");
+        super::wasi::prepare_request(route_match, &mut req, client_addr)?;
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
-
-        let headers = headers::prepare_request_headers(&req, route_match, client_addr)?;
-        req.headers_mut().clear();
-        req.headers_mut()
-            .extend(headers.into_iter().filter_map(|(n, v)| {
-                let Ok(name) = n.parse::<HeaderName>() else {
-                    return None;
-                };
-                let Ok(value) = HeaderValue::from_bytes(v.as_bytes()) else {
-                    return None;
-                };
-                Some((name, value))
-            }));
 
         let getter = (|data| wasi_http::<F>(data).unwrap())
             as fn(&mut InstanceState<F::InstanceState, ()>) -> WasiHttpCtxView<'_>;
