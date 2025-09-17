@@ -2,23 +2,23 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "wasi:http/proxy@0.3.0-rc-2025-08-15",
+    world: "wasi:http/proxy@0.3.0-rc-2025-09-16",
     generate_all,
     debug: true
 });
 
 use {
     crate::{
-        exports::wasi::http0_3_0_rc_2025_08_15::handler::Guest,
-        wasi::http0_3_0_rc_2025_08_15::{
+        exports::wasi::http0_3_0_rc_2025_09_16::handler::Guest,
+        wasi::http0_3_0_rc_2025_09_16::{
             handler,
             types::{ErrorCode, Fields, Method, Request, Response, Scheme},
         },
     },
     core::mem,
-    futures::{stream, StreamExt},
+    futures::{StreamExt, stream},
     url::Url,
-    wit_bindgen::{rt::async_support, StreamResult},
+    wit_bindgen::{StreamResult, rt::async_support},
 };
 
 const MAX_CONCURRENCY: usize = 16;
@@ -81,7 +81,8 @@ impl Guest for Component {
                 (Method::Post, Some("/echo")) => {
                     // Echo the request body without buffering it.
 
-                    let (rx, trailers) = request.consume_body().unwrap();
+                    let (rx, trailers) =
+                        Request::consume_body(request, wit_future::new(|| Ok(())).1);
                     Response::new(
                         Fields::from_list(
                             &headers
@@ -105,10 +106,12 @@ impl Guest for Component {
                             .and_then(|v| std::str::from_utf8(v).ok())
                             .and_then(|v| Url::parse(v).ok())
                     }) {
-                        let (rx, trailers) = request.consume_body().unwrap();
+                        let method = request.get_method();
+                        let (rx, trailers) =
+                            Request::consume_body(request, wit_future::new(|| Ok(())).1);
                         let outgoing_request =
                             Request::new(Fields::new(), Some(rx), trailers, None).0;
-                        outgoing_request.set_method(&request.get_method()).unwrap();
+                        outgoing_request.set_method(&method).unwrap();
                         outgoing_request
                             .set_path_with_query(Some(url.path()))
                             .unwrap();
@@ -122,7 +125,7 @@ impl Guest for Component {
                         outgoing_request
                             .set_authority(Some(url.authority()))
                             .unwrap();
-                        handler::handle(request).await?
+                        handler::handle(outgoing_request).await?
                     } else {
                         bad_request()
                     }
@@ -170,7 +173,7 @@ async fn hash(url: &Url) -> Result<String, ErrorCode> {
         ))));
     }
 
-    let (mut rx, trailers) = response.consume_body().unwrap();
+    let (mut rx, trailers) = Response::consume_body(response, wit_future::new(|| Ok(())).1);
 
     use sha2::Digest;
     let mut hasher = sha2::Sha256::new();
