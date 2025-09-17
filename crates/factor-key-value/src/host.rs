@@ -7,7 +7,7 @@ use spin_telemetry::traces::{self, Blame};
 use spin_world::v2::key_value;
 use spin_world::wasi::keyvalue as wasi_keyvalue;
 use spin_world::MAX_HOST_BUFFERED_BYTES;
-use std::{collections::HashSet, sync::Arc};
+use std::{any::Any, collections::HashSet, sync::Arc};
 use tracing::instrument;
 
 const DEFAULT_STORE_TABLE_CAPACITY: u32 = 256;
@@ -25,6 +25,11 @@ pub trait StoreManager: Sync + Send {
     fn summary(&self, store_name: &str) -> Option<String> {
         let _ = store_name;
         None
+    }
+
+    /// Metadata about the store manager that can be accessed for data collection or debugging purposes. This is opaque and can be in any format the store manager chooses.
+    fn metadata(&self) -> Arc<dyn Any> {
+        Arc::new(())
     }
 }
 
@@ -119,6 +124,10 @@ impl KeyValueDispatch {
             .ok_or(wasi_keyvalue::atomics::Error::Other(
                 "compare and swap not found".to_string(),
             ))
+    }
+
+    pub fn manager_metadata(&self) -> Arc<dyn Any> {
+        self.manager.metadata()
     }
 }
 
