@@ -12,9 +12,11 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
+http-body = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
+pin-project-lite = { workspace = true }
 rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
 serde = { workspace = true }

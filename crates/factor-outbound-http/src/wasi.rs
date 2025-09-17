@@ -10,7 +10,7 @@ use std::{
 
 use bytes::Bytes;
 use http::{header::HOST, uri::Scheme, Uri};
-use http_body::{Body, Frame};
+use http_body::{Body, Frame, SizeHint};
 use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper_util::{
     client::legacy::{
@@ -164,6 +164,14 @@ impl<B: Body<Error = p2_types::ErrorCode>> Body for BetweenBytesTimeoutBody<B> {
                 Poll::Ready(Some(Err(p3_types::ErrorCode::ConnectionReadTimeout)))
             }
         }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.body.size_hint()
     }
 }
 
