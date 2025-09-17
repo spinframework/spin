@@ -143,7 +143,7 @@ mod integration_tests {
                             Err(e) => {
                                 return Err(
                                     anyhow::anyhow!("could not read stdout file: {e}").into()
-                                )
+                                );
                             }
                         }
                     },
@@ -201,7 +201,7 @@ mod integration_tests {
                             Err(e) => {
                                 return Err(
                                     anyhow::anyhow!("could not read stdout file: {e}").into()
-                                )
+                                );
                             }
                         }
                     },
@@ -1195,16 +1195,38 @@ route = "/..."
     }
 
     #[test]
-    fn test_wasi_http_echo() -> anyhow::Result<()> {
-        wasi_http_echo("echo".into(), None)
+    fn test_wasi_http_p2_echo() -> anyhow::Result<()> {
+        wasi_http_echo("wasi-http-p2-streaming", "echo".into(), None)
     }
 
     #[test]
-    fn test_wasi_http_double_echo() -> anyhow::Result<()> {
-        wasi_http_echo("double-echo".into(), Some("echo".into()))
+    fn test_wasi_http_p3_echo() -> anyhow::Result<()> {
+        wasi_http_echo("wasi-http-p3-streaming", "echo".into(), None)
     }
 
-    fn wasi_http_echo(uri: String, url_header_uri: Option<String>) -> anyhow::Result<()> {
+    #[test]
+    fn test_wasi_http_p2_double_echo() -> anyhow::Result<()> {
+        wasi_http_echo(
+            "wasi-http-p2-streaming",
+            "double-echo".into(),
+            Some("echo".into()),
+        )
+    }
+
+    #[test]
+    fn test_wasi_http_p3_double_echo() -> anyhow::Result<()> {
+        wasi_http_echo(
+            "wasi-http-p2-streaming",
+            "double-echo".into(),
+            Some("echo".into()),
+        )
+    }
+
+    fn wasi_http_echo(
+        test: &str,
+        uri: String,
+        url_header_uri: Option<String>,
+    ) -> anyhow::Result<()> {
         let body_bytes = {
             // A sorta-random-ish megabyte
             let mut n = 0_u8;
@@ -1227,7 +1249,7 @@ route = "/..."
         ));
 
         run_test(
-            "wasi-http-streaming",
+            test,
             SpinConfig {
                 binary_path: spin_binary(),
                 spin_up_args: Vec::new(),
@@ -1267,7 +1289,16 @@ route = "/..."
     }
 
     #[test]
-    fn test_wasi_http_hash_all() -> anyhow::Result<()> {
+    fn test_wasi_http_p2_hash_all() -> anyhow::Result<()> {
+        wasi_http_hash_all("wasi-http-p2-streaming")
+    }
+
+    #[test]
+    fn test_wasi_http_p3_hash_all() -> anyhow::Result<()> {
+        wasi_http_hash_all("wasi-http-p3-streaming")
+    }
+
+    fn wasi_http_hash_all(test: &str) -> anyhow::Result<()> {
         let requests = [
             ("/a", "’Twas brillig, and the slithy toves"),
             ("/b", "Did gyre and gimble in the wabe:"),
@@ -1277,7 +1308,7 @@ route = "/..."
         .into_iter()
         .collect::<HashMap<_, _>>();
         run_test(
-            "wasi-http-streaming",
+            test,
             SpinConfig {
                 binary_path: spin_binary(),
                 spin_up_args: Vec::new(),

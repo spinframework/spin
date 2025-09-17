@@ -1,0 +1,15 @@
+[package]
+name = "integration-wasi-http-p3-streaming"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+futures = "0.3.31"
+hex = "0.4.3"
+sha2 = "0.10.9"
+url = "2.5.7"
+wit-bindgen = { version = "0.46.0", features = ["async"] }
+
