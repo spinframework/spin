@@ -4,4 +4,4 @@ exclude = ["target"]
 resolver = "2"
 
 [workspace.dependencies]
-wit-bindgen = "0.34.0"
+wit-bindgen = { version = "0.46.0", features = ["async"] }
