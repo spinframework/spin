@@ -1,9 +1,7 @@
 wit_bindgen::generate!({
     world: "spin-timer",
     path: "..",
-    exports: {
-        world: MySpinTimer
-    }
+    generate_all,
 });
 
 use fermyon::spin::variables;

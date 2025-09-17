@@ -1,6 +1,6 @@
 [package]
 name = "goodbyerust"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -10,9 +10,9 @@ crate-type = ["cdylib"]
 # Useful crate to handle errors.
 anyhow = "1"
 # General-purpose crate with common HTTP types.
-http = "0.2"
+http = "1.3.1"
 # The Spin SDK.
-spin-sdk = "2.2.0"
+spin-sdk = "5.0.0"
 
 
 [workspace]

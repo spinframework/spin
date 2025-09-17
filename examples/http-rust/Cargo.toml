@@ -1,6 +1,6 @@
 [package]
 name = "http-rust"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -8,7 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1"
-http = "0.2.9"
-spin-sdk = "2.2.0"
+http = "1.3.1"
+spin-sdk = "5.0.0"
 
 [workspace]

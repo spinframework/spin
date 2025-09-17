@@ -2,7 +2,7 @@
 name = "vault-variable-test"
 authors = ["Fermyon Engineering <engineering@fermyon.com>"]
 description = "Vault Application Variable Provider Example"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow = "1"
-constant_time_eq = "0.3.0"
-spin-sdk = "2.2.0"
+constant_time_eq = "0.4.2"
+spin-sdk = "5.0.0"
 
 [workspace]
