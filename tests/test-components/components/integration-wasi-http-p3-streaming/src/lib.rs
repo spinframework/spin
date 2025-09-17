@@ -16,9 +16,9 @@ use {
         },
     },
     core::mem,
-    futures::{StreamExt, stream},
+    futures::{stream, StreamExt},
     url::Url,
-    wit_bindgen::{StreamResult, rt::async_support},
+    wit_bindgen::{rt::async_support, StreamResult},
 };
 
 const MAX_CONCURRENCY: usize = 16;

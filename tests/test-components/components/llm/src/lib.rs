@@ -13,11 +13,7 @@ impl Component {
             top_k: 1,
             top_p: 1.0,
         };
-        let inference = ensure_ok!(llm::infer(
-            &"llama2-chat".to_owned(),
-            "say hello",
-            Some(param)
-        ));
+        let inference = ensure_ok!(llm::infer("llama2-chat", "say hello", Some(param)));
 
         ensure!(!inference.text.is_empty());
         ensure_eq!(inference.usage.generated_token_count, 1);
