@@ -7,6 +7,7 @@ wit_bindgen::generate!({
 use fermyon::spin::variables;
 
 struct MySpinTimer;
+export!(MySpinTimer);
 
 impl Guest for MySpinTimer {
     fn handle_timer_request() {
