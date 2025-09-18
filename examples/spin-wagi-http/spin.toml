@@ -22,6 +22,6 @@ source = "wagi-http-cpp/main.wasm"
 command = "make build -C wagi-http-cpp"
 
 [component.goodbye]
-source = "http-rust/target/wasm32-wasip1/release/goodbyerust.wasm"
+source = "http-rust/target/wasm32-wasip2/release/goodbyerust.wasm"
 [component.goodbye.build]
-command = "cargo build --target wasm32-wasip1 --release --manifest-path http-rust/Cargo.toml"
+command = "cargo build --target wasm32-wasip2 --release --manifest-path http-rust/Cargo.toml"

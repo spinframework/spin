@@ -152,7 +152,8 @@ async fn run_test(
 
     let module_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/test-programs/core-wasi-test.wasm");
-    let component = spin_componentize::componentize_command(&fs::read(module_path).await?)?;
+    let module_bytes = fs::read(module_path).await?;
+    let component = spin_componentize::componentize_if_necessary(&module_bytes)?;
     let component = Component::new(engine.as_ref(), &component)?;
     let instance_pre = engine.instantiate_pre(&component)?;
     let instance = instance_pre.instantiate_async(&mut store).await?;

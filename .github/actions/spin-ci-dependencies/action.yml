@@ -95,7 +95,7 @@ runs:
         rustup default ${{ inputs.rust-version }}
 
     - name: "Install Wasm Rust target"
-      run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
+      run: rustup target add wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown
       if: ${{ inputs.rust-wasm == 'true' }}
       shell: bash
 
