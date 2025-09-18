@@ -2,6 +2,7 @@ use std::{
     error::Error,
     future::Future,
     io::IoSlice,
+    net::SocketAddr,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -113,7 +114,7 @@ impl WasiHttpView for WasiHttpImplInner<'_> {
             http.response.status_code = Empty,
             server.address = Empty,
             server.port = Empty,
-        ),
+        )
     )]
     fn send_request(
         &mut self,
@@ -166,12 +167,12 @@ impl RequestSender {
         spin_telemetry::inject_trace_context(&mut request);
 
         // Run any configured request interceptor
-        let mut override_connect_host = None;
+        let mut override_connect_addr = None;
         if let Some(interceptor) = &self.request_interceptor {
             let intercept_request = std::mem::take(&mut request).into();
             match interceptor.intercept(intercept_request).await? {
                 InterceptOutcome::Continue(mut req) => {
-                    override_connect_host = req.override_connect_host.take();
+                    override_connect_addr = req.override_connect_addr.take();
                     request = req.into_hyper_request();
                 }
                 InterceptOutcome::Complete(resp) => {
@@ -186,17 +187,19 @@ impl RequestSender {
         }
 
         // Backfill span fields after potentially updating the URL in the interceptor
-        if let Some(authority) = request.uri().authority() {
-            let span = tracing::Span::current();
-            let host = override_connect_host.as_deref().unwrap_or(authority.host());
-            span.record("server.address", host);
-            if let Some(port) = authority.port() {
-                span.record("server.port", port.as_u16());
+        let span = tracing::Span::current();
+        if let Some(addr) = override_connect_addr {
+            span.record("server.address", addr.ip().to_string());
+            span.record("server.port", addr.port());
+        } else if let Some(authority) = request.uri().authority() {
+            span.record("server.address", authority.host());
+            if let Some(port) = authority.port_u16() {
+                span.record("server.port", port);
             }
         }
 
         Ok(self
-            .send_request(request, config, override_connect_host)
+            .send_request(request, config, override_connect_addr)
             .await?)
     }
 
@@ -275,7 +278,7 @@ impl RequestSender {
         self,
         request: OutgoingRequest,
         config: OutgoingRequestConfig,
-        override_connect_host: Option<String>,
+        override_connect_addr: Option<SocketAddr>,
     ) -> Result<IncomingResponse, ErrorCode> {
         let OutgoingRequestConfig {
             use_tls,
@@ -296,7 +299,7 @@ impl RequestSender {
                 blocked_networks: self.blocked_networks,
                 connect_timeout,
                 tls_client_config,
-                override_connect_host,
+                override_connect_addr,
             },
             async move {
                 if use_tls {
@@ -376,26 +379,33 @@ struct ConnectOptions {
     blocked_networks: BlockedNetworks,
     connect_timeout: Duration,
     tls_client_config: Option<TlsClientConfig>,
-    override_connect_host: Option<String>,
+    override_connect_addr: Option<SocketAddr>,
 }
 
 impl ConnectOptions {
     async fn connect_tcp(&self, uri: &Uri, default_port: u16) -> Result<TcpStream, ErrorCode> {
-        let host = self
-            .override_connect_host
-            .as_deref()
-            .or(uri.host())
-            .ok_or(ErrorCode::HttpRequestUriInvalid)?;
-        let host_and_port = (host, uri.port_u16().unwrap_or(default_port));
+        let mut socket_addrs = match self.override_connect_addr {
+            Some(override_connect_addr) => vec![override_connect_addr],
+            None => {
+                let authority = uri.authority().ok_or(ErrorCode::HttpRequestUriInvalid)?;
 
-        let mut socket_addrs = tokio::net::lookup_host(host_and_port)
-            .await
-            .map_err(|err| {
-                tracing::debug!(?host_and_port, ?err, "Error resolving host");
-                dns_error("address not available".into(), 0)
-            })?
-            .collect::<Vec<_>>();
-        tracing::debug!(?host_and_port, ?socket_addrs, "Resolved host");
+                let host_and_port = if authority.port().is_some() {
+                    authority.as_str().to_string()
+                } else {
+                    format!("{}:{}", authority.as_str(), default_port)
+                };
+
+                let socket_addrs = tokio::net::lookup_host(&host_and_port)
+                    .await
+                    .map_err(|err| {
+                        tracing::debug!(?host_and_port, ?err, "Error resolving host");
+                        dns_error("address not available".into(), 0)
+                    })?
+                    .collect::<Vec<_>>();
+                tracing::debug!(?host_and_port, ?socket_addrs, "Resolved host");
+                socket_addrs
+            }
+        };
 
         // Remove blocked IPs
         let blocked_addrs = self.blocked_networks.remove_blocked(&mut socket_addrs);

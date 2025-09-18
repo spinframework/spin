@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use http::{Request, Response};
 use http_body_util::{BodyExt, Full};
 use spin_world::async_trait;
@@ -39,7 +41,7 @@ pub enum InterceptOutcome {
 pub struct InterceptRequest {
     inner: Request<()>,
     body: InterceptBody,
-    pub(crate) override_connect_host: Option<String>,
+    pub(crate) override_connect_addr: Option<SocketAddr>,
 }
 
 enum InterceptBody {
@@ -48,16 +50,17 @@ enum InterceptBody {
 }
 
 impl InterceptRequest {
-    /// Overrides the host that will be connected to for this outbound request.
+    /// Overrides the IP and port that will be connected to for this outbound
+    /// request.
     ///
     /// This override does not have any effect on TLS server name checking or
     /// HTTP authority / host headers.
     ///
-    /// This host will not be checked against `allowed_outbound_hosts`; if that
-    /// check should occur it must be performed by the interceptor. The resolved
-    /// IP addresses from this host will be checked against blocked IP networks.
-    pub fn override_connect_host(&mut self, host: impl Into<String>) {
-        self.override_connect_host = Some(host.into())
+    /// The IP will be checked against blocked IP networks but it will not be
+    /// checked against `allowed_outbound_hosts`; if that check needs to occur
+    /// it must be performed by the interceptor.
+    pub fn override_connect_addr(&mut self, endpoint: SocketAddr) {
+        self.override_connect_addr = Some(endpoint);
     }
 
     pub fn into_hyper_request(self) -> Request<HyperBody> {
@@ -94,7 +97,7 @@ impl From<Request<HyperBody>> for InterceptRequest {
         Self {
             inner: Request::from_parts(parts, ()),
             body: InterceptBody::Hyper(body),
-            override_connect_host: None,
+            override_connect_addr: None,
         }
     }
 }
@@ -105,7 +108,7 @@ impl From<Request<Vec<u8>>> for InterceptRequest {
         Self {
             inner: Request::from_parts(parts, ()),
             body: InterceptBody::Vec(body),
-            override_connect_host: None,
+            override_connect_addr: None,
         }
     }
 }
