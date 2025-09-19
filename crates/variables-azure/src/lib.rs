@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use azure_core::{auth::TokenCredential, Url};
 use azure_security_keyvault::SecretClient;
 use serde::Deserialize;
-use spin_expressions::{Key, Provider};
+use spin_expressions::{provider::ProviderVariableKind, Key, Provider};
 use spin_factors::anyhow;
 use spin_world::async_trait;
 use tracing::{instrument, Level};
@@ -150,6 +150,10 @@ impl Provider for AzureKeyVaultProvider {
             .await
             .context("Failed to read variable from Azure Key Vault")?;
         Ok(Some(secret.value))
+    }
+
+    fn kind(&self) -> ProviderVariableKind {
+        ProviderVariableKind::Dynamic
     }
 }
 
