@@ -16,11 +16,14 @@ use spin_factors::{
     RuntimeFactors, RuntimeFactorsInstanceState,
 };
 use wasmtime::component::HasData;
-use wasmtime_wasi::cli::{StdinStream, StdoutStream};
-use wasmtime_wasi::random::WasiRandomCtx;
+use wasmtime_wasi::cli::{StdinStream, StdoutStream, WasiCli, WasiCliCtxView};
+use wasmtime_wasi::clocks::{WasiClocks, WasiClocksCtxView};
+use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemCtxView};
+use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
+use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsCtxView};
 use wasmtime_wasi::{DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView};
 
-pub use wasmtime_wasi::SocketAddrUse;
+pub use wasmtime_wasi::sockets::SocketAddrUse;
 
 pub struct WasiFactor {
     files_mounter: Box<dyn FilesMounter>,
@@ -42,6 +45,26 @@ impl WasiFactor {
             table,
         })
     }
+
+    pub fn get_cli_impl(
+        runtime_instance_state: &mut impl RuntimeFactorsInstanceState,
+    ) -> Option<WasiCliCtxView<'_>> {
+        let (state, table) = runtime_instance_state.get_with_table::<WasiFactor>()?;
+        Some(WasiCliCtxView {
+            ctx: state.ctx.cli(),
+            table,
+        })
+    }
+
+    pub fn get_sockets_impl(
+        runtime_instance_state: &mut impl RuntimeFactorsInstanceState,
+    ) -> Option<WasiSocketsCtxView<'_>> {
+        let (state, table) = runtime_instance_state.get_with_table::<WasiFactor>()?;
+        Some(WasiSocketsCtxView {
+            ctx: state.ctx.sockets(),
+            table,
+        })
+    }
 }
 
 /// Helper trait to extend `InitContext` with some more `link_*_bindings`
@@ -54,6 +77,105 @@ trait InitContextExt: InitContext<WasiFactor> {
         table
     }
 
+    fn get_clocks(data: &mut Self::StoreData) -> WasiClocksCtxView<'_> {
+        let (state, table) = Self::get_data_with_table(data);
+        WasiClocksCtxView {
+            ctx: state.ctx.clocks(),
+            table,
+        }
+    }
+
+    fn get_random(data: &mut Self::StoreData) -> &mut WasiRandomCtx {
+        let (state, _) = Self::get_data_with_table(data);
+        state.ctx.random()
+    }
+
+    fn link_clocks_bindings(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            fn(&mut Self::StoreData) -> WasiClocksCtxView<'_>,
+        ) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        add_to_linker(self.linker(), Self::get_clocks)
+    }
+
+    fn get_cli(data: &mut Self::StoreData) -> WasiCliCtxView<'_> {
+        let (state, table) = Self::get_data_with_table(data);
+        WasiCliCtxView {
+            ctx: state.ctx.cli(),
+            table,
+        }
+    }
+
+    fn link_cli_bindings(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
+        ) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        add_to_linker(self.linker(), Self::get_cli)
+    }
+
+    fn link_cli_default_bindings<O: Default>(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            &O,
+            fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
+        ) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        add_to_linker(self.linker(), &O::default(), Self::get_cli)
+    }
+
+    fn get_filesystem(data: &mut Self::StoreData) -> WasiFilesystemCtxView<'_> {
+        let (state, table) = Self::get_data_with_table(data);
+        WasiFilesystemCtxView {
+            ctx: state.ctx.filesystem(),
+            table,
+        }
+    }
+
+    fn link_filesystem_bindings(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            fn(&mut Self::StoreData) -> WasiFilesystemCtxView<'_>,
+        ) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        add_to_linker(self.linker(), Self::get_filesystem)
+    }
+
+    fn get_sockets(data: &mut Self::StoreData) -> WasiSocketsCtxView<'_> {
+        let (state, table) = Self::get_data_with_table(data);
+        WasiSocketsCtxView {
+            ctx: state.ctx.sockets(),
+            table,
+        }
+    }
+
+    fn link_sockets_bindings(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            fn(&mut Self::StoreData) -> WasiSocketsCtxView<'_>,
+        ) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        add_to_linker(self.linker(), Self::get_sockets)
+    }
+
+    fn link_sockets_default_bindings<O: Default>(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            &O,
+            fn(&mut Self::StoreData) -> WasiSocketsCtxView<'_>,
+        ) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        add_to_linker(self.linker(), &O::default(), Self::get_sockets)
+    }
+
     fn link_io_bindings(
         &mut self,
         add_to_linker: fn(
@@ -62,38 +184,6 @@ trait InitContextExt: InitContext<WasiFactor> {
         ) -> anyhow::Result<()>,
     ) -> anyhow::Result<()> {
         add_to_linker(self.linker(), Self::get_table)
-    }
-
-    fn get_wasi(data: &mut Self::StoreData) -> WasiCtxView<'_> {
-        let (state, table) = Self::get_data_with_table(data);
-        WasiCtxView {
-            ctx: &mut state.ctx,
-            table,
-        }
-    }
-
-    fn link_wasi_bindings(
-        &mut self,
-        add_to_linker: fn(
-            &mut wasmtime::component::Linker<Self::StoreData>,
-            fn(&mut Self::StoreData) -> WasiCtxView<'_>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        add_to_linker(self.linker(), Self::get_wasi)
-    }
-
-    fn link_wasi_default_bindings<O>(
-        &mut self,
-        add_to_linker: fn(
-            &mut wasmtime::component::Linker<Self::StoreData>,
-            &O,
-            fn(&mut Self::StoreData) -> WasiCtxView<'_>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()>
-    where
-        O: Default,
-    {
-        add_to_linker(self.linker(), &O::default(), Self::get_wasi)
     }
 
     fn link_random_bindings(
@@ -108,26 +198,37 @@ trait InitContextExt: InitContext<WasiFactor> {
             state.ctx.random()
         })
     }
+
+    fn link_all_bindings(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            fn(&mut Self::StoreData) -> &mut ResourceTable,
+            fn(&mut Self::StoreData) -> &mut WasiRandomCtx,
+            fn(&mut Self::StoreData) -> WasiClocksCtxView<'_>,
+            fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
+            fn(&mut Self::StoreData) -> WasiFilesystemCtxView<'_>,
+            fn(&mut Self::StoreData) -> WasiSocketsCtxView<'_>,
+        ) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        add_to_linker(
+            self.linker(),
+            Self::get_table,
+            Self::get_random,
+            Self::get_clocks,
+            Self::get_cli,
+            Self::get_filesystem,
+            Self::get_sockets,
+        )
+    }
 }
 
 impl<T> InitContextExt for T where T: InitContext<WasiFactor> {}
-
-struct HasWasi;
-
-impl HasData for HasWasi {
-    type Data<'a> = WasiCtxView<'a>;
-}
 
 struct HasIo;
 
 impl HasData for HasIo {
     type Data<'a> = &'a mut ResourceTable;
-}
-
-struct HasRandom;
-
-impl HasData for HasRandom {
-    type Data<'a> = &'a mut WasiRandomCtx;
 }
 
 impl Factor for WasiFactor {
@@ -136,38 +237,85 @@ impl Factor for WasiFactor {
     type InstanceBuilder = InstanceBuilder;
 
     fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
-        use wasmtime_wasi::p2::bindings;
+        use wasmtime_wasi::{p2, p3};
 
-        ctx.link_wasi_bindings(bindings::clocks::wall_clock::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::clocks::monotonic_clock::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::filesystem::types::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::filesystem::preopens::add_to_linker::<_, HasWasi>)?;
-        ctx.link_io_bindings(bindings::io::error::add_to_linker::<_, HasIo>)?;
-        ctx.link_io_bindings(bindings::io::poll::add_to_linker::<_, HasIo>)?;
-        ctx.link_io_bindings(bindings::io::streams::add_to_linker::<_, HasIo>)?;
-        ctx.link_random_bindings(bindings::random::random::add_to_linker::<_, HasRandom>)?;
-        ctx.link_random_bindings(bindings::random::insecure::add_to_linker::<_, HasRandom>)?;
-        ctx.link_random_bindings(bindings::random::insecure_seed::add_to_linker::<_, HasRandom>)?;
-        ctx.link_wasi_default_bindings(bindings::cli::exit::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::environment::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::stdin::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::stdout::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::stderr::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_input::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_output::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_stdin::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_stdout::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::cli::terminal_stderr::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::sockets::tcp::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::sockets::tcp_create_socket::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::sockets::udp::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::sockets::udp_create_socket::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::sockets::instance_network::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_default_bindings(bindings::sockets::network::add_to_linker::<_, HasWasi>)?;
-        ctx.link_wasi_bindings(bindings::sockets::ip_name_lookup::add_to_linker::<_, HasWasi>)?;
+        ctx.link_clocks_bindings(p2::bindings::clocks::wall_clock::add_to_linker::<_, WasiClocks>)?;
+        ctx.link_clocks_bindings(p3::bindings::clocks::wall_clock::add_to_linker::<_, WasiClocks>)?;
+        ctx.link_clocks_bindings(
+            p2::bindings::clocks::monotonic_clock::add_to_linker::<_, WasiClocks>,
+        )?;
+        ctx.link_clocks_bindings(
+            p3::bindings::clocks::monotonic_clock::add_to_linker::<_, WasiClocks>,
+        )?;
+        ctx.link_filesystem_bindings(
+            p2::bindings::filesystem::types::add_to_linker::<_, WasiFilesystem>,
+        )?;
+        ctx.link_filesystem_bindings(
+            p3::bindings::filesystem::types::add_to_linker::<_, WasiFilesystem>,
+        )?;
+        ctx.link_filesystem_bindings(
+            p2::bindings::filesystem::preopens::add_to_linker::<_, WasiFilesystem>,
+        )?;
+        ctx.link_filesystem_bindings(
+            p3::bindings::filesystem::preopens::add_to_linker::<_, WasiFilesystem>,
+        )?;
+        ctx.link_io_bindings(p2::bindings::io::error::add_to_linker::<_, HasIo>)?;
+        ctx.link_io_bindings(p2::bindings::io::poll::add_to_linker::<_, HasIo>)?;
+        ctx.link_io_bindings(p2::bindings::io::streams::add_to_linker::<_, HasIo>)?;
+        ctx.link_random_bindings(p2::bindings::random::random::add_to_linker::<_, WasiRandom>)?;
+        ctx.link_random_bindings(p3::bindings::random::random::add_to_linker::<_, WasiRandom>)?;
+        ctx.link_random_bindings(p2::bindings::random::insecure::add_to_linker::<_, WasiRandom>)?;
+        ctx.link_random_bindings(p3::bindings::random::insecure::add_to_linker::<_, WasiRandom>)?;
+        ctx.link_random_bindings(
+            p2::bindings::random::insecure_seed::add_to_linker::<_, WasiRandom>,
+        )?;
+        ctx.link_random_bindings(
+            p3::bindings::random::insecure_seed::add_to_linker::<_, WasiRandom>,
+        )?;
+        ctx.link_cli_default_bindings(p2::bindings::cli::exit::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_default_bindings(p3::bindings::cli::exit::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::environment::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::environment::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::stdin::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::stdin::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::stdout::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::stdout::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::stderr::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::stderr::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::terminal_input::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::terminal_input::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::terminal_output::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::terminal_output::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::terminal_stdin::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::terminal_stdin::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
+        ctx.link_sockets_bindings(p2::bindings::sockets::tcp::add_to_linker::<_, WasiSockets>)?;
+        ctx.link_sockets_bindings(
+            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, WasiSockets>,
+        )?;
+        ctx.link_sockets_bindings(p2::bindings::sockets::udp::add_to_linker::<_, WasiSockets>)?;
+        ctx.link_sockets_bindings(
+            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, WasiSockets>,
+        )?;
+        ctx.link_sockets_bindings(
+            p2::bindings::sockets::instance_network::add_to_linker::<_, WasiSockets>,
+        )?;
+        ctx.link_sockets_default_bindings(
+            p2::bindings::sockets::network::add_to_linker::<_, WasiSockets>,
+        )?;
+        ctx.link_sockets_bindings(
+            p2::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>,
+        )?;
+        ctx.link_sockets_bindings(
+            p3::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>,
+        )?;
+        ctx.link_sockets_bindings(p3::bindings::sockets::types::add_to_linker::<_, WasiSockets>)?;
 
-        ctx.link_wasi_bindings(wasi_2023_10_18::add_to_linker)?;
-        ctx.link_wasi_bindings(wasi_2023_11_10::add_to_linker)?;
+        ctx.link_all_bindings(wasi_2023_10_18::add_to_linker)?;
+        ctx.link_all_bindings(wasi_2023_11_10::add_to_linker)?;
         Ok(())
     }
 
@@ -333,13 +481,11 @@ impl InstanceBuilder {
             let check = check.clone();
             Box::pin(async move {
                 match addr_use {
-                    wasmtime_wasi::SocketAddrUse::TcpBind => false,
-                    wasmtime_wasi::SocketAddrUse::TcpConnect
-                    | wasmtime_wasi::SocketAddrUse::UdpBind
-                    | wasmtime_wasi::SocketAddrUse::UdpConnect
-                    | wasmtime_wasi::SocketAddrUse::UdpOutgoingDatagram => {
-                        check(addr, addr_use).await
-                    }
+                    SocketAddrUse::TcpBind => false,
+                    SocketAddrUse::TcpConnect
+                    | SocketAddrUse::UdpBind
+                    | SocketAddrUse::UdpConnect
+                    | SocketAddrUse::UdpOutgoingDatagram => check(addr, addr_use).await,
                 }
             })
         });

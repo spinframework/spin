@@ -12,9 +12,11 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
+http-body = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
+pin-project-lite = { workspace = true }
 rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
 serde = { workspace = true }
@@ -25,6 +27,7 @@ spin-factor-outbound-http = { path = "../factor-outbound-http" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factor-wasi = { path = "../factor-wasi" }
 spin-factors = { path = "../factors" }
+spin-factors-executor = { path = "../factors-executor" }
 spin-http = { path = "../http" }
 spin-telemetry = { path = "../telemetry" }
 spin-trigger = { path = "../trigger" }

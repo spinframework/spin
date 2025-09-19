@@ -24,7 +24,7 @@ impl Component {
             keep_alive_interval
         ));
 
-        ensure_ok!(connection.publish("telemetry-topic", &b"Eureka!".to_vec(), Qos::AtLeastOnce));
+        ensure_ok!(connection.publish("telemetry-topic", b"Eureka!", Qos::AtLeastOnce));
 
         Ok(())
     }

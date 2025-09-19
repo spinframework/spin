@@ -219,7 +219,11 @@ fn json_types(conn: &postgres::Connection) -> Result<postgres::RowSet, postgres:
             (2, $1);
         "#;
 
-    let jsonb_pv = postgres::ParameterValue::Jsonb(r#"{ "s": "world", "n": 234, "b": false, "x": null }"#.as_bytes().to_vec());
+    let jsonb_pv = postgres::ParameterValue::Jsonb(
+        r#"{ "s": "world", "n": 234, "b": false, "x": null }"#
+            .as_bytes()
+            .to_vec(),
+    );
     conn.execute(insert_sql_spin_parameters, &[jsonb_pv])?;
 
     let sql = r#"

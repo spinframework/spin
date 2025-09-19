@@ -11,13 +11,13 @@ impl Component {
         let address = ensure_ok!(std::env::var(REDIS_ADDRESS_ENV));
         let connection = ensure_ok!(redis::Connection::open(&address));
 
-        ensure_ok!(connection.set("spin-example-get-set", &b"Eureka!".to_vec()));
+        ensure_ok!(connection.set("spin-example-get-set", b"Eureka!"));
 
         let payload = ensure_some!(ensure_ok!(connection.get("spin-example-get-set")));
 
         ensure_eq!(String::from_utf8_lossy(&payload), "Eureka!");
 
-        ensure_ok!(connection.set("spin-example-incr", &b"0".to_vec()));
+        ensure_ok!(connection.set("spin-example-incr", b"0"));
 
         let int_value = ensure_ok!(connection.incr("spin-example-incr"));
 

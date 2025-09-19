@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wit-bindgen = { version = "0.34.0", optional = true }
+wit-bindgen = { version = "0.46.0", optional = true }
 
 [features]
 default = ["define-component"]

@@ -1,0 +1,18 @@
+spin_manifest_version = 2
+
+[application]
+authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+description = "An application that makes concurrent outbound HTTP requests."
+name = "spin-wasi-http-async"
+version = "1.0.0"
+
+[[trigger.http]]
+route = "/..."
+component = "wasi-http-async"
+
+[component.wasi-http-async]
+source = "%{source=integration-wasi-http-p3-streaming}"
+allowed_outbound_hosts = ["http://*:*", "https://*:*"]
+[component.wasi-http-async.build]
+command = "cargo build --target wasm32-wasip1 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]

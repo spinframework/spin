@@ -8,6 +8,7 @@ mod spin;
 mod tls;
 mod wagi;
 mod wasi;
+mod wasip3;
 
 use std::{
     error::Error,
@@ -153,9 +154,13 @@ impl HttpTrigger {
         }
         if let Some(TriggerMetadata { base: Some(base) }) = app.get_trigger_metadata("http")? {
             if base == "/" {
-                tracing::warn!("This application has the deprecated trigger 'base' set to the default value '/'. This may be an error in the future!");
+                tracing::warn!(
+                    "This application has the deprecated trigger 'base' set to the default value '/'. This may be an error in the future!"
+                );
             } else {
-                bail!("This application is using the deprecated trigger 'base' field. The base must be prepended to each [[trigger.http]]'s 'route'.")
+                bail!(
+                    "This application is using the deprecated trigger 'base' field. The base must be prepended to each [[trigger.http]]'s 'route'."
+                )
             }
         }
         Ok(())

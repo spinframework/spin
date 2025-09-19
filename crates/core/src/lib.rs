@@ -75,6 +75,7 @@ impl Default for Config {
         inner.async_support(true);
         inner.epoch_interruption(true);
         inner.wasm_component_model(true);
+        inner.wasm_component_model_async(true);
         // If targeting musl, disable native unwind to address this issue:
         // https://github.com/spinframework/spin/issues/2889
         // TODO: remove this when wasmtime is updated to >= v27.0.0

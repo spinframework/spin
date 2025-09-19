@@ -30,7 +30,7 @@ impl HttpExecutor for SpinHttpExecutor {
     ) -> Result<Response<Body>> {
         let spin_http::routes::TriggerLookupKey::Component(component_id) = route_match.lookup_key()
         else {
-            anyhow::bail!("INCONCEIVABLE");
+            unreachable!()
         };
 
         tracing::trace!("Executing request using the Spin executor for component {component_id}");
