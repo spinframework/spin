@@ -22,7 +22,7 @@ struct TestFactors {
     http: OutboundHttpFactor,
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn allowed_host_is_allowed() -> anyhow::Result<()> {
     let mut state = test_instance_state("https://*", true).await?;
     let mut wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
@@ -36,7 +36,7 @@ async fn allowed_host_is_allowed() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn self_request_smoke_test() -> anyhow::Result<()> {
     let mut state = test_instance_state("http://self", true).await?;
     // [100::] is the IPv6 "Discard Prefix", which should always fail
@@ -52,7 +52,7 @@ async fn self_request_smoke_test() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn disallowed_host_fails() -> anyhow::Result<()> {
     let mut state = test_instance_state("https://allowed.test", true).await?;
     let mut wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
@@ -67,7 +67,7 @@ async fn disallowed_host_fails() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn disallowed_private_ips_fails() -> anyhow::Result<()> {
     async fn run_test(allow_private_ips: bool) -> anyhow::Result<()> {
         let mut state = test_instance_state("http://*", allow_private_ips).await?;
@@ -100,8 +100,8 @@ async fn disallowed_private_ips_fails() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn override_connect_host_disallowed_private_ip_fails() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread")]
+async fn override_connect_addr_disallowed_private_ip_fails() -> anyhow::Result<()> {
     let mut state = test_instance_state("http://*", false).await?;
     state.http.set_request_interceptor({
         struct Interceptor;
@@ -111,7 +111,7 @@ async fn override_connect_host_disallowed_private_ip_fails() -> anyhow::Result<(
                 &self,
                 mut request: InterceptRequest,
             ) -> wasmtime_wasi_http::HttpResult<InterceptOutcome> {
-                request.override_connect_host("localhost");
+                request.override_connect_addr("[::1]:80".parse().unwrap());
                 Ok(InterceptOutcome::Continue(request))
             }
         }
@@ -159,8 +159,8 @@ fn test_request_config() -> OutgoingRequestConfig {
     OutgoingRequestConfig {
         use_tls: false,
         connect_timeout: Duration::from_millis(10),
-        first_byte_timeout: Duration::from_millis(10),
-        between_bytes_timeout: Duration::from_millis(10),
+        first_byte_timeout: Duration::from_millis(0),
+        between_bytes_timeout: Duration::from_millis(0),
     }
 }
 
