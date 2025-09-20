@@ -1,0 +1,5 @@
+[llm_compute]
+type = "remote_http"
+url = "http://localhost:11434"
+auth_token = "your-secret-token"
+api_type = "open_ai"

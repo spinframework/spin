@@ -1,0 +1,22 @@
+#:schema https://schemas.spinframework.dev/spin/manifest-v2/latest.json
+
+spin_manifest_version = 2
+
+[application]
+name = "open-ai-rust"
+version = "0.1.0"
+authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+description = "Example showing using openAI with Spin"
+
+[[trigger.http]]
+route = "/..."
+component = "open-ai-rust"
+
+[component.open-ai-rust]
+source = "target/wasm32-wasip1/release/open_ai_rust.wasm"
+allowed_outbound_hosts = []
+ai_models = ["gpt-oss:20b"]
+
+[component.open-ai-rust.build]
+command = "cargo build --target wasm32-wasip1 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]
