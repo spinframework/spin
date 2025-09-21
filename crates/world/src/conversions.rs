@@ -628,7 +628,6 @@ mod otel {
         for Box<dyn opentelemetry_sdk::metrics::data::Aggregation>
     {
         fn from(value: wasi_metrics::AggregatedMetrics) -> Self {
-            use opentelemetry_sdk::metrics::data as O;
             use wasi_metrics::AggregatedMetrics;
 
             fn convert_metric_data<T>(
@@ -636,27 +635,14 @@ mod otel {
             ) -> Box<dyn opentelemetry_sdk::metrics::data::Aggregation>
             where
                 T: Clone + std::fmt::Debug + Send + Sync + 'static,
-                O::Gauge<T>: From<wasi_metrics::Gauge>,
-                O::Sum<T>: From<wasi_metrics::Sum>,
-                O::Histogram<T>: From<wasi_metrics::Histogram>,
-                O::ExponentialHistogram<T>: From<wasi_metrics::ExponentialHistogram>,
+                wasi_metrics::MetricNumber: ExtractWasiMetricNumber<T>,
             {
                 match md {
-                    wasi_metrics::MetricData::Gauge(gauge) => {
-                        let gauge: O::Gauge<T> = gauge.into();
-                        Box::new(gauge)
-                    }
-                    wasi_metrics::MetricData::Sum(sum) => {
-                        let sum: O::Sum<T> = sum.into();
-                        Box::new(sum)
-                    }
-                    wasi_metrics::MetricData::Histogram(hist) => {
-                        let hist: O::Histogram<T> = hist.into();
-                        Box::new(hist)
-                    }
+                    wasi_metrics::MetricData::Gauge(gauge) => Box::new(convert_gauge(gauge)),
+                    wasi_metrics::MetricData::Sum(sum) => Box::new(convert_sum(sum)),
+                    wasi_metrics::MetricData::Histogram(hist) => Box::new(convert_histogram(hist)),
                     wasi_metrics::MetricData::ExponentialHistogram(hist) => {
-                        let hist: O::ExponentialHistogram<T> = hist.into();
-                        Box::new(hist)
+                        Box::new(convert_exponential_histogram(hist))
                     }
                 }
             }
@@ -668,319 +654,130 @@ mod otel {
         }
     }
 
-    // TODO: we need to make these generic
-    impl From<wasi_metrics::Gauge> for opentelemetry_sdk::metrics::data::Gauge<f64> {
-        fn from(value: wasi_metrics::Gauge) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::GaugeDataPoint {
-                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        value: dp.value.into_f64(),
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                    })
-                    .collect(),
-                start_time: value.start_time.map(Into::into),
-                time: value.time.into(),
-            }
+    fn convert_gauge<T>(value: wasi_metrics::Gauge) -> opentelemetry_sdk::metrics::data::Gauge<T>
+    where
+        wasi_metrics::MetricNumber: ExtractWasiMetricNumber<T>,
+    {
+        opentelemetry_sdk::metrics::data::Gauge {
+            data_points: value
+                .data_points
+                .into_iter()
+                .map(|dp| opentelemetry_sdk::metrics::data::GaugeDataPoint {
+                    attributes: dp.attributes.into_iter().map(Into::into).collect(),
+                    value: dp.value.extract_number(),
+                    exemplars: dp
+                        .exemplars
+                        .into_iter()
+                        .map(|e| convert_exemplar(e))
+                        .collect(),
+                })
+                .collect(),
+            start_time: value.start_time.map(Into::into),
+            time: value.time.into(),
         }
     }
 
-    impl From<wasi_metrics::Gauge> for opentelemetry_sdk::metrics::data::Gauge<i64> {
-        fn from(value: wasi_metrics::Gauge) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::GaugeDataPoint {
-                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        value: dp.value.into_i64(),
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                    })
-                    .collect(),
-                start_time: value.start_time.map(Into::into),
-                time: value.time.into(),
-            }
+    fn convert_sum<T>(value: wasi_metrics::Sum) -> opentelemetry_sdk::metrics::data::Sum<T>
+    where
+        wasi_metrics::MetricNumber: ExtractWasiMetricNumber<T>,
+    {
+        opentelemetry_sdk::metrics::data::Sum {
+            data_points: value
+                .data_points
+                .into_iter()
+                .map(|dp| opentelemetry_sdk::metrics::data::SumDataPoint {
+                    attributes: dp.attributes.into_iter().map(Into::into).collect(),
+                    value: dp.value.extract_number(),
+                    exemplars: dp
+                        .exemplars
+                        .into_iter()
+                        .map(|e| convert_exemplar(e))
+                        .collect(),
+                })
+                .collect(),
+            start_time: value.start_time.into(),
+            time: value.time.into(),
+            temporality: value.temporality.into(),
+            is_monotonic: value.is_monotonic,
         }
     }
 
-    impl From<wasi_metrics::Gauge> for opentelemetry_sdk::metrics::data::Gauge<u64> {
-        fn from(value: wasi_metrics::Gauge) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::GaugeDataPoint {
-                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        value: dp.value.into_u64(),
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                    })
-                    .collect(),
-                start_time: value.start_time.map(Into::into),
-                time: value.time.into(),
-            }
+    fn convert_histogram<T>(
+        value: wasi_metrics::Histogram,
+    ) -> opentelemetry_sdk::metrics::data::Histogram<T>
+    where
+        wasi_metrics::MetricNumber: ExtractWasiMetricNumber<T>,
+    {
+        opentelemetry_sdk::metrics::data::Histogram {
+            data_points: value
+                .data_points
+                .into_iter()
+                .map(|dp| opentelemetry_sdk::metrics::data::HistogramDataPoint {
+                    attributes: dp.attributes.into_iter().map(Into::into).collect(),
+                    count: dp.count,
+                    bounds: dp.bounds,
+                    bucket_counts: dp.bucket_counts,
+                    min: match dp.min {
+                        Some(v) => Some(v.extract_number()),
+                        None => None,
+                    },
+                    max: match dp.max {
+                        Some(v) => Some(v.extract_number()),
+                        None => None,
+                    },
+                    exemplars: dp
+                        .exemplars
+                        .into_iter()
+                        .map(|e| convert_exemplar(e))
+                        .collect(),
+                    sum: dp.sum.extract_number(),
+                })
+                .collect(),
+            temporality: value.temporality.into(),
+            start_time: value.start_time.into(),
+            time: value.time.into(),
         }
     }
 
-    impl From<wasi_metrics::Sum> for opentelemetry_sdk::metrics::data::Sum<f64> {
-        fn from(value: wasi_metrics::Sum) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::SumDataPoint {
+    fn convert_exponential_histogram<T>(
+        value: wasi_metrics::ExponentialHistogram,
+    ) -> opentelemetry_sdk::metrics::data::ExponentialHistogram<T>
+    where
+        wasi_metrics::MetricNumber: ExtractWasiMetricNumber<T>,
+    {
+        opentelemetry_sdk::metrics::data::ExponentialHistogram {
+            data_points: value
+                .data_points
+                .into_iter()
+                .map(
+                    |dp| opentelemetry_sdk::metrics::data::ExponentialHistogramDataPoint {
                         attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        value: dp.value.into_f64(),
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                    })
-                    .collect(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-                temporality: value.temporality.into(),
-                is_monotonic: value.is_monotonic,
-            }
-        }
-    }
-
-    impl From<wasi_metrics::Sum> for opentelemetry_sdk::metrics::data::Sum<i64> {
-        fn from(value: wasi_metrics::Sum) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::SumDataPoint {
-                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        value: dp.value.into_i64(),
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                    })
-                    .collect(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-                temporality: value.temporality.into(),
-                is_monotonic: value.is_monotonic,
-            }
-        }
-    }
-
-    impl From<wasi_metrics::Sum> for opentelemetry_sdk::metrics::data::Sum<u64> {
-        fn from(value: wasi_metrics::Sum) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::SumDataPoint {
-                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        value: dp.value.into_u64(),
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                    })
-                    .collect(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-                temporality: value.temporality.into(),
-                is_monotonic: value.is_monotonic,
-            }
-        }
-    }
-
-    impl From<wasi_metrics::Histogram> for opentelemetry_sdk::metrics::data::Histogram<f64> {
-        fn from(value: wasi_metrics::Histogram) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::HistogramDataPoint {
-                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        count: dp.count,
-                        bounds: dp.bounds,
-                        bucket_counts: dp.bucket_counts,
+                        count: dp.count as usize,
                         min: match dp.min {
-                            Some(v) => Some(v.into_f64()),
+                            Some(v) => Some(v.extract_number()),
                             None => None,
                         },
                         max: match dp.max {
-                            Some(v) => Some(v.into_f64()),
+                            Some(v) => Some(v.extract_number()),
                             None => None,
                         },
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                        sum: dp.sum.into_f64(),
-                    })
-                    .collect(),
-                temporality: value.temporality.into(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-            }
-        }
-    }
-
-    impl From<wasi_metrics::Histogram> for opentelemetry_sdk::metrics::data::Histogram<i64> {
-        fn from(value: wasi_metrics::Histogram) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::HistogramDataPoint {
-                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        count: dp.count,
-                        bounds: dp.bounds,
-                        bucket_counts: dp.bucket_counts,
-                        min: match dp.min {
-                            Some(v) => Some(v.into_i64()),
-                            None => None,
-                        },
-                        max: match dp.max {
-                            Some(v) => Some(v.into_i64()),
-                            None => None,
-                        },
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                        sum: dp.sum.into_i64(),
-                    })
-                    .collect(),
-                temporality: value.temporality.into(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-            }
-        }
-    }
-
-    impl From<wasi_metrics::Histogram> for opentelemetry_sdk::metrics::data::Histogram<u64> {
-        fn from(value: wasi_metrics::Histogram) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(|dp| opentelemetry_sdk::metrics::data::HistogramDataPoint {
-                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                        count: dp.count,
-                        bounds: dp.bounds,
-                        bucket_counts: dp.bucket_counts,
-                        min: match dp.min {
-                            Some(v) => Some(v.into_u64()),
-                            None => None,
-                        },
-                        max: match dp.max {
-                            Some(v) => Some(v.into_u64()),
-                            None => None,
-                        },
-                        exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                        sum: dp.sum.into_u64(),
-                    })
-                    .collect(),
-                temporality: value.temporality.into(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-            }
-        }
-    }
-
-    impl From<wasi_metrics::ExponentialHistogram>
-        for opentelemetry_sdk::metrics::data::ExponentialHistogram<f64>
-    {
-        fn from(value: wasi_metrics::ExponentialHistogram) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(
-                        |dp| opentelemetry_sdk::metrics::data::ExponentialHistogramDataPoint {
-                            attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                            count: dp.count as usize,
-                            min: match dp.min {
-                                Some(v) => Some(v.into_f64()),
-                                None => None,
-                            },
-                            max: match dp.max {
-                                Some(v) => Some(v.into_f64()),
-                                None => None,
-                            },
-                            sum: dp.sum.into_f64(),
-                            scale: dp.scale,
-                            zero_count: dp.zero_count,
-                            positive_bucket: dp.positive_bucket.into(),
-                            negative_bucket: dp.negative_bucket.into(),
-                            zero_threshold: dp.zero_threshold,
-                            exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                        },
-                    )
-                    .collect(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-                temporality: value.temporality.into(),
-            }
-        }
-    }
-
-    impl From<wasi_metrics::ExponentialHistogram>
-        for opentelemetry_sdk::metrics::data::ExponentialHistogram<i64>
-    {
-        fn from(value: wasi_metrics::ExponentialHistogram) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(
-                        |dp| opentelemetry_sdk::metrics::data::ExponentialHistogramDataPoint {
-                            attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                            count: dp.count as usize,
-                            min: match dp.min {
-                                Some(v) => Some(v.into_i64()),
-                                None => None,
-                            },
-                            max: match dp.max {
-                                Some(v) => Some(v.into_i64()),
-                                None => None,
-                            },
-                            sum: dp.sum.into_i64(),
-                            scale: dp.scale,
-                            zero_count: dp.zero_count,
-                            positive_bucket: dp.positive_bucket.into(),
-                            negative_bucket: dp.negative_bucket.into(),
-                            zero_threshold: dp.zero_threshold,
-                            exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                        },
-                    )
-                    .collect(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-                temporality: value.temporality.into(),
-            }
-        }
-    }
-
-    impl From<wasi_metrics::ExponentialHistogram>
-        for opentelemetry_sdk::metrics::data::ExponentialHistogram<u64>
-    {
-        fn from(value: wasi_metrics::ExponentialHistogram) -> Self {
-            Self {
-                data_points: value
-                    .data_points
-                    .into_iter()
-                    .map(
-                        |dp| opentelemetry_sdk::metrics::data::ExponentialHistogramDataPoint {
-                            attributes: dp.attributes.into_iter().map(Into::into).collect(),
-                            count: dp.count as usize,
-                            min: match dp.min {
-                                Some(v) => Some(v.into_u64()),
-                                None => None,
-                            },
-                            max: match dp.max {
-                                Some(v) => Some(v.into_u64()),
-                                None => None,
-                            },
-                            sum: dp.sum.into_u64(),
-                            scale: dp.scale,
-                            zero_count: dp.zero_count,
-                            positive_bucket: dp.positive_bucket.into(),
-                            negative_bucket: dp.negative_bucket.into(),
-                            zero_threshold: dp.zero_threshold,
-                            exemplars: dp.exemplars.into_iter().map(Into::into).collect(),
-                        },
-                    )
-                    .collect(),
-                start_time: value.start_time.into(),
-                time: value.time.into(),
-                temporality: value.temporality.into(),
-            }
+                        sum: dp.sum.extract_number(),
+                        scale: dp.scale,
+                        zero_count: dp.zero_count,
+                        positive_bucket: dp.positive_bucket.into(),
+                        negative_bucket: dp.negative_bucket.into(),
+                        zero_threshold: dp.zero_threshold,
+                        exemplars: dp
+                            .exemplars
+                            .into_iter()
+                            .map(|e| convert_exemplar(e))
+                            .collect(),
+                    },
+                )
+                .collect(),
+            start_time: value.start_time.into(),
+            time: value.time.into(),
+            temporality: value.temporality.into(),
         }
     }
 
@@ -993,106 +790,32 @@ mod otel {
         }
     }
 
-    impl wasi_metrics::MetricNumber {
-        pub fn into_f64(self) -> f64 {
-            match self {
-                wasi_metrics::MetricNumber::F64(v) => v,
-                // TODO: validate that this is desirable over just converting i64 and u64 types to f64.
-                // In my mind, the panic will help reduce bugs (i.e. a float being converted to int)
-                _ => panic!("value is not f64"),
-            }
-        }
-
-        pub fn into_i64(self) -> i64 {
-            match self {
-                wasi_metrics::MetricNumber::S64(v) => v,
-                _ => panic!("value is not i64"),
-            }
-        }
-
-        pub fn into_u64(self) -> u64 {
-            match self {
-                wasi_metrics::MetricNumber::U64(v) => v,
-                _ => panic!("value is not u64"),
-            }
-        }
-    }
-
-    impl From<wasi_metrics::Exemplar> for opentelemetry_sdk::metrics::data::Exemplar<f64> {
-        fn from(value: wasi_metrics::Exemplar) -> Self {
-            let span_id: [u8; 8] = value
-                .span_id
-                .as_bytes()
-                .try_into()
-                .expect("Span ID is longer than 8 bytes");
-            let trace_id: [u8; 16] = value
-                .trace_id
-                .as_bytes()
-                .try_into()
-                .expect("Trace ID is longer than 16 bytes");
-            Self {
-                filtered_attributes: value
-                    .filtered_attributes
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
-                time: value.time.into(),
-                value: value.value.into_f64(),
-                span_id,
-                trace_id,
-            }
-        }
-    }
-
-    impl From<wasi_metrics::Exemplar> for opentelemetry_sdk::metrics::data::Exemplar<i64> {
-        fn from(value: wasi_metrics::Exemplar) -> Self {
-            let span_id: [u8; 8] = value
-                .span_id
-                .as_bytes()
-                .try_into()
-                .expect("Span ID is longer than 8 bytes");
-            let trace_id: [u8; 16] = value
-                .trace_id
-                .as_bytes()
-                .try_into()
-                .expect("Trace ID is longer than 16 bytes");
-            Self {
-                filtered_attributes: value
-                    .filtered_attributes
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
-                time: value.time.into(),
-                value: value.value.into_i64(),
-                span_id,
-                trace_id,
-            }
-        }
-    }
-
-    impl From<wasi_metrics::Exemplar> for opentelemetry_sdk::metrics::data::Exemplar<u64> {
-        fn from(value: wasi_metrics::Exemplar) -> Self {
-            let span_id: [u8; 8] = value
-                .span_id
-                .as_bytes()
-                .try_into()
-                .expect("Span ID is longer than 8 bytes");
-            let trace_id: [u8; 16] = value
-                .trace_id
-                .as_bytes()
-                .try_into()
-                .expect("Trace ID is longer than 16 bytes");
-            Self {
-                filtered_attributes: value
-                    .filtered_attributes
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
-                time: value.time.into(),
-                value: value.value.into_u64(),
-                span_id,
-                trace_id,
-            }
+    fn convert_exemplar<T>(
+        value: wasi_metrics::Exemplar,
+    ) -> opentelemetry_sdk::metrics::data::Exemplar<T>
+    where
+        wasi_metrics::MetricNumber: ExtractWasiMetricNumber<T>,
+    {
+        let span_id: [u8; 8] = value
+            .span_id
+            .as_bytes()
+            .try_into()
+            .expect("Span ID is longer than 8 bytes");
+        let trace_id: [u8; 16] = value
+            .trace_id
+            .as_bytes()
+            .try_into()
+            .expect("Trace ID is longer than 16 bytes");
+        opentelemetry_sdk::metrics::data::Exemplar {
+            filtered_attributes: value
+                .filtered_attributes
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            time: value.time.into(),
+            value: value.value.extract_number(),
+            span_id,
+            trace_id,
         }
     }
 
@@ -1104,6 +827,37 @@ mod otel {
                 T::Delta => OT::Delta,
                 T::LowMemory => OT::LowMemory,
                 _ => OT::Cumulative,
+            }
+        }
+    }
+
+    trait ExtractWasiMetricNumber<T> {
+        fn extract_number(self) -> T;
+    }
+
+    impl ExtractWasiMetricNumber<f64> for wasi_metrics::MetricNumber {
+        fn extract_number(self) -> f64 {
+            match self {
+                wasi_metrics::MetricNumber::F64(v) => v,
+                _ => panic!("value is not f64"),
+            }
+        }
+    }
+
+    impl ExtractWasiMetricNumber<i64> for wasi_metrics::MetricNumber {
+        fn extract_number(self) -> i64 {
+            match self {
+                wasi_metrics::MetricNumber::S64(v) => v,
+                _ => panic!("value is not i64"),
+            }
+        }
+    }
+
+    impl ExtractWasiMetricNumber<u64> for wasi_metrics::MetricNumber {
+        fn extract_number(self) -> u64 {
+            match self {
+                wasi_metrics::MetricNumber::U64(v) => v,
+                _ => panic!("value is not u64"),
             }
         }
     }
