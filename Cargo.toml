@@ -170,16 +170,16 @@ tower-service = "0.3.3"
 tracing = { version = "0.1.41", features = ["log"] }
 url = "2"
 walkdir = "2"
-wasm-encoder = "0.236.1"
-wasm-metadata = "0.236.1"
+wasm-encoder = "0.239.0"
+wasm-metadata = "0.239.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
-wasmparser = "0.236.1"
-wasmtime = "36.0.2"
-wasmtime-wasi = "36.0.2"
-wasmtime-wasi-http = "36.0.2"
-wit-component = "0.236.1"
-wit-parser = "0.236.1"
+wasmparser = "0.239.0"
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0" }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0" }
+wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0" }
+wit-component = "0.239.0"
+wit-parser = "0.239.0"
 
 spin-componentize = { path = "crates/componentize" }
 
