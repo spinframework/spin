@@ -6,7 +6,7 @@ use std::{
 };
 
 use serde::Deserialize;
-use spin_expressions::{Key, Provider};
+use spin_expressions::{provider::ProviderVariableKind, Key, Provider};
 use spin_factors::anyhow::{self, Context as _};
 use spin_world::async_trait;
 use tracing::{instrument, Level};
@@ -131,6 +131,10 @@ impl Provider for EnvVariablesProvider {
     #[instrument(name = "spin_variables.get_from_env", level = Level::DEBUG, skip(self), err(level = Level::INFO))]
     async fn get(&self, key: &Key) -> anyhow::Result<Option<String>> {
         tokio::task::block_in_place(|| self.get_sync(key))
+    }
+
+    fn kind(&self) -> ProviderVariableKind {
+        ProviderVariableKind::Static
     }
 }
 

@@ -9158,6 +9158,7 @@ dependencies = [
  "spin-core",
  "spin-factor-key-value",
  "spin-factor-sqlite",
+ "spin-factor-variables",
  "spin-factor-wasi",
  "spin-factors",
  "spin-factors-executor",
