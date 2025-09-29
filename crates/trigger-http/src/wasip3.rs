@@ -11,7 +11,7 @@ use std::{
     task::{Context, Poll},
 };
 use tokio::task;
-use tracing::{instrument, Level};
+use tracing::{instrument, Instrument, Level};
 use wasmtime_wasi_http::{
     body::HyperIncomingBody as Body,
     p3::{
@@ -81,6 +81,7 @@ impl HttpExecutor for Wasip3HttpExecutor<'_> {
                     })
                     .await?
             }
+            .in_current_span()
             .inspect(|result| {
                 if let Err(error) = result {
                     tracing::error!("Component error handling request: {error:?}");
