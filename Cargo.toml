@@ -177,9 +177,9 @@ wasm-metadata = "0.239.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 wasmparser = "0.239.0"
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0", features = ["component-model-async"] }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0", features = ["p3"] }
-wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-37.0.0", features = ["p3"] }
+wasmtime = { version = "37.0.1", features = ["component-model-async"] }
+wasmtime-wasi = { version = "37.0.1", features = ["p3"] }
+wasmtime-wasi-http = { version = "37.0.1", features = ["p3"] }
 wit-component = "0.239.0"
 wit-parser = "0.239.0"
 
