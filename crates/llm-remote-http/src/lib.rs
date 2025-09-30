@@ -1,53 +1,43 @@
 use anyhow::Result;
-use reqwest::{
-    header::{HeaderMap, HeaderValue},
-    Client, Url,
+use reqwest::Url;
+use spin_world::{
+    async_trait,
+    v2::llm::{self as wasi_llm},
 };
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use spin_world::v2::llm::{self as wasi_llm};
 
-#[derive(Clone)]
+mod default;
+mod open_ai;
+
 pub struct RemoteHttpLlmEngine {
-    auth_token: String,
-    url: Url,
-    client: Option<Client>,
+    worker: Box<dyn LlmWorker>,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all(serialize = "camelCase"))]
-struct InferRequestBodyParams {
-    max_tokens: u32,
-    repeat_penalty: f32,
-    repeat_penalty_last_n_token_count: u32,
-    temperature: f32,
-    top_k: u32,
-    top_p: f32,
+impl RemoteHttpLlmEngine {
+    pub fn new(url: Url, auth_token: String, api_type: ApiType) -> Self {
+        let worker: Box<dyn LlmWorker> = match api_type {
+            ApiType::OpenAi => Box::new(open_ai::AgentEngine::new(auth_token, url, None)),
+            ApiType::Default => Box::new(default::AgentEngine::new(auth_token, url, None)),
+        };
+        Self { worker }
+    }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all(deserialize = "camelCase"))]
-struct InferUsage {
-    prompt_token_count: u32,
-    generated_token_count: u32,
-}
+#[async_trait]
+pub trait LlmWorker: Send + Sync {
+    async fn infer(
+        &mut self,
+        model: wasi_llm::InferencingModel,
+        prompt: String,
+        params: wasi_llm::InferencingParams,
+    ) -> Result<wasi_llm::InferencingResult, wasi_llm::Error>;
 
-#[derive(Deserialize)]
-struct InferResponseBody {
-    text: String,
-    usage: InferUsage,
-}
+    async fn generate_embeddings(
+        &mut self,
+        model: wasi_llm::EmbeddingModel,
+        data: Vec<String>,
+    ) -> Result<wasi_llm::EmbeddingsResult, wasi_llm::Error>;
 
-#[derive(Deserialize)]
-#[serde(rename_all(deserialize = "camelCase"))]
-struct EmbeddingUsage {
-    prompt_token_count: u32,
-}
-
-#[derive(Deserialize)]
-struct EmbeddingResponseBody {
-    embeddings: Vec<Vec<f32>>,
-    usage: EmbeddingUsage,
+    fn url(&self) -> Url;
 }
 
 impl RemoteHttpLlmEngine {
@@ -57,60 +47,7 @@ impl RemoteHttpLlmEngine {
         prompt: String,
         params: wasi_llm::InferencingParams,
     ) -> Result<wasi_llm::InferencingResult, wasi_llm::Error> {
-        let client = self.client.get_or_insert_with(Default::default);
-
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "authorization",
-            HeaderValue::from_str(&format!("bearer {}", self.auth_token)).map_err(|_| {
-                wasi_llm::Error::RuntimeError("Failed to create authorization header".to_string())
-            })?,
-        );
-        spin_telemetry::inject_trace_context(&mut headers);
-
-        let inference_options = InferRequestBodyParams {
-            max_tokens: params.max_tokens,
-            repeat_penalty: params.repeat_penalty,
-            repeat_penalty_last_n_token_count: params.repeat_penalty_last_n_token_count,
-            temperature: params.temperature,
-            top_k: params.top_k,
-            top_p: params.top_p,
-        };
-        let body = serde_json::to_string(&json!({
-            "model": model,
-            "prompt": prompt,
-            "options": inference_options
-        }))
-        .map_err(|_| wasi_llm::Error::RuntimeError("Failed to serialize JSON".to_string()))?;
-
-        let infer_url = self
-            .url
-            .join("/infer")
-            .map_err(|_| wasi_llm::Error::RuntimeError("Failed to create URL".to_string()))?;
-        tracing::info!("Sending remote inference request to {infer_url}");
-
-        let resp = client
-            .request(reqwest::Method::POST, infer_url)
-            .headers(headers)
-            .body(body)
-            .send()
-            .await
-            .map_err(|err| {
-                wasi_llm::Error::RuntimeError(format!("POST /infer request error: {err}"))
-            })?;
-
-        match resp.json::<InferResponseBody>().await {
-            Ok(val) => Ok(wasi_llm::InferencingResult {
-                text: val.text,
-                usage: wasi_llm::InferencingUsage {
-                    prompt_token_count: val.usage.prompt_token_count,
-                    generated_token_count: val.usage.generated_token_count,
-                },
-            }),
-            Err(err) => Err(wasi_llm::Error::RuntimeError(format!(
-                "Failed to deserialize response for \"POST  /index\": {err}"
-            ))),
-        }
+        self.worker.infer(model, prompt, params).await
     }
 
     pub async fn generate_embeddings(
@@ -118,62 +55,19 @@ impl RemoteHttpLlmEngine {
         model: wasi_llm::EmbeddingModel,
         data: Vec<String>,
     ) -> Result<wasi_llm::EmbeddingsResult, wasi_llm::Error> {
-        let client = self.client.get_or_insert_with(Default::default);
-
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "authorization",
-            HeaderValue::from_str(&format!("bearer {}", self.auth_token)).map_err(|_| {
-                wasi_llm::Error::RuntimeError("Failed to create authorization header".to_string())
-            })?,
-        );
-        spin_telemetry::inject_trace_context(&mut headers);
-
-        let body = serde_json::to_string(&json!({
-            "model": model,
-            "input": data
-        }))
-        .map_err(|_| wasi_llm::Error::RuntimeError("Failed to serialize JSON".to_string()))?;
-
-        let resp = client
-            .request(
-                reqwest::Method::POST,
-                self.url.join("/embed").map_err(|_| {
-                    wasi_llm::Error::RuntimeError("Failed to create URL".to_string())
-                })?,
-            )
-            .headers(headers)
-            .body(body)
-            .send()
-            .await
-            .map_err(|err| {
-                wasi_llm::Error::RuntimeError(format!("POST /embed request error: {err}"))
-            })?;
-
-        match resp.json::<EmbeddingResponseBody>().await {
-            Ok(val) => Ok(wasi_llm::EmbeddingsResult {
-                embeddings: val.embeddings,
-                usage: wasi_llm::EmbeddingsUsage {
-                    prompt_token_count: val.usage.prompt_token_count,
-                },
-            }),
-            Err(err) => Err(wasi_llm::Error::RuntimeError(format!(
-                "Failed to deserialize response  for \"POST  /embed\": {err}"
-            ))),
-        }
+        self.worker.generate_embeddings(model, data).await
     }
 
     pub fn url(&self) -> Url {
-        self.url.clone()
+        self.worker.url()
     }
 }
 
-impl RemoteHttpLlmEngine {
-    pub fn new(url: Url, auth_token: String) -> Self {
-        RemoteHttpLlmEngine {
-            url,
-            auth_token,
-            client: None,
-        }
-    }
+#[derive(Debug, Default, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiType {
+    /// Compatible with OpenAI's API alongside some other LLMs
+    OpenAi,
+    #[default]
+    Default,
 }
