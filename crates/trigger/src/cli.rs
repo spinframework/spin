@@ -341,7 +341,7 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> TriggerAppBuilder<T, B> {
         let configured_app = {
             let _sloth_guard = warn_if_wasm_build_slothful();
             executor
-                .load_app(app, runtime_config.into(), loader)
+                .load_app(app, runtime_config.into(), loader, Some(T::TYPE))
                 .await?
         };
 

@@ -1,0 +1,12 @@
+[package]
+name = "unsupported-import"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1"
+spin-sdk = "5"
+wit-bindgen = "0.43.0"
