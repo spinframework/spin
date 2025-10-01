@@ -28,6 +28,7 @@ use spin_factors::{wasmtime::component::ResourceTable, RuntimeFactorsInstanceSta
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::TcpStream,
+    sync::Semaphore,
     time::timeout,
 };
 use tokio_rustls::client::TlsStream;
@@ -282,6 +283,10 @@ impl WasiHttpView for WasiHttpImplInner<'_> {
             self_request_origin: self.state.self_request_origin.clone(),
             blocked_networks: self.state.blocked_networks.clone(),
             http_clients: self.state.wasi_http_clients.clone(),
+            concurrent_outbound_requests_semaphore: self
+                .state
+                .concurrent_outbound_requests_semaphore
+                .clone(),
         };
         Ok(HostFutureIncomingResponse::Pending(
             wasmtime_wasi::runtime::spawn(
@@ -307,6 +312,7 @@ struct RequestSender {
     self_request_origin: Option<SelfRequestOrigin>,
     request_interceptor: Option<Arc<dyn OutboundHttpInterceptor>>,
     http_clients: HttpClients,
+    concurrent_outbound_requests_semaphore: Option<Arc<Semaphore>>,
 }
 
 impl RequestSender {
@@ -474,11 +480,17 @@ impl RequestSender {
             },
         );
 
+        // If we're limiting concurrent outbound requests, acquire a permit
+        let permit = match &self.concurrent_outbound_requests_semaphore {
+            Some(s) => s.acquire().await.ok(),
+            None => None,
+        };
         let resp = timeout(first_byte_timeout, resp)
             .await
             .map_err(|_| ErrorCode::ConnectionReadTimeout)?
             .map_err(hyper_legacy_request_error)?
             .map(|body| body.map_err(hyper_request_error).boxed());
+        drop(permit);
 
         tracing::Span::current().record("http.response.status_code", resp.status().as_u16());
 
