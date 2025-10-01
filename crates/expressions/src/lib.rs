@@ -11,8 +11,6 @@ pub use provider::Provider;
 use template::Part;
 pub use template::Template;
 
-use crate::provider::ProviderVariableKind;
-
 /// A [`ProviderResolver`] that can be shared.
 pub type SharedPreparedResolver =
     std::sync::Arc<std::sync::OnceLock<std::sync::Arc<PreparedResolver>>>;
@@ -92,50 +90,25 @@ impl ProviderResolver {
         Ok(PreparedResolver { variables })
     }
 
-    /// Ensures that all required variables are resolvable at startup
-    pub async fn ensure_required_variables_resolvable(&self) -> Result<()> {
-        // If a dynamic provider is available, skip validation.
-        if self
-            .providers
-            .iter()
-            .any(|p| p.kind() == ProviderVariableKind::Dynamic)
-        {
-            return Ok(());
-        }
-
-        let mut unvalidated_keys = vec![];
-        for key in self.internal.variables.keys() {
-            // If default value is provided, skip validation.
-            if let Some(value) = self.internal.variables.get(key) {
-                if value.default.is_some() {
-                    continue;
-                }
-            }
-
-            let mut resolved = false;
-
-            for provider in &self.providers {
-                if provider
-                    .get(&Key(key))
-                    .await
-                    .map_err(Error::Provider)?
-                    .is_some()
-                {
-                    resolved = true;
-                    break;
-                }
-            }
-
-            if !resolved {
-                unvalidated_keys.push(key);
+    /// Ensures that all required variables are not unresolvable
+    pub fn ensure_required_variables_resolvable(&self) -> Result<()> {
+        let mut unresolvable_keys = vec![];
+        for key in self.internal.required_variables() {
+            let key = Key::new(key)?;
+            let resolvable = self
+                .providers
+                .iter()
+                .any(|provider| provider.may_resolve(&key));
+            if !resolvable {
+                unresolvable_keys.push(key);
             }
         }
 
-        if unvalidated_keys.is_empty() {
+        if unresolvable_keys.is_empty() {
             Ok(())
         } else {
             Err(Error::Provider(anyhow::anyhow!(
-                "no provider resolved required variable(s): {unvalidated_keys:?}",
+                "no provider resolved required variable(s): {unresolvable_keys:?}",
             )))
         }
     }
@@ -247,6 +220,12 @@ impl Resolver {
             _ => Ok(()),
         })?;
         Ok(template)
+    }
+
+    fn required_variables(&self) -> impl Iterator<Item = &str> {
+        self.variables
+            .iter()
+            .filter_map(|(name, variable)| variable.default.is_none().then_some(name.as_str()))
     }
 }
 
@@ -360,7 +339,6 @@ mod tests {
     use async_trait::async_trait;
 
     use super::*;
-    use crate::provider::ProviderVariableKind;
 
     #[derive(Debug)]
     struct TestProvider;
@@ -375,8 +353,8 @@ mod tests {
             }
         }
 
-        fn kind(&self) -> ProviderVariableKind {
-            ProviderVariableKind::Static
+        fn may_resolve(&self, key: &Key) -> bool {
+            key.as_ref() == "required"
         }
     }
 
