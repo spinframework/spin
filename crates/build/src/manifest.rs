@@ -108,6 +108,8 @@ fn build_configs_from_manifest(
         .map(|(id, c)| ComponentBuildInfo {
             id: id.to_string(),
             build: c.build.clone(),
+            source: Some(c.source.clone()),
+            dependencies: c.dependencies.clone(),
         })
         .collect()
 }
@@ -160,7 +162,10 @@ async fn has_deployment_targets(manifest_file: impl AsRef<Path>) -> Result<bool>
 pub struct ComponentBuildInfo {
     #[serde(default)]
     pub id: String,
+    pub source: Option<v2::ComponentSource>,
     pub build: Option<v2::ComponentBuildConfig>,
+    #[serde(default)]
+    pub dependencies: v2::ComponentDependencies,
 }
 
 #[derive(Deserialize)]
