@@ -73,7 +73,14 @@ impl p3::WasiHttpCtx for InstanceState {
                 >,
             > + Send,
     > {
-        // TODO: do we neeed to do anything with `fut`?
+        // If the caller (i.e. the guest) has trouble consuming the response
+        // (e.g. encountering a network error while forwarding it on to some
+        // other place), it can report that error to us via `fut`.  However,
+        // there's nothing we'll be able to do with it here, so we ignore it.
+        // Presumably the guest will also drop the body stream and trailers
+        // future if it encounters such an error while those things are still
+        // arriving, which Hyper will deal with as appropriate (e.g. closing the
+        // connection).
         _ = fut;
 
         let request_sender = RequestSender {
