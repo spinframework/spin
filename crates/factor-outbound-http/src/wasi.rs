@@ -189,6 +189,7 @@ where
         let (state, table) = C::get_data_with_table(store);
         WasiHttpImpl(WasiHttpImplInner { state, table })
     }
+
     let get_http = get_http::<C> as fn(&mut C::StoreData) -> WasiHttpImpl<WasiHttpImplInner<'_>>;
     wasmtime_wasi_http::bindings::http::outgoing_handler::add_to_linker::<_, HasHttp>(
         linker, get_http,
@@ -206,6 +207,7 @@ where
         let (state, table) = C::get_data_with_table(store);
         p3::WasiHttpCtxView { ctx: state, table }
     }
+
     let get_http_p3 = get_http_p3::<C> as fn(&mut C::StoreData) -> p3::WasiHttpCtxView<'_>;
     p3::bindings::http::handler::add_to_linker::<_, p3::WasiHttp>(linker, get_http_p3)?;
     p3::bindings::http::types::add_to_linker::<_, p3::WasiHttp>(linker, get_http_p3)?;
