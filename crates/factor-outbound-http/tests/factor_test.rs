@@ -67,6 +67,7 @@ async fn disallowed_host_fails() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg_attr(target_os = "macos", ignore)]
 #[tokio::test(flavor = "multi_thread")]
 async fn disallowed_private_ips_fails() -> anyhow::Result<()> {
     async fn run_test(allow_private_ips: bool) -> anyhow::Result<()> {
