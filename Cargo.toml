@@ -146,7 +146,7 @@ lazy_static = "1.5"
 opentelemetry = "0.28"
 # The default `reqwest-blocking-client` causes a runtime panic
 opentelemetry-otlp = { version = "0.28", default-features = false, features = ["http-proto", "reqwest-client", "logs"]}
-opentelemetry_sdk = {version = "0.28", features = ["experimental_metrics_periodicreader_with_async_runtime", "experimental_trace_batch_span_processor_with_async_runtime"]}
+opentelemetry_sdk = {version = "0.28", features = ["experimental_metrics_periodicreader_with_async_runtime", "experimental_trace_batch_span_processor_with_async_runtime", "experimental_logs_batch_log_processor_with_async_runtime"]}
 path-absolutize = "3"
 quote = "1"
 rand = "0.9"
