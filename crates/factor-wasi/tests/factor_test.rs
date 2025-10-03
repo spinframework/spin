@@ -19,9 +19,9 @@ async fn environment_works() -> anyhow::Result<()> {
         environment = { FOO = "bar" }
     });
     let mut state = env.build_instance_state().await?;
-    let mut wasi = WasiFactor::get_wasi_impl(&mut state).unwrap();
+    let mut cli = WasiFactor::get_cli_impl(&mut state).unwrap();
 
-    let val = wasi
+    let val = cli
         .get_environment()?
         .into_iter()
         .find_map(|(key, val)| (key == "FOO").then_some(val));

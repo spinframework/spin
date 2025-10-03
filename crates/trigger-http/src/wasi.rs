@@ -17,6 +17,34 @@ use wasmtime_wasi_http::{bindings::Proxy, body::HyperIncomingBody as Body, WasiH
 
 use crate::{headers::prepare_request_headers, server::HttpExecutor, TriggerInstanceBuilder};
 
+pub(super) fn prepare_request(
+    route_match: &RouteMatch<'_, '_>,
+    req: &mut Request<Body>,
+    client_addr: SocketAddr,
+) -> Result<()> {
+    let spin_http::routes::TriggerLookupKey::Component(component_id) = route_match.lookup_key()
+    else {
+        unreachable!()
+    };
+
+    tracing::trace!("Executing request using the Wasi executor for component {component_id}");
+
+    let headers = prepare_request_headers(req, route_match, client_addr)?;
+    req.headers_mut().clear();
+    req.headers_mut()
+        .extend(headers.into_iter().filter_map(|(n, v)| {
+            let Ok(name) = n.parse::<HeaderName>() else {
+                return None;
+            };
+            let Ok(value) = HeaderValue::from_bytes(v.as_bytes()) else {
+                return None;
+            };
+            Some((name, value))
+        }));
+
+    Ok(())
+}
+
 /// An [`HttpExecutor`] that uses the `wasi:http/incoming-handler` interface.
 pub struct WasiHttpExecutor<'a> {
     pub handler_type: &'a HandlerType,
@@ -31,27 +59,9 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
         mut req: Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<Response<Body>> {
-        let spin_http::routes::TriggerLookupKey::Component(component_id) = route_match.lookup_key()
-        else {
-            anyhow::bail!("INCONCEIVABLE");
-        };
-
-        tracing::trace!("Executing request using the Wasi executor for component {component_id}");
+        prepare_request(route_match, &mut req, client_addr)?;
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
-
-        let headers = prepare_request_headers(&req, route_match, client_addr)?;
-        req.headers_mut().clear();
-        req.headers_mut()
-            .extend(headers.into_iter().filter_map(|(n, v)| {
-                let Ok(name) = n.parse::<HeaderName>() else {
-                    return None;
-                };
-                let Ok(value) = HeaderValue::from_bytes(v.as_bytes()) else {
-                    return None;
-                };
-                Some((name, value))
-            }));
 
         let mut wasi_http = spin_factor_outbound_http::OutboundHttpFactor::get_wasi_http_impl(
             store.data_mut().factors_instance_state_mut(),
@@ -92,6 +102,7 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
                 Handler::Handler2023_11_10(guest)
             }
             HandlerType::Wasi0_2(indices) => Handler::Latest(indices.load(&mut store, &instance)?),
+            HandlerType::Wasi0_3(_) => unreachable!("should have used Wasip3HttpExecutor"),
             HandlerType::Spin => unreachable!("should have used SpinHttpExecutor"),
             HandlerType::Wagi(_) => unreachable!("should have used WagiExecutor instead"),
         };

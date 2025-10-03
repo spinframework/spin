@@ -1,5 +1,5 @@
 [package]
-name = "integration-wasi-http-streaming"
+name = "integration-wasi-http-p2-streaming"
 version = "0.1.0"
 edition = "2021"
 

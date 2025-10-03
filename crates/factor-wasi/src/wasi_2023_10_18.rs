@@ -1,8 +1,13 @@
 use spin_factors::anyhow::{self, Result};
 use std::mem;
-use wasmtime::component::{Linker, Resource};
+use wasmtime::component::{Linker, Resource, ResourceTable};
+use wasmtime_wasi::cli::{WasiCli, WasiCliCtxView};
+use wasmtime_wasi::clocks::{WasiClocks, WasiClocksCtxView};
+use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemCtxView};
 use wasmtime_wasi::p2::DynPollable;
-use wasmtime_wasi::{TrappableError, WasiCtxView};
+use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
+use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsCtxView};
+use wasmtime_wasi::TrappableError;
 
 mod latest {
     pub use wasmtime_wasi::p2::bindings::*;
@@ -112,45 +117,50 @@ use wasi::sockets::tcp::{
 };
 use wasi::sockets::udp::Datagram;
 
-use crate::HasWasi;
+use crate::HasIo;
 
 pub fn add_to_linker<T>(
     linker: &mut Linker<T>,
-    closure: fn(&mut T) -> WasiCtxView<'_>,
+    io_closure: fn(&mut T) -> &mut ResourceTable,
+    random_closure: fn(&mut T) -> &mut WasiRandomCtx,
+    clocks_closure: fn(&mut T) -> WasiClocksCtxView<'_>,
+    cli_closure: fn(&mut T) -> WasiCliCtxView<'_>,
+    filesystem_closure: fn(&mut T) -> WasiFilesystemCtxView<'_>,
+    sockets_closure: fn(&mut T) -> WasiSocketsCtxView<'_>,
 ) -> Result<()>
 where
     T: Send + 'static,
 {
-    wasi::clocks::monotonic_clock::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::clocks::wall_clock::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::filesystem::types::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::filesystem::preopens::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::io::poll::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::io::streams::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::random::random::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::random::insecure::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::random::insecure_seed::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::exit::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::environment::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::stdin::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::stdout::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::stderr::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::terminal_input::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::terminal_output::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::terminal_stdin::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::terminal_stdout::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::cli::terminal_stderr::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::sockets::tcp::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::sockets::tcp_create_socket::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::sockets::udp::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::sockets::udp_create_socket::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::sockets::instance_network::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::sockets::network::add_to_linker::<_, HasWasi>(linker, closure)?;
-    wasi::sockets::ip_name_lookup::add_to_linker::<_, HasWasi>(linker, closure)?;
+    wasi::clocks::monotonic_clock::add_to_linker::<_, WasiClocks>(linker, clocks_closure)?;
+    wasi::clocks::wall_clock::add_to_linker::<_, WasiClocks>(linker, clocks_closure)?;
+    wasi::filesystem::types::add_to_linker::<_, WasiFilesystem>(linker, filesystem_closure)?;
+    wasi::filesystem::preopens::add_to_linker::<_, WasiFilesystem>(linker, filesystem_closure)?;
+    wasi::io::poll::add_to_linker::<_, HasIo>(linker, io_closure)?;
+    wasi::io::streams::add_to_linker::<_, HasIo>(linker, io_closure)?;
+    wasi::random::random::add_to_linker::<_, WasiRandom>(linker, random_closure)?;
+    wasi::random::insecure::add_to_linker::<_, WasiRandom>(linker, random_closure)?;
+    wasi::random::insecure_seed::add_to_linker::<_, WasiRandom>(linker, random_closure)?;
+    wasi::cli::exit::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::environment::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::stdin::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::stdout::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::stderr::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::terminal_input::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::terminal_output::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
+    wasi::sockets::tcp::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
+    wasi::sockets::tcp_create_socket::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
+    wasi::sockets::udp::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
+    wasi::sockets::udp_create_socket::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
+    wasi::sockets::instance_network::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
+    wasi::sockets::network::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
+    wasi::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
     Ok(())
 }
 
-impl wasi::clocks::monotonic_clock::Host for WasiCtxView<'_> {
+impl wasi::clocks::monotonic_clock::Host for WasiClocksCtxView<'_> {
     fn now(&mut self) -> wasmtime::Result<Instant> {
         latest::clocks::monotonic_clock::Host::now(self)
     }
@@ -172,7 +182,7 @@ impl wasi::clocks::monotonic_clock::Host for WasiCtxView<'_> {
     }
 }
 
-impl wasi::clocks::wall_clock::Host for WasiCtxView<'_> {
+impl wasi::clocks::wall_clock::Host for WasiClocksCtxView<'_> {
     fn now(&mut self) -> wasmtime::Result<Datetime> {
         Ok(latest::clocks::wall_clock::Host::now(self)?.into())
     }
@@ -182,7 +192,7 @@ impl wasi::clocks::wall_clock::Host for WasiCtxView<'_> {
     }
 }
 
-impl wasi::filesystem::types::Host for WasiCtxView<'_> {
+impl wasi::filesystem::types::Host for WasiFilesystemCtxView<'_> {
     fn filesystem_error_code(
         &mut self,
         err: Resource<wasi::filesystem::types::Error>,
@@ -191,7 +201,7 @@ impl wasi::filesystem::types::Host for WasiCtxView<'_> {
     }
 }
 
-impl wasi::filesystem::types::HostDescriptor for WasiCtxView<'_> {
+impl wasi::filesystem::types::HostDescriptor for WasiFilesystemCtxView<'_> {
     fn read_via_stream(
         &mut self,
         self_: Resource<Descriptor>,
@@ -585,7 +595,7 @@ impl wasi::filesystem::types::HostDescriptor for WasiCtxView<'_> {
     }
 }
 
-impl wasi::filesystem::types::HostDirectoryEntryStream for WasiCtxView<'_> {
+impl wasi::filesystem::types::HostDirectoryEntryStream for WasiFilesystemCtxView<'_> {
     async fn read_directory_entry(
         &mut self,
         self_: Resource<DirectoryEntryStream>,
@@ -602,47 +612,47 @@ impl wasi::filesystem::types::HostDirectoryEntryStream for WasiCtxView<'_> {
     }
 }
 
-impl wasi::filesystem::preopens::Host for WasiCtxView<'_> {
+impl wasi::filesystem::preopens::Host for WasiFilesystemCtxView<'_> {
     fn get_directories(&mut self) -> wasmtime::Result<Vec<(Resource<Descriptor>, String)>> {
         latest::filesystem::preopens::Host::get_directories(self)
     }
 }
 
-impl wasi::io::poll::Host for WasiCtxView<'_> {
+impl wasi::io::poll::Host for ResourceTable {
     async fn poll_list(&mut self, list: Vec<Resource<DynPollable>>) -> wasmtime::Result<Vec<u32>> {
-        latest::io::poll::Host::poll(self.table, list).await
+        latest::io::poll::Host::poll(self, list).await
     }
 
     async fn poll_one(&mut self, rep: Resource<DynPollable>) -> wasmtime::Result<()> {
-        latest::io::poll::HostPollable::block(self.table, rep).await
+        latest::io::poll::HostPollable::block(self, rep).await
     }
 }
 
-impl wasi::io::poll::HostPollable for WasiCtxView<'_> {
+impl wasi::io::poll::HostPollable for ResourceTable {
     fn drop(&mut self, rep: Resource<DynPollable>) -> wasmtime::Result<()> {
-        latest::io::poll::HostPollable::drop(self.table, rep)
+        latest::io::poll::HostPollable::drop(self, rep)
     }
 }
 
-impl wasi::io::streams::Host for WasiCtxView<'_> {}
+impl wasi::io::streams::Host for ResourceTable {}
 
-impl wasi::io::streams::HostError for WasiCtxView<'_> {
+impl wasi::io::streams::HostError for ResourceTable {
     fn to_debug_string(&mut self, self_: Resource<Error>) -> wasmtime::Result<String> {
-        latest::io::error::HostError::to_debug_string(self.table, self_)
+        latest::io::error::HostError::to_debug_string(self, self_)
     }
 
     fn drop(&mut self, rep: Resource<Error>) -> wasmtime::Result<()> {
-        latest::io::error::HostError::drop(self.table, rep)
+        latest::io::error::HostError::drop(self, rep)
     }
 }
 
-impl wasi::io::streams::HostInputStream for WasiCtxView<'_> {
+impl wasi::io::streams::HostInputStream for ResourceTable {
     fn read(
         &mut self,
         self_: Resource<InputStream>,
         len: u64,
     ) -> wasmtime::Result<Result<Vec<u8>, StreamError>> {
-        let result = latest::io::streams::HostInputStream::read(self.table, self_, len);
+        let result = latest::io::streams::HostInputStream::read(self, self_, len);
         convert_stream_result(self, result)
     }
 
@@ -651,8 +661,7 @@ impl wasi::io::streams::HostInputStream for WasiCtxView<'_> {
         self_: Resource<InputStream>,
         len: u64,
     ) -> wasmtime::Result<Result<Vec<u8>, StreamError>> {
-        let result =
-            latest::io::streams::HostInputStream::blocking_read(self.table, self_, len).await;
+        let result = latest::io::streams::HostInputStream::blocking_read(self, self_, len).await;
         convert_stream_result(self, result)
     }
 
@@ -661,7 +670,7 @@ impl wasi::io::streams::HostInputStream for WasiCtxView<'_> {
         self_: Resource<InputStream>,
         len: u64,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        let result = latest::io::streams::HostInputStream::skip(self.table, self_, len);
+        let result = latest::io::streams::HostInputStream::skip(self, self_, len);
         convert_stream_result(self, result)
     }
 
@@ -670,8 +679,7 @@ impl wasi::io::streams::HostInputStream for WasiCtxView<'_> {
         self_: Resource<InputStream>,
         len: u64,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        let result =
-            latest::io::streams::HostInputStream::blocking_skip(self.table, self_, len).await;
+        let result = latest::io::streams::HostInputStream::blocking_skip(self, self_, len).await;
         convert_stream_result(self, result)
     }
 
@@ -679,20 +687,20 @@ impl wasi::io::streams::HostInputStream for WasiCtxView<'_> {
         &mut self,
         self_: Resource<InputStream>,
     ) -> wasmtime::Result<Resource<DynPollable>> {
-        latest::io::streams::HostInputStream::subscribe(self.table, self_)
+        latest::io::streams::HostInputStream::subscribe(self, self_)
     }
 
     async fn drop(&mut self, rep: Resource<InputStream>) -> wasmtime::Result<()> {
-        latest::io::streams::HostInputStream::drop(self.table, rep).await
+        latest::io::streams::HostInputStream::drop(self, rep).await
     }
 }
 
-impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
+impl wasi::io::streams::HostOutputStream for ResourceTable {
     fn check_write(
         &mut self,
         self_: Resource<OutputStream>,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        let result = latest::io::streams::HostOutputStream::check_write(self.table, self_);
+        let result = latest::io::streams::HostOutputStream::check_write(self, self_);
         convert_stream_result(self, result)
     }
 
@@ -701,7 +709,7 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         self_: Resource<OutputStream>,
         contents: Vec<u8>,
     ) -> wasmtime::Result<Result<(), StreamError>> {
-        let result = latest::io::streams::HostOutputStream::write(self.table, self_, contents);
+        let result = latest::io::streams::HostOutputStream::write(self, self_, contents);
         convert_stream_result(self, result)
     }
 
@@ -710,10 +718,9 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         self_: Resource<OutputStream>,
         contents: Vec<u8>,
     ) -> wasmtime::Result<Result<(), StreamError>> {
-        let result = latest::io::streams::HostOutputStream::blocking_write_and_flush(
-            self.table, self_, contents,
-        )
-        .await;
+        let result =
+            latest::io::streams::HostOutputStream::blocking_write_and_flush(self, self_, contents)
+                .await;
         convert_stream_result(self, result)
     }
 
@@ -721,7 +728,7 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         &mut self,
         self_: Resource<OutputStream>,
     ) -> wasmtime::Result<Result<(), StreamError>> {
-        let result = latest::io::streams::HostOutputStream::flush(self.table, self_);
+        let result = latest::io::streams::HostOutputStream::flush(self, self_);
         convert_stream_result(self, result)
     }
 
@@ -729,7 +736,7 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         &mut self,
         self_: Resource<OutputStream>,
     ) -> wasmtime::Result<Result<(), StreamError>> {
-        let result = latest::io::streams::HostOutputStream::blocking_flush(self.table, self_).await;
+        let result = latest::io::streams::HostOutputStream::blocking_flush(self, self_).await;
         convert_stream_result(self, result)
     }
 
@@ -737,7 +744,7 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         &mut self,
         self_: Resource<OutputStream>,
     ) -> wasmtime::Result<Resource<DynPollable>> {
-        latest::io::streams::HostOutputStream::subscribe(self.table, self_)
+        latest::io::streams::HostOutputStream::subscribe(self, self_)
     }
 
     fn write_zeroes(
@@ -745,7 +752,7 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         self_: Resource<OutputStream>,
         len: u64,
     ) -> wasmtime::Result<Result<(), StreamError>> {
-        let result = latest::io::streams::HostOutputStream::write_zeroes(self.table, self_, len);
+        let result = latest::io::streams::HostOutputStream::write_zeroes(self, self_, len);
         convert_stream_result(self, result)
     }
 
@@ -755,7 +762,7 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         len: u64,
     ) -> wasmtime::Result<Result<(), StreamError>> {
         let result = latest::io::streams::HostOutputStream::blocking_write_zeroes_and_flush(
-            self.table, self_, len,
+            self, self_, len,
         )
         .await;
         convert_stream_result(self, result)
@@ -767,7 +774,7 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         src: Resource<InputStream>,
         len: u64,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        let result = latest::io::streams::HostOutputStream::splice(self.table, self_, src, len);
+        let result = latest::io::streams::HostOutputStream::splice(self, self_, src, len);
         convert_stream_result(self, result)
     }
 
@@ -778,8 +785,7 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
         len: u64,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
         let result =
-            latest::io::streams::HostOutputStream::blocking_splice(self.table, self_, src, len)
-                .await;
+            latest::io::streams::HostOutputStream::blocking_splice(self, self_, src, len).await;
         convert_stream_result(self, result)
     }
 
@@ -792,43 +798,43 @@ impl wasi::io::streams::HostOutputStream for WasiCtxView<'_> {
     }
 
     async fn drop(&mut self, rep: Resource<OutputStream>) -> wasmtime::Result<()> {
-        latest::io::streams::HostOutputStream::drop(self.table, rep).await
+        latest::io::streams::HostOutputStream::drop(self, rep).await
     }
 }
 
-impl wasi::random::random::Host for WasiCtxView<'_> {
+impl wasi::random::random::Host for WasiRandomCtx {
     fn get_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
-        latest::random::random::Host::get_random_bytes(self.ctx.random(), len)
+        latest::random::random::Host::get_random_bytes(self, len)
     }
 
     fn get_random_u64(&mut self) -> wasmtime::Result<u64> {
-        latest::random::random::Host::get_random_u64(self.ctx.random())
+        latest::random::random::Host::get_random_u64(self)
     }
 }
 
-impl wasi::random::insecure::Host for WasiCtxView<'_> {
+impl wasi::random::insecure::Host for WasiRandomCtx {
     fn get_insecure_random_bytes(&mut self, len: u64) -> wasmtime::Result<Vec<u8>> {
-        latest::random::insecure::Host::get_insecure_random_bytes(self.ctx.random(), len)
+        latest::random::insecure::Host::get_insecure_random_bytes(self, len)
     }
 
     fn get_insecure_random_u64(&mut self) -> wasmtime::Result<u64> {
-        latest::random::insecure::Host::get_insecure_random_u64(self.ctx.random())
+        latest::random::insecure::Host::get_insecure_random_u64(self)
     }
 }
 
-impl wasi::random::insecure_seed::Host for WasiCtxView<'_> {
+impl wasi::random::insecure_seed::Host for WasiRandomCtx {
     fn insecure_seed(&mut self) -> wasmtime::Result<(u64, u64)> {
-        latest::random::insecure_seed::Host::insecure_seed(self.ctx.random())
+        latest::random::insecure_seed::Host::insecure_seed(self)
     }
 }
 
-impl wasi::cli::exit::Host for WasiCtxView<'_> {
+impl wasi::cli::exit::Host for WasiCliCtxView<'_> {
     fn exit(&mut self, status: Result<(), ()>) -> wasmtime::Result<()> {
         latest::cli::exit::Host::exit(self, status)
     }
 }
 
-impl wasi::cli::environment::Host for WasiCtxView<'_> {
+impl wasi::cli::environment::Host for WasiCliCtxView<'_> {
     fn get_environment(&mut self) -> wasmtime::Result<Vec<(String, String)>> {
         latest::cli::environment::Host::get_environment(self)
     }
@@ -842,61 +848,61 @@ impl wasi::cli::environment::Host for WasiCtxView<'_> {
     }
 }
 
-impl wasi::cli::stdin::Host for WasiCtxView<'_> {
+impl wasi::cli::stdin::Host for WasiCliCtxView<'_> {
     fn get_stdin(&mut self) -> wasmtime::Result<Resource<InputStream>> {
         latest::cli::stdin::Host::get_stdin(self)
     }
 }
 
-impl wasi::cli::stdout::Host for WasiCtxView<'_> {
+impl wasi::cli::stdout::Host for WasiCliCtxView<'_> {
     fn get_stdout(&mut self) -> wasmtime::Result<Resource<OutputStream>> {
         latest::cli::stdout::Host::get_stdout(self)
     }
 }
 
-impl wasi::cli::stderr::Host for WasiCtxView<'_> {
+impl wasi::cli::stderr::Host for WasiCliCtxView<'_> {
     fn get_stderr(&mut self) -> wasmtime::Result<Resource<OutputStream>> {
         latest::cli::stderr::Host::get_stderr(self)
     }
 }
 
-impl wasi::cli::terminal_stdin::Host for WasiCtxView<'_> {
+impl wasi::cli::terminal_stdin::Host for WasiCliCtxView<'_> {
     fn get_terminal_stdin(&mut self) -> wasmtime::Result<Option<Resource<TerminalInput>>> {
         latest::cli::terminal_stdin::Host::get_terminal_stdin(self)
     }
 }
 
-impl wasi::cli::terminal_stdout::Host for WasiCtxView<'_> {
+impl wasi::cli::terminal_stdout::Host for WasiCliCtxView<'_> {
     fn get_terminal_stdout(&mut self) -> wasmtime::Result<Option<Resource<TerminalOutput>>> {
         latest::cli::terminal_stdout::Host::get_terminal_stdout(self)
     }
 }
 
-impl wasi::cli::terminal_stderr::Host for WasiCtxView<'_> {
+impl wasi::cli::terminal_stderr::Host for WasiCliCtxView<'_> {
     fn get_terminal_stderr(&mut self) -> wasmtime::Result<Option<Resource<TerminalOutput>>> {
         latest::cli::terminal_stderr::Host::get_terminal_stderr(self)
     }
 }
 
-impl wasi::cli::terminal_input::Host for WasiCtxView<'_> {}
+impl wasi::cli::terminal_input::Host for WasiCliCtxView<'_> {}
 
-impl wasi::cli::terminal_input::HostTerminalInput for WasiCtxView<'_> {
+impl wasi::cli::terminal_input::HostTerminalInput for WasiCliCtxView<'_> {
     fn drop(&mut self, rep: Resource<TerminalInput>) -> wasmtime::Result<()> {
         latest::cli::terminal_input::HostTerminalInput::drop(self, rep)
     }
 }
 
-impl wasi::cli::terminal_output::Host for WasiCtxView<'_> {}
+impl wasi::cli::terminal_output::Host for WasiCliCtxView<'_> {}
 
-impl wasi::cli::terminal_output::HostTerminalOutput for WasiCtxView<'_> {
+impl wasi::cli::terminal_output::HostTerminalOutput for WasiCliCtxView<'_> {
     fn drop(&mut self, rep: Resource<TerminalOutput>) -> wasmtime::Result<()> {
         latest::cli::terminal_output::HostTerminalOutput::drop(self, rep)
     }
 }
 
-impl wasi::sockets::tcp::Host for WasiCtxView<'_> {}
+impl wasi::sockets::tcp::Host for WasiSocketsCtxView<'_> {}
 
-impl wasi::sockets::tcp::HostTcpSocket for WasiCtxView<'_> {
+impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
     async fn start_bind(
         &mut self,
         self_: Resource<TcpSocket>,
@@ -1141,7 +1147,7 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiCtxView<'_> {
     }
 }
 
-impl wasi::sockets::tcp_create_socket::Host for WasiCtxView<'_> {
+impl wasi::sockets::tcp_create_socket::Host for WasiSocketsCtxView<'_> {
     fn create_tcp_socket(
         &mut self,
         address_family: IpAddressFamily,
@@ -1153,7 +1159,7 @@ impl wasi::sockets::tcp_create_socket::Host for WasiCtxView<'_> {
     }
 }
 
-impl wasi::sockets::udp::Host for WasiCtxView<'_> {}
+impl wasi::sockets::udp::Host for WasiSocketsCtxView<'_> {}
 
 /// Between the snapshot of WASI that this file is implementing and the current
 /// implementation of WASI UDP sockets were redesigned slightly to deal with
@@ -1174,7 +1180,7 @@ pub enum UdpSocket {
 
 impl UdpSocket {
     async fn finish_connect(
-        table: &mut WasiCtxView<'_>,
+        table: &mut WasiSocketsCtxView<'_>,
         socket: &Resource<UdpSocket>,
         explicit: bool,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
@@ -1217,7 +1223,7 @@ impl UdpSocket {
     }
 }
 
-impl wasi::sockets::udp::HostUdpSocket for WasiCtxView<'_> {
+impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     async fn start_bind(
         &mut self,
         self_: Resource<UdpSocket>,
@@ -1474,7 +1480,7 @@ impl wasi::sockets::udp::HostUdpSocket for WasiCtxView<'_> {
     }
 }
 
-impl wasi::sockets::udp_create_socket::Host for WasiCtxView<'_> {
+impl wasi::sockets::udp_create_socket::Host for WasiSocketsCtxView<'_> {
     fn create_udp_socket(
         &mut self,
         address_family: IpAddressFamily,
@@ -1492,21 +1498,21 @@ impl wasi::sockets::udp_create_socket::Host for WasiCtxView<'_> {
     }
 }
 
-impl wasi::sockets::instance_network::Host for WasiCtxView<'_> {
+impl wasi::sockets::instance_network::Host for WasiSocketsCtxView<'_> {
     fn instance_network(&mut self) -> wasmtime::Result<Resource<Network>> {
         latest::sockets::instance_network::Host::instance_network(self)
     }
 }
 
-impl wasi::sockets::network::Host for WasiCtxView<'_> {}
+impl wasi::sockets::network::Host for WasiSocketsCtxView<'_> {}
 
-impl wasi::sockets::network::HostNetwork for WasiCtxView<'_> {
+impl wasi::sockets::network::HostNetwork for WasiSocketsCtxView<'_> {
     fn drop(&mut self, rep: Resource<Network>) -> wasmtime::Result<()> {
         latest::sockets::network::HostNetwork::drop(self, rep)
     }
 }
 
-impl wasi::sockets::ip_name_lookup::Host for WasiCtxView<'_> {
+impl wasi::sockets::ip_name_lookup::Host for WasiSocketsCtxView<'_> {
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
@@ -1520,7 +1526,7 @@ impl wasi::sockets::ip_name_lookup::Host for WasiCtxView<'_> {
     }
 }
 
-impl wasi::sockets::ip_name_lookup::HostResolveAddressStream for WasiCtxView<'_> {
+impl wasi::sockets::ip_name_lookup::HostResolveAddressStream for WasiSocketsCtxView<'_> {
     fn resolve_next_address(
         &mut self,
         self_: Resource<ResolveAddressStream>,
@@ -1560,7 +1566,7 @@ where
 }
 
 fn convert_stream_result<T, T2>(
-    view: &mut WasiCtxView<'_>,
+    table: &mut ResourceTable,
     result: Result<T, wasmtime_wasi::p2::StreamError>,
 ) -> wasmtime::Result<Result<T2, StreamError>>
 where
@@ -1570,7 +1576,7 @@ where
         Ok(e) => Ok(Ok(e.into())),
         Err(wasmtime_wasi::p2::StreamError::Closed) => Ok(Err(StreamError::Closed)),
         Err(wasmtime_wasi::p2::StreamError::LastOperationFailed(e)) => {
-            let e = view.table.push(e)?;
+            let e = table.push(e)?;
             Ok(Err(StreamError::LastOperationFailed(e)))
         }
         Err(wasmtime_wasi::p2::StreamError::Trap(e)) => Err(e),

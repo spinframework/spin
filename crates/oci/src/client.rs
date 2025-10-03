@@ -732,7 +732,10 @@ impl Client {
             Ok(c) => Ok(c),
             Err(_) => match docker_credential::get_credential(server) {
                 Err(e) => {
-                    tracing::trace!("Cannot retrieve credentials from Docker, attempting to use anonymous auth: {}", e);
+                    tracing::trace!(
+                        "Cannot retrieve credentials from Docker, attempting to use anonymous auth: {}",
+                        e
+                    );
                     Ok(RegistryAuth::Anonymous)
                 }
 
@@ -741,7 +744,9 @@ impl Client {
                     Ok(RegistryAuth::Basic(username, password))
                 }
                 Ok(DockerCredential::IdentityToken(_)) => {
-                    tracing::trace!("Cannot use contents of Docker config, identity token not supported. Using anonymous auth");
+                    tracing::trace!(
+                        "Cannot use contents of Docker config, identity token not supported. Using anonymous auth"
+                    );
                     Ok(RegistryAuth::Anonymous)
                 }
             },
@@ -1329,7 +1334,7 @@ mod test {
         let mut resolve = wit_parser::Resolve::default();
         let package_id = resolve.push_str("test", wit).expect("should parse WIT");
         let world_id = resolve
-            .select_world(package_id, Some(world))
+            .select_world(&[package_id], Some(world))
             .expect("should select world");
 
         let mut wasm = wit_component::dummy_module(

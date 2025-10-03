@@ -478,6 +478,7 @@ mod tests {
     macro_rules! define_test_factor {
         ($field:ident : $factor:ty) => {
             #[derive(RuntimeFactors)]
+            #[allow(unused)]
             struct TestFactors {
                 $field: $factor,
             }

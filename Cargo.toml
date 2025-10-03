@@ -136,6 +136,7 @@ futures-util = "0.3"
 glob = "0.3"
 heck = "0.5"
 http = "1"
+http-body = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -143,6 +144,7 @@ indexmap = "2"
 itertools = "0.14"
 lazy_static = "1.5"
 path-absolutize = "3"
+pin-project-lite = "0.2.16"
 quote = "1"
 rand = "0.9"
 redis = "0.32.5"
@@ -170,16 +172,16 @@ tower-service = "0.3.3"
 tracing = { version = "0.1.41", features = ["log"] }
 url = "2"
 walkdir = "2"
-wasm-encoder = "0.236.1"
-wasm-metadata = "0.236.1"
+wasm-encoder = "0.239.0"
+wasm-metadata = "0.239.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
-wasmparser = "0.236.1"
-wasmtime = "36.0.2"
-wasmtime-wasi = "36.0.2"
-wasmtime-wasi-http = "36.0.2"
-wit-component = "0.236.1"
-wit-parser = "0.236.1"
+wasmparser = "0.239.0"
+wasmtime = { version = "37.0.1", features = ["component-model-async"] }
+wasmtime-wasi = { version = "37.0.1", features = ["p3"] }
+wasmtime-wasi-http = { version = "37.0.1", features = ["p3"] }
+wit-component = "0.239.0"
+wit-parser = "0.239.0"
 
 spin-componentize = { path = "crates/componentize" }
 
