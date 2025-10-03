@@ -8228,10 +8228,12 @@ dependencies = [
  "spin-common",
  "spin-environments",
  "spin-manifest",
+ "spin-serde",
  "subprocess",
  "terminal",
  "tokio",
  "toml",
+ "topological-sort",
 ]
 
 [[package]]
