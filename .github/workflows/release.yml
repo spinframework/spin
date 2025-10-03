@@ -45,14 +45,6 @@ jobs:
               targetDir: "target/aarch64-unknown-linux-gnu/release",
             }
           - {
-              os: "macos-13",
-              arch: "amd64",
-              extension: "",
-              extraArgs: "",
-              target: "",
-              targetDir: "target/release",
-            }
-          - {
               os: "macos-14",
               arch: "aarch64",
               extension: "",

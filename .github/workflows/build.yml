@@ -115,7 +115,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-13, macos-14]
+        os: [windows-latest, macos-14]
     steps:
       - uses: actions/checkout@v3
 
@@ -124,7 +124,7 @@ jobs:
         with:
           rust: true
           rust-wasm: true
-          rust-cache: "${{ matrix.os == 'windows-latest' }} || ${{ matrix.os == 'macos-13' }}"
+          rust-cache: "${{ matrix.os == 'windows-latest' }}"
           openssl-windows: "${{ matrix.os == 'windows-latest' }}"
 
       - name: Cargo Build
@@ -245,14 +245,6 @@ jobs:
               extraArgs: "--features openssl/vendored --target aarch64-unknown-linux-gnu",
               target: "aarch64-unknown-linux-gnu",
               targetDir: "target/aarch64-unknown-linux-gnu/release",
-            }
-          - {
-              os: "macos-13",
-              arch: "amd64",
-              extension: "",
-              extraArgs: "",
-              target: "",
-              targetDir: "target/release",
             }
           - {
               os: "macos-14",
