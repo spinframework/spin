@@ -8,9 +8,10 @@ use crate::schema::v2::{AppManifest, ComponentSpec, KebabId};
 /// - Inline components in trigger configs are moved into top-level
 ///   components and replaced with a reference.
 /// - Any triggers without an ID are assigned a generated ID.
-pub fn normalize_manifest(manifest: &mut AppManifest) {
+pub fn normalize_manifest(manifest: &mut AppManifest, profile: Option<&str>) {
     normalize_trigger_ids(manifest);
     normalize_inline_components(manifest);
+    apply_profile_overrides(manifest, profile);
 }
 
 fn normalize_inline_components(manifest: &mut AppManifest) {
@@ -100,6 +101,48 @@ fn normalize_trigger_ids(manifest: &mut AppManifest) {
                 }
                 counter += 1;
             }
+        }
+    }
+}
+
+fn apply_profile_overrides(manifest: &mut AppManifest, profile: Option<&str>) {
+    let Some(profile) = profile else {
+        return;
+    };
+
+    for (_, component) in &mut manifest.components {
+        let Some(overrides) = component.profile.get(profile) else {
+            continue;
+        };
+
+        if let Some(profile_build) = overrides.build.as_ref() {
+            match component.build.as_mut() {
+                None => {
+                    component.build = Some(crate::schema::v2::ComponentBuildConfig {
+                        command: profile_build.command.clone(),
+                        workdir: None,
+                        watch: vec![],
+                    })
+                }
+                Some(build) => {
+                    build.command = profile_build.command.clone();
+                }
+            }
+        }
+
+        if let Some(source) = overrides.source.as_ref() {
+            component.source = source.clone();
+        }
+
+        for (name, value) in &overrides.environment {
+            component.environment.insert(name.clone(), value.clone());
+        }
+
+        for (reference, value) in &overrides.dependencies.inner {
+            component
+                .dependencies
+                .inner
+                .insert(reference.clone(), value.clone());
         }
     }
 }

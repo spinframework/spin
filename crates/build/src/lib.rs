@@ -15,14 +15,18 @@ use subprocess::{Exec, Redirection};
 
 use crate::manifest::component_build_configs;
 
+const LAST_BUILD_PROFILE_FILE: &str = "last-build.txt";
+const LAST_BUILD_ANON_VALUE: &str = "<anonymous>";
+
 /// If present, run the build command of each component.
 pub async fn build(
     manifest_file: &Path,
+    profile: Option<&str>,
     component_ids: &[String],
     target_checks: TargetChecking,
     cache_root: Option<PathBuf>,
 ) -> Result<()> {
-    let build_info = component_build_configs(manifest_file)
+    let build_info = component_build_configs(manifest_file, profile)
         .await
         .with_context(|| {
             format!(
@@ -52,6 +56,8 @@ pub async fn build(
 
     // If the build failed, exit with an error at this point.
     build_result?;
+
+    save_last_build_profile(&app_dir, profile);
 
     let Some(manifest) = build_info.manifest() else {
         // We can't proceed to checking (because that needs a full healthy manifest), and we've
@@ -89,8 +95,19 @@ pub async fn build(
 /// Run all component build commands, using the default options (build all
 /// components, perform target checking). We run a "default build" in several
 /// places and this centralises the logic of what such a "default build" means.
-pub async fn build_default(manifest_file: &Path, cache_root: Option<PathBuf>) -> Result<()> {
-    build(manifest_file, &[], TargetChecking::Check, cache_root).await
+pub async fn build_default(
+    manifest_file: &Path,
+    profile: Option<&str>,
+    cache_root: Option<PathBuf>,
+) -> Result<()> {
+    build(
+        manifest_file,
+        profile,
+        &[],
+        TargetChecking::Check,
+        cache_root,
+    )
+    .await
 }
 
 fn build_components(
@@ -215,6 +232,50 @@ fn construct_workdir(app_dir: &Path, workdir: Option<impl AsRef<Path>>) -> Resul
     Ok(cwd)
 }
 
+/// Saves the build profile to the "last build profile" file.
+/// Errors are ignored as they should not block building.
+pub fn save_last_build_profile(app_dir: &Path, profile: Option<&str>) {
+    let app_stash_dir = app_dir.join(".spin");
+    _ = std::fs::create_dir_all(&app_stash_dir);
+    let last_build_profile_file = app_stash_dir.join(LAST_BUILD_PROFILE_FILE);
+    _ = std::fs::write(
+        &last_build_profile_file,
+        profile.unwrap_or(LAST_BUILD_ANON_VALUE),
+    );
+}
+
+/// Reads the last build profile from the "last build profile" file.
+/// Errors are ignored.
+pub fn read_last_build_profile(app_dir: &Path) -> Option<String> {
+    let app_stash_dir = app_dir.join(".spin");
+    let last_build_profile_file = app_stash_dir.join(LAST_BUILD_PROFILE_FILE);
+    let last_build_str = std::fs::read_to_string(&last_build_profile_file).ok()?;
+
+    if last_build_str == LAST_BUILD_ANON_VALUE {
+        None
+    } else {
+        Some(last_build_str)
+    }
+}
+
+/// Prints a warning to stderr if the given profile is not the same
+/// as the most recent build in the given application directory.
+pub fn warn_if_not_latest_build(manifest_path: &Path, profile: Option<&str>) {
+    let Some(app_dir) = manifest_path.parent() else {
+        return;
+    };
+
+    let latest_build = read_last_build_profile(app_dir);
+
+    if profile != latest_build.as_deref() {
+        let profile_opt = match profile {
+            Some(p) => format!(" --profile {p}"),
+            None => "".to_string(),
+        };
+        terminal::warn!("You built a different profile more recently than the one you are running. If the app appears to be behaving like an older version then run `spin up --build{profile_opt}`.");
+    }
+}
+
 /// Specifies target environment checking behaviour
 pub enum TargetChecking {
     /// The build should check that all components are compatible with all target environments.
@@ -242,7 +303,7 @@ mod tests {
     #[tokio::test]
     async fn can_load_even_if_trigger_invalid() {
         let bad_trigger_file = test_data_root().join("bad_trigger.toml");
-        build(&bad_trigger_file, &[], TargetChecking::Skip, None)
+        build(&bad_trigger_file, None, &[], TargetChecking::Skip, None)
             .await
             .unwrap();
     }
@@ -250,7 +311,7 @@ mod tests {
     #[tokio::test]
     async fn succeeds_if_target_env_matches() {
         let manifest_path = test_data_root().join("good_target_env.toml");
-        build(&manifest_path, &[], TargetChecking::Check, None)
+        build(&manifest_path, None, &[], TargetChecking::Check, None)
             .await
             .unwrap();
     }
@@ -258,7 +319,7 @@ mod tests {
     #[tokio::test]
     async fn fails_if_target_env_does_not_match() {
         let manifest_path = test_data_root().join("bad_target_env.toml");
-        let err = build(&manifest_path, &[], TargetChecking::Check, None)
+        let err = build(&manifest_path, None, &[], TargetChecking::Check, None)
             .await
             .expect_err("should have failed")
             .to_string();
@@ -273,7 +334,8 @@ mod tests {
     #[tokio::test]
     async fn has_meaningful_error_if_target_env_does_not_match() {
         let manifest_file = test_data_root().join("bad_target_env.toml");
-        let manifest = spin_manifest::manifest_from_file(&manifest_file).unwrap();
+        let mut manifest = spin_manifest::manifest_from_file(&manifest_file).unwrap();
+        spin_manifest::normalize::normalize_manifest(&mut manifest, None);
         let application = spin_environments::ApplicationToValidate::new(
             manifest.clone(),
             manifest_file.parent().unwrap(),
