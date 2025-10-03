@@ -14,9 +14,7 @@ impl<F: RuntimeFactors, U> ExecutorHooks<F, U> for VariablesValidatorHook {
         let variables_factor_app_state = configured_app.app_state::<VariablesFactor>()?;
 
         let expression_resolver = variables_factor_app_state.expression_resolver();
-        expression_resolver
-            .ensure_required_variables_resolvable()
-            .await?;
+        expression_resolver.ensure_required_variables_resolvable()?;
 
         Ok(())
     }

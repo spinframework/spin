@@ -9,15 +9,13 @@ use crate::Key;
 pub trait Provider: Debug + Send + Sync {
     /// Returns the value at the given config path, if it exists.
     async fn get(&self, key: &Key) -> anyhow::Result<Option<String>>;
-    fn kind(&self) -> ProviderVariableKind;
-}
 
-/// The dynamism of a Provider.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub enum ProviderVariableKind {
-    /// Variable must be declared on start
-    Static,
-    /// Variable can be made available at runtime
-    #[default]
-    Dynamic,
+    /// Returns true if the given key _might_ be resolvable by this Provider.
+    ///
+    /// Dynamic resolvers will typically return true unconditionally, which is
+    /// the default implementation.
+    fn may_resolve(&self, key: &Key) -> bool {
+        let _ = key;
+        true
+    }
 }

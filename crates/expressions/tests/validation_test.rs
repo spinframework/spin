@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use spin_expressions::{provider::ProviderVariableKind, Key, Provider, ProviderResolver};
+use spin_expressions::{Key, Provider, ProviderResolver};
 use spin_locked_app::Variable;
 
 #[derive(Default)]
@@ -43,8 +43,8 @@ impl ResolverTester {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn if_single_static_provider_with_no_key_to_resolve_is_valid() -> anyhow::Result<()> {
+#[test]
+fn if_single_static_provider_with_no_key_to_resolve_is_valid() -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(StaticProvider::with_variable(
             "database_host",
@@ -52,14 +52,14 @@ async fn if_single_static_provider_with_no_key_to_resolve_is_valid() -> anyhow::
         ))
         .make_resolver()?;
 
-    resolver.ensure_required_variables_resolvable().await?;
+    resolver.ensure_required_variables_resolvable()?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn if_single_static_provider_has_data_for_variable_key_to_resolve_it_succeeds(
-) -> anyhow::Result<()> {
+#[test]
+fn if_single_static_provider_has_data_for_variable_key_to_resolve_it_succeeds() -> anyhow::Result<()>
+{
     let resolver = ResolverTester::new()
         .with_provider(StaticProvider::with_variable(
             "database_host",
@@ -68,13 +68,13 @@ async fn if_single_static_provider_has_data_for_variable_key_to_resolve_it_succe
         .with_variable("database_host", None)
         .make_resolver()?;
 
-    resolver.ensure_required_variables_resolvable().await?;
+    resolver.ensure_required_variables_resolvable()?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn if_there_is_a_single_static_provider_and_it_does_not_contain_a_required_variable_then_validation_fails(
+#[test]
+fn if_there_is_a_single_static_provider_and_it_does_not_contain_a_required_variable_then_validation_fails(
 ) -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(StaticProvider::with_variable(
@@ -84,29 +84,26 @@ async fn if_there_is_a_single_static_provider_and_it_does_not_contain_a_required
         .with_variable("api_key", None)
         .make_resolver()?;
 
-    assert!(resolver
-        .ensure_required_variables_resolvable()
-        .await
-        .is_err());
+    assert!(resolver.ensure_required_variables_resolvable().is_err());
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn if_there_is_a_dynamic_provider_then_validation_succeeds_even_without_default_value_in_play(
+#[test]
+fn if_there_is_a_dynamic_provider_then_validation_succeeds_even_without_default_value_in_play(
 ) -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(DynamicProvider)
         .with_variable("api_key", None)
         .make_resolver()?;
 
-    resolver.ensure_required_variables_resolvable().await?;
+    resolver.ensure_required_variables_resolvable()?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn if_there_is_a_dynamic_provider_and_static_provider_but_the_variable_to_be_resolved_is_not_in_play(
+#[test]
+fn if_there_is_a_dynamic_provider_and_static_provider_but_the_variable_to_be_resolved_is_not_in_play(
 ) -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(DynamicProvider)
@@ -117,13 +114,13 @@ async fn if_there_is_a_dynamic_provider_and_static_provider_but_the_variable_to_
         .with_variable("api_key", None)
         .make_resolver()?;
 
-    resolver.ensure_required_variables_resolvable().await?;
+    resolver.ensure_required_variables_resolvable()?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn if_there_is_a_dynamic_provider_and_a_static_provider_then_validation_succeeds_even_if_there_is_a_variable_in_play(
+#[test]
+fn if_there_is_a_dynamic_provider_and_a_static_provider_then_validation_succeeds_even_if_there_is_a_variable_in_play(
 ) -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(DynamicProvider)
@@ -134,13 +131,13 @@ async fn if_there_is_a_dynamic_provider_and_a_static_provider_then_validation_su
         .with_variable("api_key", Some("super-secret-key"))
         .make_resolver()?;
 
-    resolver.ensure_required_variables_resolvable().await?;
+    resolver.ensure_required_variables_resolvable()?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn if_there_are_two_static_providers_where_one_has_data_is_valid() -> anyhow::Result<()> {
+#[test]
+fn if_there_are_two_static_providers_where_one_has_data_is_valid() -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(StaticProvider::with_variable(
             "database_host",
@@ -153,14 +150,14 @@ async fn if_there_are_two_static_providers_where_one_has_data_is_valid() -> anyh
         .with_variable("database_host", None)
         .make_resolver()?;
 
-    resolver.ensure_required_variables_resolvable().await?;
+    resolver.ensure_required_variables_resolvable()?;
 
     Ok(())
 }
 // Ensure that if there are two or more static providers and the first one does not have data for the variable to be resolved,
 // but the second or subsequent one does, then validation still succeeds.
-#[tokio::test(flavor = "multi_thread")]
-async fn if_there_are_two_static_providers_where_first_provider_does_not_have_data_while_second_provider_does(
+#[test]
+fn if_there_are_two_static_providers_where_first_provider_does_not_have_data_while_second_provider_does(
 ) -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(StaticProvider::with_variable(
@@ -174,13 +171,13 @@ async fn if_there_are_two_static_providers_where_first_provider_does_not_have_da
         .with_variable("api_key", None)
         .make_resolver()?;
 
-    resolver.ensure_required_variables_resolvable().await?;
+    resolver.ensure_required_variables_resolvable()?;
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn if_there_is_two_static_providers_neither_having_data_is_invalid() -> anyhow::Result<()> {
+#[test]
+fn if_there_is_two_static_providers_neither_having_data_is_invalid() -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(StaticProvider::with_variable(
             "database_host",
@@ -193,37 +190,30 @@ async fn if_there_is_two_static_providers_neither_having_data_is_invalid() -> an
         .with_variable("hello", None)
         .make_resolver()?;
 
-    assert!(resolver
-        .ensure_required_variables_resolvable()
-        .await
-        .is_err());
+    assert!(resolver.ensure_required_variables_resolvable().is_err());
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn no_provider_data_available_but_variable_default_value_needed_is_invalid(
-) -> anyhow::Result<()> {
+#[test]
+fn no_provider_data_available_but_variable_default_value_needed_is_invalid() -> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_variable("api_key", None)
         .make_resolver()?;
 
-    assert!(resolver
-        .ensure_required_variables_resolvable()
-        .await
-        .is_err());
+    assert!(resolver.ensure_required_variables_resolvable().is_err());
 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn no_provider_data_available_but_variable_has_default_value_needed_is_valid(
-) -> anyhow::Result<()> {
+#[test]
+fn no_provider_data_available_but_variable_has_default_value_needed_is_valid() -> anyhow::Result<()>
+{
     let resolver = ResolverTester::new()
         .with_variable("api_key", Some("super-secret-key"))
         .make_resolver()?;
 
-    resolver.ensure_required_variables_resolvable().await?;
+    resolver.ensure_required_variables_resolvable()?;
 
     Ok(())
 }
@@ -247,8 +237,8 @@ impl Provider for StaticProvider {
         Ok(self.variables.get(key.as_str()).cloned().flatten())
     }
 
-    fn kind(&self) -> ProviderVariableKind {
-        ProviderVariableKind::Static
+    fn may_resolve(&self, key: &Key) -> bool {
+        self.variables.contains_key(key.as_str())
     }
 }
 
@@ -259,9 +249,5 @@ struct DynamicProvider;
 impl Provider for DynamicProvider {
     async fn get(&self, _key: &Key) -> anyhow::Result<Option<String>> {
         panic!("validation should never call get for a dynamic provider")
-    }
-
-    fn kind(&self) -> ProviderVariableKind {
-        ProviderVariableKind::Dynamic
     }
 }
