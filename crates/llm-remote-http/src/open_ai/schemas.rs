@@ -165,56 +165,6 @@ impl TryFrom<&str> for EncodingFormat {
     }
 }
 
-#[derive(Serialize, Debug)]
-enum ReasoningEffort {
-    #[serde(rename = "minimal")]
-    Minimal,
-    #[serde(rename = "low")]
-    Low,
-    #[serde(rename = "medium")]
-    Medium,
-    #[serde(rename = "high")]
-    High,
-}
-
-impl TryFrom<&str> for ReasoningEffort {
-    type Error = wasi_llm::Error;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "minimal" => Ok(ReasoningEffort::Minimal),
-            "low" => Ok(ReasoningEffort::Low),
-            "medium" => Ok(ReasoningEffort::Medium),
-            "high" => Ok(ReasoningEffort::High),
-            _ => Err(wasi_llm::Error::InvalidInput(format!(
-                "{value} not a recognized reasoning effort",
-            ))),
-        }
-    }
-}
-
-#[derive(Serialize, Debug)]
-enum Verbosity {
-    Low,
-    Medium,
-    High,
-}
-
-impl TryFrom<&str> for Verbosity {
-    type Error = wasi_llm::Error;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "low" => Ok(Verbosity::Low),
-            "medium" => Ok(Verbosity::Medium),
-            "high" => Ok(Verbosity::High),
-            _ => Err(wasi_llm::Error::InvalidInput(format!(
-                "{value} not a recognized verbosity",
-            ))),
-        }
-    }
-}
-
 #[derive(Deserialize)]
 struct ChatCompletionChoice {
     message: ChatCompletionResponseMessage,
