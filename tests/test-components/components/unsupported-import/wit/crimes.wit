@@ -1,0 +1,9 @@
+package nonspin:crimes@0.0.1;
+
+interface unsupported-in-spin {
+    spin-cant-do-this: func();
+}
+
+world crimedoer {
+    import unsupported-in-spin;
+}

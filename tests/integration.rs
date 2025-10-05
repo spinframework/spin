@@ -1534,6 +1534,29 @@ route = "/..."
     }
 
     #[test]
+    fn test_does_not_load_triggerless_component() -> anyhow::Result<()> {
+        run_test(
+            "unsupported-import-unused",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::full(Method::Get, "/", &[], Some("")),
+                    Response::new_with_body(200, "Hello World!\n"),
+                )?;
+                Ok(())
+            },
+        )?;
+        Ok(())
+    }
+
+    #[test]
     fn test_outbound_post() -> anyhow::Result<()> {
         run_test(
             "wasi-http-outbound-post",

@@ -53,6 +53,7 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutor<T, U> {
         app: App,
         runtime_config: T::RuntimeConfig,
         component_loader: &impl ComponentLoader<T, U>,
+        trigger_type: Option<&str>,
     ) -> anyhow::Result<FactorsExecutorApp<T, U>> {
         let configured_app = self
             .factors
@@ -63,7 +64,14 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutor<T, U> {
             hooks.configure_app(&configured_app).await?;
         }
 
-        let components = configured_app.app().components();
+        let components = match trigger_type {
+            Some(trigger_type) => configured_app
+                .app()
+                .triggers_with_type(trigger_type)
+                .filter_map(|t| t.component().ok())
+                .collect::<Vec<_>>(),
+            None => configured_app.app().components().collect(),
+        };
         let mut component_instance_pres = HashMap::with_capacity(components.len());
 
         for component in components {
@@ -334,7 +342,7 @@ mod tests {
         let executor = Arc::new(FactorsExecutor::new(engine_builder, env.factors)?);
 
         let factors_app = executor
-            .load_app(app, Default::default(), &DummyComponentLoader)
+            .load_app(app, Default::default(), &DummyComponentLoader, None)
             .await?;
 
         let mut instance_builder = factors_app.prepare("empty")?;
