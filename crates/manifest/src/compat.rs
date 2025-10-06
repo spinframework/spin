@@ -73,6 +73,7 @@ pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Erro
                 allowed_http_hosts: Vec::new(),
                 dependencies_inherit_configuration: false,
                 dependencies: Default::default(),
+                profile: Default::default(),
             },
         );
         triggers
