@@ -16,7 +16,7 @@ pub fn config_from_table(
         let outbound_http_toml = outbound_http.clone().try_into::<OutboundHttpToml>()?;
         Ok(Some(super::RuntimeConfig {
             connection_pooling_enabled: outbound_http_toml.connection_pooling,
-            max_concurrent_requests: outbound_http_toml.max_concurrent_requests,
+            max_concurrent_connections: outbound_http_toml.max_concurrent_requests,
         }))
     } else {
         Ok(None)

@@ -58,10 +58,10 @@ impl Factor for OutboundHttpFactor {
         Ok(AppState {
             wasi_http_clients: wasi::HttpClients::new(config.connection_pooling_enabled),
             connection_pooling_enabled: config.connection_pooling_enabled,
-            concurrent_outbound_requests_semaphore: config
-                .max_concurrent_requests
-                // Permit count is the max concurrent requests + 1.
-                // i.e., 0 concurrent requests means 1 total request.
+            concurrent_outbound_connections_semaphore: config
+                .max_concurrent_connections
+                // Permit count is the max concurrent connections + 1.
+                // i.e., 0 concurrent connections means 1 total connection.
                 .map(|n| Arc::new(Semaphore::new(n + 1))),
         })
     }
@@ -84,9 +84,9 @@ impl Factor for OutboundHttpFactor {
             spin_http_client: None,
             wasi_http_clients: ctx.app_state().wasi_http_clients.clone(),
             connection_pooling_enabled: ctx.app_state().connection_pooling_enabled,
-            concurrent_outbound_requests_semaphore: ctx
+            concurrent_outbound_connections_semaphore: ctx
                 .app_state()
-                .concurrent_outbound_requests_semaphore
+                .concurrent_outbound_connections_semaphore
                 .clone(),
         })
     }
@@ -112,8 +112,8 @@ pub struct InstanceState {
     wasi_http_clients: wasi::HttpClients,
     /// Whether connection pooling is enabled for this instance.
     connection_pooling_enabled: bool,
-    /// A semaphore to limit the number of concurrent outbound requests.
-    concurrent_outbound_requests_semaphore: Option<Arc<Semaphore>>,
+    /// A semaphore to limit the number of concurrent outbound connections.
+    concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
 }
 
 impl InstanceState {
@@ -197,6 +197,6 @@ pub struct AppState {
     wasi_http_clients: wasi::HttpClients,
     /// Whether connection pooling is enabled for this app.
     connection_pooling_enabled: bool,
-    /// A semaphore to limit the number of concurrent outbound requests.
-    concurrent_outbound_requests_semaphore: Option<Arc<Semaphore>>,
+    /// A semaphore to limit the number of concurrent outbound connections.
+    concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
 }

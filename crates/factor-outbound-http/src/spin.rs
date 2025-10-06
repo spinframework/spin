@@ -98,7 +98,7 @@ impl spin_http::Host for crate::InstanceState {
         });
 
         // If we're limiting concurrent outbound requests, acquire a permit
-        let permit = match &self.concurrent_outbound_requests_semaphore {
+        let permit = match &self.concurrent_outbound_connections_semaphore {
             Some(s) => s.acquire().await.ok(),
             None => None,
         };
