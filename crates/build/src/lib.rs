@@ -7,6 +7,7 @@ mod manifest;
 use anyhow::{anyhow, bail, Context, Result};
 use manifest::ComponentBuildInfo;
 use spin_common::{paths::parent_dir, ui::quoted_path};
+use spin_manifest::schema::v2;
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -124,6 +125,15 @@ fn build_components(
         return Ok(());
     }
 
+    // If dependencies are being built as part of `spin build`, we would like
+    // them to be rebuilt earlier (e.g. so that consumers using the binary as a source
+    // of type information see the latest interface).
+    let (components_to_build, has_cycle) = sort(components_to_build);
+
+    if has_cycle {
+        tracing::debug!("There is a dependency cycle among components. Spin cannot guarantee to build dependencies before consumers.");
+    }
+
     components_to_build
         .into_iter()
         .map(|c| build_component(c, app_dir))
@@ -215,6 +225,97 @@ fn construct_workdir(app_dir: &Path, workdir: Option<impl AsRef<Path>>) -> Resul
     Ok(cwd)
 }
 
+#[derive(Clone)]
+struct SortableBuildInfo {
+    source: Option<String>,
+    local_dependency_paths: Vec<String>,
+    build_info: ComponentBuildInfo,
+}
+
+impl From<&ComponentBuildInfo> for SortableBuildInfo {
+    fn from(value: &ComponentBuildInfo) -> Self {
+        fn local_dep_path(dep: &v2::ComponentDependency) -> Option<String> {
+            match dep {
+                v2::ComponentDependency::Local { path, .. } => Some(path.display().to_string()),
+                _ => None,
+            }
+        }
+
+        let source = match value.source.as_ref() {
+            Some(spin_manifest::schema::v2::ComponentSource::Local(path)) => Some(path.clone()),
+            _ => None,
+        };
+        let local_dependency_paths = value
+            .dependencies
+            .inner
+            .values()
+            .filter_map(local_dep_path)
+            .collect();
+
+        Self {
+            source,
+            local_dependency_paths,
+            build_info: value.clone(),
+        }
+    }
+}
+
+impl std::hash::Hash for SortableBuildInfo {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.build_info.id.hash(state);
+        self.source.hash(state);
+        self.local_dependency_paths.hash(state);
+    }
+}
+
+impl PartialEq for SortableBuildInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.build_info.id == other.build_info.id
+            && self.source == other.source
+            && self.local_dependency_paths == other.local_dependency_paths
+    }
+}
+
+impl Eq for SortableBuildInfo {}
+
+/// Topo sort by local path dependency. Second result is if there was a cycle.
+fn sort(components: Vec<ComponentBuildInfo>) -> (Vec<ComponentBuildInfo>, bool) {
+    let sortables = components
+        .iter()
+        .map(SortableBuildInfo::from)
+        .collect::<Vec<_>>();
+    let mut sorter = topological_sort::TopologicalSort::<SortableBuildInfo>::new();
+
+    for s in &sortables {
+        sorter.insert(s.clone());
+    }
+
+    for s1 in &sortables {
+        for dep in &s1.local_dependency_paths {
+            for s2 in &sortables {
+                if s2.source.as_ref().is_some_and(|src| src == dep) {
+                    // s1 depends on s2
+                    sorter.add_link(topological_sort::DependencyLink {
+                        prec: s2.clone(),
+                        succ: s1.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    let result = sorter.map(|s| s.build_info).collect::<Vec<_>>();
+
+    // We shouldn't refuse to build if a cycle occurs, so return the original order to allow
+    // stuff to proceed.  (We could be smarter about this, but really it's a pathological situation
+    // and we don't need to bust a gut over it.)
+    if result.len() == components.len() {
+        (result, false)
+    } else {
+        (components, true)
+    }
+}
+
 /// Specifies target environment checking behaviour
 pub enum TargetChecking {
     /// The build should check that all components are compatible with all target environments.
@@ -300,5 +401,163 @@ mod tests {
         assert!(err.contains("world wasi:cli/command@0.2.0"));
         assert!(err.contains("requires imports named"));
         assert!(err.contains("wasi:cli/stdout"));
+    }
+
+    fn dummy_buildinfo(id: &str) -> ComponentBuildInfo {
+        dummy_build_info_deps(id, &[])
+    }
+
+    fn dummy_build_info_dep(id: &str, dep_on: &str) -> ComponentBuildInfo {
+        dummy_build_info_deps(id, &[dep_on])
+    }
+
+    fn dummy_build_info_deps(id: &str, dep_on: &[&str]) -> ComponentBuildInfo {
+        ComponentBuildInfo {
+            id: id.into(),
+            source: Some(v2::ComponentSource::Local(format!("{id}.wasm"))),
+            build: None,
+            dependencies: depends_on(dep_on),
+        }
+    }
+
+    fn depends_on(paths: &[&str]) -> v2::ComponentDependencies {
+        let mut deps = vec![];
+        for (index, path) in paths.iter().enumerate() {
+            let dep_name =
+                spin_serde::DependencyName::Plain(format!("dummy{index}").try_into().unwrap());
+            let dep = v2::ComponentDependency::Local {
+                path: path.into(),
+                export: None,
+            };
+            deps.push((dep_name, dep));
+        }
+        v2::ComponentDependencies {
+            inner: deps.into_iter().collect(),
+        }
+    }
+
+    /// Asserts that id `before` comes before id `after` in collection `cs`
+    fn assert_before(cs: &[ComponentBuildInfo], before: &str, after: &str) {
+        assert!(
+            cs.iter().position(|c| c.id == before).unwrap()
+                < cs.iter().position(|c| c.id == after).unwrap()
+        );
+    }
+
+    #[test]
+    fn if_no_dependencies_then_all_build() {
+        let (cs, had_cycle) = sort(vec![dummy_buildinfo("1"), dummy_buildinfo("2")]);
+        assert_eq!(2, cs.len());
+        assert!(cs.iter().any(|c| c.id == "1"));
+        assert!(cs.iter().any(|c| c.id == "2"));
+        assert!(!had_cycle);
+    }
+
+    #[test]
+    fn dependencies_build_before_consumers() {
+        let (cs, had_cycle) = sort(vec![
+            dummy_buildinfo("1"),
+            dummy_build_info_dep("2", "3.wasm"),
+            dummy_buildinfo("3"),
+            dummy_build_info_dep("4", "1.wasm"),
+        ]);
+        assert_eq!(4, cs.len());
+        assert_before(&cs, "1", "4");
+        assert_before(&cs, "3", "2");
+        assert!(!had_cycle);
+    }
+
+    #[test]
+    fn multiple_dependencies_build_before_consumers() {
+        let (cs, had_cycle) = sort(vec![
+            dummy_buildinfo("1"),
+            dummy_build_info_dep("2", "3.wasm"),
+            dummy_buildinfo("3"),
+            dummy_build_info_dep("4", "1.wasm"),
+            dummy_build_info_dep("5", "3.wasm"),
+            dummy_build_info_deps("6", &["3.wasm", "2.wasm"]),
+            dummy_buildinfo("7"),
+        ]);
+        assert_eq!(7, cs.len());
+        assert_before(&cs, "1", "4");
+        assert_before(&cs, "3", "2");
+        assert_before(&cs, "3", "5");
+        assert_before(&cs, "3", "6");
+        assert_before(&cs, "2", "6");
+        assert!(!had_cycle);
+    }
+
+    #[test]
+    fn circular_dependencies_dont_prevent_build() {
+        let (cs, had_cycle) = sort(vec![
+            dummy_buildinfo("1"),
+            dummy_build_info_dep("2", "3.wasm"),
+            dummy_build_info_dep("3", "2.wasm"),
+            dummy_build_info_dep("4", "1.wasm"),
+        ]);
+        assert_eq!(4, cs.len());
+        assert!(cs.iter().any(|c| c.id == "1"));
+        assert!(cs.iter().any(|c| c.id == "2"));
+        assert!(cs.iter().any(|c| c.id == "3"));
+        assert!(cs.iter().any(|c| c.id == "4"));
+        assert!(had_cycle);
+    }
+
+    #[test]
+    fn non_path_dependencies_do_not_prevent_sorting() {
+        let mut depends_on_remote = dummy_buildinfo("2");
+        depends_on_remote.dependencies.inner.insert(
+            spin_serde::DependencyName::Plain("remote".to_owned().try_into().unwrap()),
+            v2::ComponentDependency::Version("1.2.3".to_owned()),
+        );
+
+        let mut depends_on_local_and_remote = dummy_build_info_dep("4", "1.wasm");
+        depends_on_local_and_remote.dependencies.inner.insert(
+            spin_serde::DependencyName::Plain("remote".to_owned().try_into().unwrap()),
+            v2::ComponentDependency::Version("1.2.3".to_owned()),
+        );
+
+        let (cs, _) = sort(vec![
+            dummy_buildinfo("1"),
+            depends_on_remote,
+            dummy_buildinfo("3"),
+            depends_on_local_and_remote,
+        ]);
+
+        assert_eq!(4, cs.len());
+        assert_before(&cs, "1", "4");
+    }
+
+    #[test]
+    fn non_path_sources_do_not_prevent_sorting() {
+        let mut remote_source = dummy_build_info_dep("2", "3.wasm");
+        remote_source.source = Some(v2::ComponentSource::Remote {
+            url: "far://away".into(),
+            digest: "loadsa-hex".into(),
+        });
+
+        let (cs, _) = sort(vec![
+            dummy_buildinfo("1"),
+            remote_source,
+            dummy_buildinfo("3"),
+            dummy_build_info_dep("4", "1.wasm"),
+        ]);
+
+        assert_eq!(4, cs.len());
+        assert_before(&cs, "1", "4");
+    }
+
+    #[test]
+    fn dependencies_on_non_manifest_components_do_not_prevent_sorting() {
+        let (cs, had_cycle) = sort(vec![
+            dummy_buildinfo("1"),
+            dummy_build_info_deps("2", &["3.wasm", "crikey.wasm"]),
+            dummy_buildinfo("3"),
+            dummy_build_info_dep("4", "1.wasm"),
+        ]);
+        assert_eq!(4, cs.len());
+        assert_before(&cs, "1", "4");
+        assert_before(&cs, "3", "2");
+        assert!(!had_cycle);
     }
 }

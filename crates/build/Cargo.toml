@@ -10,7 +10,10 @@ serde = { workspace = true }
 spin-common = { path = "../common" }
 spin-environments = { path = "../environments" }
 spin-manifest = { path = "../manifest" }
+spin-serde = { path = "../serde" }
 subprocess = "0.2"
 terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }
+topological-sort = "0.2"
+tracing = { workspace = true }
