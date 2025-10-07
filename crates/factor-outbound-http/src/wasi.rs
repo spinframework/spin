@@ -457,18 +457,14 @@ impl RequestSender {
             None
         };
 
-        // If we're limiting concurrent outbound requests, acquire a permit
-        let permit = match self.concurrent_outbound_connections_semaphore {
-            Some(s) => s.acquire_owned().await.ok().map(Arc::new),
-            None => None,
-        };
         let resp = CONNECT_OPTIONS.scope(
             ConnectOptions {
                 blocked_networks: self.blocked_networks,
                 connect_timeout,
                 tls_client_config,
                 override_connect_addr,
-                permit,
+                concurrent_outbound_connections_semaphore: self
+                    .concurrent_outbound_connections_semaphore,
             },
             async move {
                 if use_tls {
@@ -556,10 +552,8 @@ struct ConnectOptions {
     tls_client_config: Option<TlsClientConfig>,
     /// If set, override the address to connect to instead of using the given `uri`'s authority.
     override_connect_addr: Option<SocketAddr>,
-    /// A permit for this connection
-    ///
-    /// If there is a permit, it should be dropped when the connection is closed.
-    permit: Option<Arc<OwnedSemaphorePermit>>,
+    /// A semaphore to limit the number of concurrent outbound connections.
+    concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
 }
 
 impl ConnectOptions {
@@ -603,6 +597,12 @@ impl ConnectOptions {
             return Err(ErrorCode::DestinationIpProhibited);
         }
 
+        // If we're limiting concurrent outbound requests, acquire a permit
+        let permit = match &self.concurrent_outbound_connections_semaphore {
+            Some(s) => s.clone().acquire_owned().await.ok(),
+            None => None,
+        };
+
         let stream = timeout(self.connect_timeout, TcpStream::connect(&*socket_addrs))
             .await
             .map_err(|_| ErrorCode::ConnectionTimeout)?
@@ -614,7 +614,7 @@ impl ConnectOptions {
             })?;
         Ok(PermittedTcpStream {
             inner: stream,
-            _permit: self.permit.clone(),
+            _permit: permit,
         })
     }
 
@@ -757,7 +757,7 @@ struct PermittedTcpStream {
     ///
     /// When this stream is dropped, the permit is also dropped, allowing another
     /// connection to be established.
-    _permit: Option<Arc<OwnedSemaphorePermit>>,
+    _permit: Option<OwnedSemaphorePermit>,
 }
 
 impl Connection for PermittedTcpStream {
