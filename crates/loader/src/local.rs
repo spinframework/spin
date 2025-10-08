@@ -73,7 +73,7 @@ impl LocalLoader {
 
     // Load the given manifest into a LockedApp, ready for execution.
     pub(crate) async fn load_manifest(&self, mut manifest: AppManifest) -> Result<LockedApp> {
-        spin_manifest::normalize::normalize_manifest(&mut manifest);
+        spin_manifest::normalize::normalize_manifest(&mut manifest)?;
 
         manifest.validate_dependencies()?;
 
@@ -866,6 +866,9 @@ impl WasmLoader {
             } => {
                 let content = self.load_http_source(&url, &digest).await?;
                 Ok((content, export))
+            }
+            v2::ComponentDependency::AppComponent { .. } => {
+                panic!("Internal error: component ID dependency was not resolved to a source");
             }
         }
     }

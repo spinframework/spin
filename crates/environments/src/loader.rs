@@ -272,6 +272,7 @@ impl spin_compose::DependencyLike for WrappedComponentDependency {
             spin_manifest::schema::v2::ComponentDependency::Package { export, .. } => export,
             spin_manifest::schema::v2::ComponentDependency::Local { export, .. } => export,
             spin_manifest::schema::v2::ComponentDependency::HTTP { export, .. } => export,
+            spin_manifest::schema::v2::ComponentDependency::AppComponent { export, .. } => export,
         }
     }
 }
