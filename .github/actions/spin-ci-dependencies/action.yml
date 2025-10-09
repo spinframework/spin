@@ -114,7 +114,6 @@ runs:
       if: ${{ inputs.rust-cache == 'true' }}
       with:
         shared-key: "${{ runner.os }}-full-${{ hashFiles('./Cargo.lock', './os-release') }}"
-        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     ## Install nomad
     - name: Install nomad

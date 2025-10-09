@@ -331,6 +331,7 @@ jobs:
         with:
           rust: true
           rust-cross: true
+          rust-cache: true
 
       - name: Cargo Build
         run: cross build --target ${{ matrix.config.target }} --release --features openssl/vendored

@@ -44,6 +44,7 @@ jobs:
         with:
           rust: true
           rust-wasm: true
+          rust-cache: true
 
       - name: Run lints on main code
         run: BUILD_SPIN_EXAMPLES=0 make lint
@@ -63,6 +64,7 @@ jobs:
         with:
           rust: true
           rust-wasm: true
+          rust-cache: true
 
       - name: Cargo Build
         run: cargo build --workspace --release --all-targets --features openssl/vendored --features all-tests
@@ -97,6 +99,7 @@ jobs:
         with:
           rust: true
           rust-cross: true
+          rust-cache: true
 
       - name: Cargo Build
         run: cross build --target ${{ matrix.config.target }} --release --features openssl/vendored
@@ -124,7 +127,7 @@ jobs:
         with:
           rust: true
           rust-wasm: true
-          rust-cache: "${{ matrix.os == 'windows-latest' }} || ${{ matrix.os == 'macos-15-intel' }}"
+          rust-cache: true
           openssl-windows: "${{ matrix.os == 'windows-latest' }}"
 
       - name: Cargo Build
@@ -153,6 +156,7 @@ jobs:
         with:
           rust: true
           rust-wasm: true
+          rust-cache: true
           nomad: true
 
       - name: Check disk space (Before)
