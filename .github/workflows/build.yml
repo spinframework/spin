@@ -44,7 +44,6 @@ jobs:
         with:
           rust: true
           rust-wasm: true
-          rust-cache: true
 
       - name: Run lints on main code
         run: BUILD_SPIN_EXAMPLES=0 make lint
@@ -64,7 +63,6 @@ jobs:
         with:
           rust: true
           rust-wasm: true
-          rust-cache: true
 
       - name: Cargo Build
         run: cargo build --workspace --release --all-targets --features openssl/vendored --features all-tests
