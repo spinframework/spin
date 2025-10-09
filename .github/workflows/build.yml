@@ -153,7 +153,7 @@ jobs:
         with:
           rust: true
           rust-wasm: true
-          rust-cache: true
+          # rust-cache: true
           nomad: true
 
       - name: Check disk space (Before)
