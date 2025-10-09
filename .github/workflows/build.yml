@@ -171,6 +171,9 @@ jobs:
       - name: Check disk space (After)
         run: df -h /
 
+      - name: Set `CARGO_INCREMENTAL` to 0
+        run: echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
+
       - name: Run Unit Tests
         run: |
           make test-unit
