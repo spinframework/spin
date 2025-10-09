@@ -124,7 +124,7 @@ jobs:
         with:
           rust: true
           rust-wasm: true
-          rust-cache: true
+          rust-cache: "${{ matrix.os == 'windows-latest' }} || ${{ matrix.os == 'macos-15-intel' }}"
           openssl-windows: "${{ matrix.os == 'windows-latest' }}"
 
       - name: Cargo Build
