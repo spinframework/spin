@@ -110,32 +110,32 @@ macro_rules! einfo {
 
 #[macro_export]
 macro_rules! cprint {
-    ($color:expr, $($arg:tt)*) => {
+    ($color:expr, $($arg:tt)*) => {{
         use std::io::Write;
         let mut out = $crate::ColorText::stdout($color);
         let _ = write!(out, $($arg)*);
         drop(out); // Reset colors
-    };
+    }};
 }
 
 #[macro_export]
 macro_rules! ceprint {
-    ($color:expr, $($arg:tt)*) => {
+    ($color:expr, $($arg:tt)*) => {{
         use std::io::Write;
         let mut out = $crate::ColorText::stderr($color);
         let _ = write!(out, $($arg)*);
-        drop(out); // Reset colors
-    };
+        drop(out); // Reset color}s
+    }};
 }
 
 #[macro_export]
 macro_rules! ceprintln {
-    ($color:expr, $($arg:tt)*) => {
+    ($color:expr, $($arg:tt)*) => {{
         use std::io::Write;
         let mut out = $crate::ColorText::stderr($color);
         let _ = writeln!(out, $($arg)*);
         drop(out); // Reset colors
-    };
+    }};
 }
 
 pub mod colors {

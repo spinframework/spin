@@ -60,7 +60,19 @@ fn deployment_plugin(cmd: &str) -> anyhow::Result<String> {
     match std::env::var(DEPLOY_PLUGIN_ENV) {
         Ok(v) => Ok(v),
         Err(std::env::VarError::NotPresent) => {
-            terminal::warn!("`spin {cmd}` will soon need to be told which deployment plugin to use.\nRun a plugin command (e.g. `spin {DEFAULT_DEPLOY_PLUGIN} {cmd}`), or set the `{DEPLOY_PLUGIN_ENV}` environment variable, instead.\nDefaulting to `{DEFAULT_DEPLOY_PLUGIN}` plugin.");
+            terminal::ceprintln!(terminal::colors::bold_red(), "******** IMPORTANT! ********");
+            terminal::ceprint!(terminal::colors::bold_red(), "Future breaking change: ");
+            eprintln!("`spin {cmd}` needs to be told which deployment plugin to use. Either:");
+            terminal::step!(
+                "*",
+                "Run a plugin command (e.g. `spin {DEFAULT_DEPLOY_PLUGIN} {cmd}`); or"
+            );
+            terminal::step!("*", "Set the `{DEPLOY_PLUGIN_ENV}` environment variable.");
+            eprintln!("For now, Spin will default to the `{DEFAULT_DEPLOY_PLUGIN}` plugin.");
+            terminal::ceprintln!(
+                terminal::colors::bold_red(),
+                "This will be a hard error in a future version."
+            );
             Ok(DEFAULT_DEPLOY_PLUGIN.to_string())
         }
         Err(_) => anyhow::bail!("{DEPLOY_PLUGIN_ENV} was defined but its value could not be read"),
