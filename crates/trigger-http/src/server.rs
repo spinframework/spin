@@ -83,7 +83,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
             .app()
             .trigger_configs::<HttpTriggerConfig>("http")?
             .into_iter()
-            .map(|(trigger_id, config)| (config.lookup_key(trigger_id).map(|k| (k, config))))
+            .map(|(trigger_id, config)| config.lookup_key(trigger_id).map(|k| (k, config)))
             .collect::<Result<Vec<_>, _>>()?;
 
         // Build router

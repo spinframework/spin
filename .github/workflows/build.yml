@@ -17,7 +17,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.87
+  RUST_VERSION: '1.90'
 
 jobs:
   dependency-review:
@@ -153,7 +153,6 @@ jobs:
         with:
           rust: true
           rust-wasm: true
-          rust-cache: true
           nomad: true
 
       - name: Check disk space (Before)
