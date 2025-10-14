@@ -1,0 +1,7 @@
+default = "spin:up/platform@3.4.0"
+
+[triggers]
+
+[triggers.http]
+worlds = ["spin:up/http-trigger@3.4.0", "fermyon:spin/http-trigger-rc20231018@2.0.0"]
+capabilities = ["local_service_chaining"]
