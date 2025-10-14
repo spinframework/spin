@@ -1,0 +1,39 @@
+name: Publish WIT to registry
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-wit:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: write
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall
+
+      - name: Install wasm-tools
+        shell: bash
+        run: cargo binstall wasm-tools
+
+      - name: Install wkg
+        shell: bash
+        run: cargo binstall wkg
+
+      - name: Login to the GitHub registry
+        uses: docker/login-action
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.REGISTRY_PAT }}
+
+      - name: Build and publish WIT package
+        shell: bash
+        run: ./scripts/build-and-publish-wit.sh
+
