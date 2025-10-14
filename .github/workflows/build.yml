@@ -158,6 +158,7 @@ jobs:
 
       - name: Check disk space (Before)
         run: df -h /
+        if: always()
 
       # Clear space on macOS runner which is prone to running out of space
       - name: Free disk space
@@ -169,20 +170,32 @@ jobs:
         continue-on-error: true
         if: ${{ matrix.runner == 'macos-14' }}
 
-      - name: Check disk space (After)
+      - name: Check disk space (after MacOS freeing)
         run: df -h /
+        if: always()
 
       - name: Run Unit Tests
+        continue-on-error: true
         run: |
           make test-unit
 
+      - name: Check disk space (after unit tests)
+        run: df -h /
+        if: always()
+
       - name: Run Integration Tests
+        continue-on-error: true
         run: |
           make test-integration
         env:
           SPIN_CONFORMANCE_TESTS_DOCKER_OPT_OUT: true
         # Only run integration tests on macOS as they will be run on ubuntu separately
         if: ${{ matrix.runner == 'macos-14' }}
+
+      - name: Check disk space (after integration tests)
+        run: df -h /
+        if: always()
+
 
   all-integration-tests:
     # run on a larger runner for more SSD/resource access
@@ -302,6 +315,15 @@ jobs:
         with:
           openssl-windows: "${{ matrix.os == 'windows-latest' }}"
 
+      - name: Check disk space (before release build)
+        run: df -h /
+        if: always()
+
       - name: build release
         shell: bash
+        continue-on-error: true
         run: cargo build --release ${{ matrix.config.extraArgs }}
+
+      - name: Check disk space (after release build)
+        run: df -h /
+        if: always()
