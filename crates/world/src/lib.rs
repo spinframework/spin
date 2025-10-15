@@ -12,6 +12,7 @@ wasmtime::component::bindgen!({
         include fermyon:spin/platform@3.0.0;
         include spin:up/platform@3.2.0;
         include spin:up/platform@3.4.0;
+        include spin:up/platform@3.5.0;
         include wasi:keyvalue/imports@0.2.0-draft2;
     }
     "#,
