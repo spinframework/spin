@@ -12,6 +12,7 @@ use std::{
 };
 use tokio::task;
 use tracing::{instrument, Instrument, Level};
+use wasmtime::Trap;
 use wasmtime_wasi_http::{
     body::HyperIncomingBody as Body,
     p3::{
@@ -84,7 +85,21 @@ impl HttpExecutor for Wasip3HttpExecutor<'_> {
             .in_current_span()
             .inspect(|result| {
                 if let Err(error) = result {
-                    tracing::error!("Component error handling request: {error:?}");
+                    // TODO: Remove this check once we've updated to Wasmtime
+                    // 38+.
+                    //
+                    // Wasmtime 37's implementation of
+                    // `Instance::run_concurrent` returns `Trap::AsyncDeadlock`
+                    // if the `AsyncFnOnce` it was given does not resolve by the
+                    // time all outstanding tasks have finished.  In this case,
+                    // it's harmless and we can ignore it.  See
+                    // https://github.com/bytecodealliance/wasmtime/pull/11756
+                    // for details.
+                    if let Some(Trap::AsyncDeadlock) = error.downcast_ref::<Trap>() {
+                        // ignore
+                    } else {
+                        tracing::error!("Component error handling request: {error:?}");
+                    }
                 }
             }),
         );
