@@ -27,6 +27,7 @@ pub struct TimerTrigger {
 }
 
 // Picks out the timer entry from the application-level trigger settings
+#[allow(dead_code)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct TriggerMetadataParent {
     timer: Option<TriggerMetadata>,

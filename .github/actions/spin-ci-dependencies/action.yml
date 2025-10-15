@@ -8,7 +8,7 @@ inputs:
     type: bool
   rust-version:
     description: 'Rust version to setup'
-    default: '1.87'
+    default: '1.90'
     required: false
     type: string
 
