@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall
+        uses: cargo-bins/cargo-binstall@8aac5aa2bf0dfaa2863eccad9f43c68fe40e5ec8
 
       - name: Install wasm-tools
         shell: bash
