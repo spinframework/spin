@@ -9053,6 +9053,7 @@ version = "3.5.0-pre0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "indexmap 2.7.1",
  "schemars",
  "semver",
  "serde",

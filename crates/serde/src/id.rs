@@ -76,6 +76,19 @@ impl<const DELIM: char, const LOWER: bool> TryFrom<String> for Id<DELIM, LOWER> 
     }
 }
 
+#[cfg(test)]
+impl<const DELIM: char, const LOWER: bool> indexmap::Equivalent<Id<DELIM, LOWER>> for &str {
+    fn equivalent(&self, key: &Id<DELIM, LOWER>) -> bool {
+        key.as_ref() == *self
+    }
+}
+
+impl<const DELIM: char, const LOWER: bool> std::borrow::Borrow<str> for Id<DELIM, LOWER> {
+    fn borrow(&self) -> &str {
+        self.as_ref()
+    }
+}
+
 const fn wrong_delim<const DELIM: char>() -> Option<char> {
     match DELIM {
         '_' => Some('-'),
