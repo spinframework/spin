@@ -27,7 +27,7 @@ jobs:
         run: cargo binstall wkg
 
       - name: Login to the GitHub registry
-        uses: docker/login-action
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
