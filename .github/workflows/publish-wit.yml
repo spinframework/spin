@@ -30,8 +30,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: spinframeworkbot
+          password: ${{ secrets.SPIN_WIT_PAT }}
 
       - name: Build and publish WIT package
         shell: bash
