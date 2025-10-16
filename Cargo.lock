@@ -9207,6 +9207,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.0",
  "tracing",
+ "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
 ]
