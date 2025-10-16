@@ -590,8 +590,8 @@ mod otel {
     impl From<wasi_metrics::Resource> for opentelemetry_sdk::Resource {
         fn from(value: wasi_metrics::Resource) -> Self {
             let attributes: Vec<opentelemetry::KeyValue> =
-                value.inner.attributes.into_iter().map(Into::into).collect();
-            let schema_url: Option<String> = value.inner.schema_url.into();
+                value.attributes.into_iter().map(Into::into).collect();
+            let schema_url: Option<String> = value.schema_url.into();
 
             match schema_url {
                 Some(url) => opentelemetry_sdk::resource::Resource::builder()

@@ -20,11 +20,6 @@ interface metrics {
 
     /// An immutable representation of the entity producing telemetry as attributes.
     record %resource {
-        inner: resource-inner,
-    }
-
-    /// Inner structure of `resource` holding the actual data.
-    record resource-inner {
         attributes: list<key-value>,
         schema-url: option<string>,
     }
@@ -215,7 +210,7 @@ interface metrics {
 
     /// A measurement sampled from a time series providing a typical example.
     record exemplar {
-         /// The attributes recorded with the measurement but filtered out of the
+        /// The attributes recorded with the measurement but filtered out of the
         /// time series' aggregated data.
         filtered-attributes: list<key-value>,
         /// The time when the measurement was recorded.
