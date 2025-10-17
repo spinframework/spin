@@ -31,7 +31,7 @@ jobs:
         with:
           registry: ghcr.io
           username: spinframeworkbot
-          password: ${{ secrets.SPIN_WIT_PAT }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish WIT package
         shell: bash
