@@ -4,13 +4,13 @@ interface metrics {
     use types.{key-value, instrumentation-scope};
     use tracing.{span-id, trace-id};
 
-    /// `collect` gathers all metric data related to a Reader from the SDK
-    collect: func(metrics: resource-metrics) -> result<_, otel-error>;
+    /// `export` sends all metric data related to a Reader from the SDK
+    %export: func(metrics: resource-metrics) -> result<_, error>;
+
+    type error = string;
 
     /// `resource-metrics` is a collection of `scope-metrics` and the associated `resource`
     /// that created them.
-    ///
-    /// See https://github.com/open-telemetry/opentelemetry-rust/blob/c811cde1ae21c624870c1b952190e687b16f76b8/opentelemetry-sdk/src/metrics/data/mod.rs#L13
     record resource-metrics {
         /// The entity that collected the metrics.
         %resource: %resource,
@@ -254,14 +254,5 @@ interface metrics {
         %f64(f64),
         %s64(s64),
         %u64(u64),
-    }
-
-    /// The WASI representation of the `OTelSdkError`.
-    ///
-    /// See https://github.com/open-telemetry/opentelemetry-rust/blob/353bbb0d80fc35a26a00b4f4fed0dcaed23e5523/opentelemetry-sdk/src/error.rs#L15
-    variant otel-error {
-        already-shutdown,
-        timeout(duration),
-        internal-failure(string),
     }
 }

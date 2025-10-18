@@ -1,6 +1,9 @@
+use std::fmt::format;
+
 use anyhow::anyhow;
 use anyhow::Result;
 use opentelemetry::trace::TraceContextExt;
+use opentelemetry_sdk::error::OTelSdkError;
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::trace::SpanProcessor;
 use spin_world::wasi;
@@ -58,14 +61,23 @@ impl wasi::otel::tracing::Host for InstanceState {
 }
 
 impl wasi::otel::metrics::Host for InstanceState {
-    async fn collect(
+    async fn export(
         &mut self,
         metrics: wasi::otel::metrics::ResourceMetrics,
-    ) -> spin_core::wasmtime::Result<std::result::Result<(), wasi::otel::metrics::OtelError>> {
+    ) -> spin_core::wasmtime::Result<std::result::Result<(), wasi::otel::metrics::Error>> {
         let mut rm: opentelemetry_sdk::metrics::data::ResourceMetrics = metrics.into();
         match self.metric_exporter.export(&mut rm).await {
             Ok(_) => Ok(Ok(())),
-            Err(e) => Ok(Err(e.into())),
+            Err(e) => match e {
+                OTelSdkError::AlreadyShutdown => {
+                    Ok(Err("Shutdown has already been invoked".to_string()))
+                }
+                OTelSdkError::InternalFailure(e) => Ok(Err("Internal failure: ".to_string() + &e)),
+                OTelSdkError::Timeout(d) => Ok(Err(format!(
+                    "Operation timed out after {} seconds",
+                    d.as_secs()
+                ))),
+            },
         }
     }
 }

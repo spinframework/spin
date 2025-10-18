@@ -557,7 +557,6 @@ mod llm {
 mod otel {
     use super::*;
     use opentelemetry::StringValue;
-    use opentelemetry_sdk::error::OTelSdkError;
     use opentelemetry_sdk::trace::{SpanEvents, SpanLinks};
     use std::borrow::Cow;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -565,18 +564,6 @@ mod otel {
     use wasi::otel::metrics as wasi_metrics;
     use wasi::otel::tracing as wasi_tracing;
     use wasi::otel::types as wasi_types;
-
-    impl From<OTelSdkError> for wasi::otel::metrics::OtelError {
-        fn from(value: OTelSdkError) -> Self {
-            match value {
-                OTelSdkError::AlreadyShutdown => wasi::otel::metrics::OtelError::AlreadyShutdown,
-                OTelSdkError::InternalFailure(v) => {
-                    wasi::otel::metrics::OtelError::InternalFailure(v)
-                }
-                OTelSdkError::Timeout(d) => wasi::otel::metrics::OtelError::Timeout(d.as_secs()),
-            }
-        }
-    }
 
     impl From<wasi_metrics::ResourceMetrics> for opentelemetry_sdk::metrics::data::ResourceMetrics {
         fn from(value: wasi_metrics::ResourceMetrics) -> Self {
