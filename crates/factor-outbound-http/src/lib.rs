@@ -22,6 +22,7 @@ use spin_factors::{
     anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
     SelfInstanceBuilder,
 };
+use tokio::sync::Semaphore;
 use wasmtime_wasi_http::WasiHttpCtx;
 
 pub use wasmtime_wasi_http::{
@@ -53,13 +54,15 @@ impl Factor for OutboundHttpFactor {
         &self,
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        let connection_pooling = ctx
-            .take_runtime_config()
-            .unwrap_or_default()
-            .connection_pooling;
+        let config = ctx.take_runtime_config().unwrap_or_default();
         Ok(AppState {
-            wasi_http_clients: wasi::HttpClients::new(connection_pooling),
-            connection_pooling,
+            wasi_http_clients: wasi::HttpClients::new(config.connection_pooling_enabled),
+            connection_pooling_enabled: config.connection_pooling_enabled,
+            concurrent_outbound_connections_semaphore: config
+                .max_concurrent_connections
+                // Permit count is the max concurrent connections + 1.
+                // i.e., 0 concurrent connections means 1 total connection.
+                .map(|n| Arc::new(Semaphore::new(n + 1))),
         })
     }
 
@@ -80,7 +83,11 @@ impl Factor for OutboundHttpFactor {
             request_interceptor: None,
             spin_http_client: None,
             wasi_http_clients: ctx.app_state().wasi_http_clients.clone(),
-            connection_pooling: ctx.app_state().connection_pooling,
+            connection_pooling_enabled: ctx.app_state().connection_pooling_enabled,
+            concurrent_outbound_connections_semaphore: ctx
+                .app_state()
+                .concurrent_outbound_connections_semaphore
+                .clone(),
         })
     }
 }
@@ -94,7 +101,7 @@ pub struct InstanceState {
     request_interceptor: Option<Arc<dyn OutboundHttpInterceptor>>,
     // Connection-pooling client for 'fermyon:spin/http' interface
     //
-    // TODO: We could move this to `AppState` to like the
+    // TODO: We could move this to `AppState` like the
     // `wasi:http/outgoing-handler` pool for consistency, although it's probably
     // not a high priority given that `fermyon:spin/http` is deprecated anyway.
     spin_http_client: Option<reqwest::Client>,
@@ -103,7 +110,10 @@ pub struct InstanceState {
     // This is a clone of `AppState::wasi_http_clients`, meaning it is shared
     // among all instances of the app.
     wasi_http_clients: wasi::HttpClients,
-    connection_pooling: bool,
+    /// Whether connection pooling is enabled for this instance.
+    connection_pooling_enabled: bool,
+    /// A semaphore to limit the number of concurrent outbound connections.
+    concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
 }
 
 impl InstanceState {
@@ -185,5 +195,8 @@ impl std::fmt::Display for SelfRequestOrigin {
 pub struct AppState {
     // Connection pooling clients for `wasi:http/outgoing-handler` interface
     wasi_http_clients: wasi::HttpClients,
-    connection_pooling: bool,
+    /// Whether connection pooling is enabled for this app.
+    connection_pooling_enabled: bool,
+    /// A semaphore to limit the number of concurrent outbound connections.
+    concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
 }

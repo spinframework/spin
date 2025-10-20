@@ -21,7 +21,6 @@ impl spin_http::Host for crate::InstanceState {
         if !req.params.is_empty() {
             tracing::warn!("HTTP params field is deprecated");
         }
-
         let req_url = if !uri.starts_with('/') {
             // Absolute URI
             let is_allowed = self
@@ -92,13 +91,21 @@ impl spin_http::Host for crate::InstanceState {
         // in a single component execution
         let client = self.spin_http_client.get_or_insert_with(|| {
             let mut builder = reqwest::Client::builder();
-            if !self.connection_pooling {
+            if !self.connection_pooling_enabled {
                 builder = builder.pool_max_idle_per_host(0);
             }
             builder.build().unwrap()
         });
 
+        // If we're limiting concurrent outbound requests, acquire a permit
+        // Note: since we don't have access to the underlying connection, we can only
+        // limit the number of concurrent requests, not connections.
+        let permit = match &self.concurrent_outbound_connections_semaphore {
+            Some(s) => s.acquire().await.ok(),
+            None => None,
+        };
         let resp = client.execute(req).await.map_err(log_reqwest_error)?;
+        drop(permit);
 
         tracing::trace!("Returning response from outbound request to {req_url}");
         span.record("http.response.status_code", resp.status().as_u16());
