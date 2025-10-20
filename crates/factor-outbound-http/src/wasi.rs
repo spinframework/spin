@@ -590,31 +590,12 @@ impl ConnectOptions {
         crate::remove_blocked_addrs(&self.blocked_networks, &mut socket_addrs)?;
 
         // If we're limiting concurrent outbound requests, acquire a permit
-        let permit = match &self.concurrent_outbound_connections_semaphore {
-            Some(s) => {
-                // Try to acquire a permit without waiting first
-                // Keep track of whether we had to wait for metrics purposes.
-                let mut waited = false;
-                let permit = match s.clone().try_acquire_owned() {
-                    Ok(p) => Ok(p),
-                    // No available permits right now; wait for one
-                    Err(tokio::sync::TryAcquireError::NoPermits) => {
-                        waited = true;
-                        s.clone().acquire_owned().await.map_err(|_| ())
-                    }
-                    Err(_) => Err(()),
-                };
-                if permit.is_ok() {
-                    spin_telemetry::monotonic_counter!(
-                        outbound_http.acquired_permits = 1,
-                        interface = "wasi",
-                        waited = waited
-                    );
-                }
-                permit.ok()
-            }
-            None => None,
-        };
+
+        let permit = crate::concurrent_outbound_connections::acquire_owned_semaphore(
+            "wasi",
+            &self.concurrent_outbound_connections_semaphore,
+        )
+        .await;
 
         let stream = timeout(self.connect_timeout, TcpStream::connect(&*socket_addrs))
             .await

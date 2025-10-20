@@ -104,31 +104,11 @@ impl spin_http::Host for crate::InstanceState {
         // If we're limiting concurrent outbound requests, acquire a permit
         // Note: since we don't have access to the underlying connection, we can only
         // limit the number of concurrent requests, not connections.
-        let permit = match &self.concurrent_outbound_connections_semaphore {
-            Some(s) => {
-                // Try to acquire a permit without waiting first
-                // Keep track of whether we had to wait for metrics purposes.
-                let mut waited = false;
-                let permit = match s.try_acquire() {
-                    Ok(p) => Ok(p),
-                    // No available permits right now; wait for one
-                    Err(tokio::sync::TryAcquireError::NoPermits) => {
-                        waited = true;
-                        s.acquire().await.map_err(|_| ())
-                    }
-                    Err(_) => Err(()),
-                };
-                if permit.is_ok() {
-                    spin_telemetry::monotonic_counter!(
-                        outbound_http.acquired_permits = 1,
-                        interface = "spin",
-                        waited = waited
-                    );
-                }
-                permit.ok()
-            }
-            None => None,
-        };
+        let permit = crate::concurrent_outbound_connections::acquire_semaphore(
+            "spin",
+            &self.concurrent_outbound_connections_semaphore,
+        )
+        .await;
         let resp = client.execute(req).await.map_err(log_reqwest_error)?;
         drop(permit);
 

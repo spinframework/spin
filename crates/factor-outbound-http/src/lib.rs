@@ -142,6 +142,66 @@ impl InstanceState {
 
 impl SelfInstanceBuilder for InstanceState {}
 
+/// Helper module for acquiring permits from the outbound connections semaphore.
+///
+/// This is used by the outbound HTTP implementations to limit concurrent outbound connections.
+mod concurrent_outbound_connections {
+    use super::*;
+
+    /// Acquires a semaphore permit for the given interface, if a semaphore is configured.
+    pub async fn acquire_semaphore<'a>(
+        interface: &str,
+        semaphore: &'a Option<Arc<Semaphore>>,
+    ) -> Option<tokio::sync::SemaphorePermit<'a>> {
+        let s = semaphore.as_ref()?;
+        acquire(interface, || s.try_acquire(), async || s.acquire().await).await
+    }
+
+    /// Acquires an owned semaphore permit for the given interface, if a semaphore is configured.
+    pub async fn acquire_owned_semaphore(
+        interface: &str,
+        semaphore: &Option<Arc<Semaphore>>,
+    ) -> Option<tokio::sync::OwnedSemaphorePermit> {
+        let s = semaphore.as_ref()?;
+        acquire(
+            interface,
+            || s.clone().try_acquire_owned(),
+            async || s.clone().acquire_owned().await,
+        )
+        .await
+    }
+
+    /// Helper function to acquire a semaphore permit, either immediately or by waiting.
+    ///
+    /// Allows getting either a borrowed or owned permit.
+    async fn acquire<T>(
+        interface: &str,
+        try_acquire: impl Fn() -> Result<T, tokio::sync::TryAcquireError>,
+        acquire: impl AsyncFnOnce() -> Result<T, tokio::sync::AcquireError>,
+    ) -> Option<T> {
+        // Try to acquire a permit without waiting first
+        // Keep track of whether we had to wait for metrics purposes.
+        let mut waited = false;
+        let permit = match try_acquire() {
+            Ok(p) => Ok(p),
+            // No available permits right now; wait for one
+            Err(tokio::sync::TryAcquireError::NoPermits) => {
+                waited = true;
+                acquire().await.map_err(|_| ())
+            }
+            Err(_) => Err(()),
+        };
+        if permit.is_ok() {
+            spin_telemetry::monotonic_counter!(
+                outbound_http.acquired_permits = 1,
+                interface = interface,
+                waited = waited
+            );
+        }
+        permit.ok()
+    }
+}
+
 pub type Request = http::Request<wasmtime_wasi_http::body::HyperOutgoingBody>;
 pub type Response = http::Response<wasmtime_wasi_http::body::HyperIncomingBody>;
 
