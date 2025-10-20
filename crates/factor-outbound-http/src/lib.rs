@@ -193,7 +193,7 @@ mod concurrent_outbound_connections {
         };
         if permit.is_ok() {
             spin_telemetry::monotonic_counter!(
-                outbound_http.acquired_permits = 1,
+                outbound_http.concurrent_connection_permits_acquired = 1,
                 interface = interface,
                 waited = waited
             );
