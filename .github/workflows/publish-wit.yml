@@ -22,7 +22,7 @@ jobs:
 
       - name: Install wasm-tools
         shell: bash
-        run: cargo binstall wasm-tools
+        run: cargo install wasm-tools
 
       - name: Install wkg
         shell: bash
