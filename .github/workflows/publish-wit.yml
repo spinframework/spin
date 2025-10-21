@@ -15,8 +15,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@8aac5aa2bf0dfaa2863eccad9f43c68fe40e5ec8
+      - name: Set up Rust to build wkg
+        uses: ./.github/actions/spin-ci-dependencies
+        with:
+          rust: true
 
       - name: Install wasm-tools
         shell: bash
@@ -24,7 +26,7 @@ jobs:
 
       - name: Install wkg
         shell: bash
-        run: cargo binstall wkg
+        run: cargo install wkg --git https://github.com/itowlson/wasm-pkg-tools --branch docker-credential-does-not-play-nice-with-schemeful-urls
 
       - name: Login to the GitHub registry
         uses: docker/login-action@v3
