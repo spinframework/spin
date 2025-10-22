@@ -4,8 +4,13 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 #[derive(Clone, Debug)]
 pub enum VariableSource {
+    /// The value of the given variable name is the given string
     Literal(String, String),
+    /// The value of the given variable name is the content of the given file (as a string)
+    FileContent(String, PathBuf),
+    /// The file contains a map of variable names to (string) values
     JsonFile(PathBuf),
+    /// The file contains a map of variable names to (string) values
     TomlFile(PathBuf),
 }
 
@@ -13,6 +18,11 @@ impl VariableSource {
     pub fn get_variables(&self) -> anyhow::Result<HashMap<String, String>> {
         match self {
             VariableSource::Literal(key, val) => Ok([(key.to_string(), val.to_string())].into()),
+            VariableSource::FileContent(key, path) => {
+                let val = std::fs::read_to_string(path)
+                    .with_context(|| format!("Failed to read {}.", quoted_path(path)))?;
+                Ok([(key.to_string(), val)].into())
+            }
             VariableSource::JsonFile(path) => {
                 let json_bytes = std::fs::read(path)
                     .with_context(|| format!("Failed to read {}.", quoted_path(path)))?;
@@ -43,7 +53,14 @@ impl FromStr for VariableSource {
                 _ => bail!("variable files must end in .json or .toml"),
             }
         } else if let Some((key, val)) = s.split_once('=') {
-            Ok(VariableSource::Literal(key.to_string(), val.to_string()))
+            if let Some(path) = val.strip_prefix('@') {
+                Ok(VariableSource::FileContent(
+                    key.to_string(),
+                    PathBuf::from(path),
+                ))
+            } else {
+                Ok(VariableSource::Literal(key.to_string(), val.to_string()))
+            }
         } else {
             bail!("variables must be in the form 'key=value' or '@file'")
         }
@@ -62,6 +79,14 @@ mod tests {
             Ok(VariableSource::Literal(key, val)) => {
                 assert_eq!(key, "k");
                 assert_eq!(val, "v");
+            }
+            Ok(other) => panic!("wrong variant {other:?}"),
+            Err(err) => panic!("{err:?}"),
+        }
+        match "k=@v.txt".parse() {
+            Ok(VariableSource::FileContent(key, path)) => {
+                assert_eq!(key, "k");
+                assert_eq!(path, PathBuf::from("v.txt"));
             }
             Ok(other) => panic!("wrong variant {other:?}"),
             Err(err) => panic!("{err:?}"),
@@ -91,6 +116,17 @@ mod tests {
             .get_variables()
             .unwrap();
         assert_eq!(vars["k"], "v");
+    }
+
+    #[test]
+    fn file_content_get_variables() {
+        let mut file = tempfile::NamedTempFile::with_suffix(".txt").unwrap();
+        file.write_all(br#"sausage time!"#).unwrap();
+        let path = file.into_temp_path();
+        let vars = VariableSource::FileContent("k".to_string(), path.to_path_buf())
+            .get_variables()
+            .unwrap();
+        assert_eq!(vars["k"], "sausage time!");
     }
 
     #[test]

@@ -110,14 +110,15 @@ pub struct TriggerAppArgs {
 
     /// Variable(s) to be passed to the app
     ///
-    /// A single key-value pair can be passed as `key=value`. Alternatively, the
-    /// path to a JSON or TOML file may be given as `@file.json` or
+    /// A single key-value pair can be passed as `key=value`, or `key=@file` to
+    /// read the value from a text file. Alternatively, any number of key-value
+    /// pairs may be passed via a JSON or TOML file using the syntax `@file.json` or
     /// `@file.toml`.
     ///
     /// This option may be repeated. If the same key is specified multiple times
     /// the last value will be used.
     #[clap(long, value_parser = clap::value_parser!(VariableSource),
-        value_name = "KEY=VALUE | @FILE.json | @FILE.toml")]
+        value_name = "KEY=VALUE | KEY=@FILE | @FILE.json | @FILE.toml")]
     pub variable: Vec<VariableSource>,
 
     /// Cache variables to avoid reading files twice
