@@ -1,0 +1,37 @@
+name: Publish environment definition to registry
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "spin-up.(ver).toml version, e.g. 3.4, 3.5"
+        required: true
+        type: string
+
+jobs:
+  publish-env-def:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: write
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install oras
+        uses: oras-project/setup-oras@v1
+
+      - name: Login to the GitHub registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: spinframeworkbot
+          password: ${{ secrets.SPIN_WIT_PAT }}
+
+      - name: Publish environment TOML
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/push-env-def.sh

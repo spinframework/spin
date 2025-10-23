@@ -1,0 +1,7 @@
+default = { worlds = ["spin:up/platform@3.2.0"] }
+
+[triggers]
+
+[triggers.http]
+worlds = ["spin:up/http-trigger@3.2.0"]
+capabilities = ["local_service_chaining"]
