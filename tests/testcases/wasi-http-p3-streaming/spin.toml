@@ -9,6 +9,7 @@ version = "1.0.0"
 [[trigger.http]]
 route = "/..."
 component = "wasi-http-async"
+executor = { type = "wasip3-unstable" }
 
 [component.wasi-http-async]
 source = "%{source=integration-wasi-http-p3-streaming}"

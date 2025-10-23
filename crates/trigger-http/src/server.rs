@@ -151,7 +151,11 @@ impl<F: RuntimeFactors> HttpServer<F> {
     ) -> anyhow::Result<HandlerType> {
         let pre = trigger_app.get_instance_pre(component_id)?;
         let handler_type = match executor {
-            None | Some(HttpExecutorType::Http) => HandlerType::from_instance_pre(pre)?,
+            None | Some(HttpExecutorType::Http) | Some(HttpExecutorType::Wasip3Unstable) => {
+                let handler_type = HandlerType::from_instance_pre(pre)?;
+                handler_type.validate_executor(executor)?;
+                handler_type
+            }
             Some(HttpExecutorType::Wagi(wagi_config)) => {
                 anyhow::ensure!(
                     wagi_config.entrypoint == "_start",
@@ -367,7 +371,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         let executor = executor.as_ref().unwrap_or(&HttpExecutorType::Http);
 
         let res = match executor {
-            HttpExecutorType::Http => match handler_type {
+            HttpExecutorType::Http | HttpExecutorType::Wasip3Unstable => match handler_type {
                 HandlerType::Spin => {
                     SpinHttpExecutor
                         .execute(instance_builder, &route_match, req, client_addr)
