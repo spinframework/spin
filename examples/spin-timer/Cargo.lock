@@ -4753,9 +4753,11 @@ name = "spin-app"
 version = "3.5.0-pre0"
 dependencies = [
  "anyhow",
+ "itertools 0.14.0",
  "serde",
  "serde_json",
- "spin-locked-app",
+ "spin-serde",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4817,7 +4819,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
- "spin-locked-app",
+ "spin-app",
  "thiserror 2.0.12",
 ]
 
@@ -4827,9 +4829,9 @@ version = "3.5.0-pre0"
 dependencies = [
  "anyhow",
  "serde",
+ "spin-app",
  "spin-core",
  "spin-factors",
- "spin-locked-app",
  "spin-resource-table",
  "spin-telemetry",
  "spin-world",
@@ -4846,9 +4848,9 @@ dependencies = [
  "anyhow",
  "async-trait",
  "serde",
+ "spin-app",
  "spin-factors",
  "spin-llm-remote-http",
- "spin-locked-app",
  "spin-telemetry",
  "spin-world",
  "tokio",
@@ -4927,10 +4929,10 @@ dependencies = [
  "rustls 0.23.25",
  "rustls-pki-types",
  "serde",
+ "spin-app",
  "spin-factor-variables",
  "spin-factor-wasi",
  "spin-factors",
- "spin-locked-app",
  "spin-manifest",
  "spin-outbound-networking-config",
  "spin-serde",
@@ -4983,8 +4985,8 @@ name = "spin-factor-sqlite"
 version = "3.5.0-pre0"
 dependencies = [
  "async-trait",
+ "spin-app",
  "spin-factors",
- "spin-locked-app",
  "spin-resource-table",
  "spin-world",
  "tokio",
@@ -5113,19 +5115,6 @@ dependencies = [
  "spin-telemetry",
  "spin-world",
  "tracing",
-]
-
-[[package]]
-name = "spin-locked-app"
-version = "3.5.0-pre0"
-dependencies = [
- "anyhow",
- "async-trait",
- "itertools 0.14.0",
- "serde",
- "serde_json",
- "spin-serde",
- "thiserror 2.0.12",
 ]
 
 [[package]]

@@ -8,11 +8,11 @@ use std::{
 };
 
 use anyhow::ensure;
+use spin_app::MetadataKey;
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, FactorInstanceBuilder, InitContext, PrepareContext,
     RuntimeFactors,
 };
-use spin_locked_app::MetadataKey;
 
 /// Metadata key for key-value stores.
 pub const KEY_VALUE_STORES_KEY: MetadataKey<Vec<String>> = MetadataKey::new("key_value_stores");

@@ -20,7 +20,7 @@ serde = { workspace = true }
 spin-factors = { path = "../factors" }
 spin-llm-local = { path = "../llm-local", optional = true }
 spin-llm-remote-http = { path = "../llm-remote-http" }
-spin-locked-app = { path = "../locked-app" }
+spin-app = { path = "../app" }
 spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["sync"] }

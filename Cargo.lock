@@ -8195,10 +8195,11 @@ name = "spin-app"
 version = "3.5.0-pre0"
 dependencies = [
  "anyhow",
+ "itertools 0.14.0",
  "serde",
  "serde_json",
- "spin-factors-test",
- "spin-locked-app",
+ "spin-serde",
+ "thiserror 2.0.12",
  "tokio",
  "toml",
 ]
@@ -8269,7 +8270,6 @@ dependencies = [
  "spin-factor-outbound-networking",
  "spin-http",
  "spin-loader",
- "spin-locked-app",
  "spin-manifest",
  "spin-oci",
  "spin-plugins",
@@ -8358,11 +8358,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "serde_json",
+ "spin-app",
  "spin-componentize",
  "spin-factor-wasi",
  "spin-factors",
  "spin-factors-test",
- "spin-locked-app",
  "tokio",
  "tracing",
  "wasmtime",
@@ -8431,7 +8431,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
- "spin-locked-app",
+ "spin-app",
  "thiserror 2.0.12",
  "tokio",
  "toml",
@@ -8443,12 +8443,12 @@ version = "3.5.0-pre0"
 dependencies = [
  "anyhow",
  "serde",
+ "spin-app",
  "spin-core",
  "spin-factors",
  "spin-factors-test",
  "spin-key-value-redis",
  "spin-key-value-spin",
- "spin-locked-app",
  "spin-resource-table",
  "spin-telemetry",
  "spin-world",
@@ -8466,11 +8466,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "serde",
+ "spin-app",
  "spin-factors",
  "spin-factors-test",
  "spin-llm-local",
  "spin-llm-remote-http",
- "spin-locked-app",
  "spin-telemetry",
  "spin-world",
  "tokio",
@@ -8556,11 +8556,11 @@ dependencies = [
  "rustls 0.23.18",
  "rustls-pki-types",
  "serde",
+ "spin-app",
  "spin-factor-variables",
  "spin-factor-wasi",
  "spin-factors",
  "spin-factors-test",
- "spin-locked-app",
  "spin-manifest",
  "spin-outbound-networking-config",
  "spin-serde",
@@ -8622,9 +8622,9 @@ name = "spin-factor-sqlite"
 version = "3.5.0-pre0"
 dependencies = [
  "async-trait",
+ "spin-app",
  "spin-factors",
  "spin-factors-test",
- "spin-locked-app",
  "spin-resource-table",
  "spin-world",
  "tokio",
@@ -8703,6 +8703,7 @@ dependencies = [
  "spin-loader",
  "spin-telemetry",
  "tempfile",
+ "tokio",
  "toml",
 ]
 
@@ -8842,9 +8843,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "spin-app",
  "spin-common",
  "spin-expressions",
- "spin-locked-app",
  "spin-manifest",
  "spin-outbound-networking-config",
  "spin-serde",
@@ -8855,19 +8856,6 @@ dependencies = [
  "tracing",
  "ui-testing",
  "wasm-pkg-client",
-]
-
-[[package]]
-name = "spin-locked-app"
-version = "3.5.0-pre0"
-dependencies = [
- "anyhow",
- "async-trait",
- "itertools 0.14.0",
- "serde",
- "serde_json",
- "spin-serde",
- "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -8908,10 +8896,10 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "serde_json",
+ "spin-app",
  "spin-common",
  "spin-compose",
  "spin-loader",
- "spin-locked-app",
  "tempfile",
  "tokio",
  "tokio-util",

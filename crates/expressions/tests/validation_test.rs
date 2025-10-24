@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use spin_app::Variable;
 use spin_expressions::{Key, Provider, ProviderResolver};
-use spin_locked_app::Variable;
 
 #[derive(Default)]
 struct ResolverTester {
