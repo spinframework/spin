@@ -103,10 +103,13 @@ impl WatchCommand {
         // We create the build-related objects even if skip_build is on - the cost is insignificant,
         // and it saves having to check options all over the place.
 
-        let (artifact_tx, artifact_rx) = tokio::sync::watch::channel(Uuid::new_v4());
+        let (artifact_tx, artifact_rx) =
+            tokio::sync::watch::channel((Uuid::new_v4(), "artifact".to_owned()));
         let (pause_tx, pause_rx) = tokio::sync::mpsc::channel(1);
-        let (source_code_tx, source_code_rx) = tokio::sync::watch::channel(Uuid::new_v4());
-        let (manifest_tx, manifest_rx) = tokio::sync::watch::channel(Uuid::new_v4());
+        let (source_code_tx, source_code_rx) =
+            tokio::sync::watch::channel((Uuid::new_v4(), "THIS_IS_ THE-FIRST BUILD".to_owned()));
+        let (manifest_tx, manifest_rx) =
+            tokio::sync::watch::channel((Uuid::new_v4(), "manifest".to_owned()));
         let (stop_tx, stop_rx) = tokio::sync::watch::channel(Uuid::new_v4());
 
         let mut buildifier = Buildifier {
@@ -243,7 +246,7 @@ impl WatchCommand {
         manifest_file: &Path,
         manifest_dir: &Path,
         filter_factory: Box<dyn FilterFactory>,
-        notifier: Arc<tokio::sync::watch::Sender<Uuid>>,
+        notifier: Arc<tokio::sync::watch::Sender<(Uuid, String)>>,
         impact_description: &'static str,
     ) -> anyhow::Result<(ReconfigurableWatcher, tokio::task::JoinHandle<()>)> {
         let rtf = RuntimeConfigFactory {
@@ -273,7 +276,7 @@ pub struct RuntimeConfigFactory {
     manifest_file: PathBuf,
     manifest_dir: PathBuf,
     filter_factory: Box<dyn FilterFactory>,
-    notifier: Arc<tokio::sync::watch::Sender<Uuid>>,
+    notifier: Arc<tokio::sync::watch::Sender<(Uuid, String)>>,
     impact_description: &'static str,
     debounce: Duration,
 }
@@ -299,19 +302,19 @@ impl RuntimeConfigFactory {
 }
 
 // This is the watchexec action handler that triggers the Uppificator
-// to reload or Builidifer to rebuild by sending a notification.
+// to reload or Buildifier to rebuild by sending a notification.
 // It is a struct rather than a closure because this makes it easier
 // for the compiler to confirm that all the data lives long enough and
 // is thread-safe for async stuff.
 struct NotifyOnFileChange {
     despurifier: despurifier::Despurifier,
-    notifier: Arc<tokio::sync::watch::Sender<Uuid>>,
+    notifier: Arc<tokio::sync::watch::Sender<(Uuid, String)>>,
     impact_description: &'static str,
 }
 
 impl NotifyOnFileChange {
     fn new(
-        notifier: Arc<tokio::sync::watch::Sender<Uuid>>,
+        notifier: Arc<tokio::sync::watch::Sender<(Uuid, String)>>,
         impact_description: &'static str,
     ) -> Self {
         Self {
@@ -335,7 +338,7 @@ impl watchexec::handler::Handler<watchexec::action::Action> for NotifyOnFileChan
                 self.impact_description,
                 paths_of(&action)
             );
-            _ = self.notifier.send(Uuid::new_v4());
+            _ = self.notifier.send((Uuid::new_v4(), paths_of(&action)));
         }
         action.outcome(watchexec::action::Outcome::DoNothing);
         Ok::<(), Box<dyn std::error::Error + 'static>>(())

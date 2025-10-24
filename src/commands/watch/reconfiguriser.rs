@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 pub(crate) struct Reconfiguriser {
-    pub manifest_changes: tokio::sync::watch::Receiver<Uuid>,
+    pub manifest_changes: tokio::sync::watch::Receiver<(Uuid, String)>,
     pub artifact_watcher: super::ReconfigurableWatcher,
     pub build_watcher: super::ReconfigurableWatcher,
 }

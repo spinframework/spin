@@ -7,7 +7,7 @@ pub(crate) struct Uppificator {
     pub up_args: Vec<String>,
     pub manifest: PathBuf,
     pub clear_screen: bool,
-    pub watched_changes: tokio::sync::watch::Receiver<Uuid>,
+    pub watched_changes: tokio::sync::watch::Receiver<(Uuid, String)>,
     pub pause_feed: tokio::sync::mpsc::Receiver<Pause>,
     pub stopper: tokio::sync::watch::Receiver<Uuid>,
 }
