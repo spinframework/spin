@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use http_body_util::BodyExt;
+use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
 use spin_world::v1::{
     http as spin_http,
     http_types::{self, HttpError, Method, Request, Response},
@@ -90,7 +93,8 @@ impl spin_http::Host for crate::InstanceState {
         // Allow reuse of Client's internal connection pool for multiple requests
         // in a single component execution
         let client = self.spin_http_client.get_or_insert_with(|| {
-            let mut builder = reqwest::Client::builder();
+            let mut builder = reqwest::Client::builder()
+                .dns_resolver(Arc::new(SpinResolver(self.blocked_networks.clone())));
             if !self.connection_pooling_enabled {
                 builder = builder.pool_max_idle_per_host(0);
             }
@@ -110,6 +114,23 @@ impl spin_http::Host for crate::InstanceState {
         tracing::trace!("Returning response from outbound request to {req_url}");
         span.record("http.response.status_code", resp.status().as_u16());
         response_from_reqwest(resp).await
+    }
+}
+
+struct SpinResolver(BlockedNetworks);
+
+impl reqwest::dns::Resolve for SpinResolver {
+    fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
+        let blocked_networks = self.0.clone();
+        Box::pin(async move {
+            let mut addrs = tokio::net::lookup_host(name.as_str())
+                .await
+                .map_err(Box::new)?
+                .collect::<Vec<_>>();
+            // Remove blocked IPs
+            crate::remove_blocked_addrs(&blocked_networks, &mut addrs).map_err(Box::new)?;
+            Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
+        })
     }
 }
 

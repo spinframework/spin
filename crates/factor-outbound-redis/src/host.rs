@@ -1,7 +1,12 @@
+use std::net::SocketAddr;
+
 use anyhow::Result;
+use redis::io::AsyncDNSResolver;
+use redis::AsyncConnectionConfig;
 use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
 use spin_core::wasmtime::component::Resource;
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
+use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
 use spin_world::v1::{redis as v1, redis_types};
 use spin_world::v2::redis::{
     self as v2, Connection as RedisConnection, Error, RedisParameter, RedisResult,
@@ -11,6 +16,7 @@ use tracing::{instrument, Level};
 
 pub struct InstanceState {
     pub allowed_hosts: OutboundAllowedHosts,
+    pub blocked_networks: BlockedNetworks,
     pub connections: spin_resource_table::Table<MultiplexedConnection>,
 }
 
@@ -23,9 +29,11 @@ impl InstanceState {
         &mut self,
         address: String,
     ) -> Result<Resource<RedisConnection>, Error> {
+        let config = AsyncConnectionConfig::new()
+            .set_dns_resolver(SpinResolver(self.blocked_networks.clone()));
         let conn = redis::Client::open(address.as_str())
             .map_err(|_| Error::InvalidAddress)?
-            .get_multiplexed_async_connection()
+            .get_multiplexed_async_connection_with_config(&config)
             .await
             .map_err(other_error)?;
         self.connections
@@ -363,5 +371,31 @@ impl FromRedisValue for RedisResults {
         let mut values = Vec::new();
         append(&mut values, value)?;
         Ok(RedisResults(values))
+    }
+}
+
+struct SpinResolver(BlockedNetworks);
+
+impl AsyncDNSResolver for SpinResolver {
+    fn resolve<'a, 'b: 'a>(
+        &'a self,
+        host: &'b str,
+        port: u16,
+    ) -> redis::RedisFuture<'a, Box<dyn Iterator<Item = std::net::SocketAddr> + Send + 'a>> {
+        Box::pin(async move {
+            let mut addrs = tokio::net::lookup_host((host, port))
+                .await?
+                .collect::<Vec<_>>();
+            // Remove blocked IPs
+            let blocked_addrs = self.0.remove_blocked(&mut addrs);
+            if addrs.is_empty() && !blocked_addrs.is_empty() {
+                tracing::error!(
+                    "error.type" = "destination_ip_prohibited",
+                    ?blocked_addrs,
+                    "all destination IP(s) prohibited by runtime config"
+                );
+            }
+            Ok(Box::new(addrs.into_iter()) as Box<dyn Iterator<Item = SocketAddr> + Send>)
+        })
     }
 }
