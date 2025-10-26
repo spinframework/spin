@@ -10,22 +10,20 @@
 mod limits;
 mod store;
 
-use std::sync::OnceLock;
-use std::{path::PathBuf, time::Duration};
-
 use anyhow::Result;
-use tracing::instrument;
-use wasmtime::{InstanceAllocationStrategy, PoolingAllocationConfig};
-
 pub use async_trait::async_trait;
+use std::sync::OnceLock;
+use std::time::Instant;
+use std::{path::PathBuf, time::Duration};
+pub use store::{AsState, Store, StoreBuilder};
+use tracing::instrument;
 pub use wasmtime::Engine as WasmtimeEngine;
 pub use wasmtime::{
     self,
     component::{Component, Instance, InstancePre, Linker},
     Instance as ModuleInstance, Module, Trap,
 };
-
-pub use store::{AsState, Store, StoreBuilder};
+use wasmtime::{InstanceAllocationStrategy, PoolingAllocationConfig};
 
 /// The default [`EngineBuilder::epoch_tick_interval`].
 pub const DEFAULT_EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(10);
@@ -254,6 +252,10 @@ fn use_pooling_allocator_by_default() -> bool {
 #[derive(Default)]
 pub struct State {
     store_limits: limits::StoreLimitsAsync,
+    /// The last time guest code started running in this instance.
+    pub cpu_time_last_entry: Option<Instant>,
+    /// The total CPU time elapsed actively running guest code in this instance.
+    pub cpu_time_elapsed: Duration,
 }
 
 impl State {

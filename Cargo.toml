@@ -55,6 +55,7 @@ watchexec-filterer-globset = { git = "https://github.com/watchexec/watchexec.git
 spin-app = { path = "crates/app" }
 spin-build = { path = "crates/build" }
 spin-common = { path = "crates/common" }
+spin-factors-executor = { path = "crates/factors-executor" }
 spin-doctor = { path = "crates/doctor" }
 spin-environments = { path = "crates/environments" }
 spin-factor-outbound-networking = { path = "crates/factor-outbound-networking" }
@@ -110,6 +111,7 @@ extern-dependencies-tests = []
 llm = ["spin-runtime-factors/llm"]
 llm-metal = ["llm", "spin-runtime-factors/llm-metal"]
 llm-cublas = ["llm", "spin-runtime-factors/llm-cublas"]
+call-hook = ["spin-factors-executor/call-hook"]
 
 [workspace]
 members = [

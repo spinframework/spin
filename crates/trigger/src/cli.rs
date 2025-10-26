@@ -1,13 +1,15 @@
 mod initial_kv_setter;
 mod launch_metadata;
 mod max_instance_memory;
+mod metric_tracker;
 mod sqlite_statements;
 mod stdio;
 mod summary;
 mod variable;
 
 use std::path::PathBuf;
-use std::{future::Future, sync::Arc};
+use std::time::Duration;
+use std::{future::Future, sync::Arc, time::Instant};
 
 use anyhow::{Context, Result};
 use clap::{Args, IntoApp, Parser};
@@ -22,6 +24,7 @@ use crate::{loader::ComponentLoader as ComponentLoaderImpl, Trigger, TriggerApp}
 pub use initial_kv_setter::InitialKvSetterHook;
 pub use launch_metadata::LaunchMetadata;
 pub use max_instance_memory::MaxInstanceMemoryHook;
+pub use metric_tracker::{MetricsTracker, MetricsTrackerHook};
 pub use sqlite_statements::SqlStatementExecutorHook;
 use stdio::FollowComponents;
 pub use stdio::StdioLoggingExecutorHooks;
@@ -243,9 +246,12 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
             )
             .await?;
 
+        // Record start time for CPU time measurement
+        let start_time = Instant::now();
+
         let (abortable, abort_handle) = futures::future::abortable(run_fut);
         ctrlc::set_handler(move || abort_handle.abort())?;
-        match abortable.await {
+        let result = match abortable.await {
             Ok(Ok(())) => {
                 tracing::info!("Trigger executor shut down: exiting");
                 Ok(())
@@ -258,7 +264,20 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
                 tracing::info!("User requested shutdown: exiting");
                 Ok(())
             }
-        }
+        };
+
+        // Log execution statistics
+        let cpu_time = start_time.elapsed();
+        eprintln!("total time elapsed: {:?}", cpu_time);
+
+        let component_metric_data = MetricsTracker::global().get_data();
+        component_metric_data.iter().for_each(|(component, data)| {
+            eprintln!(
+                "Component ID: {}\nCPU: {:?}\nMEM INIT: {:?}\nMEM EXEC: {:?}",
+                component, data.cpu_time_elapsed, data.memory_usage_init, data.memory_usage_exec
+            );
+        });
+        result
     }
 
     fn follow_components(&self) -> FollowComponents {
@@ -334,6 +353,7 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> TriggerAppBuilder<T, B> {
 
         let (factors, runtime_config) = B::build(&common_options, &options)?;
 
+        // TODO: This might be where you pass a flag
         let mut executor = FactorsExecutor::new(core_engine_builder, factors)?;
         B::configure_app(&mut executor, &runtime_config, &common_options, &options)?;
         let executor = Arc::new(executor);

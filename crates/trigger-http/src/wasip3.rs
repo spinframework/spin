@@ -32,7 +32,7 @@ impl HttpExecutor for Wasip3HttpExecutor<'_> {
         mut req: http::Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<http::Response<Body>> {
-        super::wasi::prepare_request(route_match, &mut req, client_addr)?;
+        let _ = super::wasi::prepare_request(route_match, &mut req, client_addr)?;
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
 

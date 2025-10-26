@@ -8283,6 +8283,7 @@ dependencies = [
  "spin-doctor",
  "spin-environments",
  "spin-factor-outbound-networking",
+ "spin-factors-executor",
  "spin-http",
  "spin-loader",
  "spin-locked-app",

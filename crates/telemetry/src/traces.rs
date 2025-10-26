@@ -59,6 +59,7 @@ pub(crate) fn otel_tracing_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
 
     Ok(tracing_opentelemetry::layer()
         .with_tracer(tracer_provider.tracer("spin"))
+        .with_tracked_inactivity(true)
         .with_threads(false)
         .with_filter(env_filter))
 }

@@ -21,3 +21,6 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true
+
+[features]
+call-hook = ["spin-core/call-hook"]
