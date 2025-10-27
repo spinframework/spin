@@ -5,7 +5,7 @@ mod wasi;
 pub mod wasi_2023_10_18;
 pub mod wasi_2023_11_10;
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
 use http::{
@@ -199,4 +199,26 @@ pub struct AppState {
     connection_pooling_enabled: bool,
     /// A semaphore to limit the number of concurrent outbound connections.
     concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
+}
+
+/// Removes IPs in the given [`BlockedNetworks`].
+///
+/// Returns [`ErrorCode::DestinationIpProhibited`] if all IPs are removed.
+fn remove_blocked_addrs(
+    blocked_networks: &BlockedNetworks,
+    addrs: &mut Vec<SocketAddr>,
+) -> Result<(), ErrorCode> {
+    if addrs.is_empty() {
+        return Ok(());
+    }
+    let blocked_addrs = blocked_networks.remove_blocked(addrs);
+    if addrs.is_empty() && !blocked_addrs.is_empty() {
+        tracing::error!(
+            "error.type" = "destination_ip_prohibited",
+            ?blocked_addrs,
+            "all destination IP(s) prohibited by runtime config"
+        );
+        return Err(ErrorCode::DestinationIpProhibited);
+    }
+    Ok(())
 }

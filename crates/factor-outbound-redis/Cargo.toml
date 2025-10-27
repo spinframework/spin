@@ -12,6 +12,7 @@ spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-resource-table = { path = "../table" }
 spin-world = { path = "../world" }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

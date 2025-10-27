@@ -41,11 +41,10 @@ impl Factor for OutboundRedisFactor {
         &self,
         mut ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<Self::InstanceBuilder> {
-        let allowed_hosts = ctx
-            .instance_builder::<OutboundNetworkingFactor>()?
-            .allowed_hosts();
+        let outbound_networking = ctx.instance_builder::<OutboundNetworkingFactor>()?;
         Ok(InstanceState {
-            allowed_hosts,
+            allowed_hosts: outbound_networking.allowed_hosts(),
+            blocked_networks: outbound_networking.blocked_networks(),
             connections: spin_resource_table::Table::new(1024),
         })
     }

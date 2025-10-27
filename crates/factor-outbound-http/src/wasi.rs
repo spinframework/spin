@@ -587,15 +587,7 @@ impl ConnectOptions {
         };
 
         // Remove blocked IPs
-        let blocked_addrs = self.blocked_networks.remove_blocked(&mut socket_addrs);
-        if socket_addrs.is_empty() && !blocked_addrs.is_empty() {
-            tracing::error!(
-                "error.type" = "destination_ip_prohibited",
-                ?blocked_addrs,
-                "all destination IP(s) prohibited by runtime config"
-            );
-            return Err(ErrorCode::DestinationIpProhibited);
-        }
+        crate::remove_blocked_addrs(&self.blocked_networks, &mut socket_addrs)?;
 
         // If we're limiting concurrent outbound requests, acquire a permit
         let permit = match &self.concurrent_outbound_connections_semaphore {
