@@ -109,6 +109,7 @@ fn version() -> &'static str {
     name = "spin",
     version = version()
 )]
+#[expect(clippy::large_enum_variant)]
 enum SpinApp {
     #[clap(subcommand, alias = "template")]
     Templates(TemplateCommands),
@@ -141,6 +142,7 @@ enum SpinApp {
 }
 
 #[derive(Subcommand)]
+#[expect(clippy::large_enum_variant)]
 enum TriggerCommands {
     Http(FactorsTriggerCommand<HttpTrigger, FactorsBuilder>),
     Redis(FactorsTriggerCommand<RedisTrigger, FactorsBuilder>),

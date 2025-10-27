@@ -3,8 +3,9 @@ use std::{
     future::Future,
     io::IoSlice,
     net::SocketAddr,
+    ops::DerefMut,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Mutex},
     task::{self, Context, Poll},
     time::Duration,
 };
@@ -12,7 +13,7 @@ use std::{
 use bytes::Bytes;
 use http::{header::HOST, uri::Scheme, Uri};
 use http_body::{Body, Frame, SizeHint};
-use http_body_util::{combinators::BoxBody, BodyExt};
+use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
 use hyper_util::{
     client::legacy::{
         connect::{Connected, Connection},
@@ -51,6 +52,34 @@ use crate::{
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(600);
 
+pub struct MutexBody<T>(Mutex<T>);
+
+impl<T> MutexBody<T> {
+    pub fn new(body: T) -> Self {
+        Self(Mutex::new(body))
+    }
+}
+
+impl<T: Body + Unpin> Body for MutexBody<T> {
+    type Data = T::Data;
+    type Error = T::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        Pin::new(self.0.lock().unwrap().deref_mut()).poll_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.0.lock().unwrap().is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.0.lock().unwrap().size_hint()
+    }
+}
+
 pub(crate) struct HasHttp;
 
 impl HasData for HasHttp {
@@ -60,14 +89,14 @@ impl HasData for HasHttp {
 impl p3::WasiHttpCtx for InstanceState {
     fn send_request(
         &mut self,
-        request: http::Request<BoxBody<Bytes, p3_types::ErrorCode>>,
+        request: http::Request<UnsyncBoxBody<Bytes, p3_types::ErrorCode>>,
         options: Option<p3::RequestOptions>,
         fut: Box<dyn Future<Output = Result<(), p3_types::ErrorCode>> + Send>,
     ) -> Box<
         dyn Future<
                 Output = Result<
                     (
-                        http::Response<BoxBody<Bytes, p3_types::ErrorCode>>,
+                        http::Response<UnsyncBoxBody<Bytes, p3_types::ErrorCode>>,
                         Box<dyn Future<Output = Result<(), p3_types::ErrorCode>> + Send>,
                     ),
                     TrappableError<p3_types::ErrorCode>,
@@ -83,6 +112,8 @@ impl p3::WasiHttpCtx for InstanceState {
         // arriving, which Hyper will deal with as appropriate (e.g. closing the
         // connection).
         _ = fut;
+
+        let request = request.map(|body| MutexBody::new(body).boxed());
 
         let request_sender = RequestSender {
             allowed_hosts: self.allowed_hosts.clone(),
@@ -126,7 +157,7 @@ impl p3::WasiHttpCtx for InstanceState {
                             sleep: None,
                             timeout: between_bytes_timeout,
                         }
-                        .boxed()
+                        .boxed_unsync()
                     }),
                     Box::new(async {
                         // TODO: Can we plumb connection errors through to here, or

@@ -4,7 +4,8 @@ use spin_factor_outbound_http::wasi_2023_11_10::ProxyIndices as ProxyIndices2023
 use wasmtime::component::InstancePre;
 use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi_http::bindings::ProxyIndices;
-use wasmtime_wasi_http::p3::bindings::ProxyIndices as P3ProxyIndices;
+use wasmtime_wasi_http::handler::{HandlerState, ProxyHandler, ProxyPre};
+use wasmtime_wasi_http::p3::bindings::ProxyPre as P3ProxyPre;
 
 use crate::config::HttpExecutorType;
 
@@ -21,11 +22,11 @@ pub fn default_base() -> String {
 }
 
 /// The type of http handler export used by a component.
-pub enum HandlerType {
+pub enum HandlerType<S: HandlerState> {
     Spin,
     Wagi(CommandIndices),
     Wasi0_2(ProxyIndices),
-    Wasi0_3(P3ProxyIndices),
+    Wasi0_3(ProxyHandler<S>),
     Wasi2023_11_10(ProxyIndices2023_11_10),
     Wasi2023_10_18(ProxyIndices2023_10_18),
 }
@@ -41,15 +42,18 @@ const WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16: &str = "wasi:http/handler@0.3.0-rc-2
 /// The `inbound-http` export for `fermyon:spin`
 const SPIN_HTTP_EXPORT: &str = "fermyon:spin/inbound-http";
 
-impl HandlerType {
+impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
     /// Determine the handler type from the exports of a component.
-    pub fn from_instance_pre<T>(pre: &InstancePre<T>) -> anyhow::Result<HandlerType> {
+    pub fn from_instance_pre(pre: &InstancePre<T>, handler_state: S) -> anyhow::Result<Self> {
         let mut candidates = Vec::new();
         if let Ok(indices) = ProxyIndices::new(pre) {
             candidates.push(HandlerType::Wasi0_2(indices));
         }
-        if let Ok(indices) = P3ProxyIndices::new(pre) {
-            candidates.push(HandlerType::Wasi0_3(indices));
+        if let Ok(pre) = P3ProxyPre::new(pre.clone()) {
+            candidates.push(HandlerType::Wasi0_3(ProxyHandler::new(
+                handler_state,
+                ProxyPre::P3(pre),
+            )));
         }
         if let Ok(indices) = ProxyIndices2023_10_18::new(pre) {
             candidates.push(HandlerType::Wasi2023_10_18(indices));

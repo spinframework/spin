@@ -12,13 +12,20 @@ mod wasip3;
 
 use std::{
     error::Error,
+    fmt::Display,
     net::{Ipv4Addr, SocketAddr, ToSocketAddrs},
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{bail, Context};
 use clap::Args;
+use rand::{
+    distr::uniform::{SampleRange, SampleUniform},
+    RngCore,
+};
 use serde::Deserialize;
 use spin_app::App;
 use spin_factors::RuntimeFactors;
@@ -30,6 +37,11 @@ pub use server::HttpServer;
 pub use tls::TlsConfig;
 
 pub(crate) use wasmtime_wasi_http::body::HyperIncomingBody as Body;
+
+const DEFAULT_WASIP3_MAX_INSTANCE_REUSE_COUNT: usize = 128;
+const DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT: usize = 16;
+const DEFAULT_REQUEST_TIMEOUT: Option<Range<Duration>> = None;
+const DEFAULT_IDLE_INSTANCE_TIMEOUT: Range<Duration> = Range::Value(Duration::from_secs(1));
 
 /// A [`spin_trigger::TriggerApp`] for the HTTP trigger.
 pub(crate) type TriggerApp<F> = spin_trigger::TriggerApp<HttpTrigger, F>;
@@ -58,6 +70,59 @@ pub struct CliArgs {
 
     #[clap(long = "find-free-port")]
     pub find_free_port: bool,
+
+    /// Maximum number of requests to send to a single component instance before
+    /// dropping it.
+    ///
+    /// This defaults to 1 for WASIp2 components and 128 for WASIp3 components.
+    /// As of this writing, setting it to more than 1 will have no effect for
+    /// WASIp2 components, but that may change in the future.
+    ///
+    /// This may be specified either as an integer value or as a range,
+    /// e.g. 1..8.  If it's a range, a number will be selected from that range
+    /// at random for each new instance.
+    #[clap(long, value_parser = parse_usize_range)]
+    max_instance_reuse_count: Option<Range<usize>>,
+
+    /// Maximum number of concurrent requests to send to a single component
+    /// instance.
+    ///
+    /// This defaults to 1 for WASIp2 components and 16 for WASIp3 components.
+    /// Note that setting it to more than 1 will have no effect for WASIp2
+    /// components since they cannot be called concurrently.
+    ///
+    /// This may be specified either as an integer value or as a range,
+    /// e.g. 1..8.  If it's a range, a number will be selected from that range
+    /// at random for each new instance.
+    #[clap(long, value_parser = parse_usize_range)]
+    max_instance_concurrent_reuse_count: Option<Range<usize>>,
+
+    /// Request timeout to enforce.
+    ///
+    /// As of this writing, this only affects WASIp3 components.
+    ///
+    /// A number with no suffix or with an `s` suffix is interpreted as seconds;
+    /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
+    /// (microseconds), and `ns` (nanoseconds).
+    ///
+    /// This may be specified either as a single time value or as a range,
+    /// e.g. 1..8s.  If it's a range, a value will be selected from that range
+    /// at random for each new instance.
+    #[clap(long, value_parser = parse_duration_range)]
+    request_timeout: Option<Range<Duration>>,
+
+    /// Time to hold an idle component instance for possible reuse before
+    /// dropping it.
+    ///
+    /// A number with no suffix or with an `s` suffix is interpreted as seconds;
+    /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
+    /// (microseconds), and `ns` (nanoseconds).
+    ///
+    /// This may be specified either as a single time value or as a range,
+    /// e.g. 1..8s.  If it's a range, a value will be selected from that range
+    /// at random for each new instance.
+    #[clap(long, default_value = "1s", value_parser = parse_duration_range)]
+    idle_instance_timeout: Range<Duration>,
 }
 
 impl CliArgs {
@@ -73,6 +138,112 @@ impl CliArgs {
     }
 }
 
+#[derive(Copy, Clone)]
+enum Range<T> {
+    Value(T),
+    Bounds(T, T),
+}
+
+impl<T> Range<T> {
+    fn map<V>(self, fun: impl Fn(T) -> V) -> Range<V> {
+        match self {
+            Self::Value(v) => Range::Value(fun(v)),
+            Self::Bounds(a, b) => Range::Bounds(fun(a), fun(b)),
+        }
+    }
+}
+
+impl<T: SampleUniform + PartialOrd> SampleRange<T> for Range<T> {
+    fn sample_single<R: RngCore + ?Sized>(
+        self,
+        rng: &mut R,
+    ) -> Result<T, rand::distr::uniform::Error> {
+        match self {
+            Self::Value(v) => Ok(v),
+            Self::Bounds(a, b) => (a..b).sample_single(rng),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            Self::Value(_) => false,
+            Self::Bounds(a, b) => (a..b).is_empty(),
+        }
+    }
+}
+
+fn parse_range<T: FromStr>(s: &str) -> Result<Range<T>, String>
+where
+    T::Err: Display,
+{
+    let error = |e| format!("expected integer or range; got {s:?}; {e}");
+    if let Some((start, end)) = s.split_once("..") {
+        Ok(Range::Bounds(
+            start.parse().map_err(error)?,
+            end.parse().map_err(error)?,
+        ))
+    } else {
+        Ok(Range::Value(s.parse().map_err(error)?))
+    }
+}
+
+fn parse_usize_range(s: &str) -> Result<Range<usize>, String> {
+    parse_range(s)
+}
+
+struct ParsedDuration(Duration);
+
+impl FromStr for ParsedDuration {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let error = |e| {
+            format!("expected integer suffixed by `s`, `ms`, `us`, `μs`, or `ns`; got {s:?}; {e}")
+        };
+        Ok(Self(match s.parse() {
+            Ok(val) => Duration::from_secs(val),
+            Err(err) => {
+                if let Some(num) = s.strip_suffix("s") {
+                    Duration::from_secs(num.parse().map_err(error)?)
+                } else if let Some(num) = s.strip_suffix("ms") {
+                    Duration::from_millis(num.parse().map_err(error)?)
+                } else if let Some(num) = s.strip_suffix("us").or(s.strip_suffix("μs")) {
+                    Duration::from_micros(num.parse().map_err(error)?)
+                } else if let Some(num) = s.strip_suffix("ns") {
+                    Duration::from_nanos(num.parse().map_err(error)?)
+                } else {
+                    return Err(error(err));
+                }
+            }
+        }))
+    }
+}
+
+fn parse_duration_range(s: &str) -> Result<Range<Duration>, String> {
+    parse_range::<ParsedDuration>(s).map(|v| v.map(|v| v.0))
+}
+
+#[derive(Clone, Copy)]
+pub struct InstanceReuseConfig {
+    max_instance_reuse_count: Range<usize>,
+    max_instance_concurrent_reuse_count: Range<usize>,
+    request_timeout: Option<Range<Duration>>,
+    idle_instance_timeout: Range<Duration>,
+}
+
+impl Default for InstanceReuseConfig {
+    fn default() -> Self {
+        Self {
+            max_instance_reuse_count: Range::Value(DEFAULT_WASIP3_MAX_INSTANCE_REUSE_COUNT),
+            max_instance_concurrent_reuse_count: Range::Value(
+                DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT,
+            ),
+            request_timeout: DEFAULT_REQUEST_TIMEOUT,
+            idle_instance_timeout: DEFAULT_IDLE_INSTANCE_TIMEOUT,
+        }
+    }
+}
+
 /// The Spin HTTP trigger.
 pub struct HttpTrigger {
     /// The address the server should listen on.
@@ -83,6 +254,7 @@ pub struct HttpTrigger {
     tls_config: Option<TlsConfig>,
     find_free_port: bool,
     http1_max_buf_size: Option<usize>,
+    reuse_config: InstanceReuseConfig,
 }
 
 impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
@@ -94,6 +266,18 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
     fn new(cli_args: Self::CliArgs, app: &spin_app::App) -> anyhow::Result<Self> {
         let find_free_port = cli_args.find_free_port;
         let http1_max_buf_size = cli_args.http1_max_buf_size;
+        let reuse_config = InstanceReuseConfig {
+            max_instance_reuse_count: cli_args
+                .max_instance_reuse_count
+                .unwrap_or(Range::Value(DEFAULT_WASIP3_MAX_INSTANCE_REUSE_COUNT)),
+            max_instance_concurrent_reuse_count: cli_args
+                .max_instance_concurrent_reuse_count
+                .unwrap_or(Range::Value(
+                    DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT,
+                )),
+            request_timeout: cli_args.request_timeout,
+            idle_instance_timeout: cli_args.idle_instance_timeout,
+        };
 
         Self::new(
             app,
@@ -101,6 +285,7 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
             cli_args.into_tls_config(),
             find_free_port,
             http1_max_buf_size,
+            reuse_config,
         )
     }
 
@@ -125,6 +310,7 @@ impl HttpTrigger {
         tls_config: Option<TlsConfig>,
         find_free_port: bool,
         http1_max_buf_size: Option<usize>,
+        reuse_config: InstanceReuseConfig,
     ) -> anyhow::Result<Self> {
         Self::validate_app(app)?;
 
@@ -133,6 +319,7 @@ impl HttpTrigger {
             tls_config,
             find_free_port,
             http1_max_buf_size,
+            reuse_config,
         })
     }
 
@@ -146,6 +333,7 @@ impl HttpTrigger {
             tls_config,
             find_free_port,
             http1_max_buf_size,
+            reuse_config,
         } = self;
         let server = Arc::new(HttpServer::new(
             listen_addr,
@@ -153,6 +341,7 @@ impl HttpTrigger {
             find_free_port,
             trigger_app,
             http1_max_buf_size,
+            reuse_config,
         )?);
         Ok(server)
     }

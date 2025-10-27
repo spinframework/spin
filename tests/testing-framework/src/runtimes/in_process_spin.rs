@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use spin_runtime_factors::{FactorsBuilder, TriggerAppArgs, TriggerFactors};
 use spin_trigger::{cli::TriggerAppBuilder, loader::ComponentLoader};
-use spin_trigger_http::{HttpServer, HttpTrigger};
+use spin_trigger_http::{HttpServer, HttpTrigger, InstanceReuseConfig};
 use test_environment::{
     http::{Request, Response},
     services::ServicesConfig,
@@ -104,7 +104,14 @@ async fn initialize_trigger(
     .await?;
 
     let app = spin_app::App::new("my-app", locked_app);
-    let trigger = HttpTrigger::new(&app, "127.0.0.1:80".parse().unwrap(), None, false, None)?;
+    let trigger = HttpTrigger::new(
+        &app,
+        "127.0.0.1:80".parse().unwrap(),
+        None,
+        false,
+        None,
+        InstanceReuseConfig::default(),
+    )?;
     let mut builder = TriggerAppBuilder::<_, FactorsBuilder>::new(trigger);
     let trigger_app = builder
         .build(
