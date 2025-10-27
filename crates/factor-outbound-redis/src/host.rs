@@ -30,7 +30,7 @@ impl InstanceState {
         address: String,
     ) -> Result<Resource<RedisConnection>, Error> {
         let config = AsyncConnectionConfig::new()
-            .set_dns_resolver(SpinResolver(self.blocked_networks.clone()));
+            .set_dns_resolver(SpinDnsResolver(self.blocked_networks.clone()));
         let conn = redis::Client::open(address.as_str())
             .map_err(|_| Error::InvalidAddress)?
             .get_multiplexed_async_connection_with_config(&config)
@@ -374,9 +374,10 @@ impl FromRedisValue for RedisResults {
     }
 }
 
-struct SpinResolver(BlockedNetworks);
+/// Resolves DNS using Tokio's resolver, filtering out blocked IPs.
+struct SpinDnsResolver(BlockedNetworks);
 
-impl AsyncDNSResolver for SpinResolver {
+impl AsyncDNSResolver for SpinDnsResolver {
     fn resolve<'a, 'b: 'a>(
         &'a self,
         host: &'b str,
