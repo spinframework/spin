@@ -260,6 +260,18 @@ impl<T: RuntimeFactors, U: Send> FactorsInstanceBuilder<'_, T, U> {
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         Ok((instance, store))
     }
+
+    pub fn instantiate_store(
+        self,
+        executor_instance_state: U,
+    ) -> anyhow::Result<spin_core::Store<InstanceState<T::InstanceState, U>>> {
+        let instance_state = InstanceState {
+            core: Default::default(),
+            factors: self.factors.build_instance_state(self.factor_builders)?,
+            executor: executor_instance_state,
+        };
+        self.store_builder.build(instance_state)
+    }
 }
 
 /// InstanceState is the [`spin_core::Store`] `data` for an instance.

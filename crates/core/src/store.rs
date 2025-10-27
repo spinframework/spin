@@ -48,6 +48,11 @@ impl<T: 'static> Store<T> {
     pub fn data_mut(&mut self) -> &mut T {
         self.inner.data_mut()
     }
+
+    /// Convert `self` to the inner [`wasmtime::Store`].
+    pub fn into_inner(self) -> wasmtime::Store<T> {
+        self.inner
+    }
 }
 
 impl<T: 'static> AsRef<wasmtime::Store<T>> for Store<T> {
