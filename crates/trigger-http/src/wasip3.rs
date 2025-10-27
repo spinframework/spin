@@ -1,4 +1,4 @@
-use crate::{server::HttpExecutor, TriggerInstanceBuilder};
+use crate::server::HttpHandlerState;
 use anyhow::{Context as _, Result};
 use futures::{channel::oneshot, FutureExt};
 use http_body_util::BodyExt;
@@ -7,32 +7,28 @@ use spin_factors::RuntimeFactors;
 use spin_factors_executor::InstanceState;
 use spin_http::routes::RouteMatch;
 use std::net::SocketAddr;
-use tokio::task;
 use tracing::{instrument, Instrument, Level};
-use wasmtime::AsContextMut;
+use wasmtime::component::Accessor;
 use wasmtime_wasi_http::{
     body::HyperIncomingBody as Body,
-    p3::{
-        bindings::{http::types, ProxyIndices},
-        WasiHttpCtxView,
-    },
+    handler::{Proxy, ProxyHandler},
+    p3::{bindings::http::types, WasiHttpCtxView},
 };
 
 /// An [`HttpExecutor`] that uses the `wasi:http@0.3.*/handler` interface.
-pub(super) struct Wasip3HttpExecutor<'a>(pub(super) &'a ProxyIndices);
+pub(super) struct Wasip3HttpExecutor<'a, F: RuntimeFactors>(
+    pub(super) &'a ProxyHandler<HttpHandlerState<F>>,
+);
 
-impl HttpExecutor for Wasip3HttpExecutor<'_> {
+impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
     #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.lookup_key().to_string())))]
-    async fn execute<F: RuntimeFactors>(
+    pub async fn execute(
         &self,
-        instance_builder: TriggerInstanceBuilder<'_, F>,
         route_match: &RouteMatch<'_, '_>,
         mut req: http::Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<http::Response<Body>> {
         super::wasi::prepare_request(route_match, &mut req, client_addr)?;
-
-        let (instance, mut store) = instance_builder.instantiate(()).await?;
 
         let getter = (|data| wasi_http::<F>(data).unwrap())
             as fn(&mut InstanceState<F::InstanceState, ()>) -> WasiHttpCtxView<'_>;
@@ -41,16 +37,21 @@ impl HttpExecutor for Wasip3HttpExecutor<'_> {
         let body = body.map_err(spin_factor_outbound_http::p2_to_p3_error_code);
         let request = http::Request::from_parts(request, body);
         let (request, request_io_result) = types::Request::from_http(request);
-        let request = wasi_http::<F>(store.data_mut())?.table.push(request)?;
-
-        let guest = self.0.load(&mut store, &instance)?;
 
         let (tx, rx) = oneshot::channel();
-        task::spawn(
-            async move {
-                store
-                    .as_context_mut()
-                    .run_concurrent(async move |store| {
+        self.0.spawn(
+            None,
+            Box::new(move |store: &Accessor<_>, guest: &Proxy| {
+                Box::pin(
+                    async move {
+                        let Proxy::P3(guest) = guest else {
+                            unreachable!();
+                        };
+
+                        let request = store.with(|mut store| {
+                            anyhow::Ok(wasi_http::<F>(store.data_mut())?.table.push(request)?)
+                        })?;
+
                         let (response, task) = guest
                             .wasi_http_handler()
                             .call_handle(store, request)
@@ -67,14 +68,14 @@ impl HttpExecutor for Wasip3HttpExecutor<'_> {
                         task.block(store).await;
 
                         anyhow::Ok(())
-                    })
-                    .await?
-            }
-            .in_current_span()
-            .inspect(|result| {
-                if let Err(error) = result {
-                    tracing::error!("Component error handling request: {error:?}");
-                }
+                    }
+                    .in_current_span()
+                    .map(|result| {
+                        if let Err(error) = result {
+                            tracing::error!("Component error handling request: {error:?}");
+                        }
+                    }),
+                )
             }),
         );
 
