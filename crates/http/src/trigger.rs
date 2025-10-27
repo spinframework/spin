@@ -6,6 +6,8 @@ use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi_http::bindings::ProxyIndices;
 use wasmtime_wasi_http::p3::bindings::ProxyIndices as P3ProxyIndices;
 
+use crate::config::HttpExecutorType;
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Metadata {
@@ -81,6 +83,47 @@ impl HandlerType {
                 "component exports multiple different handlers but \
                      it's expected to export only one"
             ),
+        }
+    }
+
+    /// Validate that the [`HandlerType`] is compatible with the [`HttpExecutorType`].
+    pub fn validate_executor(&self, executor: &Option<HttpExecutorType>) -> anyhow::Result<()> {
+        match (self, executor) {
+            (HandlerType::Wasi0_3(_), Some(HttpExecutorType::Wasip3Unstable)) => {
+                terminal::warn!(
+                    "You’re using wasip3-unstable, an experimental executor for the \
+                    WASI Preview 3 RC interfaces, which will be removed in a future Spin release."
+                );
+                Ok(())
+            }
+            (HandlerType::Wasi0_3(_), Some(_) | None) => {
+                anyhow::bail!(
+                    "`{WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16}` is currently unstable and will be \
+                    removed in a future Spin release. You can opt-in to this unstable interface \
+                    by adding `executor = {{ type = \"wasip3-unstable\" }}` to the appropriate \
+                    `[[trigger.http]]` section of your spin.toml file."
+                );
+            }
+            (handler_type, Some(HttpExecutorType::Wasip3Unstable)) => {
+                anyhow::bail!(
+                    "The wasip3-unstable trigger executor expected a component that \
+                    exports `{WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16}` but found a \
+                    component with type {name}",
+                    name = handler_type.name(),
+                )
+            }
+            (_, _) => Ok(()),
+        }
+    }
+
+    fn name(&self) -> &str {
+        match self {
+            HandlerType::Spin => SPIN_HTTP_EXPORT,
+            HandlerType::Wasi0_2(_) => WASI_HTTP_EXPORT_0_2_PREFIX,
+            HandlerType::Wasi0_3(_) => WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16,
+            HandlerType::Wasi2023_11_10(_) => WASI_HTTP_EXPORT_2023_11_10,
+            HandlerType::Wasi2023_10_18(_) => WASI_HTTP_EXPORT_2023_10_18,
+            _ => unreachable!(), // WAGI variant will never appear here
         }
     }
 }

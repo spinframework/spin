@@ -8721,6 +8721,7 @@ dependencies = [
  "spin-app",
  "spin-factor-outbound-http",
  "spin-http-routes",
+ "terminal",
  "toml",
  "tracing",
  "wasmtime",

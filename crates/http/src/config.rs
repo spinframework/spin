@@ -33,7 +33,7 @@ impl HttpTriggerConfig {
 ///
 /// If an executor is not specified, the inferred default is `HttpExecutor::Spin`.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields, rename_all = "lowercase", tag = "type")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case", tag = "type")]
 pub enum HttpExecutorType {
     /// The component implements an HTTP based interface.
     ///
@@ -43,6 +43,8 @@ pub enum HttpExecutorType {
     Http,
     /// The component implements the Wagi CGI interface.
     Wagi(WagiTriggerConfig),
+    /// The component implements the WASIp3 HTTP interface (unstable).
+    Wasip3Unstable,
 }
 
 /// Wagi specific configuration for the http executor.
