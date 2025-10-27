@@ -94,7 +94,7 @@ impl spin_http::Host for crate::InstanceState {
         // in a single component execution
         let client = self.spin_http_client.get_or_insert_with(|| {
             let mut builder = reqwest::Client::builder()
-                .dns_resolver(Arc::new(SpinResolver(self.blocked_networks.clone())));
+                .dns_resolver(Arc::new(SpinDnsResolver(self.blocked_networks.clone())));
             if !self.connection_pooling_enabled {
                 builder = builder.pool_max_idle_per_host(0);
             }
@@ -117,9 +117,10 @@ impl spin_http::Host for crate::InstanceState {
     }
 }
 
-struct SpinResolver(BlockedNetworks);
+/// Resolves DNS using Tokio's resolver, filtering out blocked IPs.
+struct SpinDnsResolver(BlockedNetworks);
 
-impl reqwest::dns::Resolve for SpinResolver {
+impl reqwest::dns::Resolve for SpinDnsResolver {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         let blocked_networks = self.0.clone();
         Box::pin(async move {
