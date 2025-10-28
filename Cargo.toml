@@ -22,7 +22,7 @@ bytes = { workspace = true }
 clap = { workspace = true, features = ["deprecated", "derive", "env"] }
 clearscreen = "4"
 comfy-table = "7"
-command-group = "2"
+command-group = { version = "5", features = ["with-tokio"] }
 ctrlc = { workspace = true }
 dialoguer = { workspace = true }
 futures = { workspace = true }
@@ -49,8 +49,9 @@ toml = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 uuid = { version = "1.0", features = ["v4"] }
-watchexec = { git = "https://github.com/watchexec/watchexec.git", rev = "8e91d26ef6400c1e60b32a8314cbb144fa33f288" }
-watchexec-filterer-globset = { git = "https://github.com/watchexec/watchexec.git", rev = "8e91d26ef6400c1e60b32a8314cbb144fa33f288" }
+watchexec = "8.0"
+watchexec-events = "6.0"
+watchexec-filterer-globset = "8.0"
 
 spin-app = { path = "crates/app" }
 spin-build = { path = "crates/build" }

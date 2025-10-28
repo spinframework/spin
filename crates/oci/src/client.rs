@@ -447,7 +447,7 @@ impl Client {
         // Only add the archive layer to the OCI manifest
         tracing::trace!("Adding archive layer for all files in source {:?}", &source);
         let working_dir = tempfile::tempdir()?;
-        let archive_path = crate::utils::archive(source, &working_dir.into_path())
+        let archive_path = crate::utils::archive(source, &working_dir.keep())
             .await
             .context(format!(
                 "Unable to create compressed archive for source {source:?}"
