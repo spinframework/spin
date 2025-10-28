@@ -14,7 +14,7 @@ trap 'find templates -name "*.bak" -delete' EXIT
 usage() {
   echo "Usage: $0 <VERSION>"
   echo "Updates the Rust templates SDK dependency to the specified version"
-  echo "Example: $0 6.0.0"
+  echo "Example: $0 v6.0.0"
 }
 
 if [[ $# -ne 1 ]]
@@ -24,12 +24,14 @@ then
 fi
 
 # Ensure version is an 'official' release
-if [[ ! "${VERSION}" =~ ^[0-9]+.[0-9]+.[0-9]+$ ]]
+if [[ ! "${VERSION}" =~ ^v[0-9]+.[0-9]+.[0-9]+$ ]]
 then
-  echo "VERSION doesn't match [0-9]+.[0-9]+.[0-9]+ and may be a prerelease; skipping."
+  echo "VERSION doesn't match v[0-9]+.[0-9]+.[0-9]+ and may be a prerelease; skipping."
   exit 1
 fi
 
+# Strip the leading v for Cargo.toml
+STRIPPED_VERSION="${VERSION#v}"
 
 # Update the version in the Cargo.toml.tmpl files for each Rust template
-find templates -type f -path "templates/*-rust/content/Cargo.toml.tmpl" -exec $SED_INPLACE "/^\[dependencies\]/,/^\[/ s/^spin-sdk = \".*\"/spin-sdk = \"${VERSION}\"/" {} +
+find templates -type f -path "templates/*-rust/content/Cargo.toml.tmpl" -exec $SED_INPLACE "/^\[dependencies\]/,/^\[/ s/^spin-sdk = \".*\"/spin-sdk = \"${STRIPPED_VERSION}\"/" {} +
