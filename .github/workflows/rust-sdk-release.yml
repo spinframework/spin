@@ -5,10 +5,6 @@ on:
     types:
       - rust-sdk-release
 
-permissions:
-  contents: write        # allows commits/pushes
-  pull-requests: write   # allows PR creation
-
 jobs:
   create-pr:
     name: Create PR with Spin Rust Templates SDK Dependency Bump
@@ -17,22 +13,7 @@ jobs:
     steps:
       # Checkout the repository
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: false  # disable default GITHUB_TOKEN
-          fetch-depth: 0
-
-      # Configure Git identity
-      - name: Configure Git
-        run: |
-          git config user.name "spinframeworkbot"
-          git config user.email "202838904+spinframeworkbot@users.noreply.github.com"
-
-      # Set the remote to use the PAT
-      - name: Use PAT for Git
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.SPIN_RUST_SDK_RELEASE_PAT }}@github.com/${{ github.repository }}.git
-
-
+      
       # Run script to update the templates
       - name: Bump Rust Templates SDK Dependency
         shell: bash
