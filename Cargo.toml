@@ -171,7 +171,7 @@ toml = "0.8"
 toml_edit = "0.22"
 tower-service = "0.3.3"
 tracing = { version = "0.1.41", features = ["log"] }
-url = "2"
+url = "2.5.7"
 walkdir = "2"
 wasm-encoder = "0.239.0"
 wasm-metadata = "0.239.0"
