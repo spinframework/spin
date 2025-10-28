@@ -55,4 +55,4 @@ jobs:
           committer: spinframeworkbot <202838904+spinframeworkbot@users.noreply.github.com>
           author: spinframeworkbot <202838904+spinframeworkbot@users.noreply.github.com>
           signoff: true
-          token: ${{ github.token }}
+          token: ${{ secrets.SPIN_RUST_SDK_RELEASE_PAT }}
