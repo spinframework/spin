@@ -17,15 +17,6 @@ jobs:
     steps:
       # Checkout the repository
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true  # uses GITHUB_TOKEN automatically
-          fetch-depth: 0
-
-      # Configure git identity for commits
-      - name: Configure git
-        run: |
-          git config user.name "spinframeworkbot"
-          git config user.email "202838904+spinframeworkbot@users.noreply.github.com"
 
       # Run script to update the templates
       - name: Bump Rust Templates SDK Dependency
