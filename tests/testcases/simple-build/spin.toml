@@ -1,5 +1,5 @@
 spin_version = "1"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 name = "spin-build-simple"
 trigger = {type = "http"}
 version = "1.0.0"

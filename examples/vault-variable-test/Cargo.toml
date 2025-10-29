@@ -1,6 +1,6 @@
 [package]
 name = "vault-variable-test"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "Vault Application Variable Provider Example"
 version = "0.2.0"
 edition = "2021"

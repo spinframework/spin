@@ -1,7 +1,7 @@
 spin_manifest_version = 2
 
 [application]
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "Demonstrates outbound HTTP calls"
 name = "spin-outbound-post"
 version = "1.0.0"

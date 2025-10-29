@@ -1,5 +1,5 @@
 spin_version = "1"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "A simple redis application that exercises the Rust SDK in the current branch"
 name = "head-rust-sdk-redis"
 trigger = { type = "redis", address = "redis://localhost:%{port=6379}" }

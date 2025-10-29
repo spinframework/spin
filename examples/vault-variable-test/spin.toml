@@ -3,7 +3,7 @@ spin_manifest_version = 2
 [application]
 name = "vault-variable-test"
 version = "0.1.0"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "Vault Application Variable Provider Example"
 
 [[trigger.http]]

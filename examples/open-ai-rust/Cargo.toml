@@ -1,6 +1,6 @@
 [package]
 name = "open-ai-rust"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "Example showing using openAI with Spin"
 version = "0.1.0"
 rust-version = "1.78"

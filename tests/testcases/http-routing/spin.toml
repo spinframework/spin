@@ -2,7 +2,7 @@ spin_manifest_version = 2
 
 [application]
 name = "http-routing"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 version = "0.1.0"
 
 [[trigger.http]]
