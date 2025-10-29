@@ -7,7 +7,6 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-compression = { version = "0.4", features = ["gzip", "tokio"] }
-async-tar = "0.5"
 base64 = { workspace = true }
 chrono = { workspace = true }
 # Fork with updated auth to support ACR login
@@ -15,6 +14,7 @@ chrono = { workspace = true }
 dirs = { workspace = true }
 dkregistry = { git = "https://github.com/fermyon/dkregistry-rs", rev = "161cf2b66996ed97c7abaf046e38244484814de3" }
 docker_credential = "1"
+flate2 = { workspace = true }
 futures-util = { workspace = true }
 itertools = { workspace = true }
 oci-distribution = { git = "https://github.com/fermyon/oci-distribution", rev = "7b291a39f74d1a3c9499d934a56cae6580fc8e37" }
@@ -25,6 +25,7 @@ spin-common = { path = "../common" }
 spin-compose = { path = "../compose" }
 spin-loader = { path = "../loader" }
 spin-locked-app = { path = "../locked-app" }
+tar = "0.4"
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 tokio-util = { version = "0.7", features = ["compat"] }
