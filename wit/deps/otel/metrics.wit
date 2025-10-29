@@ -4,13 +4,13 @@ interface metrics {
     use types.{key-value, instrumentation-scope};
     use tracing.{span-id, trace-id};
 
-    /// `export` sends all metric data related to a Reader from the SDK
+    /// Exports a resource's metric data.
     %export: func(metrics: resource-metrics) -> result<_, error>;
 
+    /// An error resulting from `export` being called.
     type error = string;
 
-    /// `resource-metrics` is a collection of `scope-metrics` and the associated `resource`
-    /// that created them.
+    /// A collection of `scope-metrics` and the associated `resource` that created them.
     record resource-metrics {
         /// The entity that collected the metrics.
         %resource: %resource,
@@ -20,50 +20,58 @@ interface metrics {
 
     /// An immutable representation of the entity producing telemetry as attributes.
     record %resource {
+        /// Attributes that identify the resource.
         attributes: list<key-value>,
+        /// The schema URL to be recorded in the emitted resource.
         schema-url: option<string>,
     }
 
-    /// `scope-metrics` is a collection of `metric`s produced by a meter.
+    /// A collection of `metric`s produced by a meter.
     record scope-metrics {
-        /// The `instrumentation-scope` that the meter was created with.
+        /// The instrumentation scope that the meter was created with.
         scope: instrumentation-scope,
         /// The list of aggregations created by the meter.
         metrics: list<metric>,
     }
 
-    /// `metric` is a collection of one or more aggregated time series from an instrument
+    /// A collection of one or more aggregated time series from a metric.
     record metric {
-        /// The name of the instrument that created this data.
+        /// The name of the metric that created this data.
         name: string,
-        /// The description of the instrument, which can be used in documentation.
+        /// The description of the metric, which can be used in documentation.
         description: string,
-        /// The unit in which the instrument reports.
+        /// The unit in which the metric reports.
         unit: string,
-        /// The aggregated data from an instrument.
-        data: aggregated-metrics,
-    }
-
-    /// Aggregated metrics data from an instrument.
-    variant aggregated-metrics {
-        /// All metric data with `f64` value type.
-        %f64(metric-data),
-        /// All metric data with `u64` value type.
-        %u64(metric-data),
-        /// All metric data with `s64` value type.
-        %s64(metric-data),
+        /// The aggregated data from a metric.
+        data: metric-data
     }
 
     /// Metric data for all types.
     variant metric-data {
-        /// Metric data for `gauge`.
-        gauge(gauge),
-        /// Metric data for `sum`.
-        sum(sum),
-        /// Metric data for `histogram`.
-        histogram(histogram),
-        /// Metric data for `exponential-histogram`.
-        exponential-histogram(exponential-histogram),
+        /// Metric data for an f64 gauge.
+        f64-gauge(gauge),
+        /// Metric data for an f64 sum.
+        f64-sum(sum),
+        /// Metric data for an f64 histogram.
+        f64-histogram(histogram),
+        /// Metric data for an f64 exponential-histogram.
+        f64-exponential-histogram(exponential-histogram),
+        /// Metric data for an u64 gauge.
+        u64-gauge(gauge),
+        /// Metric data for an u64 sum.
+        u64-sum(sum),
+        /// Metric data for an u64 histogram.
+        u64-histogram(histogram),
+        /// Metric data for an u64 exponential-histogram.
+        u64-exponential-histogram(exponential-histogram),
+        /// Metric data for an s64 gauge.
+        s64-gauge(gauge),
+        /// Metric data for an s64 sum.
+        s64-sum(sum),
+        /// Metric data for an s64 histogram.
+        s64-histogram(histogram),
+        /// Metric data for an s64 exponential-histogram.
+        s64-exponential-histogram(exponential-histogram),
     }
 
     /// A measurement of the current value of an instrument.
@@ -76,7 +84,7 @@ interface metrics {
         time: datetime,
     }
 
-    /// `gauge-data-point` is a single data point in a time series.
+    /// A single data point in a time series to be associated with a `gauge`.
     record gauge-data-point {
         /// `attributes` is the set of key value pairs that uniquely identify the
         /// time series.
@@ -102,7 +110,7 @@ interface metrics {
         is-monotonic: bool,
     }
 
-    /// `sum-data-point` is a single data point in a time series.
+    /// A single data point in a time series to be associated with a `sum`.
     record sum-data-point {
         /// `attributes` is the set of key value pairs that uniquely identify the
         /// time series.
@@ -126,7 +134,7 @@ interface metrics {
         temporality: temporality,
     }
 
-    /// A single histogram data point in a time series.
+    /// A single data point in a time series to be associated with a `histogram`.
     record histogram-data-point {
         /// The set of key value pairs that uniquely identify the time series.
         attributes: list<key-value>,
@@ -159,12 +167,12 @@ interface metrics {
         temporality: temporality,
     }
 
-    /// A single exponential histogram data point in a time series.
+    /// A single data point in a time series to be associated with an `exponential-histogram `.
     record exponential-histogram-data-point {
         /// The set of key value pairs that uniquely identify the time series.
         attributes: list<key-value>,
         /// The number of updates this histogram has been calculated with.
-        count: u64, // TODO: check that u64 is an acceptable replacement for usize
+        count: u64,
         /// The minimum value recorded.
         min: option<metric-number>,
         /// The maximum value recorded.
@@ -234,7 +242,7 @@ interface metrics {
         ///
         /// New measurements are added to all previous measurements since a start time.
         ///
-        /// This is the default temporality
+        /// This is the default temporality.
         cumulative,
         /// A measurement interval that resets each cycle.
         ///
@@ -247,9 +255,7 @@ interface metrics {
         low-memory,
     }
 
-    /// The number types available for use with the OpenTelemetry SDKs.
-    ///
-    /// This makes it easier to use generics when converting to and from WASI data types.
+    /// The number types available for any given instrument.
     variant metric-number {
         %f64(f64),
         %s64(s64),

@@ -1,5 +1,4 @@
-use std::fmt::format;
-
+use crate::InstanceState;
 use anyhow::anyhow;
 use anyhow::Result;
 use opentelemetry::trace::TraceContextExt;
@@ -8,8 +7,6 @@ use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::trace::SpanProcessor;
 use spin_world::wasi;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
-
-use crate::InstanceState;
 
 impl wasi::otel::tracing::Host for InstanceState {
     async fn on_start(&mut self, context: wasi::otel::tracing::SpanContext) -> Result<()> {

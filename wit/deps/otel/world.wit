@@ -5,5 +5,3 @@ world imports {
     import tracing;
     import metrics;
 }
-
-// TODO: Switch to using wkg
