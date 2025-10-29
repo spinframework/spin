@@ -110,7 +110,7 @@ async fn stop(child: &mut command_group::AsyncGroupChild) {
             tracing::warn!("Could not send interrupt signal to child process: {e:#}");
             _ = child.kill();
         }
-    } else if let Err(e) = child.kill() {
+    } else if let Err(e) = child.kill().await {
         tracing::warn!("Could not terminate child process: {e:#}");
     }
     _ = child.wait().await;
@@ -118,7 +118,7 @@ async fn stop(child: &mut command_group::AsyncGroupChild) {
 
 #[cfg(not(unix))]
 async fn stop(child: &mut command_group::AsyncGroupChild) {
-    if let Err(e) = child.kill() {
+    if let Err(e) = child.kill().await {
         tracing::warn!("Could not terminate child process: {e:#}");
     }
     _ = child.wait().await;

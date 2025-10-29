@@ -1,4 +1,4 @@
-use command_group::AsyncCommandGroup;
+use command_group::tokio::AsyncCommandGroup;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -59,7 +59,7 @@ impl Buildifier {
                 }
                 _ = self.watched_changes.changed() => {
                     tracing::debug!("Cancelling build as there are new changes to process");
-                    child.kill()?;
+                    child.kill().await?;
                     if self.clear_screen {
                         _ = clearscreen::clear();
                     }

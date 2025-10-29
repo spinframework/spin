@@ -9,6 +9,38 @@ use spin_common::ui::quoted_path;
 use spin_manifest::schema::v2;
 use watchexec::filter::Filterer;
 
+#[derive(Debug)]
+pub(crate) struct AnyFilterer(Arc<dyn Filterer>);
+
+impl Filterer for AnyFilterer {
+    fn check_event(
+        &self,
+        event: &watchexec_events::Event,
+        priority: watchexec_events::Priority,
+    ) -> Result<bool, watchexec::error::RuntimeError> {
+        let is_mutating = event.tags.iter().any(is_mutating);
+        if !is_mutating {
+            return Ok(false);
+        }
+        self.0.check_event(event, priority)
+    }
+}
+
+/// The new globset filterer sends us *ALL* file events, including
+/// non-mutating accesses from things like, say, GUI file explorers.
+/// If we don't filter it down then we have a storm of gazillions
+/// of events every few milliseconds, which would kick off a rebuild
+/// every few milliseconds. ASK ME HOW I KNOW.
+fn is_mutating(tag: &watchexec_events::Tag) -> bool {
+    use watchexec_events::{filekind::FileEventKind, Tag};
+    matches!(
+        tag,
+        Tag::FileEventKind(
+            FileEventKind::Create(_) | FileEventKind::Modify(_) | FileEventKind::Remove(_)
+        )
+    )
+}
+
 #[async_trait]
 pub(crate) trait FilterFactory: Send + Sync {
     async fn build_filter(
@@ -16,7 +48,7 @@ pub(crate) trait FilterFactory: Send + Sync {
         manifest_file: &Path,
         manifest_dir: &Path,
         manifest: &v2::AppManifest,
-    ) -> anyhow::Result<Arc<dyn Filterer>>;
+    ) -> anyhow::Result<AnyFilterer>;
 }
 
 pub(crate) struct ArtifactFilterFactory {
@@ -34,7 +66,7 @@ impl FilterFactory for ArtifactFilterFactory {
         manifest_file: &Path,
         manifest_dir: &Path,
         manifest: &v2::AppManifest,
-    ) -> anyhow::Result<Arc<dyn Filterer>> {
+    ) -> anyhow::Result<AnyFilterer> {
         let manifest_glob = if self.skip_build {
             vec![manifest_path_to_watch(manifest_file)?]
         } else {
@@ -68,7 +100,7 @@ impl FilterFactory for ArtifactFilterFactory {
 
         let filterer = globset_filter(manifest_dir, artifact_globs).await?;
 
-        Ok(Arc::new(filterer))
+        Ok(AnyFilterer(Arc::new(filterer)))
     }
 }
 
@@ -88,7 +120,7 @@ impl FilterFactory for BuildFilterFactory {
         manifest_file: &Path,
         manifest_dir: &Path,
         manifest: &v2::AppManifest,
-    ) -> anyhow::Result<Arc<dyn Filterer>> {
+    ) -> anyhow::Result<AnyFilterer> {
         let mut filterers: Vec<Box<dyn Filterer>> =
             Vec::with_capacity(manifest.components.len() + 1);
 
@@ -106,7 +138,7 @@ impl FilterFactory for BuildFilterFactory {
 
         let filterer = CompositeFilterer { filterers };
 
-        Ok(Arc::new(filterer))
+        Ok(AnyFilterer(Arc::new(filterer)))
     }
 }
 
@@ -158,12 +190,12 @@ impl FilterFactory for ManifestFilterFactory {
         manifest_file: &Path,
         manifest_dir: &Path,
         _: &v2::AppManifest,
-    ) -> anyhow::Result<Arc<dyn Filterer>> {
+    ) -> anyhow::Result<AnyFilterer> {
         let manifest_glob = manifest_path_to_watch(manifest_file)?;
 
         let filterer = globset_filter(manifest_dir, [manifest_glob]).await?;
 
-        Ok(Arc::new(filterer))
+        Ok(AnyFilterer(Arc::new(filterer)))
     }
 }
 
@@ -175,6 +207,7 @@ async fn globset_filter(
         manifest_dir,
         globs.into_iter().map(|s| (s, None)),
         standard_ignores(),
+        [],
         [],
         [],
     )
@@ -209,8 +242,8 @@ struct CompositeFilterer {
 impl watchexec::filter::Filterer for CompositeFilterer {
     fn check_event(
         &self,
-        event: &watchexec::event::Event,
-        priority: watchexec::event::Priority,
+        event: &watchexec_events::Event,
+        priority: watchexec_events::Priority,
     ) -> Result<bool, watchexec::error::RuntimeError> {
         // We are interested in a change if _any_ component is interested in it
         for f in &self.filterers {

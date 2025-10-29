@@ -279,7 +279,7 @@ pub struct RuntimeConfigFactory {
 }
 
 impl RuntimeConfigFactory {
-    async fn build_config(&self) -> anyhow::Result<watchexec::config::RuntimeConfig> {
+    async fn build_config(&self, rt: &watchexec::Config) -> anyhow::Result<()> {
         let manifest_str = tokio::fs::read_to_string(&self.manifest_file).await?;
         let manifest = spin_manifest::manifest_from_str(&manifest_str)?;
         let filterer = self
@@ -289,12 +289,11 @@ impl RuntimeConfigFactory {
 
         let handler = NotifyOnFileChange::new(self.notifier.clone(), self.impact_description);
 
-        let mut rt = watchexec::config::RuntimeConfig::default();
-        rt.pathset([&self.manifest_dir]);
+        rt.pathset([self.manifest_dir.as_path()]);
         rt.filterer(filterer);
-        rt.action_throttle(self.debounce);
-        rt.on_action(handler);
-        Ok(rt)
+        rt.throttle(self.debounce);
+        rt.on_action(move |ah| handler.handle(ah));
+        Ok(())
     }
 }
 
@@ -320,13 +319,8 @@ impl NotifyOnFileChange {
             impact_description,
         }
     }
-}
 
-impl watchexec::handler::Handler<watchexec::action::Action> for NotifyOnFileChange {
-    fn handle(
-        &mut self,
-        action: watchexec::action::Action,
-    ) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    fn handle(&self, action: watchexec::action::ActionHandler) -> watchexec::action::ActionHandler {
         if self.despurifier.all_spurious(&action) {
             tracing::debug!("spin watch ignored spurious changes: {}", paths_of(&action));
         } else {
@@ -337,12 +331,12 @@ impl watchexec::handler::Handler<watchexec::action::Action> for NotifyOnFileChan
             );
             _ = self.notifier.send(Uuid::new_v4());
         }
-        action.outcome(watchexec::action::Outcome::DoNothing);
-        Ok::<(), Box<dyn std::error::Error + 'static>>(())
+
+        action
     }
 }
 
-fn paths_of(action: &watchexec::action::Action) -> String {
+fn paths_of(action: &watchexec::action::ActionHandler) -> String {
     action
         .events
         .iter()
@@ -353,13 +347,13 @@ fn paths_of(action: &watchexec::action::Action) -> String {
         .join(", ")
 }
 
-fn path_of_event(event: &watchexec::event::Event) -> Option<&Path> {
+fn path_of_event(event: &watchexec_events::Event) -> Option<&Path> {
     event.tags.iter().filter_map(path_of_tag).next()
 }
 
-fn path_of_tag(tag: &watchexec::event::Tag) -> Option<&Path> {
+fn path_of_tag(tag: &watchexec_events::Tag) -> Option<&Path> {
     match tag {
-        watchexec::event::Tag::Path { path, .. } => Some(path),
+        watchexec_events::Tag::Path { path, .. } => Some(path),
         _ => None,
     }
 }
@@ -369,7 +363,7 @@ mod despurifier {
     use std::collections::HashMap;
     use std::sync::Mutex;
     use std::time::SystemTime;
-    use watchexec::event::{filekind::FileEventKind, Tag};
+    use watchexec_events::{filekind::FileEventKind, Tag};
 
     pub struct Despurifier {
         process_start_time: SystemTime,
@@ -384,13 +378,13 @@ mod despurifier {
             }
         }
 
-        pub fn all_spurious(&mut self, action: &watchexec::action::Action) -> bool {
+        pub fn all_spurious(&self, action: &watchexec::action::ActionHandler) -> bool {
             action.events.iter().all(|e| self.all_spurious_evt(e))
         }
 
         // This is necessary to check due to a bug on macOS emitting modify events on copies
         // https://github.com/rust-lang/rust/issues/107130
-        fn all_spurious_evt(&mut self, event: &watchexec::event::Event) -> bool {
+        fn all_spurious_evt(&self, event: &watchexec_events::Event) -> bool {
             // Deletions are never spurious
             if event
                 .tags
@@ -438,7 +432,7 @@ mod despurifier {
             Self
         }
 
-        pub fn all_spurious(&mut self, _action: &watchexec::action::Action) -> bool {
+        pub fn all_spurious(&self, _action: &watchexec::action::ActionHandler) -> bool {
             false
         }
     }
@@ -459,8 +453,8 @@ impl ReconfigurableWatcher {
     async fn start(
         rtf: RuntimeConfigFactory,
     ) -> anyhow::Result<(Self, tokio::task::JoinHandle<()>)> {
-        let rt = rtf.build_config().await?;
-        let watcher = Watchexec::new(watchexec::config::InitConfig::default(), rt)?;
+        let watcher = Arc::new(Watchexec::default());
+        rtf.build_config(&watcher.config).await?;
         let watcher_clone = watcher.clone();
         let join_handle = tokio::task::spawn(async move {
             _ = watcher_clone.main().await;
@@ -477,16 +471,9 @@ impl ReconfigurableWatcher {
     pub async fn reconfigure(&self) {
         match self {
             Self::Actual((watchexec, rtf)) => {
-                let rt = match rtf.build_config().await {
-                    Ok(rt) => rt,
-                    Err(e) => {
-                        tracing::error!("Unable to re-configure watcher after manifest change. Changes in files newly added to the application may not be detected. Error: {e}");
-                        return;
-                    }
-                };
-                if let Err(e) = watchexec.reconfigure(rt) {
+                if let Err(e) = rtf.build_config(&watchexec.config).await {
                     tracing::error!("Unable to re-configure watcher after manifest change. Changes in files newly added to the application may not be detected. Error: {e}");
-                }
+                };
             }
             Self::Dummy => (),
         }
