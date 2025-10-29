@@ -1,7 +1,7 @@
 spin_manifest_version = 2
 
 [application]
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "A simple application that returns hello."
 name = "spin-hello-world"
 version = "1.0.0"

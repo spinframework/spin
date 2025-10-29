@@ -1,7 +1,7 @@
 spin_manifest_version = 2
 
 [application]
-authors = ["itowlson <ivan.towlson@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 name = "goodbye"
 version = "0.1.0"
 

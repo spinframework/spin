@@ -1,5 +1,5 @@
 spin_version = "1"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "A legacy test for verifying backward compatible runtime"
 name = "legacy-test"
 trigger = { type = "http" }

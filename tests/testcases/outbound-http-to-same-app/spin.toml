@@ -1,5 +1,5 @@
 spin_version = "1"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "An application that demonstates a component making an outbound http request to another component in the same application."
 name = "local-outbound-http"
 trigger = { type = "http" }

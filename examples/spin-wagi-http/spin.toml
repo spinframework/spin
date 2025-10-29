@@ -1,7 +1,7 @@
 spin_manifest_version = 2
 
 [application]
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "A hello world application that serves content from a C++ program and a Rust program"
 name = "spin-wagi-hello"
 version = "1.0.0"

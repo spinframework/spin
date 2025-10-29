@@ -1,7 +1,7 @@
 spin_manifest_version = 2
 
 [application]
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "An application that returns the arguments the program started with, the environment variables set, and current time"
 name = "wagi-hello-world"
 version = "1.0.0"

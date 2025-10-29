@@ -1,4 +1,4 @@
 spin_version = "1"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 name = "error"
 trigger = { type = "http" }

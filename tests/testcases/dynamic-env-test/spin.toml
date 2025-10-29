@@ -1,7 +1,7 @@
 spin_version = "1"
 name = "headers-dynamic-env-test"
 version = "1.0.0"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "A simple application that returns hello and goodbye."
 trigger = { type = "http" }
 

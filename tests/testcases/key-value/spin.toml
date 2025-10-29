@@ -1,5 +1,5 @@
 spin_version = "1"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "A simple application that exercises key/value storage."
 name = "key-value"
 trigger = { type = "http" }

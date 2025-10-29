@@ -1,6 +1,6 @@
 [package]
 name = "timer-app-example"
-authors = ["itowlson <ivan.towlson@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = ""
 version = "0.1.0"
 edition = "2021"

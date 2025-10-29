@@ -5,7 +5,7 @@ spin_manifest_version = 2
 [application]
 name = "open-ai-rust"
 version = "0.1.0"
-authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+authors = ["Spin Framework Contributors"]
 description = "Example showing using openAI with Spin"
 
 [[trigger.http]]
