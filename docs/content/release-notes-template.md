@@ -14,7 +14,7 @@ As always, thanks to contributors old and new for helping improve Spin on a dail
 
 After downloading the <version> release of Spin, either via the artifact attached to this release corresponding to your OS/architecture combination or via the [installation method of your choice](https://spinframework.dev/install), you are ready to verify the release signature.
 
-First, install [cosign](https://docs.sigstore.dev/cosign/installation/). This is the tool we'll use to perform signature verification. Then run the following command:
+First, install [cosign](https://docs.sigstore.dev/cosign/system_config/installation/). This is the tool we'll use to perform signature verification. Then run the following command:
 
 ```
 cosign verify-blob \
