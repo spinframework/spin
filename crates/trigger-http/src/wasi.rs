@@ -1,5 +1,7 @@
+// TODO
 use std::io::IsTerminal;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use futures::TryFutureExt;
@@ -10,6 +12,7 @@ use spin_factor_outbound_http::wasi_2023_11_10::Proxy as Proxy2023_11_10;
 use spin_factors::RuntimeFactors;
 use spin_http::routes::RouteMatch;
 use spin_http::trigger::HandlerType;
+use spin_trigger::cli::MetricsTracker;
 use tokio::{sync::oneshot, task};
 use tracing::{instrument, Instrument, Level};
 use wasmtime_wasi_http::bindings::http::types::Scheme;
@@ -21,7 +24,7 @@ pub(super) fn prepare_request(
     route_match: &RouteMatch<'_, '_>,
     req: &mut Request<Body>,
     client_addr: SocketAddr,
-) -> Result<()> {
+) -> Result<String> {
     let spin_http::routes::TriggerLookupKey::Component(component_id) = route_match.lookup_key()
     else {
         unreachable!()
@@ -42,7 +45,7 @@ pub(super) fn prepare_request(
             Some((name, value))
         }));
 
-    Ok(())
+    Ok(component_id.to_owned())
 }
 
 /// An [`HttpExecutor`] that uses the `wasi:http/incoming-handler` interface.
@@ -59,7 +62,12 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
         mut req: Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<Response<Body>> {
-        prepare_request(route_match, &mut req, client_addr)?;
+        let component_id = prepare_request(route_match, &mut req, client_addr)?;
+        let metrics_prefix = format!(
+            "{} request to {} handled. Component: {component_id}",
+            req.method(),
+            req.uri(),
+        );
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
 
@@ -107,6 +115,7 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
             HandlerType::Wagi(_) => unreachable!("should have used WagiExecutor instead"),
         };
 
+        let start = std::time::Instant::now();
         let handle = task::spawn(
             async move {
                 let result = match handler {
@@ -132,6 +141,16 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
                             .await
                     }
                 };
+
+                MetricsTracker::global()
+                    .set_cpu_time_elapsed(component_id, store.data().core_state().cpu_time_elapsed);
+
+                tracing::info!(
+                    "{metrics_prefix}, Peak memory usage: {}, CPU time: {}, Wall-clock time: {}",
+                    format_bytes(store.data().core_state().memory_consumed()),
+                    format_duration(&store.data().core_state().cpu_time_elapsed),
+                    format_duration(&start.elapsed())
+                );
 
                 tracing::trace!(
                     "wasi-http memory consumed: {}",
@@ -177,5 +196,28 @@ impl HttpExecutor for WasiHttpExecutor<'_> {
                 ))
             }
         }
+    }
+}
+
+fn format_duration(duration: &Duration) -> String {
+    if duration.as_secs() > 0 {
+        format!("{:.2}s", duration.as_secs_f64())
+    } else if duration.as_millis() >= 1000 {
+        format!("{}ms", duration.as_millis())
+    } else {
+        format!("{}µs", duration.as_micros())
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+
+    match bytes as f64 {
+        b if b < KB => format!("{}B", bytes),
+        b if b < MB => format!("{:.1}KB", b / KB),
+        b if b < GB => format!("{:.1}MB", b / MB),
+        b => format!("{:.1}GB", b / GB),
     }
 }

@@ -6,6 +6,7 @@ use hyper::{Request, Response};
 use spin_factors::RuntimeFactors;
 use spin_http::body;
 use spin_http::routes::RouteMatch;
+use spin_trigger::cli::MetricsTracker;
 use spin_world::v1::http_types;
 use tracing::{instrument, Level};
 
@@ -36,6 +37,11 @@ impl HttpExecutor for SpinHttpExecutor {
         tracing::trace!("Executing request using the Spin executor for component {component_id}");
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
+
+        // Track memory usage after instantiation
+        let memory_consumed = store.data().core_state().memory_consumed();
+        MetricsTracker::global().set_memory_usage_init(component_id.to_owned(), memory_consumed);
+        tracing::info!("Memory after instantiation: {} bytes", memory_consumed);
 
         let headers = prepare_request_headers(&req, route_match, client_addr)?;
         // Expects here are safe since we have already checked that this
@@ -81,6 +87,12 @@ impl HttpExecutor for SpinHttpExecutor {
         };
 
         let (resp,) = func.call_async(&mut store, (req,)).await?;
+
+        // Track memory usage after component execution
+        let memory_after_execution = store.data().core_state().memory_consumed();
+        MetricsTracker::global()
+            .set_memory_usage_exec(component_id.to_owned(), memory_after_execution);
+        tracing::info!("Memory after execution: {} bytes", memory_after_execution);
 
         if resp.status < 100 || resp.status > 600 {
             tracing::error!("malformed HTTP status code");
