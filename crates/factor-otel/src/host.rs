@@ -67,13 +67,20 @@ impl wasi::otel::metrics::Host for InstanceState {
             Ok(_) => Ok(Ok(())),
             Err(e) => match e {
                 OTelSdkError::AlreadyShutdown => {
-                    Ok(Err("Shutdown has already been invoked".to_string()))
+                    let msg = "Shutdown has already been invoked";
+                    tracing::error!(msg);
+                    Ok(Err(msg.to_string()))
                 }
-                OTelSdkError::InternalFailure(e) => Ok(Err("Internal failure: ".to_string() + &e)),
-                OTelSdkError::Timeout(d) => Ok(Err(format!(
-                    "Operation timed out after {} seconds",
-                    d.as_secs()
-                ))),
+                OTelSdkError::InternalFailure(e) => {
+                    let detailed_msg = format!("Internal failure: {}", e);
+                    tracing::error!(detailed_msg);
+                    Ok(Err("Internal failure.".to_string()))
+                }
+                OTelSdkError::Timeout(d) => {
+                    let detailed_msg = format!("Operation timed out after {} seconds", d.as_secs());
+                    tracing::error!(detailed_msg);
+                    Ok(Err("Operation timed out.".to_string()))
+                }
             },
         }
     }
