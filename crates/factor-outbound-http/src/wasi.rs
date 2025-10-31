@@ -590,10 +590,12 @@ impl ConnectOptions {
         crate::remove_blocked_addrs(&self.blocked_networks, &mut socket_addrs)?;
 
         // If we're limiting concurrent outbound requests, acquire a permit
-        let permit = match &self.concurrent_outbound_connections_semaphore {
-            Some(s) => s.clone().acquire_owned().await.ok(),
-            None => None,
-        };
+
+        let permit = crate::concurrent_outbound_connections::acquire_owned_semaphore(
+            "wasi",
+            &self.concurrent_outbound_connections_semaphore,
+        )
+        .await;
 
         let stream = timeout(self.connect_timeout, TcpStream::connect(&*socket_addrs))
             .await
