@@ -161,10 +161,10 @@ pub enum WasiFilesMount {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentBuildConfig {
-    /// The command or commands to build the application. If multiple commands
+    /// The command or commands to build the component. If multiple commands
     /// are specified, they are run sequentially from left to right.
     ///
-    /// Example: `command = "cargo build"`, `command = ["npm install", "npm run build"]`
+    /// Example: `command = "cargo build --release"`, `command = ["npm install", "npm run build"]`
     ///
     /// Learn more: https://spinframework.dev/build#setting-up-for-spin-build
     pub command: Commands,

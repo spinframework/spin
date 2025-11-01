@@ -40,6 +40,11 @@ pub struct Push {
     )]
     pub app_source: Option<PathBuf>,
 
+    /// The build profile to push. The default is the anonymous profile (usually
+    /// the release build).
+    #[clap(long)]
+    pub profile: Option<String>,
+
     /// Ignore server certificate errors
     #[clap(
         name = INSECURE_OPT,
@@ -84,7 +89,9 @@ impl Push {
         notify_if_nondefault_rel(&app_file, distance);
 
         if self.build {
-            spin_build::build_default(&app_file, self.cache_dir.clone()).await?;
+            spin_build::build_default(&app_file, self.profile(), self.cache_dir.clone()).await?;
+        } else {
+            spin_build::warn_if_not_latest_build(&app_file, self.profile());
         }
 
         let annotations = if self.annotations.is_empty() {
@@ -106,6 +113,7 @@ impl Push {
         let digest = client
             .push(
                 &app_file,
+                self.profile(),
                 &self.reference,
                 annotations,
                 InferPredefinedAnnotations::All,
@@ -118,6 +126,10 @@ impl Push {
         };
 
         Ok(())
+    }
+
+    fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
     }
 }
 
