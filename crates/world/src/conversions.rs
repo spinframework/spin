@@ -558,12 +558,282 @@ mod otel {
     use super::*;
     use opentelemetry::StringValue;
     use opentelemetry_sdk::trace::{SpanEvents, SpanLinks};
+    use std::borrow::Cow;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use wasi::clocks0_2_0::wall_clock;
-    use wasi::otel::tracing as wasi_otel;
 
-    impl From<wasi_otel::SpanData> for opentelemetry_sdk::trace::SpanData {
-        fn from(value: wasi_otel::SpanData) -> Self {
+    impl From<wasi::otel::metrics::ResourceMetrics>
+        for opentelemetry_sdk::metrics::data::ResourceMetrics
+    {
+        fn from(value: wasi::otel::metrics::ResourceMetrics) -> Self {
+            Self {
+                resource: value.resource.into(),
+                scope_metrics: value.scope_metrics.into_iter().map(Into::into).collect(),
+            }
+        }
+    }
+
+    impl From<wasi::otel::metrics::Resource> for opentelemetry_sdk::Resource {
+        fn from(value: wasi::otel::metrics::Resource) -> Self {
+            let attributes: Vec<opentelemetry::KeyValue> =
+                value.attributes.into_iter().map(Into::into).collect();
+            let schema_url: Option<String> = value.schema_url.into();
+
+            match schema_url {
+                Some(url) => opentelemetry_sdk::resource::Resource::builder()
+                    .with_schema_url(attributes, url)
+                    .build(),
+                None => opentelemetry_sdk::resource::Resource::builder()
+                    .with_attributes(attributes)
+                    .build(),
+            }
+        }
+    }
+
+    impl From<wasi::otel::metrics::ScopeMetrics> for opentelemetry_sdk::metrics::data::ScopeMetrics {
+        fn from(value: wasi::otel::metrics::ScopeMetrics) -> Self {
+            Self {
+                scope: value.scope.into(),
+                metrics: value.metrics.into_iter().map(Into::into).collect(),
+            }
+        }
+    }
+
+    impl From<wasi::otel::metrics::Metric> for opentelemetry_sdk::metrics::data::Metric {
+        fn from(value: wasi::otel::metrics::Metric) -> Self {
+            Self {
+                name: Cow::Owned(value.name),
+                description: Cow::Owned(value.description),
+                unit: Cow::Owned(value.unit),
+                data: value.data.into(),
+            }
+        }
+    }
+
+    /// Converts a Wasi exemplar to an OTel exemplar
+    macro_rules! exemplars_to_otel {
+        (
+            $wasi_exemplar_list:expr,
+            $exemplar_type:ty
+        ) => {
+            $wasi_exemplar_list
+                .iter()
+                .map(|e| {
+                    let span_id: [u8; 8] = e
+                        .span_id
+                        .as_bytes()
+                        .try_into()
+                        .expect("Span ID is longer than 8 bytes");
+                    let trace_id: [u8; 16] = e
+                        .trace_id
+                        .as_bytes()
+                        .try_into()
+                        .expect("Trace ID is longer than 16 bytes");
+                    opentelemetry_sdk::metrics::data::Exemplar::<$exemplar_type> {
+                        filtered_attributes: e
+                            .filtered_attributes
+                            .to_owned()
+                            .into_iter()
+                            .map(Into::into)
+                            .collect(),
+                        time: e.time.into(),
+                        value: e.value.into(),
+                        span_id,
+                        trace_id,
+                    }
+                })
+                .collect()
+        };
+    }
+
+    /// Converts a WASI Gauge to an OTel Gauge
+    macro_rules! wasi_gauge_to_otel {
+        ($gauge:expr, $number_type:ty) => {
+            Box::new(opentelemetry_sdk::metrics::data::Gauge {
+                data_points: $gauge
+                    .data_points
+                    .iter()
+                    .map(|dp| opentelemetry_sdk::metrics::data::GaugeDataPoint {
+                        attributes: dp.attributes.iter().map(Into::into).collect(),
+                        value: dp.value.into(),
+                        exemplars: exemplars_to_otel!(dp.exemplars, $number_type),
+                    })
+                    .collect(),
+                start_time: match $gauge.start_time {
+                    Some(t) => Some(t.into()),
+                    None => None,
+                },
+                time: $gauge.time.into(),
+            })
+        };
+    }
+
+    /// Converts a WASI Sum to an OTel Sum
+    macro_rules! wasi_sum_to_otel {
+        ($sum:expr, $number_type:ty) => {
+            Box::new(opentelemetry_sdk::metrics::data::Sum {
+                data_points: $sum
+                    .data_points
+                    .iter()
+                    .map(|dp| opentelemetry_sdk::metrics::data::SumDataPoint {
+                        attributes: dp.attributes.iter().map(Into::into).collect(),
+                        exemplars: exemplars_to_otel!(dp.exemplars, $number_type),
+                        value: dp.value.into(),
+                    })
+                    .collect(),
+                start_time: $sum.start_time.into(),
+                time: $sum.time.into(),
+                temporality: $sum.temporality.into(),
+                is_monotonic: $sum.is_monotonic,
+            })
+        };
+    }
+
+    /// Converts a WASI Histogram to an OTel Histogram
+    macro_rules! wasi_histogram_to_otel {
+        ($histogram:expr, $number_type:ty) => {
+            Box::new(opentelemetry_sdk::metrics::data::Histogram {
+                data_points: $histogram
+                    .data_points
+                    .iter()
+                    .map(|dp| opentelemetry_sdk::metrics::data::HistogramDataPoint {
+                        attributes: dp.attributes.iter().map(Into::into).collect(),
+                        bounds: dp.bounds.to_owned(),
+                        bucket_counts: dp.bucket_counts.to_owned(),
+                        exemplars: exemplars_to_otel!(dp.exemplars, $number_type),
+                        count: dp.count,
+                        max: match dp.max {
+                            Some(m) => Some(m.into()),
+                            None => None,
+                        },
+                        min: match dp.min {
+                            Some(m) => Some(m.into()),
+                            None => None,
+                        },
+                        sum: dp.sum.into(),
+                    })
+                    .collect(),
+                start_time: $histogram.start_time.into(),
+                time: $histogram.time.into(),
+                temporality: $histogram.temporality.into(),
+            })
+        };
+    }
+
+    /// Converts a WASI ExponentialHistogram to an OTel ExponentialHistogram
+    macro_rules! wasi_exponential_histogram_to_otel {
+        ($histogram:expr, $number_type:ty) => {
+            Box::new(opentelemetry_sdk::metrics::data::ExponentialHistogram {
+                data_points: $histogram
+                    .data_points
+                    .iter()
+                    .map(
+                        |dp| opentelemetry_sdk::metrics::data::ExponentialHistogramDataPoint {
+                            attributes: dp.attributes.iter().map(Into::into).collect(),
+                            exemplars: exemplars_to_otel!(dp.exemplars, $number_type),
+                            count: dp.count as usize,
+                            max: match dp.max {
+                                Some(m) => Some(m.into()),
+                                None => None,
+                            },
+                            min: match dp.min {
+                                Some(m) => Some(m.into()),
+                                None => None,
+                            },
+                            sum: dp.sum.into(),
+                            scale: dp.scale,
+                            zero_count: dp.zero_count,
+                            positive_bucket: dp.positive_bucket.to_owned().into(),
+                            negative_bucket: dp.negative_bucket.to_owned().into(),
+                            zero_threshold: dp.zero_threshold,
+                        },
+                    )
+                    .collect(),
+                start_time: $histogram.start_time.into(),
+                time: $histogram.time.into(),
+                temporality: $histogram.temporality.into(),
+            })
+        };
+    }
+
+    impl From<wasi::otel::metrics::MetricData>
+        for Box<dyn opentelemetry_sdk::metrics::data::Aggregation>
+    {
+        fn from(value: wasi::otel::metrics::MetricData) -> Self {
+            match value {
+                wasi::otel::metrics::MetricData::F64Sum(s) => wasi_sum_to_otel!(s, f64),
+                wasi::otel::metrics::MetricData::S64Sum(s) => wasi_sum_to_otel!(s, i64),
+                wasi::otel::metrics::MetricData::U64Sum(s) => wasi_sum_to_otel!(s, u64),
+                wasi::otel::metrics::MetricData::F64Gauge(g) => wasi_gauge_to_otel!(g, f64),
+                wasi::otel::metrics::MetricData::S64Gauge(g) => wasi_gauge_to_otel!(g, i64),
+                wasi::otel::metrics::MetricData::U64Gauge(g) => wasi_gauge_to_otel!(g, u64),
+                wasi::otel::metrics::MetricData::F64Histogram(h) => wasi_histogram_to_otel!(h, f64),
+                wasi::otel::metrics::MetricData::S64Histogram(h) => wasi_histogram_to_otel!(h, i64),
+                wasi::otel::metrics::MetricData::U64Histogram(h) => wasi_histogram_to_otel!(h, u64),
+                wasi::otel::metrics::MetricData::F64ExponentialHistogram(h) => {
+                    wasi_exponential_histogram_to_otel!(h, f64)
+                }
+                wasi::otel::metrics::MetricData::S64ExponentialHistogram(h) => {
+                    wasi_exponential_histogram_to_otel!(h, i64)
+                }
+                wasi::otel::metrics::MetricData::U64ExponentialHistogram(h) => {
+                    wasi_exponential_histogram_to_otel!(h, u64)
+                }
+            }
+        }
+    }
+
+    impl From<wasi::otel::metrics::MetricNumber> for f64 {
+        fn from(value: wasi::otel::metrics::MetricNumber) -> Self {
+            match value {
+                wasi::otel::metrics::MetricNumber::F64(n) => n,
+                _ => panic!("error converting WASI MetricNumber to f64"),
+            }
+        }
+    }
+
+    impl From<wasi::otel::metrics::MetricNumber> for u64 {
+        fn from(value: wasi::otel::metrics::MetricNumber) -> Self {
+            match value {
+                wasi::otel::metrics::MetricNumber::U64(n) => n,
+                _ => panic!("error converting WASI MetricNumber to u64"),
+            }
+        }
+    }
+
+    impl From<wasi::otel::metrics::MetricNumber> for i64 {
+        fn from(value: wasi::otel::metrics::MetricNumber) -> Self {
+            match value {
+                wasi::otel::metrics::MetricNumber::S64(n) => n,
+                _ => panic!("error converting WASI MetricNumber to i64"),
+            }
+        }
+    }
+
+    impl From<wasi::otel::metrics::ExponentialBucket>
+        for opentelemetry_sdk::metrics::data::ExponentialBucket
+    {
+        fn from(value: wasi::otel::metrics::ExponentialBucket) -> Self {
+            Self {
+                offset: value.offset,
+                counts: value.counts,
+            }
+        }
+    }
+
+    impl From<wasi::otel::metrics::Temporality> for opentelemetry_sdk::metrics::Temporality {
+        fn from(value: wasi::otel::metrics::Temporality) -> Self {
+            use opentelemetry_sdk::metrics::Temporality;
+            match value {
+                wasi::otel::metrics::Temporality::Cumulative => Temporality::Cumulative,
+                wasi::otel::metrics::Temporality::Delta => Temporality::Delta,
+                wasi::otel::metrics::Temporality::LowMemory => Temporality::LowMemory,
+            }
+        }
+    }
+
+    impl From<wasi::otel::tracing::SpanData> for opentelemetry_sdk::trace::SpanData {
+        fn from(value: wasi::otel::tracing::SpanData) -> Self {
             let mut span_events = SpanEvents::default();
             span_events.events = value.events.into_iter().map(Into::into).collect();
             span_events.dropped_count = value.dropped_events;
@@ -588,8 +858,8 @@ mod otel {
         }
     }
 
-    impl From<wasi_otel::SpanContext> for opentelemetry::trace::SpanContext {
-        fn from(sc: wasi_otel::SpanContext) -> Self {
+    impl From<wasi::otel::tracing::SpanContext> for opentelemetry::trace::SpanContext {
+        fn from(sc: wasi::otel::tracing::SpanContext) -> Self {
             let trace_id = opentelemetry::trace::TraceId::from_hex(&sc.trace_id)
                 .unwrap_or(opentelemetry::trace::TraceId::INVALID);
             let span_id = opentelemetry::trace::SpanId::from_hex(&sc.span_id)
@@ -606,7 +876,7 @@ mod otel {
         }
     }
 
-    impl From<opentelemetry::trace::SpanContext> for wasi_otel::SpanContext {
+    impl From<opentelemetry::trace::SpanContext> for wasi::otel::tracing::SpanContext {
         fn from(sc: opentelemetry::trace::SpanContext) -> Self {
             Self {
                 trace_id: format!("{:x}", sc.trace_id()),
@@ -629,62 +899,68 @@ mod otel {
         }
     }
 
-    impl From<wasi_otel::TraceFlags> for opentelemetry::trace::TraceFlags {
-        fn from(flags: wasi_otel::TraceFlags) -> Self {
+    impl From<wasi::otel::tracing::TraceFlags> for opentelemetry::trace::TraceFlags {
+        fn from(flags: wasi::otel::tracing::TraceFlags) -> Self {
             Self::new(flags.as_array()[0] as u8)
         }
     }
 
-    impl From<opentelemetry::trace::TraceFlags> for wasi_otel::TraceFlags {
+    impl From<opentelemetry::trace::TraceFlags> for wasi::otel::tracing::TraceFlags {
         fn from(flags: opentelemetry::trace::TraceFlags) -> Self {
             if flags.is_sampled() {
-                wasi_otel::TraceFlags::SAMPLED
+                wasi::otel::tracing::TraceFlags::SAMPLED
             } else {
-                wasi_otel::TraceFlags::empty()
+                wasi::otel::tracing::TraceFlags::empty()
             }
         }
     }
 
-    impl From<wasi_otel::SpanKind> for opentelemetry::trace::SpanKind {
-        fn from(kind: wasi_otel::SpanKind) -> Self {
+    impl From<wasi::otel::tracing::SpanKind> for opentelemetry::trace::SpanKind {
+        fn from(kind: wasi::otel::tracing::SpanKind) -> Self {
             match kind {
-                wasi_otel::SpanKind::Client => opentelemetry::trace::SpanKind::Client,
-                wasi_otel::SpanKind::Server => opentelemetry::trace::SpanKind::Server,
-                wasi_otel::SpanKind::Producer => opentelemetry::trace::SpanKind::Producer,
-                wasi_otel::SpanKind::Consumer => opentelemetry::trace::SpanKind::Consumer,
-                wasi_otel::SpanKind::Internal => opentelemetry::trace::SpanKind::Internal,
+                wasi::otel::tracing::SpanKind::Client => opentelemetry::trace::SpanKind::Client,
+                wasi::otel::tracing::SpanKind::Server => opentelemetry::trace::SpanKind::Server,
+                wasi::otel::tracing::SpanKind::Producer => opentelemetry::trace::SpanKind::Producer,
+                wasi::otel::tracing::SpanKind::Consumer => opentelemetry::trace::SpanKind::Consumer,
+                wasi::otel::tracing::SpanKind::Internal => opentelemetry::trace::SpanKind::Internal,
             }
         }
     }
 
-    impl From<wasi_otel::KeyValue> for opentelemetry::KeyValue {
-        fn from(kv: wasi_otel::KeyValue) -> Self {
+    impl From<wasi::otel::tracing::KeyValue> for opentelemetry::KeyValue {
+        fn from(kv: wasi::otel::tracing::KeyValue) -> Self {
             opentelemetry::KeyValue::new(kv.key, kv.value)
         }
     }
 
-    impl From<wasi_otel::Value> for opentelemetry::Value {
-        fn from(value: wasi_otel::Value) -> Self {
+    impl From<&wasi::otel::tracing::KeyValue> for opentelemetry::KeyValue {
+        fn from(kv: &wasi::otel::tracing::KeyValue) -> Self {
+            opentelemetry::KeyValue::new(kv.key.to_owned(), kv.value.to_owned())
+        }
+    }
+
+    impl From<wasi::otel::types::Value> for opentelemetry::Value {
+        fn from(value: wasi::otel::types::Value) -> Self {
             match value {
-                wasi_otel::Value::String(v) => v.into(),
-                wasi_otel::Value::Bool(v) => v.into(),
-                wasi_otel::Value::F64(v) => v.into(),
-                wasi_otel::Value::S64(v) => v.into(),
-                wasi_otel::Value::StringArray(v) => opentelemetry::Value::Array(
+                wasi::otel::types::Value::String(v) => v.into(),
+                wasi::otel::types::Value::Bool(v) => v.into(),
+                wasi::otel::types::Value::F64(v) => v.into(),
+                wasi::otel::types::Value::S64(v) => v.into(),
+                wasi::otel::types::Value::StringArray(v) => opentelemetry::Value::Array(
                     v.into_iter()
                         .map(StringValue::from)
                         .collect::<Vec<_>>()
                         .into(),
                 ),
-                wasi_otel::Value::BoolArray(v) => opentelemetry::Value::Array(v.into()),
-                wasi_otel::Value::F64Array(v) => opentelemetry::Value::Array(v.into()),
-                wasi_otel::Value::S64Array(v) => opentelemetry::Value::Array(v.into()),
+                wasi::otel::types::Value::BoolArray(v) => opentelemetry::Value::Array(v.into()),
+                wasi::otel::types::Value::F64Array(v) => opentelemetry::Value::Array(v.into()),
+                wasi::otel::types::Value::S64Array(v) => opentelemetry::Value::Array(v.into()),
             }
         }
     }
 
-    impl From<wasi_otel::Event> for opentelemetry::trace::Event {
-        fn from(event: wasi_otel::Event) -> Self {
+    impl From<wasi::otel::tracing::Event> for opentelemetry::trace::Event {
+        fn from(event: wasi::otel::tracing::Event) -> Self {
             Self::new(
                 event.name,
                 event.time.into(),
@@ -694,8 +970,8 @@ mod otel {
         }
     }
 
-    impl From<wasi_otel::Link> for opentelemetry::trace::Link {
-        fn from(link: wasi_otel::Link) -> Self {
+    impl From<wasi::otel::tracing::Link> for opentelemetry::trace::Link {
+        fn from(link: wasi::otel::tracing::Link) -> Self {
             Self::new(
                 link.span_context.into(),
                 link.attributes.into_iter().map(Into::into).collect(),
@@ -704,20 +980,20 @@ mod otel {
         }
     }
 
-    impl From<wasi_otel::Status> for opentelemetry::trace::Status {
-        fn from(status: wasi_otel::Status) -> Self {
+    impl From<wasi::otel::tracing::Status> for opentelemetry::trace::Status {
+        fn from(status: wasi::otel::tracing::Status) -> Self {
             match status {
-                wasi_otel::Status::Unset => Self::Unset,
-                wasi_otel::Status::Ok => Self::Ok,
-                wasi_otel::Status::Error(s) => Self::Error {
+                wasi::otel::tracing::Status::Unset => Self::Unset,
+                wasi::otel::tracing::Status::Ok => Self::Ok,
+                wasi::otel::tracing::Status::Error(s) => Self::Error {
                     description: s.into(),
                 },
             }
         }
     }
 
-    impl From<wasi_otel::InstrumentationScope> for opentelemetry::InstrumentationScope {
-        fn from(value: wasi_otel::InstrumentationScope) -> Self {
+    impl From<wasi::otel::types::InstrumentationScope> for opentelemetry::InstrumentationScope {
+        fn from(value: wasi::otel::tracing::InstrumentationScope) -> Self {
             let builder = Self::builder(value.name)
                 .with_attributes(value.attributes.into_iter().map(Into::into));
             match (value.version, value.schema_url) {

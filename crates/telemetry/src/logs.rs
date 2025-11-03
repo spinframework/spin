@@ -3,8 +3,9 @@ use std::{ascii::escape_default, sync::OnceLock};
 use anyhow::bail;
 use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry_sdk::{
-    logs::{BatchConfigBuilder, BatchLogProcessor, SdkLogger},
+    logs::{log_processor_with_async_runtime::BatchLogProcessor, BatchConfigBuilder, SdkLogger},
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
+    runtime::Tokio,
     Resource,
 };
 
@@ -97,7 +98,7 @@ pub(crate) fn init_otel_logging_backend(spin_version: String) -> anyhow::Result<
     let provider = opentelemetry_sdk::logs::SdkLoggerProvider::builder()
         .with_resource(resource)
         .with_log_processor(
-            BatchLogProcessor::builder(exporter)
+            BatchLogProcessor::builder(exporter, Tokio)
                 .with_batch_config(BatchConfigBuilder::default().build())
                 .build(),
         )
