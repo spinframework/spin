@@ -1,0 +1,13 @@
+manifest_version = "1"
+id = "http-rust-wasip3-unstable"
+description = "WASIp3 HTTP request handler using Rust (0.3.0-rc-2025-09-16)"
+tags = ["http", "rust"]
+
+[add_component]
+skip_files = ["spin.toml"]
+[add_component.snippets]
+component = "component.txt"
+
+[parameters]
+project-description = { type = "string",  prompt = "Description", default = "" }
+http-path = { type = "string", prompt = "HTTP path", default = "/...", pattern = "^/\\S*$" }
