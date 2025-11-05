@@ -52,6 +52,10 @@ pub struct CliArgs {
     #[clap(long, env = "SPIN_TLS_KEY", requires = "tls-cert")]
     pub tls_key: Option<PathBuf>,
 
+    /// Sets the maximum buffer size (in bytes) for the HTTP connection. The minimum value allowed is 8192.
+    #[clap(long, env = "SPIN_HTTP1_MAX_BUF_SIZE")]
+    pub http1_max_buf_size: Option<usize>,
+
     #[clap(long = "find-free-port")]
     pub find_free_port: bool,
 }
@@ -78,6 +82,7 @@ pub struct HttpTrigger {
     listen_addr: SocketAddr,
     tls_config: Option<TlsConfig>,
     find_free_port: bool,
+    http1_max_buf_size: Option<usize>,
 }
 
 impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
@@ -88,12 +93,14 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
 
     fn new(cli_args: Self::CliArgs, app: &spin_app::App) -> anyhow::Result<Self> {
         let find_free_port = cli_args.find_free_port;
+        let http1_max_buf_size = cli_args.http1_max_buf_size;
 
         Self::new(
             app,
             cli_args.address,
             cli_args.into_tls_config(),
             find_free_port,
+            http1_max_buf_size,
         )
     }
 
@@ -117,6 +124,7 @@ impl HttpTrigger {
         listen_addr: SocketAddr,
         tls_config: Option<TlsConfig>,
         find_free_port: bool,
+        http1_max_buf_size: Option<usize>,
     ) -> anyhow::Result<Self> {
         Self::validate_app(app)?;
 
@@ -124,6 +132,7 @@ impl HttpTrigger {
             listen_addr,
             tls_config,
             find_free_port,
+            http1_max_buf_size,
         })
     }
 
@@ -136,12 +145,14 @@ impl HttpTrigger {
             listen_addr,
             tls_config,
             find_free_port,
+            http1_max_buf_size,
         } = self;
         let server = Arc::new(HttpServer::new(
             listen_addr,
             tls_config,
             find_free_port,
             trigger_app,
+            http1_max_buf_size,
         )?);
         Ok(server)
     }

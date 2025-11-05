@@ -104,7 +104,7 @@ async fn initialize_trigger(
     .await?;
 
     let app = spin_app::App::new("my-app", locked_app);
-    let trigger = HttpTrigger::new(&app, "127.0.0.1:80".parse().unwrap(), None, false)?;
+    let trigger = HttpTrigger::new(&app, "127.0.0.1:80".parse().unwrap(), None, false, None)?;
     let mut builder = TriggerAppBuilder::<_, FactorsBuilder>::new(trigger);
     let trigger_app = builder
         .build(
