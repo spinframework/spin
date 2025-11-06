@@ -58,6 +58,8 @@ pub struct HttpServer<F: RuntimeFactors> {
     listen_addr: SocketAddr,
     /// The TLS configuration for the server.
     tls_config: Option<TlsConfig>,
+    /// The maximum buffer size for an HTTP1 connection.
+    http1_max_buf_size: Option<usize>,
     /// Whether to find a free port if the specified port is already in use.
     find_free_port: bool,
     /// Request router.
@@ -77,6 +79,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         tls_config: Option<TlsConfig>,
         find_free_port: bool,
         trigger_app: TriggerApp<F>,
+        http1_max_buf_size: Option<usize>,
     ) -> anyhow::Result<Self> {
         // This needs to be a vec before building the router to handle duplicate routes
         let component_trigger_configs = trigger_app
@@ -139,6 +142,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
             find_free_port,
             router,
             trigger_app,
+            http1_max_buf_size,
             component_trigger_configs,
             component_handler_types,
         })
@@ -491,7 +495,13 @@ impl<F: RuntimeFactors> HttpServer<F> {
         client_addr: SocketAddr,
     ) {
         task::spawn(async move {
-            if let Err(err) = Builder::new(TokioExecutor::new())
+            let mut server_builder = Builder::new(TokioExecutor::new());
+
+            if let Some(http1_max_buf_size) = self.http1_max_buf_size {
+                server_builder.http1().max_buf_size(http1_max_buf_size);
+            }
+
+            if let Err(err) = server_builder
                 .serve_connection(
                     TokioIo::new(stream),
                     service_fn(move |request| {
