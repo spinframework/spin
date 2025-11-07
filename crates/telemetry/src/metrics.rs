@@ -61,6 +61,8 @@ pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
 ///
 /// The increment may only be an i64 or f64. You must not mix types for the same metric.
 ///
+/// Takes advantage of counter support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
+///
 /// ```no_run
 /// # use spin_telemetry::metrics::counter;
 /// counter!(spin.metric_name = 1, metric_attribute = "value");
@@ -75,6 +77,8 @@ macro_rules! counter {
 /// Adds an additional value to the distribution of the named histogram with the given attributes.
 ///
 /// The increment may only be an i64 or f64. You must not mix types for the same metric.
+///
+/// Takes advantage of histogram support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
 ///
 /// ```no_run
 /// # use spin_telemetry::metrics::histogram;
@@ -91,6 +95,8 @@ macro_rules! histogram {
 ///
 /// The increment may only be a positive i64 or f64. You must not mix types for the same metric.
 ///
+/// Takes advantage of monotonic counter support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
+///
 /// ```no_run
 /// # use spin_telemetry::metrics::monotonic_counter;
 /// monotonic_counter!(spin.metric_name = 1, metric_attribute = "value");
@@ -101,6 +107,24 @@ macro_rules! monotonic_counter {
     }
 }
 
+#[macro_export]
+/// Records an increment to the named monotonic counter with the given attributes.
+///
+/// The increment may only be a positive i64 or f64. You must not mix types for the same metric.
+///
+/// Takes advantage of gauge support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
+///
+/// ```no_run
+/// # use spin_telemetry::metrics::gauge;
+/// gauge!(spin.metric_name = 1, metric_attribute = "value");
+/// ```
+macro_rules! gauge {
+    ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
+        tracing::trace!(gauge.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
+    }
+}
+
 pub use counter;
+pub use gauge;
 pub use histogram;
 pub use monotonic_counter;
