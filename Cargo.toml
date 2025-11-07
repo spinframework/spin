@@ -74,6 +74,7 @@ spin-trigger = { path = "crates/trigger" }
 spin-trigger-http = { path = "crates/trigger-http" }
 spin-trigger-redis = { path = "crates/trigger-redis" }
 terminal = { path = "crates/terminal" }
+rand.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # This needs to be an explicit dependency to enable

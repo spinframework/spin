@@ -17,6 +17,7 @@ http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 pin-project-lite = { workspace = true }
+rand.workspace = true
 rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
 serde = { workspace = true }

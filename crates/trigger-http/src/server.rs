@@ -21,6 +21,7 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
+use rand::Rng;
 use spin_app::{APP_DESCRIPTION_KEY, APP_NAME_KEY};
 use spin_factor_outbound_http::{OutboundHttpFactor, SelfRequestOrigin};
 use spin_factors::RuntimeFactors;
@@ -50,7 +51,7 @@ use crate::{
     wagi::WagiHttpExecutor,
     wasi::WasiHttpExecutor,
     wasip3::Wasip3HttpExecutor,
-    Body, NotFoundRouteKind, TlsConfig, TriggerApp, TriggerInstanceBuilder,
+    Body, InstanceReuseConfig, NotFoundRouteKind, TlsConfig, TriggerApp, TriggerInstanceBuilder,
 };
 
 pub const MAX_RETRIES: u16 = 10;
@@ -83,6 +84,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         find_free_port: bool,
         trigger_app: TriggerApp<F>,
         http1_max_buf_size: Option<usize>,
+        reuse_config: InstanceReuseConfig,
     ) -> anyhow::Result<Self> {
         // This needs to be a vec before building the router to handle duplicate routes
         let component_trigger_configs = trigger_app
@@ -135,6 +137,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                         &trigger_app,
                         component,
                         &trigger_config.executor,
+                        reuse_config,
                     )
                     .map(|ht| (component.clone(), ht)),
                 ),
@@ -157,6 +160,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         trigger_app: &Arc<TriggerApp<F>>,
         component_id: &str,
         executor: &Option<HttpExecutorType>,
+        reuse_config: InstanceReuseConfig,
     ) -> anyhow::Result<HandlerType<HttpHandlerState<F>>> {
         let pre = trigger_app.get_instance_pre(component_id)?;
         let handler_type = match executor {
@@ -166,6 +170,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                     HttpHandlerState {
                         trigger_app: trigger_app.clone(),
                         component_id: component_id.into(),
+                        reuse_config,
                     },
                 )?;
                 handler_type.validate_executor(executor)?;
@@ -636,6 +641,7 @@ pub(crate) trait HttpExecutor {
 pub(crate) struct HttpHandlerState<F: RuntimeFactors> {
     trigger_app: Arc<TriggerApp<F>>,
     component_id: String,
+    reuse_config: InstanceReuseConfig,
 }
 
 impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
@@ -653,23 +659,22 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
     }
 
     fn request_timeout(&self) -> Duration {
-        // TODO: Make this configurable
-        Duration::MAX
+        self.reuse_config
+            .request_timeout
+            .map(|range| rand::rng().random_range(range))
+            .unwrap_or(Duration::MAX)
     }
 
     fn idle_instance_timeout(&self) -> Duration {
-        // TODO: Make this configurable
-        Duration::from_secs(1)
+        rand::rng().random_range(self.reuse_config.idle_instance_timeout)
     }
 
     fn max_instance_reuse_count(&self) -> usize {
-        // TODO: Make this configurable
-        128
+        rand::rng().random_range(self.reuse_config.max_instance_reuse_count)
     }
 
     fn max_instance_concurrent_reuse_count(&self) -> usize {
-        // TODO: Make this configurable
-        16
+        rand::rng().random_range(self.reuse_config.max_instance_concurrent_reuse_count)
     }
 
     fn handle_worker_error(&self, error: anyhow::Error) {
