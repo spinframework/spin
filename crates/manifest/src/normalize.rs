@@ -19,55 +19,89 @@ pub fn normalize_manifest(manifest: &mut AppManifest) -> anyhow::Result<()> {
 fn normalize_inline_components(manifest: &mut AppManifest) {
     // Normalize inline components
     let components = &mut manifest.components;
+    let mut counter = 0;
+
+    let mut normalize_spec = |spec: &mut ComponentSpec| {
+        if !matches!(spec, ComponentSpec::Inline(_)) {
+            return;
+        };
+
+        let inline_id = 
+            loop {
+                counter += 1;
+                let id = KebabId::try_from(format!("inline-component{counter}")).unwrap();  // I sacrificed naturality and I'D DO IT AGAIN HA HA HA okay Lann okay I'll put it back
+                if !components.contains_key(&id) {
+                    println!("derived id {id} for {spec:?}");
+                    break id;
+                }
+            };
+
+        // Replace the inline component with a reference...
+        let inline_spec = std::mem::replace(spec, ComponentSpec::Reference(inline_id.clone()));
+        let ComponentSpec::Inline(component) = inline_spec else {
+            unreachable!();
+        };
+        // ...moving the inline component into the top-level components map.
+        components.insert(inline_id.clone(), *component);
+    };
 
     for trigger in manifest.triggers.values_mut().flatten() {
-        let trigger_id = &trigger.id;
+        // let trigger_id = &trigger.id;
 
-        let component_specs = trigger
-            .component
-            .iter_mut()
-            .chain(
-                trigger
-                    .components
-                    .values_mut()
-                    .flat_map(|specs| specs.0.iter_mut()),
-            )
-            .collect::<Vec<_>>();
-        let multiple_components = component_specs.len() > 1;
-
-        let mut counter = 1;
-        for spec in component_specs {
-            if !matches!(spec, ComponentSpec::Inline(_)) {
-                continue;
-            };
-
-            let inline_id = {
-                // Try a "natural" component ID...
-                let mut id = KebabId::try_from(format!("{trigger_id}-component"));
-                // ...falling back to a counter-based component ID
-                if multiple_components
-                    || id.is_err()
-                    || components.contains_key(id.as_ref().unwrap())
-                {
-                    id = Ok(loop {
-                        let id = KebabId::try_from(format!("inline-component{counter}")).unwrap();
-                        if !components.contains_key(&id) {
-                            break id;
-                        }
-                        counter += 1;
-                    });
-                }
-                id.unwrap()
-            };
-
-            // Replace the inline component with a reference...
-            let inline_spec = std::mem::replace(spec, ComponentSpec::Reference(inline_id.clone()));
-            let ComponentSpec::Inline(component) = inline_spec else {
-                unreachable!();
-            };
-            // ...moving the inline component into the top-level components map.
-            components.insert(inline_id.clone(), *component);
+        if let Some(primary_component) = trigger.component.as_mut() {
+            normalize_spec(primary_component);
         }
+
+        for complications in trigger.components.values_mut() {
+            for spec in &mut complications.0 {
+                normalize_spec(spec);
+            }
+        }
+
+        // let component_specs = trigger
+        //     .component
+        //     .iter_mut()
+        //     .chain(
+        //         trigger
+        //             .components
+        //             .values_mut()
+        //             .flat_map(|specs| specs.0.iter_mut()),
+        //     )
+        //     .collect::<Vec<_>>();
+        // let multiple_components = component_specs.len() > 1;
+
+        // for spec in component_specs {
+        //     if !matches!(spec, ComponentSpec::Inline(_)) {
+        //         continue;
+        //     };
+
+        //     let inline_id = {
+        //         // Try a "natural" component ID...
+        //         let mut id = KebabId::try_from(format!("{trigger_id}-component"));
+        //         // ...falling back to a counter-based component ID
+        //         if multiple_components
+        //             || id.is_err()
+        //             || components.contains_key(id.as_ref().unwrap())
+        //         {
+        //             id = Ok(loop {
+        //                 let id = KebabId::try_from(format!("inline-component{counter}")).unwrap();
+        //                 if !components.contains_key(&id) {
+        //                     break id;
+        //                 }
+        //                 counter += 1;
+        //             });
+        //         }
+        //         id.unwrap()
+        //     };
+
+        //     // Replace the inline component with a reference...
+        //     let inline_spec = std::mem::replace(spec, ComponentSpec::Reference(inline_id.clone()));
+        //     let ComponentSpec::Inline(component) = inline_spec else {
+        //         unreachable!();
+        //     };
+        //     // ...moving the inline component into the top-level components map.
+        //     components.insert(inline_id.clone(), *component);
+        // }
     }
 }
 
