@@ -1,0 +1,17 @@
+spin_manifest_version = 2
+
+[application]
+name = "middleware"
+authors = ["Spin Framework"]
+version = "0.1.0"
+
+[[trigger.http]]
+route = "/..."
+component = "echo"
+dependencies.middleware = [{ component = "middleware-header-adder" }]
+
+[component.echo]
+source = "%{source=middleware-primary}"
+
+[component.middleware-header-adder]
+source = "%{source=middleware-header-adder}"

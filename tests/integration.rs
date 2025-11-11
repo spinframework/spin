@@ -1560,6 +1560,181 @@ route = "/..."
         Ok(())
     }
 
+    fn binary_chunks(num_kilobytes: usize) -> Vec<Vec<u8>> {
+        let body_bytes = {
+            let mut n = 0_u8;
+            std::iter::repeat_with(move || {
+                n = n.wrapping_add(251);
+                n
+            })
+            .take(num_kilobytes * 1024)
+            .collect::<Vec<_>>()
+        };
+        body_bytes
+            .chunks(16 * 1024)
+            .map(ToOwned::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn test_middleware() -> anyhow::Result<()> {
+        let chunks = binary_chunks(128);
+        let mut resp_chunks = chunks.clone();
+        let body = reqwest::Body::wrap_stream(futures::stream::iter(
+            chunks
+                .iter()
+                .map(|chunk| Ok::<_, anyhow::Error>(bytes::Bytes::copy_from_slice(chunk)))
+                .collect::<Vec<_>>(),
+        ));
+        resp_chunks.reverse();
+        resp_chunks.push(b"Request body:\n\n".to_vec());
+        resp_chunks.reverse();
+
+        run_test(
+            "middleware",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                let headers = vec![
+                    ("content-type", "application/octet-stream"),
+                    ("my-header", "hello"),
+                ];
+                let request = Request::full(Method::Post, "/", &headers, Some(body));
+                assert_spin_request(
+                    spin,
+                    request,
+                    Response::full(
+                        200,
+                        [
+                            (
+                                "request-content-type".to_owned(),
+                                "application/octet-stream".to_owned(),
+                            ),
+                            ("request-my-header".to_owned(), "hello".to_owned()),
+                            (
+                                "request-header-added-by".to_owned(),
+                                "middleware-header-adder".to_owned(),
+                            ),
+                            (
+                                "response-header-added-by".to_owned(),
+                                "yep me again!".to_owned(),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        resp_chunks,
+                    ),
+                )?;
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_middleware_with_kv() -> anyhow::Result<()> {
+        let chunks = binary_chunks(128);
+        let mut resp_chunks = chunks.clone();
+        let body = reqwest::Body::wrap_stream(futures::stream::iter(
+            chunks
+                .iter()
+                .map(|chunk| Ok::<_, anyhow::Error>(bytes::Bytes::copy_from_slice(chunk)))
+                .collect::<Vec<_>>(),
+        ));
+        resp_chunks.reverse();
+        resp_chunks.push(b"Request body:\n\n".to_vec());
+        resp_chunks.push(b"Path: /testywesty\n".to_vec());
+        resp_chunks.reverse();
+
+        run_test(
+            "middleware-with-kv",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                let headers = vec![
+                    ("content-type", "application/octet-stream"),
+                    ("my-header", "hello"),
+                ];
+                let request = Request::full(Method::Post, "/testywesty", &headers, Some(body));
+                assert_spin_request(
+                    spin,
+                    request,
+                    Response::full(
+                        200,
+                        [
+                            (
+                                "request-content-type".to_owned(),
+                                "application/octet-stream".to_owned(),
+                            ),
+                            ("request-my-header".to_owned(), "hello".to_owned()),
+                            (
+                                "request-header-added-by".to_owned(),
+                                "middleware-header-adder".to_owned(),
+                            ),
+                            (
+                                "response-header-added-by".to_owned(),
+                                "yep me again!".to_owned(),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        resp_chunks,
+                    ),
+                )?;
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_middleware_without_kv() -> anyhow::Result<()> {
+        let chunks = binary_chunks(128);
+        let body = reqwest::Body::wrap_stream(futures::stream::iter(
+            chunks
+                .iter()
+                .map(|chunk| Ok::<_, anyhow::Error>(bytes::Bytes::copy_from_slice(chunk)))
+                .collect::<Vec<_>>(),
+        ));
+
+        run_test(
+            "middleware-without-kv",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                let headers = vec![
+                    ("content-type", "application/octet-stream"),
+                    ("my-header", "hello"),
+                ];
+                let request = Request::full(Method::Post, "/testywesty", &headers, Some(body));
+                assert_spin_request(spin, request, Response::new(500))?;
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
     #[cfg(feature = "extern-dependencies-tests")]
     #[test]
     fn test_mysql_v3() -> anyhow::Result<()> {

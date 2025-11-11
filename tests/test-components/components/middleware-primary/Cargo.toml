@@ -1,0 +1,11 @@
+[package]
+name = "middleware-primary"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+futures = "0.3.31"
+wit-bindgen = { workspace = true, features = ['async-spawn'] }

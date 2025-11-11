@@ -84,6 +84,7 @@ pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Erro
                 id: format!("trigger-{component_id}"),
                 component: Some(v2::ComponentSpec::Reference(component_id)),
                 components: Default::default(),
+                dependencies: Default::default(),
                 config: component.trigger,
             });
     }

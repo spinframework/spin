@@ -1,4 +1,6 @@
-use crate::schema::v2::{Component, ComponentSpec, Map, OneOrManyComponentSpecs};
+use crate::schema::v2::{
+    Component, ComponentSpec, Map, OneOrManyComponentSpecs, TriggerDependencies,
+};
 use schemars::JsonSchema;
 
 // The structs here allow dead code because they exist only
@@ -28,6 +30,9 @@ pub struct HttpTriggerSchema {
     /// `components = { ... }`
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     pub components: Map<String, OneOrManyComponentSpecs>,
+    /// `dependencies.middleware = { ... }`
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub dependencies: Map<String, TriggerDependencies>,
     /// `route = "/user/:name/..."`
     route: HttpRouteSchema,
     /// `executor = { type = "wagi" }

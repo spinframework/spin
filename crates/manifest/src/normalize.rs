@@ -21,7 +21,6 @@ pub fn normalize_manifest(manifest: &mut AppManifest, profile: Option<&str>) -> 
 fn normalize_inline_components(manifest: &mut AppManifest) {
     // Normalize inline components
     let components = &mut manifest.components;
-
     for trigger in manifest.triggers.values_mut().flatten() {
         let trigger_id = &trigger.id;
 
@@ -147,7 +146,9 @@ fn apply_profile_overrides(manifest: &mut AppManifest, profile: Option<&str>) {
     }
 }
 
-use crate::schema::v2::{Component, ComponentDependency, ComponentSource, InheritConfiguration};
+use crate::schema::v2::{
+    Component, ComponentDependency, ComponentSource, InheritConfiguration, TriggerDependency,
+};
 
 /// Validates that `dependencies_inherit_configuration` and per-dependency
 /// `inherit_configuration` are not used simultaneously, then normalizes the
@@ -199,12 +200,35 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
                 let depended_on = components
                     .get(depended_on_id)
                     .with_context(|| format!("dependency ID {depended_on_id} does not exist"))?;
-                ensure_is_acceptable_dependency(depended_on, depended_on_id, depender_id)?;
+                ensure_is_acceptable_dependency(depended_on, depended_on_id, depender_id.as_ref())?;
                 *dependency = component_source_to_dependency(
                     &depended_on.source,
                     export.clone(),
                     inherit_configuration.clone(),
                 );
+            }
+        }
+    }
+
+    for (_, triggers) in &mut manifest.triggers {
+        for trigger in triggers {
+            for (_, deps) in &mut trigger.dependencies {
+                for dependency in &mut deps.0 {
+                    if let TriggerDependency::AppComponent {
+                        component: depended_on_id,
+                        inherit_configuration,
+                    } = dependency
+                    {
+                        let depended_on = components.get(depended_on_id).with_context(|| {
+                            format!("dependency ID {depended_on_id} does not exist")
+                        })?;
+                        ensure_is_acceptable_dependency(depended_on, depended_on_id, &trigger.id)?;
+                        *dependency = component_source_to_trigger_dependency(
+                            &depended_on.source,
+                            inherit_configuration.clone(),
+                        );
+                    }
+                }
             }
         }
     }
@@ -243,13 +267,40 @@ fn component_source_to_dependency(
     }
 }
 
+fn component_source_to_trigger_dependency(
+    source: &ComponentSource,
+    inherit_configuration: Option<InheritConfiguration>,
+) -> TriggerDependency {
+    match source {
+        ComponentSource::Local(path) => TriggerDependency::Local {
+            path: PathBuf::from(path),
+            inherit_configuration,
+        },
+        ComponentSource::Remote { url, digest } => TriggerDependency::HTTP {
+            url: url.clone(),
+            digest: digest.clone(),
+            inherit_configuration,
+        },
+        ComponentSource::Registry {
+            registry,
+            package,
+            version,
+        } => TriggerDependency::Package {
+            version: version.clone(),
+            registry: registry.as_ref().map(|r| r.to_string()),
+            package: package.to_string(),
+            inherit_configuration,
+        },
+    }
+}
+
 /// If a dependency has things like files or KV stores or network access...
 /// those won't apply when it's composed, and that's likely to be surprising,
 /// and developers hate surprises.
 fn ensure_is_acceptable_dependency(
     component: &Component,
     depended_on_id: &KebabId,
-    depender_id: &KebabId,
+    depender_id: &str,
 ) -> anyhow::Result<()> {
     let mut surprises = vec![];
 

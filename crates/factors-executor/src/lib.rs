@@ -55,6 +55,7 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutor<T, U> {
         runtime_config: T::RuntimeConfig,
         component_loader: &impl ComponentLoader<T, U>,
         trigger_type: Option<&str>,
+        trigger_dependencies_composer: impl TriggerDependenciesComposer,
     ) -> anyhow::Result<FactorsExecutorApp<T, U>> {
         let configured_app = self
             .factors
@@ -77,7 +78,11 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutor<T, U> {
 
         for component in components {
             let instance_pre = component_loader
-                .load_instance_pre(&self.core_engine, &component)
+                .load_instance_pre(
+                    &self.core_engine,
+                    &component,
+                    &trigger_dependencies_composer,
+                )
                 .await?;
             component_instance_pres.insert(component.id().to_string(), instance_pre);
         }
@@ -116,6 +121,7 @@ pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
         &self,
         engine: &spin_core::wasmtime::Engine,
         component: &AppComponent,
+        trigger_dependencies_composer: &impl TriggerDependenciesComposer,
     ) -> anyhow::Result<Component>;
 
     /// Loads [`InstancePre`] for the given [`AppComponent`].
@@ -123,10 +129,47 @@ pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
         &self,
         engine: &spin_core::Engine<InstanceState<T::InstanceState, U>>,
         component: &AppComponent,
+        trigger_dependencies_composer: &impl TriggerDependenciesComposer,
     ) -> anyhow::Result<spin_core::InstancePre<InstanceState<T::InstanceState, U>>> {
-        let component = self.load_component(engine.as_ref(), component).await?;
+        let component = self
+            .load_component(engine.as_ref(), component, trigger_dependencies_composer)
+            .await?;
         engine.instantiate_pre(&component)
     }
+}
+
+#[async_trait]
+pub trait TriggerDependenciesComposer: Send + Sync {
+    async fn compose_trigger_dependencies(
+        &self,
+        trigger_dependencies: &HashMap<String, Vec<TriggerDependency>>,
+        component: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>>;
+}
+
+#[async_trait]
+impl TriggerDependenciesComposer for () {
+    async fn compose_trigger_dependencies(
+        &self,
+        trigger_dependencies: &HashMap<String, Vec<TriggerDependency>>,
+        component: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>> {
+        if trigger_dependencies.is_empty() {
+            Ok(component)
+        } else {
+            Err(anyhow::anyhow!("this trigger should not have dependencies"))
+        }
+    }
+}
+
+pub struct TriggerDependency {
+    pub data: TriggerDependencyData,
+    pub dependency: spin_app::locked::LockedComponentDependency,
+}
+
+pub enum TriggerDependencyData {
+    InMemory(Vec<u8>),
+    OnDisk(std::path::PathBuf),
 }
 
 type InstancePre<T, U> =
@@ -437,7 +480,7 @@ mod tests {
         let executor = Arc::new(FactorsExecutor::new(engine_builder, env.factors)?);
 
         let factors_app = executor
-            .load_app(app, Default::default(), &DummyComponentLoader, None)
+            .load_app(app, Default::default(), &DummyComponentLoader, None, ())
             .await?;
 
         let mut instance_builder = factors_app.prepare("empty")?;
@@ -463,6 +506,7 @@ mod tests {
             &self,
             engine: &spin_core::wasmtime::Engine,
             _component: &AppComponent,
+            _trigger_dependencies_composer: &impl TriggerDependenciesComposer,
         ) -> anyhow::Result<Component> {
             Ok(Component::new(engine, "(component)")?)
         }
