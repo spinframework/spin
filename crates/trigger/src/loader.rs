@@ -2,6 +2,7 @@ use spin_common::{ui::quoted_path, url::parse_file_url};
 use spin_compose::ComponentSourceLoaderFs;
 use spin_core::{async_trait, wasmtime, Component};
 use spin_factors::{AppComponent, RuntimeFactors};
+use spin_factors_executor::ComplicationData;
 use wasmtime::error::Context as _;
 
 #[derive(Default)]
@@ -65,6 +66,42 @@ impl ComponentLoader {
             }
         }
     }
+
+    pub(crate) async fn load_composed(
+        &self,
+        component: &AppComponent<'_>,
+        complicator: &impl spin_factors_executor::Complicator,
+    ) -> anyhow::Result<Vec<u8>> {
+        let loader = ComponentSourceLoaderFs;
+
+        let empty: serde_json::Map<String, serde_json::Value> = Default::default();
+        let extras = component
+            .locked
+            .metadata
+            .get("trigger-extras")
+            .and_then(|v| v.as_object())
+            .unwrap_or(&empty);
+
+        let complications = load_complications(component.app, extras, &loader).await?;
+
+        let complicate = async |c: Vec<u8>| {
+            complicator
+                .complicate(&complications, c)
+                .await
+                .map_err(spin_compose::ComposeError::PrepareError)
+        };
+
+        let composed = spin_compose::compose(&loader, component.locked, complicate)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to resolve dependencies for component {:?}",
+                    component.locked.id
+                )
+            })?;
+
+        Ok(composed)
+    }
 }
 
 #[async_trait]
@@ -73,6 +110,7 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
         &self,
         engine: &wasmtime::Engine,
         component: &AppComponent,
+        complicator: &impl spin_factors_executor::Complicator,
     ) -> anyhow::Result<Component> {
         let source = component
             .source()
@@ -90,17 +128,69 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
             return Ok(component);
         }
 
-        let composed = spin_compose::compose(&ComponentSourceLoaderFs, component.locked)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to resolve dependencies for component {:?}",
-                    component.locked.id
-                )
-            })?;
+        let composed = self.load_composed(component, complicator).await?;
 
         let component = spin_core::Component::new(engine, composed)
             .with_context(|| format!("failed to compile component from {}", quoted_path(&path)))?;
         Ok(component)
+    }
+}
+
+pub(crate) async fn load_complications(
+    app: &spin_app::App,
+    extras: &serde_json::Map<String, serde_json::Value>,
+    loader: &spin_compose::ComponentSourceLoaderFs,
+) -> Result<
+    std::collections::HashMap<String, Vec<spin_factors_executor::Complication>>,
+    anyhow::Error,
+> {
+    use spin_factors_executor::Complication;
+    use std::collections::HashMap;
+
+    let mut complications = HashMap::with_capacity(extras.len());
+
+    for (role, role_components) in extras {
+        let components = role_components
+            .as_array()
+            .context("extra components should have been an array")?;
+        let mut complications_for_role = Vec::with_capacity(components.len());
+
+        for component_ref in components {
+            let component_ref = component_ref
+                .as_str()
+                .context("middleware should be strings currently")?;
+            let reffed_component = app
+                .get_component(component_ref)
+                .context("no such component")?;
+            let component_src = reffed_component.source().clone();
+            let data = load_complication_data(loader, &component_src).await?;
+            complications_for_role.push(Complication {
+                data,
+                source: component_src,
+            });
+        }
+        complications.insert(role.clone(), complications_for_role);
+    }
+
+    Ok(complications)
+}
+
+async fn load_complication_data(
+    loader: &ComponentSourceLoaderFs,
+    source: &spin_app::locked::LockedComponentSource,
+) -> anyhow::Result<ComplicationData> {
+    use spin_compose::ComponentSourceLoader;
+
+    if let Some(path) = source
+        .content
+        .source
+        .as_ref()
+        .and_then(|url| parse_file_url(url).ok())
+    {
+        Ok(ComplicationData::OnDisk(path))
+    } else {
+        Ok(ComplicationData::InMemory(
+            loader.load_source(source).await?,
+        ))
     }
 }
