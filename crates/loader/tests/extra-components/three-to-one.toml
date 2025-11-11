@@ -1,0 +1,39 @@
+spin_manifest_version = 2
+
+[application]
+name = "file-errors"
+
+[[trigger.http]]
+route = "/a1"
+component = "a"
+components.middleware = ["m1", "m2"]
+
+[[trigger.http]]
+route = "/a2"
+component = "a"
+components.middleware = ["m2", "m3"]
+
+[[trigger.http]]
+route = "/a3"
+component = "a"
+components.middleware = ["m3", "m2", "m1"]
+
+[[trigger.http]]
+route = "/b"
+component = "b"
+components.middleware = ["m1", "m3"]
+
+[component.a]
+source = "a.dummy.wasm.txt"
+
+[component.b]
+source = "b.dummy.wasm.txt"
+
+[component.m1]
+source = "a.dummy.wasm.txt"
+
+[component.m2]
+source = "b.dummy.wasm.txt"
+
+[component.m3]
+source = "c.dummy.wasm.txt"

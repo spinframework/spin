@@ -1,0 +1,22 @@
+spin_manifest_version = 2
+
+[application]
+name = "file-errors"
+
+[[trigger.http]]
+route = "/a1"
+component = "a"
+
+[[trigger.http]]
+route = "/a2"
+component = "a"
+
+[[trigger.http]]
+route = "/b"
+component = "b"
+
+[component.a]
+source = "a.dummy.wasm.txt"
+
+[component.b]
+source = "b.dummy.wasm.txt"
