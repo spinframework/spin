@@ -365,8 +365,64 @@ impl Client {
         let mut components = Vec::new();
         let mut layers = Vec::new();
 
+        let temp_dir = tempfile::tempdir().unwrap();
+        let working_dir = temp_dir.path();
+        let locked_url = write_locked_app(&locked, working_dir).await.unwrap();
+
+        const SPIN_LOCKED_URL: &str = "SPIN_LOCKED_URL";
+        // const SPIN_LOCAL_APP_DIR: &str = "SPIN_LOCAL_APP_DIR";
+        const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
+
         for mut c in locked.components {
-            let composed = spin_compose::compose(&ComponentSourceLoaderFs, &c, Ok)
+            let complicate = |data: Vec<u8>| {
+                use spin_compose::ComposeError;
+
+                let Some(resolve_extras_using) = c.metadata.get("resolve-extras-using").and_then(|v| v.as_str()) else {
+                    return Result::<_, ComposeError>::Ok(data);
+                };
+
+                let resolver_subcmd = match resolve_extras_using {
+                    "http" | "redis" => vec!["trigger".into(), resolve_extras_using.into()],
+                    _ => vec![format!("trigger-{resolve_extras_using}")],
+                };
+
+                let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
+                cmd.args(resolver_subcmd)
+                    .args(["--resolve-extras-only", "--resolve-extras-component-id"])
+                    .arg(&c.id)
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::inherit())
+                    .env(SPIN_LOCKED_URL, locked_url.clone())
+                    .env(SPIN_WORKING_DIR, working_dir);
+
+                let mut child = cmd.spawn().map_err(|e| ComposeError::PrepareError(e.into()))?;
+
+                use std::io::Write;
+
+                let mut input = child.stdin.take().unwrap();
+                input.write_all(&data).map_err(|e| ComposeError::PrepareError(e.into()))?;
+                input.flush().map_err(|e| ComposeError::PrepareError(e.into()))?;
+                drop(input);
+
+                // let buf = Vec::with_capacity(16384);
+                // let read_count = child.stdout.as_ref().unwrap().read_to_end()?;
+                // buf.truncate(read_count);
+
+                let trigout = child.wait_with_output().map_err(|e| ComposeError::PrepareError(e.into()))?;
+
+                // _ = std::io::stderr().write(&trigout.stderr);
+
+                if !trigout.status.success() {
+                    // TODO: I know! I know!
+                    panic!("complicating failed, bailing");
+                }
+
+                let complicated = trigout.stdout;
+                Ok(complicated)
+            };
+            
+            let composed = spin_compose::compose(&ComponentSourceLoaderFs, &c, complicate)
                 .await
                 .with_context(|| {
                     format!("failed to resolve dependencies for component {:?}", c.id)
@@ -374,12 +430,31 @@ impl Client {
             let layer = ImageLayer::new(composed, WASM_LAYER_MEDIA_TYPE.to_string(), None);
             c.source.content = self.content_ref_for_layer(&layer);
             c.dependencies.clear();
+            c.metadata.remove("trigger-extras");
             layers.push(layer);
 
             c.files = self
                 .assemble_content_layers(assembly_mode, &mut layers, c.files.as_slice())
                 .await?;
             components.push(c);
+        }
+
+        // Copied from `spin up`
+        async fn write_locked_app(
+            locked_app: &LockedApp,
+            working_dir: &Path,
+        ) -> Result<String, anyhow::Error> {
+            let locked_path = working_dir.join("spin.lock");
+            let locked_app_contents =
+                serde_json::to_vec_pretty(&locked_app).context("failed to serialize locked app")?;
+            tokio::fs::write(&locked_path, locked_app_contents)
+                .await
+                .with_context(|| format!("failed to write {}", quoted_path(&locked_path)))?;
+            let locked_url = Url::from_file_path(&locked_path)
+                .map_err(|_| anyhow::anyhow!("cannot convert to file URL: {}", quoted_path(&locked_path)))?
+                .to_string();
+
+            Ok(locked_url)
         }
 
         Ok((layers, components))
