@@ -95,4 +95,27 @@ mod tests {
         assert!(limits.table_growing(9, 10, None).await.unwrap());
         assert!(!limits.table_growing(10, 11, None).await.unwrap());
     }
+
+    #[tokio::test]
+    async fn test_memory_consumed() {
+        let engine = wasmtime::Engine::new(crate::Config::default().wasmtime_config()).unwrap();
+        let linker = wasmtime::component::Linker::new(&engine);
+        let component = wasmtime::component::Component::new(
+            &engine,
+            r#"
+            (component
+                (core module $m (memory 1))
+                (core instance $a (instantiate $m))
+            )
+            "#,
+        )
+        .unwrap();
+        let mut store = wasmtime::Store::new(&engine, StoreLimitsAsync::default());
+        store.limiter_async(|s| s);
+        let _ = linker
+            .instantiate_async(&mut store, &component)
+            .await
+            .unwrap();
+        assert_eq!(store.data().memory_consumed(), 1 << 16);
+    }
 }
