@@ -173,6 +173,7 @@ tower-service = "0.3.3"
 tracing = { version = "0.1.41", features = ["log"] }
 url = "2.5.7"
 walkdir = "2"
+wac-graph = "0.8.1"
 wasm-encoder = "0.239.0"
 wasm-metadata = "0.239.0"
 wasm-pkg-client = "0.11"
