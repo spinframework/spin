@@ -9237,10 +9237,13 @@ dependencies = [
  "spin-telemetry",
  "spin-trigger",
  "spin-world",
+ "tempfile",
  "terminal",
  "tokio",
  "tokio-rustls 0.26.0",
  "tracing",
+ "wasm-compose 0.239.0",
+ "wasmparser 0.239.0",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
@@ -10874,6 +10877,27 @@ dependencies = [
  "smallvec",
  "wasm-encoder 0.41.2",
  "wasmparser 0.121.2",
+ "wat",
+]
+
+[[package]]
+name = "wasm-compose"
+version = "0.239.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0ec5bc51a265c73434ede0659536ac9af486eebf0397ff073bfb19093421cd8"
+dependencies = [
+ "anyhow",
+ "heck 0.4.1",
+ "im-rc",
+ "indexmap 2.12.0",
+ "log",
+ "petgraph",
+ "serde",
+ "serde_derive",
+ "serde_yaml",
+ "smallvec",
+ "wasm-encoder 0.239.0",
+ "wasmparser 0.239.0",
  "wat",
 ]
 

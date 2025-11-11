@@ -50,6 +50,12 @@ pub trait Trigger<F: RuntimeFactors>: Sized + Send {
         Ok(())
     }
 
+    /// An object which composes extras onto the primary component.
+    /// TODO: the combination of functions and objects and traits is a bit funny and we may/should be able to streamline it.
+    fn complicator() -> impl spin_factors_executor::Complicator {
+        ()
+    }
+
     /// Update the [`Linker`] for this trigger.
     fn add_to_linker(
         &mut self,
