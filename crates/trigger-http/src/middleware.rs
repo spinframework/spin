@@ -4,7 +4,7 @@ use wasm_compose::{composer::{ComponentComposer, ROOT_COMPONENT_NAME}, config::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use spin_factors_executor::{Complicator, Complication};
+use spin_factors_executor::{Complication, ComplicationData, Complicator};
 
 #[derive(Default)]
 pub(crate) struct HttpMiddlewareComplicator;
@@ -27,18 +27,12 @@ impl Complicator for HttpMiddlewareComplicator {
     }
 }
 
-async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &'a Vec<u8>>) -> anyhow::Result<Vec<u8>> {
+async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &'a ComplicationData>) -> anyhow::Result<Vec<u8>> {
     const MW_NEXT_INBOUND: &str = "wasi:http/handler@0.3.0-rc-2025-09-16";
     const MW_NEXT_OUTBOUND: &str = "spin:up/next@3.5.0";
     
     // `wasm-tools compose` relies on the components it's composing being in
-    // files, so write all the blobs to a temp dir.
-    //
-    // TODO: I did it this way because I wasn't sure I could rely on all
-    // blobs being already in files. But it's wasteful for the common case
-    // where they are: we could map those files directly rather than relying
-    // on temp files (even for registry/HTTP we would cache so maybe they're
-    // always files). But in practice this isn't a huge barrier so FIX LATER.
+    // files, so write all any in-memory blobs to a temp dir.
     let temp_dir = tempfile::tempdir().context("creating working dir for middleware")?;
     let temp_path = temp_dir.path();
 
@@ -101,12 +95,18 @@ async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterat
 
 /// The return vector has the written-out paths in chain order:
 /// the middlewares in order, followed by the primary. This matters!
-async fn write_blobs_to(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &Vec<u8>>, temp_path: &std::path::Path) -> anyhow::Result<Vec<PathBuf>> {
+async fn write_blobs_to(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &ComplicationData>, temp_path: &std::path::Path) -> anyhow::Result<Vec<PathBuf>> {
     let mut mw_blob_paths = vec![];
 
     for (mw_index, mw_blob) in middleware_blobs.enumerate() {
-        let mw_blob_path = temp_path.join(format!("middleware-blob-idx{mw_index}.wasm"));
-        tokio::fs::write(&mw_blob_path, mw_blob).await.context("writing middleware blob to temp dir")?;
+        let mw_blob_path = match mw_blob {
+            ComplicationData::InMemory(data) => {
+                let mw_blob_path = temp_path.join(format!("middleware-blob-idx{mw_index}.wasm"));
+                tokio::fs::write(&mw_blob_path, data).await.context("writing middleware blob to temp dir")?;
+                mw_blob_path
+            },
+            ComplicationData::OnDisk(path) => path.clone(),
+        };
         mw_blob_paths.push(mw_blob_path);
     }
 

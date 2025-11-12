@@ -222,7 +222,6 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
         let trigger = T::new(self.trigger_args, &app)?;
 
         if self.resolve_extras_only {
-            use spin_compose::ComponentSourceLoader;
             use spin_factors_executor::Complicator;
 
             let Some(resolve_extras_component_id) = self.resolve_extras_component_id.as_ref() else {
@@ -237,24 +236,9 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
                 anyhow::bail!("--resolve-extras-component-id: component has no extras");
             };
 
-            let loader = spin_compose::ComponentSourceLoaderFs;
+            // let loader = spin_compose::ComponentSourceLoaderFs;
 
-            let mut complications= std::collections::HashMap::new();
-            for (role, role_components) in extras {
-                let Some(role_components) = role_components.as_array() else {
-                    anyhow::bail!("role components not array");
-                };
-                let mut these_complications = vec![];
-                for cid in role_components {
-                    let Some(cid) = cid.as_str() else {
-                        anyhow::bail!("oh come on");
-                    };
-                    let compy_comp = app.get_component(cid).unwrap();
-                    let source = compy_comp.source().clone();
-                    these_complications.push(spin_factors_executor::Complication { data: loader.load_source(&source).await.unwrap(), source });
-                }
-                complications.insert(role.clone(), these_complications);
-            }
+            let complications = crate::loader::load_complications(&app, extras, &spin_compose::ComponentSourceLoaderFs).await?;
 
             // let complicand = loader.load_component_source(&component.locked).await.unwrap();
             use std::io::Read;

@@ -150,7 +150,12 @@ impl Complicator for () {
 
 pub struct Complication {
     pub source: spin_app::locked::LockedComponentSource,
-    pub data: Vec<u8>,
+    pub data: ComplicationData,
+}
+
+pub enum ComplicationData {
+    InMemory(Vec<u8>),
+    OnDisk(std::path::PathBuf),
 }
 
 type InstancePre<T, U> =
