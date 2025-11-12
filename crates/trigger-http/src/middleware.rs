@@ -3,8 +3,9 @@ use anyhow::bail;
 #[derive(Default)]
 pub(crate) struct HttpMiddlewareComplicator;
 
+#[spin_core::async_trait]
 impl spin_factors_executor::Complicator for HttpMiddlewareComplicator {
-    fn complicate(&self, complications: &std::collections::HashMap<String, Vec<spin_factors_executor::Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    async fn complicate(&self, complications: &std::collections::HashMap<String, Vec<spin_factors_executor::Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         let Some(pipeline) = complications.get("middleware") else {
             return Ok(component);
         };
@@ -36,8 +37,6 @@ fn complicate_the_living_shit_out_of_all_the_things<'a>(depped_source: Vec<u8>, 
 
     let mut config = wasm_compose::config::Config::default();
     config.skip_validation = true;
-    // config.definitions = pipey_blob_paths.iter().skip(1).map(|p| p.clone()).collect();
-    // config.definitions.push(final_path);
     config.dependencies = pipey_blob_paths.iter().skip(1).enumerate().map(|(i, p)| (format!("pipe{i}"), wasm_compose::config::Dependency { path: p.clone() })).collect();
 
     config.instantiations.insert(wasm_compose::composer::ROOT_COMPONENT_NAME.to_owned(), wasm_compose::config::Instantiation {
@@ -45,8 +44,7 @@ fn complicate_the_living_shit_out_of_all_the_things<'a>(depped_source: Vec<u8>, 
         arguments: [("spin:up/next@3.5.0".to_owned(), wasm_compose::config::InstantiationArg { instance: "pipe0inst".to_owned(), export: Some("wasi:http/handler@0.3.0-rc-2025-09-16".to_owned()) })].into(),
     });
 
-    //let mut curr = wasm_compose::composer::ROOT_COMPONENT_NAME.to_owned();
-    let last = pipey_blob_paths.iter().skip(1).enumerate().last().unwrap().0;
+    let last = pipey_blob_paths.iter().skip(1).enumerate().next_back().unwrap().0;
 
     for (i, _p) in pipey_blob_paths.iter().skip(1).enumerate() {
         let dep_ref = format!("pipe{i}");
@@ -73,13 +71,6 @@ fn complicate_the_living_shit_out_of_all_the_things<'a>(depped_source: Vec<u8>, 
     // eprintln!("{config:?}");
 
     let composer = wasm_compose::composer::ComponentComposer::new(&pipey_blob_paths[0], &config);
-    let compo = composer.compose().unwrap();
 
-    // static COUNT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
-
-    // std::fs::write(format!("./COMPYWOMPY{}.wasm", COUNT.load(std::sync::atomic::Ordering::Relaxed)), &compo).unwrap();
-
-    // COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-    compo
+    composer.compose().unwrap()
 }

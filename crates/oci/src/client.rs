@@ -369,57 +369,9 @@ impl Client {
         let working_dir = temp_dir.path();
         let locked_url = write_locked_app(&locked, working_dir).await.unwrap();
 
-        const SPIN_LOCKED_URL: &str = "SPIN_LOCKED_URL";
-        // const SPIN_LOCAL_APP_DIR: &str = "SPIN_LOCAL_APP_DIR";
-        const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
-
         for mut c in locked.components {
             let complicate = |data: Vec<u8>| {
-                use spin_compose::ComposeError;
-
-                let Some(resolve_extras_using) = c.metadata.get("resolve-extras-using").and_then(|v| v.as_str()) else {
-                    return Result::<_, ComposeError>::Ok(data);
-                };
-
-                let resolver_subcmd = match resolve_extras_using {
-                    "http" | "redis" => vec!["trigger".into(), resolve_extras_using.into()],
-                    _ => vec![format!("trigger-{resolve_extras_using}")],
-                };
-
-                let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
-                cmd.args(resolver_subcmd)
-                    .args(["--resolve-extras-only", "--resolve-extras-component-id"])
-                    .arg(&c.id)
-                    .stdin(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::inherit())
-                    .env(SPIN_LOCKED_URL, locked_url.clone())
-                    .env(SPIN_WORKING_DIR, working_dir);
-
-                let mut child = cmd.spawn().map_err(|e| ComposeError::PrepareError(e.into()))?;
-
-                use std::io::Write;
-
-                let mut input = child.stdin.take().unwrap();
-                input.write_all(&data).map_err(|e| ComposeError::PrepareError(e.into()))?;
-                input.flush().map_err(|e| ComposeError::PrepareError(e.into()))?;
-                drop(input);
-
-                // let buf = Vec::with_capacity(16384);
-                // let read_count = child.stdout.as_ref().unwrap().read_to_end()?;
-                // buf.truncate(read_count);
-
-                let trigout = child.wait_with_output().map_err(|e| ComposeError::PrepareError(e.into()))?;
-
-                // _ = std::io::stderr().write(&trigout.stderr);
-
-                if !trigout.status.success() {
-                    // TODO: I know! I know!
-                    panic!("complicating failed, bailing");
-                }
-
-                let complicated = trigout.stdout;
-                Ok(complicated)
+                compose_trigger_extras(&c, &locked_url, working_dir, data)
             };
             
             let composed = spin_compose::compose(&ComponentSourceLoaderFs, &c, complicate)
@@ -980,6 +932,51 @@ fn add_inferred(map: &mut BTreeMap<String, String>, key: &str, value: Option<Str
             e.insert(value);
         }
     }
+}
+
+const SPIN_LOCKED_URL: &str = "SPIN_LOCKED_URL";
+const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
+
+async fn compose_trigger_extras(c: &LockedComponent, locked_url: &str, working_dir: &Path, data: Vec<u8>) -> Result<Vec<u8>, spin_compose::ComposeError> {
+    use spin_compose::ComposeError;
+
+    let Some(resolve_extras_using) = c.metadata.get("resolve-extras-using").and_then(|v| v.as_str()) else {
+        return Result::<_, ComposeError>::Ok(data);
+    };
+
+    let resolver_subcmd = match resolve_extras_using {
+        "http" | "redis" => vec!["trigger".into(), resolve_extras_using.into()],
+        _ => vec![format!("trigger-{resolve_extras_using}")],
+    };
+
+    let mut cmd = tokio::process::Command::new(std::env::current_exe().unwrap());
+    cmd.args(resolver_subcmd)
+        .args(["--resolve-extras-only", "--resolve-extras-component-id"])
+        .arg(&c.id)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit())
+        .env("SPIN_PLUGINS_SUPPRESS_COMPATIBILITY_WARNINGS", "1")
+        .env(SPIN_LOCKED_URL, locked_url)
+        .env(SPIN_WORKING_DIR, working_dir);
+
+    let mut child = cmd.spawn().map_err(|e| ComposeError::PrepareError(e.into()))?;
+
+    use tokio::io::AsyncWriteExt;
+
+    let mut input = child.stdin.take().unwrap();
+    input.write_all(&data).await.map_err(|e| ComposeError::PrepareError(e.into()))?;
+    input.flush().await.map_err(|e| ComposeError::PrepareError(e.into()))?;
+    drop(input);
+
+    let trigger_out = child.wait_with_output().await.map_err(|e| ComposeError::PrepareError(e.into()))?;
+
+    if !trigger_out.status.success() {
+        return Err(ComposeError::PrepareError(anyhow::anyhow!("unable to compose additional components for {} using `{}`", c.id, resolve_extras_using)));
+    }
+
+    let complicated = trigger_out.stdout;
+    Ok(complicated)
 }
 
 /// Takes a relative path and turns it into a format that is safe

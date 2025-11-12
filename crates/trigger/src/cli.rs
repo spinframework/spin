@@ -249,7 +249,7 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
                     let Some(cid) = cid.as_str() else {
                         anyhow::bail!("oh come on");
                     };
-                    let compy_comp = app.get_component(&cid).unwrap();
+                    let compy_comp = app.get_component(cid).unwrap();
                     let source = compy_comp.source().clone();
                     these_complications.push(spin_factors_executor::Complication { data: loader.load_source(&source).await.unwrap(), source });
                 }
@@ -262,7 +262,7 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
             let read_count = std::io::stdin().read_to_end(&mut complicand)?;
             complicand.truncate(read_count);
 
-            let complicated = complicator.complicate(&complications, complicand).unwrap();
+            let complicated = complicator.complicate(&complications, complicand).await.unwrap();
 
             use std::io::Write;
             std::io::stdout().write_all(&complicated).unwrap();

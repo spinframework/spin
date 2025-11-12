@@ -132,12 +132,14 @@ pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
     }
 }
 
+#[async_trait]
 pub trait Complicator: Send + Sync {
-    fn complicate(&self, complications: &HashMap<String, Vec<Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>>;
+    async fn complicate(&self, complications: &HashMap<String, Vec<Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>>;
 }
 
+#[async_trait]
 impl Complicator for () {
-    fn complicate(&self, complications: &HashMap<String, Vec<Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    async fn complicate(&self, complications: &HashMap<String, Vec<Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>> {
         if complications.is_empty() {
             Ok(component)
         } else {

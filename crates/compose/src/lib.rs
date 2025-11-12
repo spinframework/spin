@@ -27,10 +27,10 @@ use wac_graph::{CompositionGraph, NodeId};
 /// dependent component. Finally, the composer will export all exports from the
 /// dependent component to its dependents. The composer will then encode the
 /// composition graph into a byte array and return it.
-pub async fn compose<L: ComponentSourceLoader>(
+pub async fn compose<L: ComponentSourceLoader, Fut: std::future::Future<Output = Result<Vec<u8>, ComposeError>>>(
     loader: &L,
     component: &L::Component,
-    complicator: impl Fn(Vec<u8>) -> Result<Vec<u8>, ComposeError>,
+    complicator: impl Fn(Vec<u8>) -> Fut,
 ) -> Result<Vec<u8>, ComposeError> {
     Composer::new(loader).compose(component, complicator).await
 }
@@ -118,7 +118,7 @@ impl ComponentSourceLoader for ComponentSourceLoaderFs {
     }
 
     async fn load_source(&self, source: &Self::Source) -> anyhow::Result<Vec<u8>> {
-        Self::load_from_locked_source(&source).await
+        Self::load_from_locked_source(source).await
     }
 }
 
@@ -204,7 +204,8 @@ struct Composer<'a, L> {
 }
 
 impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
-    async fn compose(mut self, component: &L::Component,     complicator: impl Fn(Vec<u8>) -> Result<Vec<u8>, ComposeError>) -> Result<Vec<u8>, ComposeError> {
+    async fn compose<Fut: std::future::Future<Output = Result<Vec<u8>, ComposeError>>>(mut self, component: &L::Component,    complicator: impl Fn(Vec<u8>) -> Fut,
+) -> Result<Vec<u8>, ComposeError> {
         let source = self
             .loader
             .load_component_source(component)
@@ -239,7 +240,7 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
                 .map_err(|e| ComposeError::EncodeError(e.into()))?
         };
 
-        let with_extras = complicator(fulfilled_source)?;
+        let with_extras = complicator(fulfilled_source).await?;
 
         Ok(with_extras)
     }

@@ -116,7 +116,7 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
             complications.insert(role.to_string(), complications_for_role);
         }
 
-        let complicate = |c: Vec<u8>| complicator.complicate(&complications, c).map_err(|e| spin_compose::ComposeError::PrepareError(e));
+        let complicate = async |c: Vec<u8>| complicator.complicate(&complications, c).await.map_err(spin_compose::ComposeError::PrepareError);
 
         let composed = spin_compose::compose(&loader, component.locked, complicate)
             .await

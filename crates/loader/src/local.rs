@@ -580,7 +580,7 @@ fn reassign_extra_components_from_triggers(mut locked: LockedApp) -> LockedApp {
         all_triggers.iter().filter(|t| component_id(t).as_ref() == Some(cid)).collect()
     }
 
-    let referenced_component_ids: Vec<_> = locked_clone.triggers.iter().filter_map(|t| component_id(t)).collect();
+    let referenced_component_ids: Vec<_> = locked_clone.triggers.iter().filter_map(component_id).collect();
     let cid_to_triggers: HashMap<_, _> = referenced_component_ids.iter().map(|cid| (cid, triggers_referencing(&locked_clone.triggers, cid))).collect();
     let needs_splitting = cid_to_triggers.into_iter()
         .filter(|(_, triggers)|
@@ -598,7 +598,7 @@ fn reassign_extra_components_from_triggers(mut locked: LockedApp) -> LockedApp {
             }
             let mut synthetic_id = format!("{cid}-for-{}", trigger.id);
             if seen.contains(&synthetic_id) {
-                disambiguator = disambiguator + 1;
+                disambiguator += 1;
                 synthetic_id = format!("{synthetic_id}-d{disambiguator}");
             }
             seen.insert(synthetic_id.clone());

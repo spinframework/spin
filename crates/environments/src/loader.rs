@@ -146,7 +146,7 @@ impl ApplicationToValidate {
 
         let loader = ComponentSourceLoader::new(&self.wasm_loader);
 
-        let wasm = spin_compose::compose(&loader, &component, Ok).await.with_context(|| format!("Spin needed to compose dependencies for {} as part of target checking, but composition failed", component.id))?;
+        let wasm = spin_compose::compose(&loader, &component, async |data| Ok(data)).await.with_context(|| format!("Spin needed to compose dependencies for {} as part of target checking, but composition failed", component.id))?;
 
         let host_requirements = if component.requires_service_chaining {
             vec!["local_service_chaining".to_string()]
