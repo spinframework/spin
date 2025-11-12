@@ -1,76 +1,132 @@
-use anyhow::bail;
+use anyhow::{bail, Context};
+use wasm_compose::{composer::{ComponentComposer, ROOT_COMPONENT_NAME}, config::{Config, Dependency, Instantiation, InstantiationArg}};
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use spin_factors_executor::{Complicator, Complication};
 
 #[derive(Default)]
 pub(crate) struct HttpMiddlewareComplicator;
 
 #[spin_core::async_trait]
-impl spin_factors_executor::Complicator for HttpMiddlewareComplicator {
-    async fn complicate(&self, complications: &std::collections::HashMap<String, Vec<spin_factors_executor::Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>> {
-        let Some(pipeline) = complications.get("middleware") else {
+impl Complicator for HttpMiddlewareComplicator {
+    async fn complicate(&self, complications: &HashMap<String, Vec<Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+        let Some(middlewares) = complications.get("middleware") else {
             return Ok(component);
         };
         if complications.len() > 1 {
-            bail!("whoa too complicated, only allowed complication is `middleware`");
+            bail!("the HTTP trigger's only allowed complication is `middleware`");
         }
-        if pipeline.is_empty() {
+        if middlewares.is_empty() {
             return Ok(component);
         }
 
-        let pipey_blobs = pipeline.iter().map(|cm| &cm.data);
-        let compo = complicate_the_living_shit_out_of_all_the_things(component, pipey_blobs);
-
-        Ok(compo)
+        let middleware_blobs = middlewares.iter().map(|cm| &cm.data);
+        compose_middlewares(component, middleware_blobs).await
     }
 }
 
-fn complicate_the_living_shit_out_of_all_the_things<'a>(depped_source: Vec<u8>, pipey_blobs: impl Iterator<Item = &'a Vec<u8>>) -> Vec<u8> {
-    let td = tempfile::tempdir().unwrap();
-    let mut pipey_blob_paths = vec![];
-    for (pbindex, pb) in pipey_blobs.enumerate() {
-        let pb_path = td.path().join(format!("pipey-blob-idx{pbindex}.wasm"));
-        std::fs::write(&pb_path, pb).unwrap();
-        pipey_blob_paths.push(pb_path);
-    }
-    let final_path = td.path().join("final-final-v2.wasm");
-    std::fs::write(&final_path, depped_source).unwrap();
-    pipey_blob_paths.push(final_path);
+async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &'a Vec<u8>>) -> anyhow::Result<Vec<u8>> {
+    const MW_NEXT_INBOUND: &str = "wasi:http/handler@0.3.0-rc-2025-09-16";
+    const MW_NEXT_OUTBOUND: &str = "spin:up/next@3.5.0";
+    
+    // `wasm-tools compose` relies on the components it's composing being in
+    // files, so write all the blobs to a temp dir.
+    //
+    // TODO: I did it this way because I wasn't sure I could rely on all
+    // blobs being already in files. But it's wasteful for the common case
+    // where they are: we could map those files directly rather than relying
+    // on temp files (even for registry/HTTP we would cache so maybe they're
+    // always files). But in practice this isn't a huge barrier so FIX LATER.
+    let temp_dir = tempfile::tempdir().context("creating working dir for middleware")?;
+    let temp_path = temp_dir.path();
 
-    let mut config = wasm_compose::config::Config::default();
-    config.skip_validation = true;
-    config.dependencies = pipey_blob_paths.iter().skip(1).enumerate().map(|(i, p)| (format!("pipe{i}"), wasm_compose::config::Dependency { path: p.clone() })).collect();
+    let mut mw_blob_paths = write_blobs_to(primary, middleware_blobs, temp_path).await?;
 
-    config.instantiations.insert(wasm_compose::composer::ROOT_COMPONENT_NAME.to_owned(), wasm_compose::config::Instantiation {
+    // We will use the first item in the chain as the composition root.
+    // This means it does not get mapped in the list of dependencies, but
+    // is provided directly to the ComponentComposer. So we set it
+    // aside for now.
+    let first = mw_blob_paths.remove(0);
+    let last_index = mw_blob_paths.len() - 1; // points to the end of the composition chain (which is the primary)
+
+    // All blobs except the (already set aside) root are mapped in via dependencies
+    let dependencies = mw_blob_paths.iter().enumerate().map(|(index, mw_path)| (dep_ref(index), Dependency { path: mw_path.clone() })).collect();
+
+    let mut config = Config {
+        skip_validation: true,
+        dependencies,
+        ..Default::default()
+    };
+
+    // The composition root hooks up to the start of the (remaining)
+    // pipeline (which we will soon create as inst ref 0).
+    config.instantiations.insert(ROOT_COMPONENT_NAME.to_owned(), Instantiation {
         dependency: None,
-        arguments: [("spin:up/next@3.5.0".to_owned(), wasm_compose::config::InstantiationArg { instance: "pipe0inst".to_owned(), export: Some("wasi:http/handler@0.3.0-rc-2025-09-16".to_owned()) })].into(),
+        arguments: [(MW_NEXT_OUTBOUND.to_owned(), InstantiationArg { instance: inst_ref(0), export: Some(MW_NEXT_INBOUND.to_owned()) })].into(),
     });
 
-    let last = pipey_blob_paths.iter().skip(1).enumerate().next_back().unwrap().0;
-
-    for (i, _p) in pipey_blob_paths.iter().skip(1).enumerate() {
-        let dep_ref = format!("pipe{i}");
-        let inst_ref = format!("{dep_ref}inst");
-        let instarg = wasm_compose::config::InstantiationArg {
-            instance: format!("pipe{}inst", i + 1),
-            export: Some("wasi:http/handler@0.3.0-rc-2025-09-16".to_owned()),
+    // Go through the remaining items of of the pipeline except for the last.
+    // For each, create an instantiation (named by index) of the
+    // middleware at hand with its 'next' import hooked up to the next instance's (named by inst ref) handler export.
+    //
+    // The range is deliberately non-inclusive: the last item needs different
+    // handling, because we do *not* want to fulfil its dependencies.
+    for index in 0..last_index {
+        let next_inst_ref = InstantiationArg {
+            instance: inst_ref(index + 1),
+            export: Some(MW_NEXT_INBOUND.to_owned()),
         };
-        let inst = if i == last {
-            wasm_compose::config::Instantiation {
-                dependency: Some(dep_ref.clone()),
-                arguments: Default::default(),
-            }
-        } else {
-            wasm_compose::config::Instantiation {
-                dependency: Some(dep_ref.clone()),
-                arguments: [("spin:up/next@3.5.0".to_owned(), instarg)].into_iter().collect(),
-            }
+        let inst = Instantiation {
+            dependency: Some(dep_ref(index)),
+            arguments: [(MW_NEXT_OUTBOUND.to_owned(), next_inst_ref)].into_iter().collect(),
         };
-        config.instantiations.insert(inst_ref.clone(), inst);
-        //curr = inst_ref;
+        config.instantiations.insert(inst_ref(index), inst);
     }
 
-    // eprintln!("{config:?}");
+    // Create an instantiation of the primary
+    // (which is the last thing in the pipeline) with its imports open.
+    let primary = Instantiation {
+        dependency: Some(dep_ref(last_index)),
+        arguments: Default::default(),
+    };
+    config.instantiations.insert(inst_ref(last_index), primary);
 
-    let composer = wasm_compose::composer::ComponentComposer::new(&pipey_blob_paths[0], &config);
+    // Run the composition, using the previously set aside first item the composition root.
+    let composer = ComponentComposer::new(&first, &config);
 
-    composer.compose().unwrap()
+    composer.compose()
+}
+
+/// The return vector has the written-out paths in chain order:
+/// the middlewares in order, followed by the primary. This matters!
+async fn write_blobs_to(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &Vec<u8>>, temp_path: &std::path::Path) -> anyhow::Result<Vec<PathBuf>> {
+    let mut mw_blob_paths = vec![];
+
+    for (mw_index, mw_blob) in middleware_blobs.enumerate() {
+        let mw_blob_path = temp_path.join(format!("middleware-blob-idx{mw_index}.wasm"));
+        tokio::fs::write(&mw_blob_path, mw_blob).await.context("writing middleware blob to temp dir")?;
+        mw_blob_paths.push(mw_blob_path);
+    }
+
+    let primary_path = temp_path.join("primary.wasm");
+    tokio::fs::write(&primary_path, primary).await.context("writing component to temp dir for middleware composition")?;
+    mw_blob_paths.push(primary_path);
+
+    Ok(mw_blob_paths)
+}
+
+/// The identifier in the composition graph for the index'th item
+/// in the 'middlewares + primary' list. The config maps these
+/// identifiers to physical files.
+fn dep_ref(index: usize) -> String {
+    format!("mw{index}")
+}
+
+/// The identifier in the composition graph for the instantiation of the
+/// index'th item in the 'middlewares + primary' list. This is used when
+/// hooking up the imports of one instantiation to the exports of another.
+fn inst_ref(index: usize) -> String {
+    format!("mw{index}inst")
 }
