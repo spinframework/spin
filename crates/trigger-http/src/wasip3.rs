@@ -1,41 +1,34 @@
-use crate::{server::HttpExecutor, TriggerInstanceBuilder};
+use crate::server::HttpHandlerState;
 use anyhow::{Context as _, Result};
 use futures::{channel::oneshot, FutureExt};
 use http_body_util::BodyExt;
+use spin_factor_outbound_http::MutexBody;
 use spin_factors::RuntimeFactors;
 use spin_factors_executor::InstanceState;
 use spin_http::routes::RouteMatch;
-use std::{
-    net::SocketAddr,
-    pin::Pin,
-    task::{Context, Poll},
-};
-use tokio::task;
+use std::net::SocketAddr;
 use tracing::{instrument, Instrument, Level};
-use wasmtime::Trap;
+use wasmtime::component::Accessor;
 use wasmtime_wasi_http::{
     body::HyperIncomingBody as Body,
-    p3::{
-        bindings::{http::types, ProxyIndices},
-        WasiHttpCtxView,
-    },
+    handler::{Proxy, ProxyHandler},
+    p3::{bindings::http::types, WasiHttpCtxView},
 };
 
 /// An [`HttpExecutor`] that uses the `wasi:http@0.3.*/handler` interface.
-pub(super) struct Wasip3HttpExecutor<'a>(pub(super) &'a ProxyIndices);
+pub(super) struct Wasip3HttpExecutor<'a, F: RuntimeFactors>(
+    pub(super) &'a ProxyHandler<HttpHandlerState<F>>,
+);
 
-impl HttpExecutor for Wasip3HttpExecutor<'_> {
+impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
     #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.lookup_key().to_string())))]
-    async fn execute<F: RuntimeFactors>(
+    pub async fn execute(
         &self,
-        instance_builder: TriggerInstanceBuilder<'_, F>,
         route_match: &RouteMatch<'_, '_>,
         mut req: http::Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<http::Response<Body>> {
         super::wasi::prepare_request(route_match, &mut req, client_addr)?;
-
-        let (instance, mut store) = instance_builder.instantiate(()).await?;
 
         let getter = (|data| wasi_http::<F>(data).unwrap())
             as fn(&mut InstanceState<F::InstanceState, ()>) -> WasiHttpCtxView<'_>;
@@ -44,15 +37,21 @@ impl HttpExecutor for Wasip3HttpExecutor<'_> {
         let body = body.map_err(spin_factor_outbound_http::p2_to_p3_error_code);
         let request = http::Request::from_parts(request, body);
         let (request, request_io_result) = types::Request::from_http(request);
-        let request = wasi_http::<F>(store.data_mut())?.table.push(request)?;
-
-        let guest = self.0.load(&mut store, &instance)?;
 
         let (tx, rx) = oneshot::channel();
-        task::spawn(
-            async move {
-                instance
-                    .run_concurrent(&mut store, async move |store| {
+        self.0.spawn(
+            None,
+            Box::new(move |store: &Accessor<_>, guest: &Proxy| {
+                Box::pin(
+                    async move {
+                        let Proxy::P3(guest) = guest else {
+                            unreachable!();
+                        };
+
+                        let request = store.with(|mut store| {
+                            anyhow::Ok(wasi_http::<F>(store.data_mut())?.table.push(request)?)
+                        })?;
+
                         let (response, task) = guest
                             .wasi_http_handler()
                             .call_handle(store, request)
@@ -64,78 +63,25 @@ impl HttpExecutor for Wasip3HttpExecutor<'_> {
                             response.into_http_with_getter(&mut store, request_io_result, getter)
                         })?;
 
-                        let (response_tx, response_rx) = oneshot::channel::<()>();
-                        _ = tx.send(response.map(|body| BodyWithAttachment {
-                            body,
-                            _attachment: response_tx,
-                        }));
+                        _ = tx.send(response);
 
                         task.block(store).await;
 
-                        // TODO: This is a temporary workaround for
-                        // https://github.com/bytecodealliance/wasmtime/issues/11703.
-                        // Remove this (and `BodyWithAttachment`) once that
-                        // issue is addressed:
-                        _ = response_rx.await;
-
                         anyhow::Ok(())
-                    })
-                    .await?
-            }
-            .in_current_span()
-            .inspect(|result| {
-                if let Err(error) = result {
-                    // TODO: Remove this check once we've updated to Wasmtime
-                    // 38+.
-                    //
-                    // Wasmtime 37's implementation of
-                    // `Instance::run_concurrent` returns `Trap::AsyncDeadlock`
-                    // if the `AsyncFnOnce` it was given does not resolve by the
-                    // time all outstanding tasks have finished.  In this case,
-                    // it's harmless and we can ignore it.  See
-                    // https://github.com/bytecodealliance/wasmtime/pull/11756
-                    // for details.
-                    if let Some(Trap::AsyncDeadlock) = error.downcast_ref::<Trap>() {
-                        // ignore
-                    } else {
-                        tracing::error!("Component error handling request: {error:?}");
                     }
-                }
+                    .in_current_span()
+                    .map(|result| {
+                        if let Err(error) = result {
+                            tracing::error!("Component error handling request: {error:?}");
+                        }
+                    }),
+                )
             }),
         );
 
         Ok(rx.await?.map(|body| {
-            body.map_err(spin_factor_outbound_http::p3_to_p2_error_code)
-                .boxed()
+            MutexBody::new(body.map_err(spin_factor_outbound_http::p3_to_p2_error_code)).boxed()
         }))
-    }
-}
-
-pin_project_lite::pin_project! {
-    struct BodyWithAttachment<B, A> {
-        #[pin]
-        body: B,
-        _attachment: A,
-    }
-}
-
-impl<B: http_body::Body, A> http_body::Body for BodyWithAttachment<B, A> {
-    type Data = B::Data;
-    type Error = B::Error;
-
-    fn poll_frame(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-        self.project().body.poll_frame(cx)
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.body.is_end_stream()
-    }
-
-    fn size_hint(&self) -> http_body::SizeHint {
-        self.body.size_hint()
     }
 }
 

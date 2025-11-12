@@ -13,7 +13,9 @@ use spin_http::trigger::HandlerType;
 use tokio::{sync::oneshot, task};
 use tracing::{instrument, Instrument, Level};
 use wasmtime_wasi_http::bindings::http::types::Scheme;
-use wasmtime_wasi_http::{bindings::Proxy, body::HyperIncomingBody as Body, WasiHttpView};
+use wasmtime_wasi_http::{
+    bindings::Proxy, body::HyperIncomingBody as Body, handler::HandlerState, WasiHttpView,
+};
 
 use crate::{headers::prepare_request_headers, server::HttpExecutor, TriggerInstanceBuilder};
 
@@ -46,11 +48,11 @@ pub(super) fn prepare_request(
 }
 
 /// An [`HttpExecutor`] that uses the `wasi:http/incoming-handler` interface.
-pub struct WasiHttpExecutor<'a> {
-    pub handler_type: &'a HandlerType,
+pub struct WasiHttpExecutor<'a, S: HandlerState> {
+    pub handler_type: &'a HandlerType<S>,
 }
 
-impl HttpExecutor for WasiHttpExecutor<'_> {
+impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
     #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.lookup_key().to_string())))]
     async fn execute<F: RuntimeFactors>(
         &self,
