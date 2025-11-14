@@ -7,6 +7,7 @@ _Listed in alphabetical order by first name_
 | Name | GitHub Username |
 | --- | --- |
 | Brian Hardock | fibonacci1729 |
+| Caleb Schoepp | calebschoepp |
 | Ivan Towlson | itowlson |
 | Joel Dice | dicej |
 | Kate Goldenring | kate-goldenring |
