@@ -1,0 +1,10 @@
+[package]
+name = "spin-wasi-async"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+spin-core = { path = "../core" }
+tokio = { workspace = true }

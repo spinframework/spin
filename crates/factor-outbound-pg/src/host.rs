@@ -1,7 +1,8 @@
 use anyhow::Result;
-use spin_core::wasmtime::component::Resource;
+use spin_core::wasmtime;
+use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
 use spin_world::spin::postgres3_0_0::postgres::{self as v3};
-use spin_world::spin::postgres4_1_0::postgres::{self as v4};
+use spin_world::spin::postgres4_2_0::postgres::{self as v4};
 use spin_world::v1::postgres as v1;
 use spin_world::v1::rdbms_types as v1_types;
 use spin_world::v2::postgres::{self as v2};
@@ -11,8 +12,13 @@ use tracing::field::Empty;
 use tracing::instrument;
 use tracing::Level;
 
+use crate::allowed_hosts::AllowedHostChecker;
 use crate::client::{Client, ClientFactory, HashableCertificate};
 use crate::InstanceState;
+
+// Declare some types to make Clippy less mad
+pub type RowStream = StreamReader<Result<v4::Row, v4::Error>>;
+pub type ColumnsFuture = FutureReader<Vec<v4::Column>>;
 
 impl<CF: ClientFactory> InstanceState<CF> {
     async fn open_connection<Conn: 'static>(
@@ -40,53 +46,15 @@ impl<CF: ClientFactory> InstanceState<CF> {
             .ok_or_else(|| v4::Error::ConnectionFailed("no connection found".into()))
     }
 
+    fn allowed_host_checker(&self) -> AllowedHostChecker {
+        self.allowed_host_checker.clone()
+    }
+
     #[allow(clippy::result_large_err)]
     async fn ensure_address_allowed(&self, address: &str) -> Result<(), v4::Error> {
-        fn conn_failed(message: impl Into<String>) -> v4::Error {
-            v4::Error::ConnectionFailed(message.into())
-        }
-        fn err_other(err: anyhow::Error) -> v4::Error {
-            v4::Error::Other(err.to_string())
-        }
-
-        let config = address
-            .parse::<tokio_postgres::Config>()
-            .map_err(|e| conn_failed(e.to_string()))?;
-
-        for (i, host) in config.get_hosts().iter().enumerate() {
-            match host {
-                tokio_postgres::config::Host::Tcp(address) => {
-                    let ports = config.get_ports();
-                    // The port we use is either:
-                    // * The port at the same index as the host
-                    // * The first port if there is only one port
-                    let port = ports.get(i).or_else(|| {
-                        if ports.len() == 1 {
-                            ports.first()
-                        } else {
-                            None
-                        }
-                    });
-                    let port_str = port.map(|p| format!(":{p}")).unwrap_or_default();
-                    let url = format!("{address}{port_str}");
-                    if !self
-                        .allowed_hosts
-                        .check_url(&url, "postgres")
-                        .await
-                        .map_err(err_other)?
-                    {
-                        return Err(conn_failed(format!(
-                            "address postgres://{url} is not permitted"
-                        )));
-                    }
-                }
-                #[cfg(unix)]
-                tokio_postgres::config::Host::Unix(_) => {
-                    return Err(conn_failed("Unix sockets are not supported on WebAssembly"));
-                }
-            }
-        }
-        Ok(())
+        self.allowed_host_checker
+            .ensure_address_allowed(address)
+            .await
     }
 }
 
@@ -239,6 +207,145 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     async fn drop(&mut self, connection: Resource<v4::Connection>) -> anyhow::Result<()> {
         self.connections.remove(connection.rep());
         Ok(())
+    }
+}
+
+impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectionWithStore
+    for crate::PgFactorData<CF>
+{
+    #[instrument(name = "spin_outbound_pg.open_async", skip(accessor, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
+    async fn open_async<T>(
+        accessor: &Accessor<T, Self>,
+        address: String,
+    ) -> Result<Resource<v4::Connection>, v4::Error> {
+        spin_factor_outbound_networking::record_address_fields(&address);
+
+        // A merry dance to avoid doing the async allow check under the accessor
+        let allowed_host_checker = accessor.with(|mut access| {
+            let host = access.get();
+            host.allowed_host_checker()
+        });
+
+        allowed_host_checker
+            .ensure_address_allowed(&address)
+            .await?;
+
+        let cf = accessor.with(|mut access| {
+            let host = access.get();
+            host.client_factory.clone()
+        });
+        let client = cf
+            .get_client(&address, None)
+            .await
+            .map_err(|e| v4::Error::ConnectionFailed(format!("{e:?}")))?;
+        let rsrc = accessor.with(|mut access| {
+            let host = access.get();
+            host.connections
+                .push(client)
+                .map_err(|_| v4::Error::ConnectionFailed("too many connections".into()))
+                .map(wasmtime::component::Resource::new_own)
+        });
+        rsrc
+    }
+
+    #[instrument(name = "spin_outbound_pg.execute", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
+    async fn execute_async<T>(
+        accessor: &Accessor<T, Self>,
+        connection: Resource<v4::Connection>,
+        statement: String,
+        params: Vec<v4::ParameterValue>,
+    ) -> Result<u64, v4::Error> {
+        let client = accessor.with(|mut access| {
+            let host = access.get();
+            host.connections.get(connection.rep()).unwrap().clone()
+        });
+
+        client.execute(statement, params).await
+    }
+
+    #[instrument(name = "spin_outbound_pg.query", skip(accessor, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
+    async fn query_async<T>(
+        accessor: &Accessor<T, Self>,
+        connection: Resource<v4::Connection>,
+        statement: String,
+        params: Vec<v4::ParameterValue>,
+    ) -> Result<(ColumnsFuture, RowStream), v4::Error> {
+        use wasmtime::AsContextMut;
+
+        let client = accessor.with(|mut access| {
+            let host = access.get();
+            host.connections.get(connection.rep()).unwrap().clone()
+        });
+
+        let (col_rx, row_rx) = client.query_async(statement, params).await?;
+
+        let row_producer = spin_wasi_async::stream::producer(row_rx);
+        let col_producer = spin_wasi_async::future::producer(col_rx);
+
+        let (fr, sr) = accessor.with(|mut access| {
+            let fr = FutureReader::new(access.as_context_mut(), col_producer);
+            let sr = StreamReader::new(access.as_context_mut(), row_producer);
+            (fr, sr)
+        });
+
+        Ok((fr, sr))
+    }
+}
+
+impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectionBuilderWithStore
+    for crate::PgFactorData<CF>
+{
+    async fn build_async<T>(
+        accessor: &Accessor<T, Self>,
+        builder: Resource<v4::ConnectionBuilder>,
+    ) -> Result<Resource<v4::Connection>, v4::Error> {
+        // TODO: so much deduplicating
+        let rep = builder.rep();
+
+        let (address, root_ca) = accessor.with(|mut access| {
+            let host = access.get();
+
+            let builder = host
+                .builders
+                .get_mut(rep)
+                .ok_or_else(|| v4::Error::ConnectionFailed("no builder found".into()))?;
+
+            let address = builder.address.clone();
+            let root_ca = builder.root_ca.clone();
+
+            Ok((address, root_ca))
+        })?;
+
+        // TODO: this is from open_async. TODO: so much deduplication
+
+        spin_factor_outbound_networking::record_address_fields(&address);
+
+        // A merry dance to avoid doing the async allow check under the accessor
+        let allowed_host_checker = accessor.with(|mut access| {
+            let host = access.get();
+            host.allowed_host_checker()
+        });
+
+        allowed_host_checker
+            .ensure_address_allowed(&address)
+            .await?;
+
+        let cf = accessor.with(|mut access| {
+            let host = access.get();
+            host.client_factory.clone()
+        });
+        let client = cf
+            .get_client(&address, root_ca)
+            .await
+            .map_err(|e| v4::Error::ConnectionFailed(format!("{e:?}")))?;
+        let rsrc = accessor.with(|mut access| {
+            let host = access.get();
+            host.connections
+                .push(client)
+                .map_err(|_| v4::Error::ConnectionFailed("too many connections".into()))
+                .map(wasmtime::component::Resource::new_own)
+        });
+        rsrc
     }
 }
 

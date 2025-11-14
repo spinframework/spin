@@ -8769,6 +8769,7 @@ dependencies = [
  "spin-factors-test",
  "spin-locked-app",
  "spin-resource-table",
+ "spin-wasi-async",
  "spin-world",
  "tokio",
  "tokio-postgres",
@@ -9453,6 +9454,15 @@ dependencies = [
  "spin-factors",
  "tracing",
  "vaultrs",
+]
+
+[[package]]
+name = "spin-wasi-async"
+version = "3.7.0-pre0"
+dependencies = [
+ "anyhow",
+ "spin-core",
+ "tokio",
 ]
 
 [[package]]

@@ -1,4 +1,5 @@
-use spin_world::spin::postgres4_1_0::postgres::{DbDataType, DbValue, ParameterValue};
+use anyhow::Result;
+use spin_world::spin::postgres4_2_0::postgres::{self as v4, DbDataType, DbValue, ParameterValue};
 use tokio_postgres::types::{FromSql, Type};
 use tokio_postgres::{types::ToSql, Row};
 
@@ -161,4 +162,26 @@ pub fn to_sql_parameter(value: &ParameterValue) -> anyhow::Result<Box<dyn ToSql 
         ParameterValue::Interval(v) => Ok(Box::new(Interval(*v))),
         ParameterValue::DbNull => Ok(Box::new(PgNull)),
     }
+}
+
+// The logic for "vector of ParameterValue to vector of &dyn ToSql" is
+// used in multiple places, but needs to be broken into two functions
+// because the return value of the first (the Vec<Box>) needs to be kept
+// around to provide an owner for the refs.
+#[allow(clippy::result_large_err)]
+pub fn to_sql_parameters(
+    params: Vec<ParameterValue>,
+) -> Result<Vec<Box<dyn ToSql + Send + Sync>>, v4::Error> {
+    params
+        .iter()
+        .map(to_sql_parameter)
+        .collect::<Result<Vec<_>>>()
+        .map_err(|e| v4::Error::BadParameter(format!("{e:?}")))
+}
+
+pub fn as_sql_parameter_refs(params: &[Box<dyn ToSql + Send + Sync>]) -> Vec<&(dyn ToSql + Sync)> {
+    params
+        .iter()
+        .map(|b| b.as_ref() as &(dyn ToSql + Sync))
+        .collect()
 }
