@@ -14,7 +14,7 @@ use http::{
 };
 use intercept::OutboundHttpInterceptor;
 use runtime_config::RuntimeConfig;
-use spin_factor_otel::OtelContext;
+use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::{
     config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
     ComponentTlsClientConfigs, OutboundNetworkingFactor,
@@ -75,7 +75,7 @@ impl Factor for OutboundHttpFactor {
         let allowed_hosts = outbound_networking.allowed_hosts();
         let blocked_networks = outbound_networking.blocked_networks();
         let component_tls_configs = outbound_networking.component_tls_configs();
-        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
+        let otel_context = OtelFactorState::from_prepare_context(&mut ctx)?;
         Ok(InstanceState {
             wasi_http_ctx: WasiHttpCtx::new(),
             allowed_hosts,
@@ -118,7 +118,7 @@ pub struct InstanceState {
     /// A semaphore to limit the number of concurrent outbound connections.
     concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
     /// Manages access to the OtelFactor state.
-    otel_context: OtelContext,
+    otel_context: OtelFactorState,
 }
 
 impl InstanceState {

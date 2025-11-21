@@ -5,7 +5,7 @@ use redis::io::AsyncDNSResolver;
 use redis::AsyncConnectionConfig;
 use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
 use spin_core::wasmtime::component::Resource;
-use spin_factor_otel::OtelContext;
+use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
 use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
 use spin_world::v1::{redis as v1, redis_types};
@@ -19,7 +19,7 @@ pub struct InstanceState {
     pub allowed_hosts: OutboundAllowedHosts,
     pub blocked_networks: BlockedNetworks,
     pub connections: spin_resource_table::Table<MultiplexedConnection>,
-    pub otel_context: OtelContext,
+    pub otel_context: OtelFactorState,
 }
 
 impl InstanceState {

@@ -7,8 +7,8 @@ use std::sync::Arc;
 use host::InstanceState;
 
 use async_trait::async_trait;
+use spin_factor_otel::OtelFactorState;
 use spin_factors::{anyhow, Factor, FactorData};
-use spin_factor_otel::OtelContext;
 use spin_locked_app::MetadataKey;
 use spin_world::spin::sqlite::sqlite as v3;
 use spin_world::v1::sqlite as v1;
@@ -83,7 +83,7 @@ impl Factor for SqliteFactor {
             .get(ctx.app_component().id())
             .cloned()
             .unwrap_or_default();
-        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
+        let otel_context = OtelFactorState::from_prepare_context(&mut ctx)?;
         Ok(InstanceState::new(
             allowed_databases,
             ctx.app_state().connection_creators.clone(),

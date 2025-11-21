@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use spin_factor_otel::OtelContext;
+use spin_factor_otel::OtelFactorState;
 use spin_factors::wasmtime::component::Resource;
 use spin_factors::{anyhow, SelfInstanceBuilder};
 use spin_world::spin::sqlite::sqlite as v3;
@@ -18,7 +18,7 @@ pub struct InstanceState {
     connections: spin_resource_table::Table<Box<dyn Connection>>,
     /// A map from database label to connection creators.
     connection_creators: HashMap<String, Arc<dyn ConnectionCreator>>,
-    otel_context: OtelContext,
+    otel_context: OtelFactorState,
 }
 
 impl InstanceState {
@@ -28,7 +28,7 @@ impl InstanceState {
     pub fn new(
         allowed_databases: Arc<HashSet<String>>,
         connection_creators: HashMap<String, Arc<dyn ConnectionCreator>>,
-        otel_context: OtelContext,
+        otel_context: OtelFactorState,
     ) -> Self {
         Self {
             allowed_databases,

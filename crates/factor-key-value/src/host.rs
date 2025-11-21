@@ -1,7 +1,7 @@
 use super::{Cas, SwapError};
 use anyhow::{Context, Result};
 use spin_core::{async_trait, wasmtime::component::Resource};
-use spin_factor_otel::OtelContext;
+use spin_factor_otel::OtelFactorState;
 use spin_resource_table::Table;
 use spin_telemetry::traces::{self, Blame};
 use spin_world::v2::key_value;
@@ -50,7 +50,7 @@ pub struct KeyValueDispatch {
     manager: Arc<dyn StoreManager>,
     stores: Table<Arc<dyn Store>>,
     compare_and_swaps: Table<Arc<dyn Cas>>,
-    otel_context: Option<OtelContext>,
+    otel_context: Option<OtelFactorState>,
 }
 
 impl KeyValueDispatch {
@@ -62,7 +62,7 @@ impl KeyValueDispatch {
         allowed_stores: HashSet<String>,
         manager: Arc<dyn StoreManager>,
         capacity: u32,
-        otel_context: Option<OtelContext>,
+        otel_context: Option<OtelFactorState>,
     ) -> Self {
         Self {
             allowed_stores,

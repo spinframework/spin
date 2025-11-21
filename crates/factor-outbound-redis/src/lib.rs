@@ -1,7 +1,7 @@
 mod host;
 
 use host::InstanceState;
-use spin_factor_otel::OtelContext;
+use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
     anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
@@ -42,7 +42,7 @@ impl Factor for OutboundRedisFactor {
         &self,
         mut ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<Self::InstanceBuilder> {
-        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
+        let otel_context = OtelFactorState::from_prepare_context(&mut ctx)?;
         let outbound_networking = ctx.instance_builder::<OutboundNetworkingFactor>()?;
 
         Ok(InstanceState {

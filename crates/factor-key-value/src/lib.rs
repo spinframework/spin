@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::ensure;
-use spin_factor_otel::OtelContext;
+use spin_factor_otel::OtelFactorState;
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, FactorInstanceBuilder, InitContext, PrepareContext,
     RuntimeFactors,
@@ -96,7 +96,7 @@ impl Factor for KeyValueFactor {
             .get(ctx.app_component().id())
             .expect("component should be in component_stores")
             .clone();
-        let otel_context = OtelContext::from_prepare_context(&mut ctx)?;
+        let otel_context = OtelFactorState::from_prepare_context(&mut ctx)?;
         Ok(InstanceBuilder {
             store_manager: app_state.store_manager.clone(),
             allowed_stores,
@@ -180,7 +180,7 @@ pub struct InstanceBuilder {
     store_manager: Arc<AppStoreManager>,
     /// The allowed stores for this component instance.
     allowed_stores: HashSet<String>,
-    otel_context: OtelContext,
+    otel_context: OtelFactorState,
 }
 
 impl FactorInstanceBuilder for InstanceBuilder {

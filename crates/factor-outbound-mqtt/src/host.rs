@@ -2,9 +2,9 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use spin_core::{async_trait, wasmtime::component::Resource};
+use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
 use spin_world::v2::mqtt::{self as v2, Connection, Error, Qos};
-use spin_factor_otel::OtelContext;
 use tracing::{instrument, Level};
 
 use crate::ClientCreator;
@@ -13,14 +13,14 @@ pub struct InstanceState {
     allowed_hosts: OutboundAllowedHosts,
     connections: spin_resource_table::Table<Arc<dyn MqttClient>>,
     create_client: Arc<dyn ClientCreator>,
-    otel_context: OtelContext,
+    otel_context: OtelFactorState,
 }
 
 impl InstanceState {
     pub fn new(
         allowed_hosts: OutboundAllowedHosts,
         create_client: Arc<dyn ClientCreator>,
-        otel_context: OtelContext,
+        otel_context: OtelFactorState,
     ) -> Self {
         Self {
             allowed_hosts,

@@ -14,7 +14,7 @@ spin-core = { path = "../core" }
 spin-factors = { path = "../factors" }
 spin-resource-table = { path = "../table" }
 spin-telemetry = { path = "../telemetry" }
-spin-world = { path = "../world" }
+wasi-otel = { path = "../wasi-otel" }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 

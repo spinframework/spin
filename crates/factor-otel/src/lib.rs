@@ -29,8 +29,9 @@ impl Factor for OtelFactor {
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::wasi::otel::tracing::add_to_linker::<_, FactorData<Self>>)?;
-        ctx.link_bindings(spin_world::wasi::otel::metrics::add_to_linker::<_, FactorData<Self>>)?;
+        // TODO: This feels weird. I'm wondering if it can be fixed by wrangling the bindgen macro in `crates/wasi_otel/lib.rs`.
+        ctx.link_bindings(wasi_otel::wasi::otel::tracing::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(wasi_otel::wasi::otel::metrics::add_to_linker::<_, FactorData<Self>>)?;
         Ok(())
     }
 
@@ -135,15 +136,15 @@ pub(crate) struct State {
 
 /// Manages access to the OtelFactor state for the purpose of maintaining proper span
 /// parent/child relationships when WASI Otel spans are being created.
-pub struct OtelContext {
+pub struct OtelFactorState {
     pub(crate) state: Option<Arc<RwLock<State>>>,
 }
 
-impl OtelContext {
-    /// Creates an [`OtelContext`] from a [`PrepareContext`].
+impl OtelFactorState {
+    /// Creates an [`OtelFactorState`] from a [`PrepareContext`].
     ///
     /// If [`RuntimeFactors`] does not contain an [`OtelFactor`], then calling
-    /// [`OtelContext::reparent_tracing_span`] will be a no-op.
+    /// [`OtelFactorState::reparent_tracing_span`] will be a no-op.
     pub fn from_prepare_context<T: RuntimeFactors, F: Factor>(
         prepare_context: &mut PrepareContext<T, F>,
     ) -> anyhow::Result<Self> {
@@ -170,7 +171,7 @@ impl OtelContext {
     ///
     ///  Setting the guest spans parent as the host is enabled through current_span_context.
     /// However, the more difficult task is having the host factor spans be children of the guest
-    /// span. [`OtelContext::reparent_tracing_span`] handles this by reparenting the current span to
+    /// span. [`OtelFactorState::reparent_tracing_span`] handles this by reparenting the current span to
     /// be a child of the last active guest span (which is tracked internally in the otel factor).
     ///
     /// Note that if the otel factor is not in your [`RuntimeFactors`] than this is effectively a

@@ -5,8 +5,9 @@ use opentelemetry::trace::TraceContextExt;
 use opentelemetry_sdk::error::OTelSdkError;
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::trace::SpanProcessor;
-use spin_world::wasi;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
+// TODO: This feels weird. I'm wondering if it can be fixed by wrangling the bindgen macro in `crates/wasi_otel/lib.rs`.
+use wasi_otel::wasi;
 
 impl wasi::otel::tracing::Host for InstanceState {
     async fn on_start(&mut self, context: wasi::otel::tracing::SpanContext) -> Result<()> {
