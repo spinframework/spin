@@ -1,0 +1,264 @@
+interface metrics {
+    use wasi:clocks/wall-clock@0.2.0.{datetime};
+    use wasi:clocks/monotonic-clock@0.2.0.{duration};
+    use types.{key-value, instrumentation-scope};
+    use tracing.{span-id, trace-id};
+
+    /// Exports a resource's metric data.
+    %export: func(metrics: resource-metrics) -> result<_, error>;
+
+    /// An error resulting from `export` being called.
+    type error = string;
+
+    /// A collection of `scope-metrics` and the associated `resource` that created them.
+    record resource-metrics {
+        /// The entity that collected the metrics.
+        %resource: %resource,
+        /// The collection of metrics with unique `instrumentation-scope`s.
+        scope-metrics: list<scope-metrics>,
+    }
+
+    /// An immutable representation of the entity producing telemetry as attributes.
+    record %resource {
+        /// Attributes that identify the resource.
+        attributes: list<key-value>,
+        /// The schema URL to be recorded in the emitted resource.
+        schema-url: option<string>,
+    }
+
+    /// A collection of `metric`s produced by a meter.
+    record scope-metrics {
+        /// The instrumentation scope that the meter was created with.
+        scope: instrumentation-scope,
+        /// The list of aggregations created by the meter.
+        metrics: list<metric>,
+    }
+
+    /// A collection of one or more aggregated time series from a metric.
+    record metric {
+        /// The name of the metric that created this data.
+        name: string,
+        /// The description of the metric, which can be used in documentation.
+        description: string,
+        /// The unit in which the metric reports.
+        unit: string,
+        /// The aggregated data from a metric.
+        data: metric-data
+    }
+
+    /// Metric data for all types.
+    variant metric-data {
+        /// Metric data for an f64 gauge.
+        f64-gauge(gauge),
+        /// Metric data for an f64 sum.
+        f64-sum(sum),
+        /// Metric data for an f64 histogram.
+        f64-histogram(histogram),
+        /// Metric data for an f64 exponential-histogram.
+        f64-exponential-histogram(exponential-histogram),
+        /// Metric data for an u64 gauge.
+        u64-gauge(gauge),
+        /// Metric data for an u64 sum.
+        u64-sum(sum),
+        /// Metric data for an u64 histogram.
+        u64-histogram(histogram),
+        /// Metric data for an u64 exponential-histogram.
+        u64-exponential-histogram(exponential-histogram),
+        /// Metric data for an s64 gauge.
+        s64-gauge(gauge),
+        /// Metric data for an s64 sum.
+        s64-sum(sum),
+        /// Metric data for an s64 histogram.
+        s64-histogram(histogram),
+        /// Metric data for an s64 exponential-histogram.
+        s64-exponential-histogram(exponential-histogram),
+    }
+
+    /// A measurement of the current value of an instrument.
+    record gauge {
+        /// Represents individual aggregated measurements with unique attributes.
+        data-points: list<gauge-data-point>,
+        /// The time when the time series was started.
+        start-time: option<datetime>,
+        /// The time when the time series was recorded.
+        time: datetime,
+    }
+
+    /// A single data point in a time series to be associated with a `gauge`.
+    record gauge-data-point {
+        /// `attributes` is the set of key value pairs that uniquely identify the
+        /// time series.
+        attributes: list<key-value>,
+        /// The value of this data point.
+        value: metric-number,
+        /// The sampled `exemplar`s collected during the time series.
+        exemplars: list<exemplar>,
+    }
+
+    /// Represents the sum of all measurements of values from an instrument.
+    record sum {
+         /// Represents individual aggregated measurements with unique attributes.
+        data-points: list<sum-data-point>,
+        /// The time when the time series was started.
+        start-time: datetime,
+        /// The time when the time series was recorded.
+        time: datetime,
+        /// Describes if the aggregation is reported as the change from the last report
+        /// time, or the cumulative changes since a fixed start time.
+        temporality: temporality,
+        /// Whether this aggregation only increases or decreases.
+        is-monotonic: bool,
+    }
+
+    /// A single data point in a time series to be associated with a `sum`.
+    record sum-data-point {
+        /// `attributes` is the set of key value pairs that uniquely identify the
+        /// time series.
+        attributes: list<key-value>,
+        /// The value of this data point.
+        value: metric-number,
+        /// The sampled `exemplar`s collected during the time series.
+        exemplars: list<exemplar>,
+    }
+
+    /// Represents the histogram of all measurements of values from an instrument.
+    record histogram {
+        /// Individual aggregated measurements with unique attributes.
+        data-points: list<histogram-data-point>,
+        /// The time when the time series was started.
+        start-time: datetime,
+        /// The time when the time series was recorded.
+        time: datetime,
+        /// Describes if the aggregation is reported as the change from the last report
+        /// time, or the cumulative changes since a fixed start time.
+        temporality: temporality,
+    }
+
+    /// A single data point in a time series to be associated with a `histogram`.
+    record histogram-data-point {
+        /// The set of key value pairs that uniquely identify the time series.
+        attributes: list<key-value>,
+        /// The number of updates this histogram has been calculated with.
+        count: u64,
+        /// The upper bounds of the buckets of the histogram.
+        bounds: list<f64>,
+        /// The count of each of the buckets.
+        bucket-counts: list<u64>,
+        /// The minimum value recorded.
+        min: option<metric-number>,
+        /// The maximum value recorded.
+        max: option<metric-number>,
+        /// The sum of the values recorded
+        sum: metric-number,
+        /// The sampled `exemplar`s collected during the time series.
+        exemplars: list<exemplar>,
+    }
+
+    /// The histogram of all measurements of values from an instrument.
+    record exponential-histogram {
+        /// The individual aggregated measurements with unique attributes.
+        data-points: list<exponential-histogram-data-point>,
+        /// When the time series was started.
+        start-time: datetime,
+        /// The time when the time series was recorded.
+        time: datetime,
+        /// Describes if the aggregation is reported as the change from the last report
+        /// time, or the cumulative changes since a fixed start time.
+        temporality: temporality,
+    }
+
+    /// A single data point in a time series to be associated with an `exponential-histogram `.
+    record exponential-histogram-data-point {
+        /// The set of key value pairs that uniquely identify the time series.
+        attributes: list<key-value>,
+        /// The number of updates this histogram has been calculated with.
+        count: u64,
+        /// The minimum value recorded.
+        min: option<metric-number>,
+        /// The maximum value recorded.
+        max: option<metric-number>,
+        /// The maximum value recorded.
+        sum: metric-number,
+        /// Describes the resolution of the histogram.
+        ///
+        /// Boundaries are located at powers of the base, where:
+        ///
+        ///   base = 2 ^ (2 ^ -scale)
+        scale: s8,
+        /// The number of values whose absolute value is less than or equal to
+        /// `zero_threshold`.
+        ///
+        /// When `zero_threshold` is `0`, this is the number of values that cannot be
+        /// expressed using the standard exponential formula as well as values that have
+        /// been rounded to zero.
+        zero-count: u64,
+        /// The range of positive value bucket counts.
+        positive-bucket: exponential-bucket,
+        /// The range of negative value bucket counts.
+        negative-bucket: exponential-bucket,
+        /// The width of the zero region.
+        ///
+        /// Where the zero region is defined as the closed interval
+        /// [-zero_threshold, zero_threshold].
+        zero-threshold: f64,
+        /// The sampled exemplars collected during the time series.
+        exemplars: list<exemplar>,
+    }
+
+    /// A set of bucket counts, encoded in a contiguous array of counts.
+    record exponential-bucket {
+        /// The bucket index of the first entry in the `counts` list.
+        offset: s32,
+        /// A list where `counts[i]` carries the count of the bucket at index `offset + i`.
+        ///
+        /// `counts[i]` is the count of values greater than base^(offset+i) and less than
+        /// or equal to base^(offset+i+1).
+        counts: list<u64>,
+    }
+
+    /// A measurement sampled from a time series providing a typical example.
+    record exemplar {
+        /// The attributes recorded with the measurement but filtered out of the
+        /// time series' aggregated data.
+        filtered-attributes: list<key-value>,
+        /// The time when the measurement was recorded.
+        time: datetime,
+        /// The measured value.
+        value: metric-number,
+        /// The ID of the span that was active during the measurement.
+        ///
+        /// If no span was active or the span was not sampled this will be empty.
+        span-id: span-id,
+        /// The ID of the trace the active span belonged to during the measurement.
+        ///
+        /// If no span was active or the span was not sampled this will be empty.
+        trace-id: trace-id,
+    }
+
+    /// Defines the window that an aggregation was calculated over.
+    enum temporality {
+        /// A measurement interval that continues to expand forward in time from a
+        /// starting point.
+        ///
+        /// New measurements are added to all previous measurements since a start time.
+        ///
+        /// This is the default temporality.
+        cumulative,
+        /// A measurement interval that resets each cycle.
+        ///
+        /// Measurements from one cycle are recorded independently, measurements from
+        /// other cycles do not affect them.
+        delta,
+        /// Configures Synchronous Counter and Histogram instruments to use
+        /// Delta aggregation temporality, which allows them to shed memory
+        /// following a cardinality explosion, thus use less memory.
+        low-memory,
+    }
+
+    /// The number types available for any given instrument.
+    variant metric-number {
+        %f64(f64),
+        %s64(s64),
+        %u64(u64),
+    }
+}
