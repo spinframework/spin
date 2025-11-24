@@ -14,6 +14,14 @@ pub struct OciLoader {
     working_dir: PathBuf,
 }
 
+/// The artifact loaded by the `OciLoader`
+pub enum ExecutableArtifact {
+    /// The OCI reference contained a Spin application
+    Application(LockedApp),
+    /// The OCI reference contained a Wasm package
+    Package(PathBuf),
+}
+
 impl OciLoader {
     /// Creates a new OciLoader which builds temporary mount directory(s) in
     /// the given working_dir.
@@ -23,9 +31,13 @@ impl OciLoader {
     }
 
     /// Pulls and loads an OCI Artifact and returns a LockedApp with the given OCI client and reference
-    pub async fn load_app(&self, client: &mut Client, reference: &str) -> Result<LockedApp> {
+    pub async fn load_app(
+        &self,
+        client: &mut Client,
+        reference: &str,
+    ) -> Result<ExecutableArtifact> {
         // Fetch app
-        client.pull(reference).await.with_context(|| {
+        let manifest = client.pull(reference).await.with_context(|| {
             format!("cannot pull Spin application from registry reference {reference:?}")
         })?;
 
@@ -34,42 +46,58 @@ impl OciLoader {
             .lockfile_path(&reference)
             .await
             .context("cannot get path to spin.lock")?;
-        self.load_from_cache(lockfile_path, reference, &client.cache)
+        self.load_from_cache(manifest, lockfile_path, reference, &client.cache)
             .await
     }
 
     /// Loads an OCI Artifact from the given cache and returns a LockedApp with the given reference
     pub async fn load_from_cache(
         &self,
+        manifest: oci_distribution::manifest::OciImageManifest,
         lockfile_path: PathBuf,
         reference: &str,
         cache: &Cache,
-    ) -> std::result::Result<LockedApp, anyhow::Error> {
+    ) -> std::result::Result<ExecutableArtifact, anyhow::Error> {
         let locked_content = tokio::fs::read(&lockfile_path)
             .await
             .with_context(|| format!("failed to read from {}", quoted_path(&lockfile_path)))?;
-        let mut locked_app = LockedApp::from_json(&locked_content).with_context(|| {
-            format!(
-                "failed to decode locked app from {}",
-                quoted_path(&lockfile_path)
-            )
-        })?;
+        let locked_json: serde_json::Value = serde_json::from_slice(&locked_content)
+            .with_context(|| format!("OCI config {} is not JSON", quoted_path(&lockfile_path)))?;
 
-        // Update origin metadata
-        let resolved_reference = Reference::try_from(reference).context("invalid reference")?;
-        let origin_uri = format!("{ORIGIN_URL_SCHEME}:{resolved_reference}");
-        locked_app
-            .metadata
-            .insert("origin".to_string(), origin_uri.into());
+        if locked_json.get("spin_lock_version").is_some() {
+            let mut locked_app = LockedApp::from_json(&locked_content).with_context(|| {
+                format!(
+                    "failed to decode locked app from {}",
+                    quoted_path(&lockfile_path)
+                )
+            })?;
 
-        for component in &mut locked_app.components {
-            self.resolve_component_content_refs(component, cache)
-                .await
-                .with_context(|| {
-                    format!("failed to resolve content for component {:?}", component.id)
-                })?;
+            // Update origin metadata
+            let resolved_reference = Reference::try_from(reference).context("invalid reference")?;
+            let origin_uri = format!("{ORIGIN_URL_SCHEME}:{resolved_reference}");
+            locked_app
+                .metadata
+                .insert("origin".to_string(), origin_uri.into());
+
+            for component in &mut locked_app.components {
+                self.resolve_component_content_refs(component, cache)
+                    .await
+                    .with_context(|| {
+                        format!("failed to resolve content for component {:?}", component.id)
+                    })?;
+            }
+            Ok(ExecutableArtifact::Application(locked_app))
+        } else {
+            if manifest.layers.len() != 1 {
+                anyhow::bail!(
+                    "expected single layer in OCI package, found {} layers",
+                    manifest.layers.len()
+                );
+            }
+            let layer = &manifest.layers[0]; // guaranteed safe by previous check
+            let wasm_path = cache.wasm_path(&layer.digest);
+            Ok(ExecutableArtifact::Package(wasm_path))
         }
-        Ok(locked_app)
     }
 
     async fn resolve_component_content_refs(

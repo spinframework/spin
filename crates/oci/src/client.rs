@@ -35,6 +35,8 @@ pub const DATA_MEDIATYPE: &str = "application/vnd.wasm.content.layer.v1+data";
 pub const ARCHIVE_MEDIATYPE: &str = "application/vnd.wasm.content.bundle.v1.tar+gzip";
 // Note: this will be updated with a canonical value once defined upstream
 const WASM_LAYER_MEDIA_TYPE: &str = "application/vnd.wasm.content.layer.v1+wasm";
+// Media type for a Wasm binary pushed by wkg
+const WASM_LAYER_MEDIA_TYPE_WKG: &str = "application/wasm";
 
 const CONFIG_FILE: &str = "config.json";
 const LATEST_TAG: &str = "latest";
@@ -499,7 +501,7 @@ impl Client {
     }
 
     /// Pull a Spin application from an OCI registry.
-    pub async fn pull(&mut self, reference: &str) -> Result<()> {
+    pub async fn pull(&mut self, reference: &str) -> Result<OciImageManifest> {
         let reference: Reference = reference.parse().context("cannot parse reference")?;
         let auth = Self::auth(&reference).await?;
 
@@ -526,7 +528,7 @@ impl Client {
 
         // If a layer is a Wasm module, write it in the Wasm directory.
         // Otherwise, write it in the data directory (after unpacking if archive layer)
-        stream::iter(manifest.layers)
+        stream::iter(&manifest.layers)
             .map(|layer| {
                 let this = &self;
                 let reference = reference.clone();
@@ -541,14 +543,14 @@ impl Client {
 
                     tracing::debug!("Pulling layer {}", &layer.digest);
                     let mut bytes = Vec::with_capacity(layer.size.try_into()?);
-                    this.oci.pull_blob(&reference, &layer, &mut bytes).await?;
+                    this.oci.pull_blob(&reference, layer, &mut bytes).await?;
                     match layer.media_type.as_str() {
                         SPIN_APPLICATION_MEDIA_TYPE => {
                             this.write_locked_app_config(&reference.to_string(), &bytes)
                                 .await
                                 .with_context(|| "unable to write locked app config to cache")?;
                         }
-                        WASM_LAYER_MEDIA_TYPE => {
+                        WASM_LAYER_MEDIA_TYPE | WASM_LAYER_MEDIA_TYPE_WKG => {
                             this.cache.write_wasm(&bytes, &layer.digest).await?;
                         }
                         ARCHIVE_MEDIATYPE => {
@@ -566,7 +568,7 @@ impl Client {
             .await?;
         tracing::info!("Pulled {}@{}", reference, digest);
 
-        Ok(())
+        Ok(manifest)
     }
 
     /// Get the file path to an OCI manifest given a reference.
