@@ -217,6 +217,8 @@ jobs:
           chmod +x grain-linux-x64
           mv grain-linux-x64 grain
           echo "$PWD" >> $GITHUB_PATH
+      - name: Install wkg
+        run: cargo install wkg
 
       - name: Run Full Integration Tests
         run: make test-integration-full

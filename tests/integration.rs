@@ -873,6 +873,47 @@ mod integration_tests {
     }
 
     #[test]
+    #[cfg(feature = "extern-dependencies-tests")]
+    fn registry_bare_wasm_works() -> anyhow::Result<()> {
+        let services = ServicesConfig::new(vec!["registry"])?;
+        let spin_up_args = |env: &mut test_environment::TestEnvironment<()>| {
+            let port = env
+                .get_port(5000)?
+                .context("no registry port was exposed by test services")?;
+            let registry_url =
+                format!("localhost:{port}/spin-e2e-tests/registry-base-wasm-works/v1");
+            let mut registry_push = std::process::Command::new("wkg");
+            registry_push.args([
+                "oci",
+                "push",
+                &registry_url,
+                "./target/wasm32-wasip1/release/test.wasm",
+                "--insecure",
+            ]);
+            registry_push.arg(format!("localhost:{port}"));
+            env.run_in(&mut registry_push)?;
+            Ok(vec!["-f".into(), registry_url, "--insecure".into()])
+        };
+        let mut env = super::testcases::bootstrap_smoke_test(
+            services,
+            None,
+            &[],
+            "http-rust",
+            |_| Ok(Vec::new()),
+            |_| Ok(()),
+            HashMap::default(),
+            spin_up_args,
+            SpinAppType::Http,
+        )?;
+        assert_spin_request(
+            env.runtime_mut(),
+            Request::new(Method::Get, "/"),
+            Response::new_with_body(200, "Hello World!"),
+        )?;
+        Ok(())
+    }
+
+    #[test]
     fn test_wasi_http_rc_11_10() -> anyhow::Result<()> {
         test_wasi_http_rc("wasi-http-0.2.0-rc-2023-11-10")
     }

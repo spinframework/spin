@@ -8,7 +8,7 @@ pub mod utils;
 mod validate;
 
 pub use client::{Client, ComposeMode};
-pub use loader::OciLoader;
+pub use loader::{ExecutableArtifact, OciLoader};
 
 /// URL scheme used for the locked app "origin" metadata field for OCI-sourced apps.
 pub const ORIGIN_URL_SCHEME: &str = "vnd.fermyon.origin-oci";

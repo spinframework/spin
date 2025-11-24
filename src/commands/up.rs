@@ -15,7 +15,7 @@ use spin_app::locked::LockedApp;
 use spin_common::ui::quoted_path;
 use spin_factor_outbound_networking::validate_service_chaining_for_components;
 use spin_loader::FilesMountStrategy;
-use spin_oci::OciLoader;
+use spin_oci::{ExecutableArtifact, OciLoader};
 use spin_trigger::cli::{LaunchMetadata, SPIN_LOCAL_APP_DIR, SPIN_LOCKED_URL, SPIN_WORKING_DIR};
 use tempfile::TempDir;
 
@@ -467,10 +467,18 @@ impl UpCommand {
                     .await
                     .context("cannot create registry client")?;
 
-                let locked_app = OciLoader::new(working_dir)
+                let artifact = OciLoader::new(working_dir)
                     .load_app(&mut client, reference)
                     .await?;
-                ResolvedAppSource::OciRegistry { locked_app }
+
+                match artifact {
+                    ExecutableArtifact::Application(locked_app) => {
+                        ResolvedAppSource::OciRegistry { locked_app }
+                    }
+                    ExecutableArtifact::Package(wasm_path) => {
+                        ResolvedAppSource::BareWasm { wasm_path }
+                    }
+                }
             }
             AppSource::BareWasm(path) => ResolvedAppSource::BareWasm {
                 wasm_path: path.clone(),
