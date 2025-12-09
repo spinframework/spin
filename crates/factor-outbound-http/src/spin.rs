@@ -104,10 +104,11 @@ impl spin_http::Host for crate::InstanceState {
         // If we're limiting concurrent outbound requests, acquire a permit
         // Note: since we don't have access to the underlying connection, we can only
         // limit the number of concurrent requests, not connections.
-        let permit = match &self.concurrent_outbound_connections_semaphore {
-            Some(s) => s.acquire().await.ok(),
-            None => None,
-        };
+        let permit = crate::concurrent_outbound_connections::acquire_semaphore(
+            "spin",
+            &self.concurrent_outbound_connections_semaphore,
+        )
+        .await;
         let resp = client.execute(req).await.map_err(log_reqwest_error)?;
         drop(permit);
 
