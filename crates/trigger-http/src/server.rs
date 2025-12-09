@@ -4,6 +4,7 @@ use std::{
     io::{ErrorKind, IsTerminal},
     net::SocketAddr,
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{bail, Context};
@@ -20,9 +21,11 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
+use rand::Rng;
 use spin_app::{APP_DESCRIPTION_KEY, APP_NAME_KEY};
 use spin_factor_outbound_http::{OutboundHttpFactor, SelfRequestOrigin};
 use spin_factors::RuntimeFactors;
+use spin_factors_executor::InstanceState;
 use spin_http::{
     app_info::AppInfo,
     body,
@@ -38,6 +41,7 @@ use tokio::{
 use tracing::Instrument;
 use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi_http::body::HyperOutgoingBody;
+use wasmtime_wasi_http::handler::{HandlerState, StoreBundle};
 
 use crate::{
     headers::strip_forbidden_headers,
@@ -47,7 +51,7 @@ use crate::{
     wagi::WagiHttpExecutor,
     wasi::WasiHttpExecutor,
     wasip3::Wasip3HttpExecutor,
-    Body, NotFoundRouteKind, TlsConfig, TriggerApp, TriggerInstanceBuilder,
+    Body, InstanceReuseConfig, NotFoundRouteKind, TlsConfig, TriggerApp, TriggerInstanceBuilder,
 };
 
 pub const MAX_RETRIES: u16 = 10;
@@ -65,11 +69,11 @@ pub struct HttpServer<F: RuntimeFactors> {
     /// Request router.
     router: Router,
     /// The app being triggered.
-    trigger_app: TriggerApp<F>,
+    trigger_app: Arc<TriggerApp<F>>,
     // Component ID -> component trigger config
     component_trigger_configs: HashMap<spin_http::routes::TriggerLookupKey, HttpTriggerConfig>,
     // Component ID -> handler type
-    component_handler_types: HashMap<String, HandlerType>,
+    component_handler_types: HashMap<String, HandlerType<HttpHandlerState<F>>>,
 }
 
 impl<F: RuntimeFactors> HttpServer<F> {
@@ -80,6 +84,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         find_free_port: bool,
         trigger_app: TriggerApp<F>,
         http1_max_buf_size: Option<usize>,
+        reuse_config: InstanceReuseConfig,
     ) -> anyhow::Result<Self> {
         // This needs to be a vec before building the router to handle duplicate routes
         let component_trigger_configs = trigger_app
@@ -122,6 +127,8 @@ impl<F: RuntimeFactors> HttpServer<F> {
         // Now that router is built we can merge duplicate routes by component
         let component_trigger_configs = HashMap::from_iter(component_trigger_configs);
 
+        let trigger_app = Arc::new(trigger_app);
+
         let component_handler_types = component_trigger_configs
             .iter()
             .filter_map(|(key, trigger_config)| match key {
@@ -130,6 +137,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                         &trigger_app,
                         component,
                         &trigger_config.executor,
+                        reuse_config,
                     )
                     .map(|ht| (component.clone(), ht)),
                 ),
@@ -149,14 +157,22 @@ impl<F: RuntimeFactors> HttpServer<F> {
     }
 
     fn handler_type_for_component(
-        trigger_app: &TriggerApp<F>,
+        trigger_app: &Arc<TriggerApp<F>>,
         component_id: &str,
         executor: &Option<HttpExecutorType>,
-    ) -> anyhow::Result<HandlerType> {
+        reuse_config: InstanceReuseConfig,
+    ) -> anyhow::Result<HandlerType<HttpHandlerState<F>>> {
         let pre = trigger_app.get_instance_pre(component_id)?;
         let handler_type = match executor {
             None | Some(HttpExecutorType::Http) | Some(HttpExecutorType::Wasip3Unstable) => {
-                let handler_type = HandlerType::from_instance_pre(pre)?;
+                let handler_type = HandlerType::from_instance_pre(
+                    pre,
+                    HttpHandlerState {
+                        trigger_app: trigger_app.clone(),
+                        component_id: component_id.into(),
+                        reuse_config,
+                    },
+                )?;
                 handler_type.validate_executor(executor)?;
                 handler_type
             }
@@ -334,12 +350,16 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 )
                 .await
             }
-            (None, Some(static_response)) => {
-                Self::respond_static_response(static_response)
-            },
+            (None, Some(static_response)) => Self::respond_static_response(static_response),
             // These error cases should have been ruled out by this point but belt and braces
-            (None, None) => Err(anyhow::anyhow!("Triggers must specify either component or static_response - neither is specified for {}", route_match.raw_route())),
-            (Some(_), Some(_)) => Err(anyhow::anyhow!("Triggers must specify either component or static_response - both are specified for {}", route_match.raw_route())),
+            (None, None) => Err(anyhow::anyhow!(
+                "Triggers must specify either component or static_response - neither is specified for {}",
+                route_match.raw_route()
+            )),
+            (Some(_), Some(_)) => Err(anyhow::anyhow!(
+                "Triggers must specify either component or static_response - both are specified for {}",
+                route_match.raw_route()
+            )),
         }
     }
 
@@ -381,9 +401,9 @@ impl<F: RuntimeFactors> HttpServer<F> {
                         .execute(instance_builder, &route_match, req, client_addr)
                         .await
                 }
-                HandlerType::Wasi0_3(indices) => {
-                    Wasip3HttpExecutor(indices)
-                        .execute(instance_builder, &route_match, req, client_addr)
+                HandlerType::Wasi0_3(handler) => {
+                    Wasip3HttpExecutor(handler)
+                        .execute(&route_match, req, client_addr)
                         .await
                 }
                 HandlerType::Wasi0_2(_)
@@ -616,4 +636,48 @@ pub(crate) trait HttpExecutor {
         req: Request<Body>,
         client_addr: SocketAddr,
     ) -> impl Future<Output = anyhow::Result<Response<Body>>>;
+}
+
+pub(crate) struct HttpHandlerState<F: RuntimeFactors> {
+    trigger_app: Arc<TriggerApp<F>>,
+    component_id: String,
+    reuse_config: InstanceReuseConfig,
+}
+
+impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
+    type StoreData = InstanceState<F::InstanceState, ()>;
+
+    fn new_store(&self, _req_id: Option<u64>) -> anyhow::Result<StoreBundle<Self::StoreData>> {
+        Ok(StoreBundle {
+            store: self
+                .trigger_app
+                .prepare(&self.component_id)?
+                .instantiate_store(())?
+                .into_inner(),
+            write_profile: Box::new(|_| ()),
+        })
+    }
+
+    fn request_timeout(&self) -> Duration {
+        self.reuse_config
+            .request_timeout
+            .map(|range| rand::rng().random_range(range))
+            .unwrap_or(Duration::MAX)
+    }
+
+    fn idle_instance_timeout(&self) -> Duration {
+        rand::rng().random_range(self.reuse_config.idle_instance_timeout)
+    }
+
+    fn max_instance_reuse_count(&self) -> usize {
+        rand::rng().random_range(self.reuse_config.max_instance_reuse_count)
+    }
+
+    fn max_instance_concurrent_reuse_count(&self) -> usize {
+        rand::rng().random_range(self.reuse_config.max_instance_concurrent_reuse_count)
+    }
+
+    fn handle_worker_error(&self, error: anyhow::Error) {
+        tracing::warn!("worker error: {error:?}")
+    }
 }

@@ -74,6 +74,7 @@ spin-trigger = { path = "crates/trigger" }
 spin-trigger-http = { path = "crates/trigger-http" }
 spin-trigger-redis = { path = "crates/trigger-redis" }
 terminal = { path = "crates/terminal" }
+rand.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # This needs to be an explicit dependency to enable
@@ -179,9 +180,9 @@ wasm-metadata = "0.240.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 wasmparser = "0.240.0"
-wasmtime = { version = "38.0.4", features = ["component-model-async"] }
-wasmtime-wasi = { version = "38.0.4", features = ["p3"] }
-wasmtime-wasi-http = { version = "38.0.4", features = ["p3"] }
+wasmtime = { version = "39.0.1", features = ["component-model-async"] }
+wasmtime-wasi = { version = "39.0.1", features = ["p3"] }
+wasmtime-wasi-http = { version = "39.0.1", features = ["p3", "component-model-async"] }
 wit-component = "0.240.0"
 wit-parser = "0.240.0"
 
