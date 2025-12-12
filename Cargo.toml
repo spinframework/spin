@@ -56,6 +56,7 @@ watchexec-filterer-globset = "8.0"
 spin-app = { path = "crates/app" }
 spin-build = { path = "crates/build" }
 spin-common = { path = "crates/common" }
+spin-factors-executor = { path = "crates/factors-executor" }
 spin-doctor = { path = "crates/doctor" }
 spin-environments = { path = "crates/environments" }
 spin-factor-outbound-networking = { path = "crates/factor-outbound-networking" }
@@ -106,12 +107,14 @@ vergen = { version = "^8.2.1", default-features = false, features = [
 ] }
 
 [features]
-default = ["llm"]
+default = ["llm", "cpu-time-metrics"]
 all-tests = ["extern-dependencies-tests"]
 extern-dependencies-tests = []
 llm = ["spin-runtime-factors/llm"]
 llm-metal = ["llm", "spin-runtime-factors/llm-metal"]
 llm-cublas = ["llm", "spin-runtime-factors/llm-cublas"]
+# This enables the collection and emission CPU time elapsed per component execution.
+cpu-time-metrics = ["spin-factors-executor/cpu-time-metrics"]
 
 [workspace]
 members = [

@@ -13,6 +13,8 @@ anyhow = { workspace = true }
 spin-app = { path = "../app" }
 spin-core = { path = "../core" }
 spin-factors = { path = "../factors" }
+spin-telemetry = { path = "../telemetry" }
+tracing = { workspace = true }
 
 [dev-dependencies]
 spin-factor-wasi = { path = "../factor-wasi" }
@@ -21,3 +23,6 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true
+
+[features]
+cpu-time-metrics = ["spin-core/call-hook"]
