@@ -1,8 +1,9 @@
+use std::time::{Duration, Instant};
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
 use spin_app::{App, AppComponent};
-use spin_core::{async_trait, Component};
+use spin_core::{async_trait, wasmtime::CallHook, Component};
 use spin_factors::{
     AsInstanceState, ConfiguredApp, Factor, HasInstanceBuilder, RuntimeFactors,
     RuntimeFactorsInstanceState,
@@ -255,9 +256,24 @@ impl<T: RuntimeFactors, U: Send> FactorsInstanceBuilder<'_, T, U> {
             core: Default::default(),
             factors: self.factors.build_instance_state(self.factor_builders)?,
             executor: executor_instance_state,
+            cpu_time_elapsed: Duration::from_millis(0),
+            cpu_time_last_entry: None,
+            memory_used_on_init: 0,
+            component_id: self.app_component.id().into(),
         };
         let mut store = self.store_builder.build(instance_state)?;
+
+        #[cfg(feature = "cpu-time-metrics")]
+        store.as_mut().call_hook(|mut store, hook| {
+            CpuTimeCallHook.handle_call_event::<T, U>(store.data_mut(), hook)
+        });
+
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
+
+        // Track memory usage after instantiation in the instance state.
+        // Note: This only applies if the component has initial memory reservations.
+        store.data_mut().memory_used_on_init = store.data().core_state().memory_consumed();
+
         Ok((instance, store))
     }
 
@@ -269,8 +285,38 @@ impl<T: RuntimeFactors, U: Send> FactorsInstanceBuilder<'_, T, U> {
             core: Default::default(),
             factors: self.factors.build_instance_state(self.factor_builders)?,
             executor: executor_instance_state,
+            cpu_time_elapsed: Duration::from_millis(0),
+            cpu_time_last_entry: None,
+            memory_used_on_init: 0,
+            component_id: self.app_component.id().into(),
         };
         self.store_builder.build(instance_state)
+    }
+}
+
+// Tracks CPU time used by a Wasm guest.
+#[allow(unused)]
+struct CpuTimeCallHook;
+
+#[allow(unused)]
+impl CpuTimeCallHook {
+    fn handle_call_event<T: RuntimeFactors, U>(
+        &self,
+        state: &mut InstanceState<T::InstanceState, U>,
+        ch: CallHook,
+    ) -> anyhow::Result<()> {
+        match ch {
+            CallHook::CallingWasm | CallHook::ReturningFromHost => {
+                debug_assert!(state.cpu_time_last_entry.is_none());
+                state.cpu_time_last_entry = Some(Instant::now());
+            }
+            CallHook::ReturningFromWasm | CallHook::CallingHost => {
+                let elapsed = state.cpu_time_last_entry.take().unwrap().elapsed();
+                state.cpu_time_elapsed += elapsed;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -282,6 +328,43 @@ pub struct InstanceState<T, U> {
     core: spin_core::State,
     factors: T,
     executor: U,
+    /// The component ID.
+    component_id: String,
+
+    /// The last time guest code started running in this instance.
+    cpu_time_last_entry: Option<Instant>,
+    /// The total CPU time elapsed actively running guest code in this instance.
+    cpu_time_elapsed: Duration,
+    /// The memory (in bytes) consumed on initialization.
+    memory_used_on_init: u64,
+}
+
+impl<T, U> Drop for InstanceState<T, U> {
+    fn drop(&mut self) {
+        // Record the component execution time.
+        #[cfg(feature = "cpu-time-metrics")]
+        spin_telemetry::metrics::histogram!(
+            spin.component_cpu_time = self.cpu_time_elapsed.as_secs_f64(),
+            component_id = self.component_id,
+            // According to the OpenTelemetry spec, instruments measuring durations should use "s" as the unit.
+            // See https://opentelemetry.io/docs/specs/semconv/general/metrics/#units
+            unit = "s"
+        );
+
+        // Record the component memory consumed on initialization.
+        spin_telemetry::metrics::histogram!(
+            spin.component_memory_used_on_init = self.memory_used_on_init,
+            component_id = self.component_id,
+            unit = "By"
+        );
+
+        // Record the component memory consumed during execution.
+        spin_telemetry::metrics::histogram!(
+            spin.component_memory_used = self.core.memory_consumed(),
+            component_id = self.component_id,
+            unit = "By"
+        );
+    }
 }
 
 impl<T, U> InstanceState<T, U> {
