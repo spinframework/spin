@@ -1,0 +1,2 @@
+[postgres]
+root_certificates = ["postgres-ssl/ca.crt"]
