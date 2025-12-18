@@ -1,0 +1,36 @@
+interface logs {
+    use types.{instrumentation-scope, %resource, value, key-value};
+    use tracing.{span-id, trace-id, trace-flags};
+    use wasi:clocks/wall-clock@0.2.0.{datetime};
+
+    /// Called when a log is emitted.
+    on-emit: func(data: log-record);
+
+    /// Represents the recording of an event.
+    record log-record {
+        /// Time when the event occurred.
+        timestamp: option<datetime>,
+        /// Time when the event was observed.
+        observed-timestamp: option<datetime>,
+        /// The severity text(also known as log level).
+        severity-text: option<string>,
+        /// The numerical value of the severity ranging from 1-24.
+        severity-number: option<u8>,
+        /// The body of the log record.
+        body: option<value>,
+        /// Additional information about the specific event occurrence.
+        attributes: option<list<key-value>>,
+        /// Name that identifies the class / type of event.
+        event-name: option<string>,
+        /// Describes the source of the log.
+        %resource: option<%resource>,
+        /// Describes the scope that emitted the log.
+        instrumentation-scope: option<instrumentation-scope>,
+        /// Request trace id.
+        trace-id: option<trace-id>,
+        /// Request span id.
+        span-id: option<span-id>,
+        /// W3C trace flag.
+        trace-flags: option<trace-flags>,
+    }
+}
