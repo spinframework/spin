@@ -2,11 +2,11 @@ pub mod client;
 mod host;
 mod types;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use client::ClientFactory;
 use spin_factor_outbound_networking::{
-    config::allowed_hosts::OutboundAllowedHosts, OutboundNetworkingFactor,
+    ComponentTlsClientConfigs, OutboundNetworkingFactor, config::allowed_hosts::OutboundAllowedHosts
 };
 use spin_factors::{
     anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
@@ -19,7 +19,7 @@ pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {
 
 impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
     type RuntimeConfig = ();
-    type AppState = Arc<CF>;
+    type AppState = HashMap<String, Arc<CF>>;
     type InstanceBuilder = InstanceState<CF>;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
@@ -36,22 +36,29 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        _ctx: ConfigureAppContext<T, Self>,
+        ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        Ok(Arc::new(CF::default()))
+        let mut client_factories = HashMap::new();
+        for comp in ctx.app().components() {
+            client_factories.insert(comp.id().to_string(), Arc::new(CF::default()));
+        }
+        Ok(client_factories)
     }
 
     fn prepare<T: RuntimeFactors>(
         &self,
         mut ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<Self::InstanceBuilder> {
-        let allowed_hosts = ctx
-            .instance_builder::<OutboundNetworkingFactor>()?
-            .allowed_hosts();
+        let outbound_networking = ctx.instance_builder::<OutboundNetworkingFactor>()?;
+        let allowed_hosts = outbound_networking.allowed_hosts();
+        let component_tls_configs = outbound_networking.component_tls_configs();
+        let cf = ctx.app_state().get(ctx.app_component().id()).unwrap();
+
         Ok(InstanceState {
             allowed_hosts,
-            client_factory: ctx.app_state().clone(),
+            client_factory: cf.clone(),
             connections: Default::default(),
+            component_tls_configs,
         })
     }
 }
@@ -74,6 +81,7 @@ pub struct InstanceState<CF: ClientFactory> {
     allowed_hosts: OutboundAllowedHosts,
     client_factory: Arc<CF>,
     connections: spin_resource_table::Table<CF::Client>,
+    component_tls_configs: ComponentTlsClientConfigs,
 }
 
 impl<CF: ClientFactory> SelfInstanceBuilder for InstanceState<CF> {}

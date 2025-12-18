@@ -14,6 +14,7 @@ native-tls = "0.2"
 postgres-native-tls = "0.5"
 postgres_range = "0.11"
 rust_decimal = { version = "1.37", features = ["db-tokio-postgres"] }
+tokio-rustls = { workspace = true }
 serde_json = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }

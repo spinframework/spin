@@ -8641,6 +8641,7 @@ dependencies = [
  "spin-world",
  "tokio",
  "tokio-postgres",
+ "tokio-rustls 0.26.0",
  "tracing",
  "uuid",
 ]

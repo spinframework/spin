@@ -21,7 +21,7 @@ impl<CF: ClientFactory> InstanceState<CF> {
         self.connections
             .push(
                 self.client_factory
-                    .get_client(address)
+                    .get_client(address, &self.component_tls_configs)
                     .await
                     .map_err(|e| v4::Error::ConnectionFailed(format!("{e:?}")))?,
             )

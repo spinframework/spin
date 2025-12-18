@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use native_tls::TlsConnector;
 use postgres_native_tls::MakeTlsConnector;
+use spin_factor_outbound_networking::ComponentTlsClientConfigs;
 use spin_world::async_trait;
 use spin_world::spin::postgres4_0_0::postgres::{
     self as v4, Column, DbValue, ParameterValue, RowSet,
@@ -21,19 +22,22 @@ const CONNECTION_POOL_CACHE_CAPACITY: u64 = 16;
 pub trait ClientFactory: Default + Send + Sync + 'static {
     /// The type of client produced by `get_client`.
     type Client: Client;
+    // fn new(component_tls_configs: ComponentTlsClientConfigs) -> Self;
     /// Gets a client from the factory.
-    async fn get_client(&self, address: &str) -> Result<Self::Client>;
+    async fn get_client(&self, address: &str, component_tls_configs: &ComponentTlsClientConfigs) -> Result<Self::Client>;
 }
 
 /// A `ClientFactory` that uses a connection pool per address.
 pub struct PooledTokioClientFactory {
     pools: moka::sync::Cache<String, deadpool_postgres::Pool>,
+    // component_tls_configs: Option<ComponentTlsClientConfigs>,
 }
 
 impl Default for PooledTokioClientFactory {
     fn default() -> Self {
         Self {
             pools: moka::sync::Cache::new(CONNECTION_POOL_CACHE_CAPACITY),
+            // component_tls_configs: None,
         }
     }
 }
@@ -42,10 +46,17 @@ impl Default for PooledTokioClientFactory {
 impl ClientFactory for PooledTokioClientFactory {
     type Client = deadpool_postgres::Object;
 
-    async fn get_client(&self, address: &str) -> Result<Self::Client> {
+    // fn new(component_tls_configs: ComponentTlsClientConfigs) -> Self {
+    //     Self {
+    //         pools: moka::sync::Cache::new(CONNECTION_POOL_CACHE_CAPACITY),
+    //         component_tls_configs,
+    //     }
+    // }
+
+    async fn get_client(&self, address: &str, component_tls_configs: &ComponentTlsClientConfigs) -> Result<Self::Client> {
         let pool = self
             .pools
-            .try_get_with_by_ref(address, || create_connection_pool(address))
+            .try_get_with_by_ref(address, || create_connection_pool(address, component_tls_configs))
             .map_err(ArcError)
             .context("establishing PostgreSQL connection pool")?;
 
@@ -54,7 +65,7 @@ impl ClientFactory for PooledTokioClientFactory {
 }
 
 /// Creates a Postgres connection pool for the given address.
-fn create_connection_pool(address: &str) -> Result<deadpool_postgres::Pool> {
+fn create_connection_pool(address: &str, component_tls_configs: &ComponentTlsClientConfigs) -> Result<deadpool_postgres::Pool> {
     let config = address
         .parse::<tokio_postgres::Config>()
         .context("parsing Postgres connection string")?;
@@ -68,9 +79,16 @@ fn create_connection_pool(address: &str) -> Result<deadpool_postgres::Pool> {
     let mgr = if config.get_ssl_mode() == SslMode::Disable {
         deadpool_postgres::Manager::from_config(config, NoTls, mgr_config)
     } else {
-        let builder = TlsConnector::builder();
-        let connector = MakeTlsConnector::new(builder.build()?);
-        deadpool_postgres::Manager::from_config(config, connector, mgr_config)
+        let mut connector: Option<tokio_rustls::TlsConnector> = None;
+        for host in config.get_hosts() {
+            // let ctc = component_tls_configs.get_client_config(host);
+            // let connector = tokio_rustls::TlsConnector::from(ctc.inner().clone());
+        }
+        // let connector = MakeTlsConnector::new(builder.build()?);
+        let arse = Arse {
+            component_tls_configs: component_tls_configs.clone(),
+        };
+        deadpool_postgres::Manager::from_config(config, arse, mgr_config)
     };
 
     // TODO: what is our max size heuristic?  Should this be passed in so that different
@@ -82,6 +100,102 @@ fn create_connection_pool(address: &str) -> Result<deadpool_postgres::Pool> {
         .context("building Postgres connection pool")?;
 
     Ok(pool)
+}
+
+#[derive(Clone)]
+struct Arse {
+    component_tls_configs: ComponentTlsClientConfigs,
+}
+
+struct ArseConnect {
+    c: tokio_rustls::TlsConnector,
+    domain: tokio_rustls::rustls::pki_types::ServerName<'static>,
+}
+
+impl<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static + Send> tokio_postgres::tls::TlsConnect<S> for ArseConnect {
+    type Stream = FancyStm<S>;
+
+    type Error = tokio_rustls::rustls::Error;
+
+    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Stream, Self::Error>> + Send>>;
+
+    fn connect(self, stream: S) -> Self::Future {
+        let fut = i_hate_this_make_it_stop(self, stream);
+        Box::pin(fut)
+    }
+}
+
+async fn i_hate_this_make_it_stop<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static + Send>(a: ArseConnect, stream: S) -> Result<FancyStm<S>, tokio_rustls::rustls::Error> {
+    let connno = a.c.connect(a.domain, stream).await.unwrap();
+    let fstm = FancyStm { inner: connno };
+    Ok(fstm)
+}
+
+impl tokio_postgres::tls::MakeTlsConnect<tokio_postgres::Socket> for Arse {
+    type Stream = FancyStm<tokio_postgres::Socket>;
+
+    type TlsConnect = ArseConnect; // postgres_native_tls::TlsConnector;
+
+    type Error = tokio_rustls::rustls::Error;
+
+    fn make_tls_connect(&mut self, domain: &str) -> std::result::Result<Self::TlsConnect, Self::Error> {
+        let ctc = self.component_tls_configs.get_client_config(domain);
+        let rtls_conn = tokio_rustls::TlsConnector::from(ctc.inner().clone());
+        Ok(ArseConnect {
+            c: rtls_conn,
+            domain: tokio_rustls::rustls::pki_types::ServerName::try_from(domain.to_string()).unwrap(),
+        })
+        // rtls_conn.
+
+        // let builder = native_tls::TlsConnector::builder();
+        
+
+        // let nat_conn = builder.build()?;
+        // Ok(postgres_native_tls::TlsConnector::new(nat_conn, domain))
+    }
+}
+
+struct FancyStm<IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> {
+    inner: tokio_rustls::client::TlsStream<IO>
+}
+
+impl<IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> tokio_postgres::tls::TlsStream for FancyStm<IO> {
+    fn channel_binding(&self) -> tokio_postgres::tls::ChannelBinding {
+        let peer_certs = self.inner.get_ref().1.peer_certificates();
+        match peer_certs {
+            Some(certs) if certs.len() > 0 => tokio_postgres::tls::ChannelBinding::tls_server_end_point(certs[0].to_vec()),
+            _ => tokio_postgres::tls::ChannelBinding::none(),
+        }
+    }
+}
+
+impl<IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> tokio::io::AsyncRead for FancyStm<IO> {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+
+impl<IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for FancyStm<IO> {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::result::Result<usize, std::io::Error>> {
+        std::pin::Pin::new(&mut self.inner).poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::result::Result<(), std::io::Error>> {
+        std::pin::Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::result::Result<(), std::io::Error>> {
+        std::pin::Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
 }
 
 #[async_trait]

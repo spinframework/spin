@@ -112,7 +112,7 @@ pub struct MockClient {}
 #[async_trait]
 impl ClientFactory for MockClientFactory {
     type Client = MockClient;
-    async fn get_client(&self, _address: &str) -> Result<Self::Client> {
+    async fn get_client(&self, _address: &str, _tls: &spin_factor_outbound_networking::ComponentTlsClientConfigs) -> Result<Self::Client> {
         Ok(MockClient {})
     }
 }
