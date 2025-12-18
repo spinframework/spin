@@ -4,4 +4,5 @@ world imports {
     import types;
     import tracing;
     import metrics;
+    import logs;
 }

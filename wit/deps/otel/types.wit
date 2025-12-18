@@ -11,23 +11,17 @@ interface types {
     type key = string;
 
     /// The value part of attribute `key-value` pairs.
-    variant value {
-        /// A string value.
-        %string(string),
-        /// A boolean value.
-        %bool(bool),
-        /// A double precision floating point value.
-        %f64(f64),
-        /// A signed 64 bit integer value.
-        %s64(s64),
-        /// A homogeneous array of string values.
-        string-array(list<string>),
-        /// A homogeneous array of boolean values.
-        bool-array(list<bool>),
-        /// A homogeneous array of double precision floating point values.
-        f64-array(list<f64>),
-        /// A homogeneous array of 64 bit integer values.
-        s64-array(list<s64>),
+    ///
+    /// This corresponds with the `AnyValue` type defined in the [attribute spec](https://opentelemetry.io/docs/specs/otel/common/#anyvalue).
+    /// Because WIT doesn't support recursive types, the data needs to be serialized. JSON is used as the encoding format.
+    type value = string;
+
+    /// An immutable representation of the entity producing telemetry as attributes.
+    record %resource {
+        /// Attributes that identify the resource.
+        attributes: list<key-value>,
+        /// The schema URL to be recorded in the emitted resource.
+        schema-url: option<string>,
     }
 
     /// Describes the instrumentation scope that produced telemetry.
@@ -39,7 +33,7 @@ interface types {
         version: option<string>,
 
         /// Schema URL used by this library.
-        /// https://github.com/open-telemetry/opentelemetry-specification/blob/v1.9.0/specification/schemas/overview.md#schema-url
+        /// https://opentelemetry.io/docs/specs/otel/schemas/#schema-url
         schema-url: option<string>,
 
         /// Specifies the instrumentation scope attributes to associate with emitted telemetry.

@@ -11,6 +11,7 @@ anyhow = "1"
 http = "0.2"
 opentelemetry = "0.31.0"
 opentelemetry_sdk = "0.31.0"
+# TODO: asteurer
 opentelemetry-wasi = { git = "https://github.com/calebschoepp/opentelemetry-wasi", rev = "3c2c38478e02a1a4d3bfb56c02cbc39daaccd0e4" }
 spin-sdk = "5.1.1"
 wit-bindgen = "0.30.0"

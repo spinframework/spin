@@ -1,7 +1,7 @@
 interface metrics {
     use wasi:clocks/wall-clock@0.2.0.{datetime};
     use wasi:clocks/monotonic-clock@0.2.0.{duration};
-    use types.{key-value, instrumentation-scope};
+    use types.{key-value, instrumentation-scope, %resource};
     use tracing.{span-id, trace-id};
 
     /// Exports a resource's metric data.
@@ -16,14 +16,6 @@ interface metrics {
         %resource: %resource,
         /// The collection of metrics with unique `instrumentation-scope`s.
         scope-metrics: list<scope-metrics>,
-    }
-
-    /// An immutable representation of the entity producing telemetry as attributes.
-    record %resource {
-        /// Attributes that identify the resource.
-        attributes: list<key-value>,
-        /// The schema URL to be recorded in the emitted resource.
-        schema-url: option<string>,
     }
 
     /// A collection of `metric`s produced by a meter.

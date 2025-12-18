@@ -8,6 +8,7 @@ use opentelemetry::{
 };
 use opentelemetry_otlp::MetricExporter;
 use opentelemetry_sdk::{
+    logs::{log_processor_with_async_runtime::BatchLogProcessor, LogProcessor},
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,
     trace::{span_processor_with_async_runtime::BatchSpanProcessor, SpanProcessor},
@@ -21,6 +22,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 pub struct OtelFactor {
     span_processor: Arc<BatchSpanProcessor<Tokio>>,
     metric_exporter: Arc<MetricExporter>,
+    log_processor: Arc<BatchLogProcessor<Tokio>>,
 }
 
 impl Factor for OtelFactor {
@@ -31,6 +33,7 @@ impl Factor for OtelFactor {
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
         ctx.link_bindings(wasi_otel::wasi::otel::tracing::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(wasi_otel::wasi::otel::metrics::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(wasi_otel::wasi::otel::logs::add_to_linker::<_, FactorData<Self>>)?;
         Ok(())
     }
 
@@ -52,6 +55,7 @@ impl Factor for OtelFactor {
             })),
             span_processor: self.span_processor.clone(),
             metric_exporter: self.metric_exporter.clone(),
+            log_processor: self.log_processor.clone(),
         })
     }
 }
@@ -83,7 +87,6 @@ impl OtelFactor {
         };
 
         let mut span_processor = BatchSpanProcessor::builder(span_exporter, Tokio).build();
-
         span_processor.set_resource(&resource);
 
         let metric_exporter = match OtlpProtocol::metrics_protocol_from_env() {
@@ -96,9 +99,23 @@ impl OtelFactor {
             OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
         };
 
+        let log_exporter = match OtlpProtocol::logs_protocol_from_env() {
+            OtlpProtocol::Grpc => opentelemetry_otlp::LogExporter::builder()
+                .with_tonic()
+                .build()?,
+            OtlpProtocol::HttpProtobuf => opentelemetry_otlp::LogExporter::builder()
+                .with_http()
+                .build()?,
+            OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
+        };
+
+        let log_processor = BatchLogProcessor::builder(log_exporter, Tokio).build();
+        log_processor.set_resource(&resource);
+
         Ok(Self {
             span_processor: Arc::new(span_processor),
             metric_exporter: Arc::new(metric_exporter),
+            log_processor: Arc::new(log_processor),
         })
     }
 }
@@ -107,6 +124,7 @@ pub struct InstanceState {
     pub(crate) state: Arc<RwLock<State>>,
     pub(crate) span_processor: Arc<BatchSpanProcessor<Tokio>>,
     pub(crate) metric_exporter: Arc<MetricExporter>,
+    pub(crate) log_processor: Arc<BatchLogProcessor<Tokio>>,
 }
 
 impl SelfInstanceBuilder for InstanceState {}

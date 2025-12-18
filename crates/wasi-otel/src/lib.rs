@@ -45,5 +45,9 @@ pub use fermyon::spin as v1;
 pub use fermyon::spin2_0_0 as v2;
 
 mod common_conversions;
-mod metrics_conversions;
+mod log_conversions;
+mod metric_conversions;
 mod trace_conversions;
+
+use common_conversions::from_json;
+pub use log_conversions::parse_wasi_log_record;
