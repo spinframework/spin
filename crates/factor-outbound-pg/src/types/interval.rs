@@ -1,5 +1,5 @@
 use anyhow::Result;
-use spin_world::spin::postgres4_0_0::postgres::{self as v4};
+use spin_world::spin::postgres4_1_0::postgres::{self as v4};
 use tokio_postgres::types::{FromSql, ToSql, Type};
 
 #[derive(Debug)]

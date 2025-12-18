@@ -13,8 +13,9 @@ route = "/..."
 component = "pg-app"
 
 [component.pg-app]
-source = "target/wasm32-wasip1/release/pg_app.wasm"
+source = "target/wasm32-wasip2/release/pg_app.wasm"
+# files = [{ source = "postgres-ssl", destination = "/" }]
 allowed_outbound_hosts = ["postgres://localhost"]
 [component.pg-app.build]
-command = "cargo build --target wasm32-wasip1 --release"
+command = "cargo build --target wasm32-wasip2 --release"
 watch = ["src/**/*.rs", "Cargo.toml"]

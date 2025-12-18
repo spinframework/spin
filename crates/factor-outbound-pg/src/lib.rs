@@ -2,6 +2,8 @@ pub mod client;
 mod host;
 mod types;
 
+use std::{collections::HashMap, sync::Arc};
+
 use client::ClientFactory;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::{
@@ -11,7 +13,6 @@ use spin_factors::{
     anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
     SelfInstanceBuilder,
 };
-use std::sync::Arc;
 
 pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {
     _phantom: std::marker::PhantomData<CF>,
@@ -19,7 +20,7 @@ pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {
 
 impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
     type RuntimeConfig = ();
-    type AppState = Arc<CF>;
+    type AppState = HashMap<String, Arc<CF>>;
     type InstanceBuilder = InstanceState<CF>;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
@@ -29,16 +30,20 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
             spin_world::spin::postgres3_0_0::postgres::add_to_linker::<_, FactorData<Self>>,
         )?;
         ctx.link_bindings(
-            spin_world::spin::postgres4_0_0::postgres::add_to_linker::<_, FactorData<Self>>,
+            spin_world::spin::postgres4_1_0::postgres::add_to_linker::<_, FactorData<Self>>,
         )?;
         Ok(())
     }
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        _ctx: ConfigureAppContext<T, Self>,
+        ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        Ok(Arc::new(CF::default()))
+        let mut client_factories = HashMap::new();
+        for comp in ctx.app().components() {
+            client_factories.insert(comp.id().to_string(), Arc::new(CF::default()));
+        }
+        Ok(client_factories)
     }
 
     fn prepare<T: RuntimeFactors>(
@@ -49,12 +54,14 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
             .instance_builder::<OutboundNetworkingFactor>()?
             .allowed_hosts();
         let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
+        let cf = ctx.app_state().get(ctx.app_component().id()).unwrap();
 
         Ok(InstanceState {
             allowed_hosts,
-            client_factory: ctx.app_state().clone(),
+            client_factory: cf.clone(),
             connections: Default::default(),
             otel,
+            builders: Default::default(),
         })
     }
 }
@@ -78,6 +85,7 @@ pub struct InstanceState<CF: ClientFactory> {
     client_factory: Arc<CF>,
     connections: spin_resource_table::Table<CF::Client>,
     otel: OtelFactorState,
+    builders: spin_resource_table::Table<host::ConnectionBuilder>,
 }
 
 impl<CF: ClientFactory> SelfInstanceBuilder for InstanceState<CF> {}
