@@ -101,7 +101,7 @@ impl<'de> Deserialize<'de> for OwnedValue {
                 E: de::Error,
             {
                 i64::try_from(value)
-                    .map(|v| Ok(OwnedValue::I64(v as i64)))
+                    .map(|v| Ok(OwnedValue::I64(v)))
                     .map_err(|_| de::Error::custom("Integer too large for i64"))?
             }
 
