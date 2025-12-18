@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use native_tls::TlsConnector;
-use postgres_native_tls::MakeTlsConnector;
+// use native_tls::TlsConnector;
+// use postgres_native_tls::MakeTlsConnector;
 use spin_factor_outbound_networking::ComponentTlsClientConfigs;
 use spin_world::async_trait;
 use spin_world::spin::postgres4_0_0::postgres::{
@@ -79,11 +79,11 @@ fn create_connection_pool(address: &str, component_tls_configs: &ComponentTlsCli
     let mgr = if config.get_ssl_mode() == SslMode::Disable {
         deadpool_postgres::Manager::from_config(config, NoTls, mgr_config)
     } else {
-        let mut connector: Option<tokio_rustls::TlsConnector> = None;
-        for host in config.get_hosts() {
-            // let ctc = component_tls_configs.get_client_config(host);
-            // let connector = tokio_rustls::TlsConnector::from(ctc.inner().clone());
-        }
+        // let mut connector: Option<tokio_rustls::TlsConnector> = None;
+        // for host in config.get_hosts() {
+        //     // let ctc = component_tls_configs.get_client_config(host);
+        //     // let connector = tokio_rustls::TlsConnector::from(ctc.inner().clone());
+        // }
         // let connector = MakeTlsConnector::new(builder.build()?);
         let arse = Arse {
             component_tls_configs: component_tls_configs.clone(),
