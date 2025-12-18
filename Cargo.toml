@@ -155,7 +155,7 @@ reqwest = { version = "0.12", features = ["stream", "blocking"] }
 rusqlite = "0.34"
 # In `rustls` turn off the `aws_lc_rs` default feature and turn on `ring`.
 # If both `aws_lc_rs` and `ring` are enabled, a panic at runtime will occur.
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging"] }
 rustls-pki-types = "1.12"
 semver = "1"
 serde = { version = "1", features = ["derive", "rc"] }
@@ -167,7 +167,7 @@ tempfile = "3"
 test-environment = { git = "https://github.com/fermyon/conformance-tests", rev = "61f2799f92b5d85f342cc07e3f5dec5cd0a7bc9c" }
 thiserror = "2"
 tokio = "1"
-tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging"] }
 toml = "0.8"
 toml_edit = "0.22"
 tower-service = "0.3.3"
