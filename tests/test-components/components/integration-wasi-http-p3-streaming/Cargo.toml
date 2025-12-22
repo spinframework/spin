@@ -11,5 +11,4 @@ futures = "0.3.31"
 hex = "0.4.3"
 sha2 = "0.10.9"
 url = "2.5.7"
-wit-bindgen = { workspace = true }
-
+wit-bindgen = { workspace = true, features = ['async-spawn'] }

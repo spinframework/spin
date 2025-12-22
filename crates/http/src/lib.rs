@@ -13,14 +13,14 @@ pub use spin_http_routes::WELL_KNOWN_PREFIX;
 #[cfg(feature = "runtime")]
 pub mod body {
     use super::Body;
-    use http_body_util::{combinators::BoxBody, BodyExt, Empty, Full};
+    use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Empty, Full};
     use hyper::body::Bytes;
 
     pub fn full(bytes: Bytes) -> Body {
-        BoxBody::new(Full::new(bytes).map_err(|_| unreachable!()))
+        UnsyncBoxBody::new(Full::new(bytes).map_err(|_| unreachable!()))
     }
 
     pub fn empty() -> Body {
-        BoxBody::new(Empty::new().map_err(|_| unreachable!()))
+        UnsyncBoxBody::new(Empty::new().map_err(|_| unreachable!()))
     }
 }

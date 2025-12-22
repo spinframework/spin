@@ -80,7 +80,8 @@ impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
         );
 
         Ok(rx.await?.map(|body| {
-            MutexBody::new(body.map_err(spin_factor_outbound_http::p3_to_p2_error_code)).boxed()
+            MutexBody::new(body.map_err(spin_factor_outbound_http::p3_to_p2_error_code))
+                .boxed_unsync()
         }))
     }
 }

@@ -141,7 +141,7 @@ impl p3::WasiHttpCtx for InstanceState {
         Box::new(async {
             match request_sender
                 .send(
-                    request.map(|body| body.map_err(p3_to_p2_error_code).boxed()),
+                    request.map(|body| body.map_err(p3_to_p2_error_code).boxed_unsync()),
                     config,
                 )
                 .await
@@ -520,7 +520,7 @@ impl RequestSender {
             .await
             .map_err(|_| ErrorCode::ConnectionReadTimeout)?
             .map_err(hyper_legacy_request_error)?
-            .map(|body| body.map_err(hyper_request_error).boxed());
+            .map(|body| body.map_err(hyper_request_error).boxed_unsync());
 
         tracing::Span::current().record("http.response.status_code", resp.status().as_u16());
 

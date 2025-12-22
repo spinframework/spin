@@ -9,4 +9,4 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = "1"
 spin-sdk = "5"
-wit-bindgen = "0.43.0"
+wit-bindgen = { workspace = true }
