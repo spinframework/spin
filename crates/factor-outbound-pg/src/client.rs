@@ -18,9 +18,10 @@ const CONNECTION_POOL_CACHE_CAPACITY: u64 = 16;
 /// A factory object for Postgres clients. This abstracts
 /// details of client creation such as pooling.
 #[async_trait]
-pub trait ClientFactory: Default + Send + Sync + 'static {
+pub trait ClientFactory: Send + Sync + 'static {
     /// The type of client produced by `get_client`.
     type Client: Client;
+    fn new(root_certificates: Vec<Vec<u8>>) -> Self;
     /// Gets a client from the factory.
     async fn get_client(&self, address: &str) -> Result<Self::Client>;
 }
@@ -28,24 +29,26 @@ pub trait ClientFactory: Default + Send + Sync + 'static {
 /// A `ClientFactory` that uses a connection pool per address.
 pub struct PooledTokioClientFactory {
     pools: moka::sync::Cache<String, deadpool_postgres::Pool>,
-}
-
-impl Default for PooledTokioClientFactory {
-    fn default() -> Self {
-        Self {
-            pools: moka::sync::Cache::new(CONNECTION_POOL_CACHE_CAPACITY),
-        }
-    }
+    root_certificates: Vec<Vec<u8>>,
 }
 
 #[async_trait]
 impl ClientFactory for PooledTokioClientFactory {
     type Client = deadpool_postgres::Object;
 
+    fn new(root_certificates: Vec<Vec<u8>>) -> Self {
+        Self {
+            pools: moka::sync::Cache::new(CONNECTION_POOL_CACHE_CAPACITY),
+            root_certificates,
+        }
+    }
+
     async fn get_client(&self, address: &str) -> Result<Self::Client> {
         let pool = self
             .pools
-            .try_get_with_by_ref(address, || create_connection_pool(address))
+            .try_get_with_by_ref(address, || {
+                create_connection_pool(address, &self.root_certificates)
+            })
             .map_err(ArcError)
             .context("establishing PostgreSQL connection pool")?;
 
@@ -54,7 +57,10 @@ impl ClientFactory for PooledTokioClientFactory {
 }
 
 /// Creates a Postgres connection pool for the given address.
-fn create_connection_pool(address: &str) -> Result<deadpool_postgres::Pool> {
+fn create_connection_pool(
+    address: &str,
+    root_certificates: &[Vec<u8>],
+) -> Result<deadpool_postgres::Pool> {
     let config = address
         .parse::<tokio_postgres::Config>()
         .context("parsing Postgres connection string")?;
@@ -68,7 +74,11 @@ fn create_connection_pool(address: &str) -> Result<deadpool_postgres::Pool> {
     let mgr = if config.get_ssl_mode() == SslMode::Disable {
         deadpool_postgres::Manager::from_config(config, NoTls, mgr_config)
     } else {
-        let builder = TlsConnector::builder();
+        let mut builder = TlsConnector::builder();
+        for cert_bytes in root_certificates {
+            builder.add_root_certificate(native_tls::Certificate::from_pem(cert_bytes)?);
+        }
+
         let connector = MakeTlsConnector::new(builder.build()?);
         deadpool_postgres::Manager::from_config(config, connector, mgr_config)
     };
