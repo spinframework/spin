@@ -644,7 +644,7 @@ dependencies = [
 [[package]]
 name = "azure_core"
 version = "0.20.0"
-source = "git+https://github.com/azure/azure-sdk-for-rust.git?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
+source = "git+https://github.com/azure/azure-sdk-for-rust?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -718,7 +718,7 @@ dependencies = [
 [[package]]
 name = "azure_identity"
 version = "0.20.0"
-source = "git+https://github.com/azure/azure-sdk-for-rust.git?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
+source = "git+https://github.com/azure/azure-sdk-for-rust?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
 dependencies = [
  "async-lock",
  "async-process",
@@ -759,7 +759,7 @@ dependencies = [
 [[package]]
 name = "azure_security_keyvault"
 version = "0.20.0"
-source = "git+https://github.com/azure/azure-sdk-for-rust.git?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
+source = "git+https://github.com/azure/azure-sdk-for-rust?rev=8c4caa251c3903d5eae848b41bb1d02a4d65231c#8c4caa251c3903d5eae848b41bb1d02a4d65231c"
 dependencies = [
  "async-trait",
  "azure_core 0.20.0",

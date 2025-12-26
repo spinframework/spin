@@ -117,9 +117,9 @@ impl From<InterceptBody> for HyperBody {
     fn from(body: InterceptBody) -> Self {
         match body {
             InterceptBody::Hyper(body) => body,
-            InterceptBody::Vec(bytes) => {
-                Full::new(bytes.into()).map_err(|err| match err {}).boxed()
-            }
+            InterceptBody::Vec(bytes) => Full::new(bytes.into())
+                .map_err(|err| match err {})
+                .boxed_unsync(),
         }
     }
 }

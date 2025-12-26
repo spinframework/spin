@@ -552,7 +552,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 .handle(
                     request.map(|body: Incoming| {
                         body.map_err(wasmtime_wasi_http::hyper_response_error)
-                            .boxed()
+                            .boxed_unsync()
                     }),
                     server_scheme,
                     client_addr,
