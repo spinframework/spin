@@ -8309,6 +8309,7 @@ dependencies = [
  "spin-doctor",
  "spin-environments",
  "spin-factor-outbound-networking",
+ "spin-factors-executor",
  "spin-http",
  "spin-loader",
  "spin-locked-app",
@@ -8734,7 +8735,9 @@ dependencies = [
  "spin-factor-wasi",
  "spin-factors",
  "spin-factors-test",
+ "spin-telemetry",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
