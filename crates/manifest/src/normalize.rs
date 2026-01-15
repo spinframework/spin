@@ -187,6 +187,7 @@ fn ensure_is_acceptable_dependency(
         key_value_stores,
         sqlite_databases,
         ai_models,
+        targets: _,
         build: _,
         tool: _,
         dependencies_inherit_configuration: _,

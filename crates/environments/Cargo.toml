@@ -34,6 +34,7 @@ wit-component = { workspace = true }
 wit-parser = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 wit-component = { workspace = true, features = ["dummy-module"] }
 wit-encoder = "0.235"
 

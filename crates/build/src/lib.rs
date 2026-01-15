@@ -385,7 +385,10 @@ mod tests {
 
         let target_validation = spin_environments::validate_application_against_environment_ids(
             &application,
-            &manifest.application.targets,
+            spin_environments::Targets {
+                default: &manifest.application.targets,
+                overrides: std::collections::HashMap::new(),
+            },
             None,
             manifest_file.parent().unwrap(),
         )
@@ -417,6 +420,7 @@ mod tests {
             source: Some(v2::ComponentSource::Local(format!("{id}.wasm"))),
             build: None,
             dependencies: depends_on(dep_on),
+            targets: None,
         }
     }
 

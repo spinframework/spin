@@ -2,6 +2,7 @@
 //! a fully realised collection of WIT packages with their worlds and
 //! mappings.
 
+use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
 use anyhow::{anyhow, Context};
@@ -20,11 +21,11 @@ const DEFAULT_PACKAGE_REGISTRY: &str = "spinframework.dev";
 /// Registry data will be cached, with a lockfile under `.spin` mapping
 /// environment IDs to digests (to allow cache lookup without needing
 /// to fetch the digest from the registry).
-pub async fn load_environments(
-    env_ids: &[TargetEnvironmentRef],
+pub async fn load_environments<'a>(
+    env_ids: &[&'a TargetEnvironmentRef],
     cache_root: Option<std::path::PathBuf>,
     app_dir: &std::path::Path,
-) -> anyhow::Result<Vec<TargetEnvironment>> {
+) -> anyhow::Result<HashMap<&'a TargetEnvironmentRef, Arc<TargetEnvironment>>> {
     if env_ids.is_empty() {
         return Ok(Default::default());
     }
@@ -47,7 +48,10 @@ pub async fn load_environments(
             .iter()
             .map(|e| load_environment(e, app_dir, &cache, &lockfile)),
     )
-    .await?;
+    .await?
+    .into_iter()
+    .map(|(k, v)| (k, Arc::new(v)))
+    .collect();
 
     let final_lockfile = &*lockfile.read().await;
     if *final_lockfile != orig_lockfile {
@@ -61,13 +65,13 @@ pub async fn load_environments(
 }
 
 /// Loads the given `TargetEnvironment` from a registry or directory.
-async fn load_environment(
-    env_id: &TargetEnvironmentRef,
+async fn load_environment<'a>(
+    env_id: &'a TargetEnvironmentRef,
     app_dir: &Path,
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
-) -> anyhow::Result<TargetEnvironment> {
-    match env_id {
+) -> anyhow::Result<(&'a TargetEnvironmentRef, TargetEnvironment)> {
+    let env = match env_id {
         TargetEnvironmentRef::DefaultRegistry(id) => {
             load_environment_from_registry(DEFAULT_ENV_DEF_REGISTRY_PREFIX, id, cache, lockfile)
                 .await
@@ -78,7 +82,8 @@ async fn load_environment(
         TargetEnvironmentRef::File { path } => {
             load_environment_from_file(app_dir.join(path), cache, lockfile).await
         }
-    }
+    }?;
+    Ok((env_id, env))
 }
 
 /// Loads a `TargetEnvironment` from the environment definition at the given

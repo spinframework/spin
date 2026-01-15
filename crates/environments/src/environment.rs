@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use anyhow::Context;
 use spin_common::ui::quoted_path;
@@ -9,6 +9,8 @@ mod env_loader;
 mod lockfile;
 
 use definition::WorldName;
+
+use crate::Targets;
 
 /// A fully realised deployment environment, e.g. Spin 2.7,
 /// SpinKube 3.1, Fermyon Cloud. The `TargetEnvironment` provides a mapping
@@ -23,18 +25,47 @@ pub struct TargetEnvironment {
     unknown_capabilities: Vec<String>,
 }
 
+pub(crate) struct RealisedTargets {
+    default: Vec<Arc<TargetEnvironment>>,
+    overrides: HashMap<String, Vec<Arc<TargetEnvironment>>>,
+}
+
+impl RealisedTargets {
+    pub fn iter(&self) -> impl Iterator<Item = &Arc<TargetEnvironment>> {
+        self.default
+            .iter()
+            .chain(self.overrides.values().flat_map(|v| v.iter()))
+    }
+
+    pub fn get(&self, component_id: &str) -> &[Arc<TargetEnvironment>] {
+        self.overrides.get(component_id).unwrap_or(&self.default)
+    }
+}
+
 impl TargetEnvironment {
     /// Loads the specified list of environments. This fetches all required
     /// environment definitions from their references, and then chases packages
     /// references until the entire target environment is fully loaded.
     /// The function also caches registry references in the application directory,
     /// to avoid loading from the network when the app is validated again.
-    pub async fn load_all(
-        env_ids: &[TargetEnvironmentRef],
+    pub async fn load_all<'a>(
+        targets: Targets<'a>,
         cache_root: Option<std::path::PathBuf>,
         app_dir: &std::path::Path,
-    ) -> anyhow::Result<Vec<Self>> {
-        env_loader::load_environments(env_ids, cache_root, app_dir).await
+    ) -> anyhow::Result<RealisedTargets> {
+        let env_ids = targets.all_refs();
+        let envs = env_loader::load_environments(&env_ids, cache_root, app_dir).await?;
+
+        let env = |id: &TargetEnvironmentRef| envs[id].clone();
+
+        let default = targets.default.iter().map(env).collect();
+        let overrides = targets
+            .overrides
+            .iter()
+            .map(|(c, ids)| (c.clone(), ids.iter().map(env).collect()))
+            .collect();
+
+        Ok(RealisedTargets { default, overrides })
     }
 
     /// The environment name for UI purposes
@@ -236,12 +267,12 @@ mod test {
     }
 
     /// Build an environment using the given WIT that maps the "s" trigger
-    /// to the "spin:test/simple@1.0.0" world (and denies all other triggers).
-    fn target_simple_world(wit_path: &Path) -> TargetEnvironment {
-        let candidate_worlds = load_simple_world(wit_path, "spin:test/simple@1.0.0");
+    /// to the given world (and denies all other triggers).
+    fn target_world_unarced(env_name: &str, wit_path: &Path, world: &str) -> TargetEnvironment {
+        let candidate_worlds = load_simple_world(wit_path, world);
 
         TargetEnvironment {
-            name: "test".to_owned(),
+            name: env_name.to_owned(),
             trigger_worlds: [("s".to_owned(), candidate_worlds)].into_iter().collect(),
             trigger_capabilities: Default::default(),
             unknown_trigger: UnknownTrigger::Deny,
@@ -249,19 +280,41 @@ mod test {
         }
     }
 
+    /// Build an environment using the given WIT that maps the "s" trigger
+    /// to the "spin:test/simple@1.0.0" world (and denies all other triggers).
+    fn target_simple_world_unarced(wit_path: &Path) -> TargetEnvironment {
+        target_world_unarced("test", wit_path, "spin:test/simple@1.0.0")
+    }
+
+    /// Build an environment using the given WIT that maps the "s" trigger
+    /// to the "spin:test/simple@1.0.0" world (and denies all other triggers).
+    fn target_simple_world(wit_path: &Path) -> Arc<TargetEnvironment> {
+        Arc::new(target_simple_world_unarced(wit_path))
+    }
+
+    /// Build an environment using the given WIT that maps the "s" trigger
+    /// to the "spin:test/not-so-simple@1.0.0" world (and denies all other triggers).
+    fn target_not_so_simple_world(wit_path: &Path) -> Arc<TargetEnvironment> {
+        Arc::new(target_world_unarced(
+            "test-nss",
+            wit_path,
+            "spin:test/not-so-simple@1.0.0",
+        ))
+    }
+
     /// Build an environment using the given WIT that maps all triggers to
     /// the "spin:test/simple-import-only@1.0.0" world. (This isn't a very realistic example
     /// because a fallback world would usually be imports-only.)
-    fn target_import_only_forgiving(wit_path: &Path) -> TargetEnvironment {
+    fn target_import_only_forgiving(wit_path: &Path) -> Arc<TargetEnvironment> {
         let candidate_worlds = load_simple_world(wit_path, "spin:test/simple-import-only@1.0.0");
 
-        TargetEnvironment {
+        Arc::new(TargetEnvironment {
             name: "test".to_owned(),
             trigger_worlds: [].into_iter().collect(),
             trigger_capabilities: Default::default(),
             unknown_trigger: UnknownTrigger::Allow(candidate_worlds),
             unknown_capabilities: Default::default(),
-        }
+        })
     }
 
     #[tokio::test]
@@ -290,6 +343,146 @@ mod test {
                 .collect::<Vec<_>>()
                 .join("\n")
         );
+    }
+
+    #[tokio::test]
+    async fn can_override_validation_at_component_level() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm1 = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+        let wasm2 = generate_dummy_component(&wit_text, "spin:test/not-so-simple@1.0.0");
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::write(temp_dir.path().join("wasm1"), wasm1).unwrap();
+        std::fs::write(temp_dir.path().join("wasm2"), wasm2).unwrap();
+
+        let env1 = target_simple_world(&wit_path);
+        let env2 = target_not_so_simple_world(&wit_path);
+
+        // This would normally be derived from the manifest
+        let targets = RealisedTargets {
+            default: vec![env1],
+            overrides: [("nss".to_string(), vec![env2])].into_iter().collect(),
+        };
+
+        let manifest = spin_manifest::manifest_from_str(
+            r#"
+            spin_manifest_version = 2
+
+            [application]
+            name = "test"
+            targets = ["test"]  # default: maps to env1 as per `targets`
+
+            [[trigger.s]]
+            route = "/1"
+            component = { source = "wasm1" }
+
+            [[trigger.s]]
+            route = "/2"
+            component = "nss"
+
+            [component.nss]
+            source = "wasm2"
+            targets = ["test-nss"]  # override: maps to env2 as per `targets`
+        "#,
+        )
+        .unwrap();
+
+        let application = crate::ApplicationToValidate::new(manifest, temp_dir.path())
+            .await
+            .unwrap();
+
+        let validation = crate::validate_application_against_environments(&application, &targets)
+            .await
+            .unwrap();
+        assert!(
+            validation.errors().is_empty(),
+            "{}",
+            validation
+                .errors()
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert!(validation.is_ok());
+    }
+
+    #[tokio::test]
+    async fn override_at_component_level_bad_component_is_caught() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm1 = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+        let wasm2 = generate_dummy_component(&wit_text, "spin:test/not-so-simple@1.0.0");
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::write(temp_dir.path().join("wasm1"), wasm1).unwrap();
+        std::fs::write(temp_dir.path().join("wasm2"), wasm2).unwrap();
+
+        let env1 = target_simple_world(&wit_path);
+        let env2 = target_not_so_simple_world(&wit_path);
+
+        // This would normally be derived from the manifest
+        let targets = RealisedTargets {
+            default: vec![env2],
+            overrides: [("nss".to_string(), vec![env1])].into_iter().collect(),
+        };
+
+        let manifest = spin_manifest::manifest_from_str(
+            r#"
+            spin_manifest_version = 2
+
+            [application]
+            name = "test"
+            targets = ["nss-test"]  # default: maps to env2 as per `targets`
+
+            [[trigger.s]]
+            route = "/1"
+            component = { source = "wasm1" }
+
+            [[trigger.s]]
+            route = "/2"
+            component = "nss"
+
+            [component.nss]
+            source = "wasm2"
+            targets = ["test"]  # override: maps to env1 as per `targets`
+        "#,
+        )
+        .unwrap();
+
+        let application = crate::ApplicationToValidate::new(manifest, temp_dir.path())
+            .await
+            .unwrap();
+
+        let validation = crate::validate_application_against_environments(&application, &targets)
+            .await
+            .unwrap();
+
+        let errs = validation.errors();
+        assert!(!errs.is_empty());
+
+        let err = errs[0].to_string();
+        assert!(
+            err.contains("Component nss (file \"wasm2\") can't run in environment test"),
+            "unexpected error {err}"
+        );
+        assert!(
+            err.contains("requires imports named"),
+            "unexpected error {err}"
+        );
+        assert!(
+            err.contains("spin:test/evil@1.0.0"),
+            "unexpected error {err}"
+        );
+
+        assert!(!validation.is_ok());
     }
 
     #[tokio::test]
@@ -335,7 +528,7 @@ mod test {
             .unwrap();
         let wasm = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
 
-        let mut env = target_simple_world(&wit_path);
+        let mut env = target_simple_world_unarced(&wit_path);
         env.trigger_capabilities.insert(
             "s".to_owned(),
             vec![
@@ -343,6 +536,7 @@ mod test {
                 "nice_cup_of_tea".to_owned(),
             ],
         );
+        let env = Arc::new(env);
 
         assert!(env.supports_trigger_type(&"s".to_owned()));
         assert!(!env.supports_trigger_type(&"t".to_owned()));

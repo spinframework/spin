@@ -67,6 +67,7 @@ pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Erro
                 key_value_stores: component.key_value_stores,
                 sqlite_databases: component.sqlite_databases,
                 ai_models: component.ai_models,
+                targets: Default::default(),
                 build: component.build,
                 tool: Default::default(),
                 allowed_outbound_hosts,

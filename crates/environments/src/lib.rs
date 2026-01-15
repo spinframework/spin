@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::Arc};
+
 use anyhow::{anyhow, Context};
 
 mod environment;
@@ -7,6 +9,33 @@ use environment::{CandidateWorld, CandidateWorlds, TargetEnvironment, TriggerTyp
 pub use loader::ApplicationToValidate;
 use loader::ComponentToValidate;
 use spin_manifest::schema::v2::TargetEnvironmentRef;
+
+use crate::environment::RealisedTargets;
+
+#[derive(Default)]
+pub struct Targets<'a> {
+    pub default: &'a [TargetEnvironmentRef],
+    pub overrides: HashMap<String, &'a [TargetEnvironmentRef]>,
+}
+
+impl<'a> Targets<'a> {
+    fn is_empty(&self) -> bool {
+        self.default.is_empty() && self.overrides.is_empty()
+    }
+
+    fn all_refs(&self) -> Vec<&TargetEnvironmentRef> {
+        let mut set = std::collections::HashSet::new();
+        for env_id in self.default {
+            set.insert(env_id);
+        }
+        for list in self.overrides.values() {
+            for env_id in *list {
+                set.insert(env_id);
+            }
+        }
+        set.into_iter().collect()
+    }
+}
 
 /// The result of validating an application against a list of target environments.
 /// If `is_ok` returns true (or equivalently if the `errors` collection is empty),
@@ -34,17 +63,17 @@ impl TargetEnvironmentValidation {
 /// outcome of validation.
 ///
 /// If the return value is `Err(...)`, then we weren't able even to attempt validation.
-pub async fn validate_application_against_environment_ids(
+pub async fn validate_application_against_environment_ids<'a>(
     application: &ApplicationToValidate,
-    env_ids: &[TargetEnvironmentRef],
+    targets: Targets<'a>,
     cache_root: Option<std::path::PathBuf>,
     app_dir: &std::path::Path,
 ) -> anyhow::Result<TargetEnvironmentValidation> {
-    if env_ids.is_empty() {
+    if targets.is_empty() {
         return Ok(Default::default());
     }
 
-    let envs = TargetEnvironment::load_all(env_ids, cache_root, app_dir).await?;
+    let envs = TargetEnvironment::load_all(targets, cache_root, app_dir).await?;
     validate_application_against_environments(application, &envs).await
 }
 
@@ -54,7 +83,7 @@ pub async fn validate_application_against_environment_ids(
 /// For the slightly funky return type, see [validate_application_against_environment_ids].
 async fn validate_application_against_environments(
     application: &ApplicationToValidate,
-    envs: &[TargetEnvironment],
+    envs: &RealisedTargets,
 ) -> anyhow::Result<TargetEnvironmentValidation> {
     for trigger_type in application.trigger_types() {
         if let Some(env) = envs.iter().find(|e| !e.supports_trigger_type(trigger_type)) {
@@ -71,6 +100,7 @@ async fn validate_application_against_environments(
 
     for (trigger_type, component) in components_by_trigger_type {
         for component in &component {
+            let envs = envs.get(component.id());
             errs.extend(
                 validate_component_against_environments(envs, &trigger_type, component).await,
             );
@@ -88,7 +118,7 @@ async fn validate_application_against_environments(
 /// An empty list means the component has passed validation and is compatible with
 /// all target environments.
 async fn validate_component_against_environments(
-    envs: &[TargetEnvironment],
+    envs: &[Arc<TargetEnvironment>],
     trigger_type: &TriggerType,
     component: &ComponentToValidate<'_>,
 ) -> Vec<anyhow::Error> {
