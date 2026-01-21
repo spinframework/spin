@@ -8,6 +8,7 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 spin-common = { path = "../common" }
+spin-dependency-wit = { path = "../dependency-wit" }
 spin-environments = { path = "../environments" }
 spin-manifest = { path = "../manifest" }
 spin-serde = { path = "../serde" }
