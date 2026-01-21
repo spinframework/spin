@@ -33,7 +33,11 @@ pub async fn build(
         })?;
     let app_dir = parent_dir(manifest_file)?;
 
-    let build_result = build_components(component_ids, build_info.components(), &app_dir);
+    let components_to_build = components_to_build(component_ids, build_info.components())?;
+
+    regenerate_wits(&components_to_build, &app_dir).await?;
+
+    let build_result = build_components(components_to_build, &app_dir);
 
     // Emit any required warnings now, so that they don't bury any errors.
     if let Some(e) = build_info.load_error() {
@@ -94,11 +98,20 @@ pub async fn build_default(manifest_file: &Path, cache_root: Option<PathBuf>) ->
     build(manifest_file, &[], TargetChecking::Check, cache_root).await
 }
 
-fn build_components(
+// fn build_components(
+//     component_ids: &[String],
+//     components: Vec<ComponentBuildInfo>,
+//     app_dir: &Path,
+// ) -> Result<(), anyhow::Error> {
+//     let components_to_build = components_to_build(component_ids, components)?;
+
+//     build_components_2(app_dir, components_to_build)
+// }
+
+fn components_to_build(
     component_ids: &[String],
     components: Vec<ComponentBuildInfo>,
-    app_dir: &Path,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<Vec<ComponentBuildInfo>> {
     let components_to_build = if component_ids.is_empty() {
         components
     } else {
@@ -119,6 +132,34 @@ fn build_components(
             .collect()
     };
 
+    Ok(components_to_build)
+}
+
+async fn regenerate_wits(
+    components_to_build: &[ComponentBuildInfo],
+    app_root: &Path,
+) -> anyhow::Result<()> {
+    for component in components_to_build {
+        let component_dir = match component.build.as_ref().and_then(|b| b.workdir.as_ref()) {
+            None => app_root.to_owned(),
+            Some(d) => app_root.join(d),
+        };
+        let dest_file = component_dir.join("spin-dependencies.wit");
+        spin_dependency_wit::extract_wits_into(
+            component.dependencies.inner.iter(),
+            app_root,
+            dest_file,
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+fn build_components(
+    components_to_build: Vec<ComponentBuildInfo>,
+    app_dir: &Path,
+) -> anyhow::Result<()> {
     if components_to_build.iter().all(|c| c.build.is_none()) {
         println!("None of the components have a build command.");
         println!("For information on specifying a build command, see https://spinframework.dev/build#setting-up-for-spin-build.");
