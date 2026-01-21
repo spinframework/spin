@@ -115,6 +115,7 @@ llm-metal = ["llm", "spin-runtime-factors/llm-metal"]
 llm-cublas = ["llm", "spin-runtime-factors/llm-cublas"]
 # This enables the collection and emission CPU time elapsed per component execution.
 cpu-time-metrics = ["spin-factors-executor/cpu-time-metrics"]
+experimental-wasm-features = ["spin-trigger/experimental-wasm-features"]
 
 [workspace]
 members = [

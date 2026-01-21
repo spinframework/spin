@@ -10,6 +10,8 @@ use std::path::PathBuf;
 use std::{future::Future, sync::Arc};
 
 use anyhow::{Context, Result};
+#[cfg(feature = "experimental-wasm-features")]
+use clap::ValueEnum;
 use clap::{Args, IntoApp, Parser};
 use spin_app::App;
 use spin_common::sloth;
@@ -111,6 +113,10 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
     )]
     pub runtime_config_file: Option<PathBuf>,
 
+    #[cfg(feature = "experimental-wasm-features")]
+    #[clap(long, value_enum)]
+    pub experimental_wasm_feature: Vec<ExperimentalWasmFeature>,
+
     /// Set the application state directory path. This is used in the default
     /// locations for logs, key value stores, etc.
     ///
@@ -131,6 +137,15 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
 
     #[clap(long = "launch-metadata-only", hide = true)]
     pub launch_metadata_only: bool,
+}
+
+#[cfg(feature = "experimental-wasm-features")]
+#[derive(Clone, Debug, ValueEnum)]
+pub enum ExperimentalWasmFeature {
+    Gc,
+    ReferenceTypes,
+    Exceptions,
+    FunctionReferences,
 }
 
 /// Configuration options that are common to all triggers.
@@ -210,6 +225,23 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
 
         if self.disable_pooling {
             config.disable_pooling();
+        }
+
+        #[cfg(feature = "experimental-wasm-features")]
+        {
+            let wasmtime_config = config.wasmtime_config();
+            for wasm_feature in self.experimental_wasm_feature {
+                match wasm_feature {
+                    ExperimentalWasmFeature::Gc => wasmtime_config.wasm_gc(true),
+                    ExperimentalWasmFeature::ReferenceTypes => {
+                        wasmtime_config.wasm_reference_types(true)
+                    }
+                    ExperimentalWasmFeature::Exceptions => wasmtime_config.wasm_exceptions(true),
+                    ExperimentalWasmFeature::FunctionReferences => {
+                        wasmtime_config.wasm_function_references(true)
+                    }
+                };
+            }
         }
 
         let state_dir = match &self.state_dir {
