@@ -33,12 +33,23 @@ impl ManifestBuildInfo {
         }
     }
 
-    pub fn deployment_targets(&self) -> &[spin_manifest::schema::v2::TargetEnvironmentRef] {
+    pub fn deployment_targets<'a>(&'a self) -> spin_environments::Targets<'a> {
         match self {
             Self::Loadable {
-                deployment_targets, ..
-            } => deployment_targets,
-            Self::Unloadable { .. } => &[],
+                deployment_targets,
+                components,
+                ..
+            } => {
+                let overrides = components
+                    .iter()
+                    .filter_map(|c| c.targets.as_ref().map(|ts| (c.id.clone(), ts.as_slice())))
+                    .collect();
+                spin_environments::Targets {
+                    default: deployment_targets,
+                    overrides,
+                }
+            }
+            Self::Unloadable { .. } => Default::default(),
         }
     }
 
@@ -110,6 +121,7 @@ fn build_configs_from_manifest(
             build: c.build.clone(),
             source: Some(c.source.clone()),
             dependencies: c.dependencies.clone(),
+            targets: c.targets.clone(),
         })
         .collect()
 }
@@ -166,6 +178,8 @@ pub struct ComponentBuildInfo {
     pub build: Option<v2::ComponentBuildConfig>,
     #[serde(default)]
     pub dependencies: v2::ComponentDependencies,
+    #[serde(default)]
+    pub targets: Option<Vec<v2::TargetEnvironmentRef>>,
 }
 
 #[derive(Deserialize)]

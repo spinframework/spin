@@ -77,7 +77,9 @@ pub struct AppDetails {
     /// `authors = ["author@example.com"]`
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub authors: Vec<String>,
-    /// The Spin environments with which the application must be compatible.
+    /// The Spin environments with which application components must be compatible
+    /// unless otherwise specified. Individual components may express different
+    /// requirements: these override the application-level default.
     ///
     /// Example: `targets = ["spin-up:3.3", "spinkube:0.4"]`
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -397,6 +399,12 @@ pub struct Component {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(with = "Vec<json_schema::AIModel>")]
     pub ai_models: Vec<String>,
+    /// The Spin environments with which the component must be compatible.
+    /// If present, this overrides the default application targets (they are not combined).
+    ///
+    /// Example: `targets = ["spin-up:3.3", "spinkube:0.4"]`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub targets: Option<Vec<TargetEnvironmentRef>>,
     /// The component build configuration.
     ///
     /// Learn more: https://spinframework.dev/build
@@ -554,7 +562,7 @@ impl ComponentDependencies {
 }
 
 /// Identifies a deployment target.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged, deny_unknown_fields)]
 pub enum TargetEnvironmentRef {
     /// Environment definition doc reference e.g. `spin-up:3.2`, `my-host`. This is looked up
@@ -784,6 +792,7 @@ mod tests {
             key_value_stores: labels.clone(),
             sqlite_databases: labels,
             ai_models: vec![],
+            targets: None,
             build: None,
             tool: Map::new(),
             dependencies_inherit_configuration: false,

@@ -8456,6 +8456,7 @@ dependencies = [
  "spin-loader",
  "spin-manifest",
  "spin-serde",
+ "tempfile",
  "tokio",
  "toml 0.8.19",
  "tracing",
