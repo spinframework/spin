@@ -4,6 +4,7 @@ use anyhow::Context;
 use spin_loader::WasmLoader;
 use spin_manifest::schema::v2::ComponentDependency;
 use spin_serde::DependencyName;
+use tokio::io::AsyncWriteExt;
 use wit_component::DecodedWasm;
 
 pub async fn extract_wits_into(
@@ -14,20 +15,30 @@ pub async fn extract_wits_into(
     let loader = WasmLoader::new(app_root.as_ref().to_owned(), None, None).await?;
 
     let mut package_wits = indexmap::IndexMap::new();
-    let mut world_wits = vec![];
+
+    let mut aggregating_resolve = wit_parser::Resolve::default();
+    let aggregating_pkg_id =
+        aggregating_resolve.push_str("dummy.wit", "package root:component;\n\nworld root {}")?;
+    let aggregating_world_id =
+        aggregating_resolve.select_world(&[aggregating_pkg_id], Some("root"))?;
 
     // TODO: figure out what to do if we import two itfs from same dep
-    for (dependency_name, dependency) in source {
+    for (index, (dependency_name, dependency)) in source.enumerate() {
         // TODO: map `export`
         let (wasm_path, _export) = loader
             .load_component_dependency(dependency_name, dependency)
             .await?;
         let wasm_bytes = tokio::fs::read(&wasm_path).await?;
 
-        let decoded = read_wasm(&wasm_bytes)?; // this erases the package name, hurrah
-        let importised = importize(decoded, None, None)?;
+        let decoded = read_wasm(&wasm_bytes)?;
+        let impo_world = format!("impo-world{index}");
+        let importised = importize(decoded, None, Some(&impo_world))?;
 
-        let root_pkg = importised.package(); // the useless root:component one
+        // Capture WITs for all packages used in the importised thing.
+        // Things like WASI packages may be depended on my multiple packages
+        // so we index on the package name to avoid emitting them twice.
+
+        let root_pkg = importised.package();
         let useful_pkgs = importised
             .resolve()
             .packages
@@ -44,33 +55,50 @@ pub async fn extract_wits_into(
             package_wits.insert(pkg_name, printer.output.to_string());
         }
 
-        let output = wit_component::OutputToString::default();
-        let mut printer = wit_component::WitPrinter::new(output);
-        // TODO: limit to the imported interfaces
-        printer.print(importised.resolve(), root_pkg, &[])?;
-        world_wits.push(format!("{}", printer.output));
+        // Now add the imports to the aggregating component import world
+
+        let imports = match dependency_name {
+            DependencyName::Plain(_) => all_imports(&importised),
+            DependencyName::Package(dependency_package_name) => {
+                match dependency_package_name.interface.as_ref() {
+                    Some(itf) => one_import(&importised, itf),
+                    None => all_imports(&importised),
+                }
+            }
+        };
+
+        let remap = aggregating_resolve.merge(importised.resolve().clone())?;
+        for iid in imports {
+            let mapped_iid = remap.map_interface(iid, None)?;
+            let wk = wit_parser::WorldKey::Interface(mapped_iid);
+            let world_item = wit_parser::WorldItem::Interface {
+                id: mapped_iid,
+                stability: wit_parser::Stability::Unknown,
+            };
+            aggregating_resolve
+                .worlds
+                .get_mut(aggregating_world_id)
+                .unwrap()
+                .imports
+                .insert(wk, world_item);
+        }
     }
+
+    // Text for the root package and world(s)
+    let world_output = wit_component::OutputToString::default();
+    let mut world_printer = wit_component::WitPrinter::new(world_output);
+    world_printer.print(&aggregating_resolve, aggregating_pkg_id, &[])?;
 
     tokio::fs::create_dir_all(dest_file.as_ref().parent().unwrap()).await?;
 
-    use tokio::io::AsyncWriteExt;
     let mut dest_file = tokio::fs::File::create(dest_file.as_ref()).await?;
 
-    // TODO: ugh!
+    // Print the root package and the world(s) with the imports
     dest_file
-        .write_all("package root:component;\n\nworld root {\n".as_bytes())
+        .write_all(world_printer.output.to_string().as_bytes())
         .await?;
-    for world_wit in world_wits {
-        let text = world_wit.replace("package root:component;", "");
-        let text = text.replace("world root-importized", "");
-        let text = text.trim();
-        let text = text.trim_matches('{').trim_matches('}');
-        let text = text.trim();
-        dest_file.write_all(text.trim().as_bytes()).await?;
-        dest_file.write_all("\n".as_bytes()).await?;
-    }
-    dest_file.write_all("}\n\n".as_bytes()).await?;
 
+    // Print each package
     for package_wit in package_wits.values() {
         dest_file.write_all(package_wit.as_bytes()).await?;
     }
@@ -78,6 +106,32 @@ pub async fn extract_wits_into(
     dest_file.flush().await?;
 
     Ok(())
+}
+
+fn all_imports(wasm: &DecodedWasm) -> Vec<wit_parser::InterfaceId> {
+    wasm.resolve()
+        .worlds
+        .iter()
+        .flat_map(|(_wid, w)| w.imports.values())
+        .flat_map(as_interface)
+        .collect()
+}
+
+fn as_interface(wi: &wit_parser::WorldItem) -> Option<wit_parser::InterfaceId> {
+    match wi {
+        wit_parser::WorldItem::Interface { id, .. } => Some(*id),
+        _ => None,
+    }
+}
+
+fn one_import(wasm: &DecodedWasm, name: &spin_serde::KebabId) -> Vec<wit_parser::InterfaceId> {
+    let id = wasm
+        .resolve()
+        .interfaces
+        .iter()
+        .find(|i| i.1.name == Some(name.to_string()))
+        .map(|t| t.0);
+    id.into_iter().collect()
 }
 
 fn read_wasm(wasm_bytes: &[u8]) -> anyhow::Result<DecodedWasm> {
