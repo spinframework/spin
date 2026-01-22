@@ -120,7 +120,13 @@ jobs:
         with:
           openssl-windows: "${{ matrix.os == 'windows-latest' }}"
 
+      - name: build release (canary)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: cargo build --features experimental-wasm-features --release ${{ matrix.config.extraArgs }}
+
       - name: build release
+        if: github.ref != 'refs/heads/main'
         shell: bash
         run: cargo build --release ${{ matrix.config.extraArgs }}
 
