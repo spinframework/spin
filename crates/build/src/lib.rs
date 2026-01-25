@@ -21,6 +21,7 @@ pub async fn build(
     manifest_file: &Path,
     component_ids: &[String],
     target_checks: TargetChecking,
+    wit_generation: GenerateDependencyWits,
     cache_root: Option<PathBuf>,
 ) -> Result<()> {
     let build_info = component_build_configs(manifest_file)
@@ -35,7 +36,9 @@ pub async fn build(
 
     let components_to_build = components_to_build(component_ids, build_info.components())?;
 
-    regenerate_wits(&components_to_build, &app_dir).await?;
+    if wit_generation.generate() {
+        regenerate_wits(&components_to_build, &app_dir).await?;
+    }
 
     let build_result = build_components(components_to_build, &app_dir);
 
@@ -95,18 +98,15 @@ pub async fn build(
 /// components, perform target checking). We run a "default build" in several
 /// places and this centralises the logic of what such a "default build" means.
 pub async fn build_default(manifest_file: &Path, cache_root: Option<PathBuf>) -> Result<()> {
-    build(manifest_file, &[], TargetChecking::Check, cache_root).await
+    build(
+        manifest_file,
+        &[],
+        TargetChecking::Check,
+        GenerateDependencyWits::Generate,
+        cache_root,
+    )
+    .await
 }
-
-// fn build_components(
-//     component_ids: &[String],
-//     components: Vec<ComponentBuildInfo>,
-//     app_dir: &Path,
-// ) -> Result<(), anyhow::Error> {
-//     let components_to_build = components_to_build(component_ids, components)?;
-
-//     build_components_2(app_dir, components_to_build)
-// }
 
 fn components_to_build(
     component_ids: &[String],
@@ -372,6 +372,21 @@ impl TargetChecking {
     }
 }
 
+/// Specifies dependency WIT generation behaviour
+pub enum GenerateDependencyWits {
+    /// The build should generate WITs for component dependencies.
+    Generate,
+    /// The build should not generate WITs.
+    Skip,
+}
+
+impl GenerateDependencyWits {
+    /// Should the build generate dependency WITs?
+    fn generate(&self) -> bool {
+        matches!(self, Self::Generate)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -384,26 +399,44 @@ mod tests {
     #[tokio::test]
     async fn can_load_even_if_trigger_invalid() {
         let bad_trigger_file = test_data_root().join("bad_trigger.toml");
-        build(&bad_trigger_file, &[], TargetChecking::Skip, None)
-            .await
-            .unwrap();
+        build(
+            &bad_trigger_file,
+            &[],
+            TargetChecking::Skip,
+            GenerateDependencyWits::Skip,
+            None,
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
     async fn succeeds_if_target_env_matches() {
         let manifest_path = test_data_root().join("good_target_env.toml");
-        build(&manifest_path, &[], TargetChecking::Check, None)
-            .await
-            .unwrap();
+        build(
+            &manifest_path,
+            &[],
+            TargetChecking::Check,
+            GenerateDependencyWits::Skip,
+            None,
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
     async fn fails_if_target_env_does_not_match() {
         let manifest_path = test_data_root().join("bad_target_env.toml");
-        let err = build(&manifest_path, &[], TargetChecking::Check, None)
-            .await
-            .expect_err("should have failed")
-            .to_string();
+        let err = build(
+            &manifest_path,
+            &[],
+            TargetChecking::Check,
+            GenerateDependencyWits::Skip,
+            None,
+        )
+        .await
+        .expect_err("should have failed")
+        .to_string();
 
         // build prints validation errors rather than returning them to top level
         // (because there could be multiple errors) - see has_meaningful_error_if_target_env_does_not_match
