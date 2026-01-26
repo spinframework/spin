@@ -4,7 +4,6 @@ use anyhow::Context;
 use spin_loader::WasmLoader;
 use spin_manifest::schema::v2::ComponentDependency;
 use spin_serde::DependencyName;
-use tokio::io::AsyncWriteExt;
 use wit_component::DecodedWasm;
 
 pub async fn extract_wits_into(
@@ -12,6 +11,18 @@ pub async fn extract_wits_into(
     app_root: impl AsRef<Path>,
     dest_file: impl AsRef<Path>,
 ) -> anyhow::Result<()> {
+    let wit_text = extract_wits(source, app_root).await?;
+
+    tokio::fs::create_dir_all(dest_file.as_ref().parent().unwrap()).await?;
+    tokio::fs::write(dest_file, wit_text.as_bytes()).await?;
+
+    Ok(())
+}
+
+pub async fn extract_wits(
+    source: impl Iterator<Item = (&DependencyName, &ComponentDependency)>,
+    app_root: impl AsRef<Path>,
+) -> anyhow::Result<String> {
     let loader = WasmLoader::new(app_root.as_ref().to_owned(), None, None).await?;
 
     let mut package_wits = indexmap::IndexMap::new();
@@ -89,23 +100,17 @@ pub async fn extract_wits_into(
     let mut world_printer = wit_component::WitPrinter::new(world_output);
     world_printer.print(&aggregating_resolve, aggregating_pkg_id, &[])?;
 
-    tokio::fs::create_dir_all(dest_file.as_ref().parent().unwrap()).await?;
-
-    let mut dest_file = tokio::fs::File::create(dest_file.as_ref()).await?;
+    let mut buf = String::new();
 
     // Print the root package and the world(s) with the imports
-    dest_file
-        .write_all(world_printer.output.to_string().as_bytes())
-        .await?;
+    buf.push_str(&world_printer.output.to_string());
 
     // Print each package
     for package_wit in package_wits.values() {
-        dest_file.write_all(package_wit.as_bytes()).await?;
+        buf.push_str(package_wit);
     }
 
-    dest_file.flush().await?;
-
-    Ok(())
+    Ok(buf)
 }
 
 fn all_imports(wasm: &DecodedWasm) -> Vec<wit_parser::InterfaceId> {
