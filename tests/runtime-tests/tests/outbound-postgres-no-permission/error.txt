@@ -1,1 +1,1 @@
-Error::ConnectionFailed("address postgres://spin:spin@localhost:5432/spin_dev is not permitted")
+Error::ConnectionFailed("address postgres://localhost:5432 is not permitted")
