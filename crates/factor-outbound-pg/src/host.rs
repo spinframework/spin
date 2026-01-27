@@ -38,10 +38,19 @@ impl<CF: ClientFactory> InstanceState<CF> {
             .ok_or_else(|| v4::Error::ConnectionFailed("no connection found".into()))
     }
 
-    async fn is_address_allowed(&self, address: &str) -> Result<bool> {
-        let Ok(config) = address.parse::<tokio_postgres::Config>() else {
-            return Ok(false);
-        };
+    #[allow(clippy::result_large_err)]
+    async fn ensure_address_allowed(&self, address: &str) -> Result<(), v4::Error> {
+        fn conn_failed(message: impl Into<String>) -> v4::Error {
+            v4::Error::ConnectionFailed(message.into())
+        }
+        fn err_other(err: anyhow::Error) -> v4::Error {
+            v4::Error::Other(err.to_string())
+        }
+
+        let config = address
+            .parse::<tokio_postgres::Config>()
+            .map_err(|e| conn_failed(e.to_string()))?;
+
         for (i, host) in config.get_hosts().iter().enumerate() {
             match host {
                 tokio_postgres::config::Host::Tcp(address) => {
@@ -55,15 +64,24 @@ impl<CF: ClientFactory> InstanceState<CF> {
                             .or_else(|| if ports.len() == 1 { ports.get(1) } else { None });
                     let port_str = port.map(|p| format!(":{p}")).unwrap_or_default();
                     let url = format!("{address}{port_str}");
-                    if !self.allowed_hosts.check_url(&url, "postgres").await? {
-                        return Ok(false);
+                    if !self
+                        .allowed_hosts
+                        .check_url(&url, "postgres")
+                        .await
+                        .map_err(err_other)?
+                    {
+                        return Err(conn_failed(format!(
+                            "address postgres://{url} is not permitted"
+                        )));
                     }
                 }
                 #[cfg(unix)]
-                tokio_postgres::config::Host::Unix(_) => return Ok(false),
+                tokio_postgres::config::Host::Unix(_) => {
+                    return Err(conn_failed("Unix sockets are not supported on WebAssembly"));
+                }
             }
         }
-        Ok(true)
+        Ok(())
     }
 }
 
@@ -82,15 +100,8 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
     async fn open(&mut self, address: String) -> Result<Resource<v3::Connection>, v3::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        if !self
-            .is_address_allowed(&address)
-            .await
-            .map_err(|e| v3::Error::Other(e.to_string()))?
-        {
-            return Err(v3::Error::ConnectionFailed(format!(
-                "address {address} is not permitted"
-            )));
-        }
+        self.ensure_address_allowed(&address).await?;
+
         Ok(self.open_connection(&address).await?)
     }
 
@@ -134,15 +145,8 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     async fn open(&mut self, address: String) -> Result<Resource<v4::Connection>, v4::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        if !self
-            .is_address_allowed(&address)
-            .await
-            .map_err(|e| v4::Error::Other(e.to_string()))?
-        {
-            return Err(v4::Error::ConnectionFailed(format!(
-                "address {address} is not permitted"
-            )));
-        }
+        self.ensure_address_allowed(&address).await?;
+
         self.open_connection(&address).await
     }
 
@@ -199,11 +203,7 @@ impl<CF: ClientFactory> v4::Host for InstanceState<CF> {
 /// Delegate a function call to the v3::HostConnection implementation
 macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
-        if !$self.is_address_allowed(&$address).await.map_err(|e| v4::Error::Other(e.to_string()))? {
-            return Err(v1::PgError::ConnectionFailed(format!(
-                "address {} is not permitted", $address
-            )));
-        }
+        $self.ensure_address_allowed(&$address).await?;
         let connection = match $self.open_connection(&$address).await {
             Ok(c) => c,
             Err(e) => return Err(e.into()),
@@ -221,15 +221,8 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        if !self
-            .is_address_allowed(&address)
-            .await
-            .map_err(|e| v2::Error::Other(e.to_string()))?
-        {
-            return Err(v2::Error::ConnectionFailed(format!(
-                "address {address} is not permitted"
-            )));
-        }
+        self.ensure_address_allowed(&address).await?;
+
         Ok(self.open_connection(&address).await?)
     }
 
