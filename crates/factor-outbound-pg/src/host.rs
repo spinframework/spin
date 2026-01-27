@@ -21,7 +21,7 @@ impl<CF: ClientFactory> InstanceState<CF> {
         self.connections
             .push(
                 self.client_factory
-                    .get_client(address, &self.component_tls_configs)
+                    .get_client(address, &self.assets)
                     .await
                     .map_err(|e| v4::Error::ConnectionFailed(format!("{e:?}")))?,
             )
@@ -48,8 +48,9 @@ impl<CF: ClientFactory> InstanceState<CF> {
         }
 
         let config = address
-            .parse::<tokio_postgres::Config>()
-            .map_err(|e| conn_failed(e.to_string()))?;
+            .parse::<crate::client::SuperConfig>()
+            .map_err(|e| conn_failed(e.to_string()))?
+            .config;
 
         for (i, host) in config.get_hosts().iter().enumerate() {
             match host {

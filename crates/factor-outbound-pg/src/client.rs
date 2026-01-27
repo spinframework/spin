@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-// use native_tls::TlsConnector;
-// use postgres_native_tls::MakeTlsConnector;
-use spin_factor_outbound_networking::ComponentTlsClientConfigs;
+use native_tls::TlsConnector;
+use postgres_native_tls::MakeTlsConnector;
+use spin_locked_app::locked::ContentPath;
 use spin_world::async_trait;
 use spin_world::spin::postgres4_0_0::postgres::{
     self as v4, Column, DbValue, ParameterValue, RowSet,
@@ -24,7 +24,7 @@ pub trait ClientFactory: Default + Send + Sync + 'static {
     type Client: Client;
     // fn new(component_tls_configs: ComponentTlsClientConfigs) -> Self;
     /// Gets a client from the factory.
-    async fn get_client(&self, address: &str, component_tls_configs: &ComponentTlsClientConfigs) -> Result<Self::Client>;
+    async fn get_client(&self, address: &str, assets: &[ContentPath]) -> Result<Self::Client>;
 }
 
 /// A `ClientFactory` that uses a connection pool per address.
@@ -46,17 +46,10 @@ impl Default for PooledTokioClientFactory {
 impl ClientFactory for PooledTokioClientFactory {
     type Client = deadpool_postgres::Object;
 
-    // fn new(component_tls_configs: ComponentTlsClientConfigs) -> Self {
-    //     Self {
-    //         pools: moka::sync::Cache::new(CONNECTION_POOL_CACHE_CAPACITY),
-    //         component_tls_configs,
-    //     }
-    // }
-
-    async fn get_client(&self, address: &str, component_tls_configs: &ComponentTlsClientConfigs) -> Result<Self::Client> {
+    async fn get_client(&self, address: &str, assets: &[ContentPath]) -> Result<Self::Client> {
         let pool = self
             .pools
-            .try_get_with_by_ref(address, || create_connection_pool(address, component_tls_configs))
+            .try_get_with_by_ref(address, || create_connection_pool(address, assets))
             .map_err(ArcError)
             .context("establishing PostgreSQL connection pool")?;
 
@@ -64,10 +57,69 @@ impl ClientFactory for PooledTokioClientFactory {
     }
 }
 
+pub(crate) struct SuperConfig {
+    pub config: tokio_postgres::Config,
+    ssl_root_cert: Option<String>,
+}
+
+impl std::str::FromStr for SuperConfig {
+    type Err = <tokio_postgres::Config as std::str::FromStr>::Err;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let (ssl_root_cert, conn_str) =
+            if s.starts_with("postgresql://") || s.starts_with("postgres://") {
+                let url = url::Url::parse(s).unwrap();
+                let (sr, rest): (Vec<_>, _) = url.query_pairs().partition(|t| t.0 == "sslrootcert");
+                let mut url2 = url::Url::parse(s).unwrap();
+                let url2 = url2
+                    .query_pairs_mut()
+                    .clear()
+                    .extend_pairs(rest)
+                    .finish()
+                    .to_string();
+                // let sr = url.query_pairs().find(|(k,v)| k == "sslrootcert").map(|t| t.1.to_string());
+                let sr = match sr.len() {
+                    0 => None,
+                    1 => Some(sr[0].1.to_string()),
+                    _ => panic!("oh no"),
+                };
+                (sr, url2)
+            } else {
+                let bits = s.split(' ');
+                let (ssl_root_certs, rest): (Vec<_>, _) =
+                    bits.partition(|bit| bit.strip_prefix("sslrootcert=").is_some());
+                let ssl_root_certs = ssl_root_certs
+                    .into_iter()
+                    .filter_map(|e| e.strip_prefix("sslrootcert="))
+                    .collect::<Vec<_>>();
+                let sr = match ssl_root_certs.len() {
+                    0 => None,
+                    1 => Some(ssl_root_certs[0].to_owned()),
+                    _ => panic!("oh no"),
+                };
+                let rest = rest.join(" ");
+                (sr, rest)
+            };
+
+        eprintln!("SSL ROOT: {ssl_root_cert:?}");
+        eprintln!("CONFIG: {conn_str}");
+
+        let config = conn_str.parse::<tokio_postgres::Config>()?;
+
+        Ok(Self {
+            ssl_root_cert,
+            config,
+        })
+    }
+}
+
 /// Creates a Postgres connection pool for the given address.
-fn create_connection_pool(address: &str, component_tls_configs: &ComponentTlsClientConfigs) -> Result<deadpool_postgres::Pool> {
-    let config = address
-        .parse::<tokio_postgres::Config>()
+fn create_connection_pool(
+    address: &str,
+    assets: &[ContentPath],
+) -> Result<deadpool_postgres::Pool> {
+    let super_config = address
+        .parse::<SuperConfig>()
         .context("parsing Postgres connection string")?;
 
     tracing::debug!("Build new connection: {}", address);
@@ -76,19 +128,41 @@ fn create_connection_pool(address: &str, component_tls_configs: &ComponentTlsCli
         recycling_method: deadpool_postgres::RecyclingMethod::Clean,
     };
 
-    let mgr = if config.get_ssl_mode() == SslMode::Disable {
-        deadpool_postgres::Manager::from_config(config, NoTls, mgr_config)
+    let mgr = if super_config.config.get_ssl_mode() == SslMode::Disable {
+        deadpool_postgres::Manager::from_config(super_config.config, NoTls, mgr_config)
     } else {
-        // let mut connector: Option<tokio_rustls::TlsConnector> = None;
-        // for host in config.get_hosts() {
-        //     // let ctc = component_tls_configs.get_client_config(host);
-        //     // let connector = tokio_rustls::TlsConnector::from(ctc.inner().clone());
-        // }
-        // let connector = MakeTlsConnector::new(builder.build()?);
-        let arse = Arse {
-            component_tls_configs: component_tls_configs.clone(),
-        };
-        deadpool_postgres::Manager::from_config(config, arse, mgr_config)
+        match super_config.ssl_root_cert.as_ref() {
+            None => deadpool_postgres::Manager::from_config(super_config.config, NoTls, mgr_config),
+            Some(ca_file_path) => {
+                if assets.len() == 1 && assets[0].path.display().to_string() == "/" {
+                    // we are in a copy-mount scenario and can party on
+                } else {
+                    anyhow::bail!("PostgreSQL sslrootcert is not yet supported with direct mounts")
+                };
+
+                let asset_root_url = assets[0]
+                    .content
+                    .source
+                    .as_ref()
+                    .context("LockedComponentSource missing source field")?;
+                let asset_root_dir = spin_common::url::parse_file_url(asset_root_url)?;
+
+                let ca_file_rel_path = ca_file_path.trim_start_matches('/');
+                let ca_file_abs_path = asset_root_dir.join(ca_file_rel_path);
+                eprintln!("CA FILE: {}", ca_file_abs_path.display());
+
+                if !ca_file_abs_path.is_file() {
+                    anyhow::bail!("file {ca_file_path} does not exist in this component");
+                }
+
+                let cert_bytes = std::fs::read(&ca_file_abs_path)?;
+
+                let mut builder = TlsConnector::builder();
+                builder.add_root_certificate(native_tls::Certificate::from_pem(&cert_bytes)?);
+                let connector = MakeTlsConnector::new(builder.build()?);
+                deadpool_postgres::Manager::from_config(super_config.config, connector, mgr_config)
+            }
+        }
     };
 
     // TODO: what is our max size heuristic?  Should this be passed in so that different
@@ -100,102 +174,6 @@ fn create_connection_pool(address: &str, component_tls_configs: &ComponentTlsCli
         .context("building Postgres connection pool")?;
 
     Ok(pool)
-}
-
-#[derive(Clone)]
-struct Arse {
-    component_tls_configs: ComponentTlsClientConfigs,
-}
-
-struct ArseConnect {
-    c: tokio_rustls::TlsConnector,
-    domain: tokio_rustls::rustls::pki_types::ServerName<'static>,
-}
-
-impl<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static + Send> tokio_postgres::tls::TlsConnect<S> for ArseConnect {
-    type Stream = FancyStm<S>;
-
-    type Error = tokio_rustls::rustls::Error;
-
-    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Stream, Self::Error>> + Send>>;
-
-    fn connect(self, stream: S) -> Self::Future {
-        let fut = i_hate_this_make_it_stop(self, stream);
-        Box::pin(fut)
-    }
-}
-
-async fn i_hate_this_make_it_stop<S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + 'static + Send>(a: ArseConnect, stream: S) -> Result<FancyStm<S>, tokio_rustls::rustls::Error> {
-    let connno = a.c.connect(a.domain, stream).await.unwrap();
-    let fstm = FancyStm { inner: connno };
-    Ok(fstm)
-}
-
-impl tokio_postgres::tls::MakeTlsConnect<tokio_postgres::Socket> for Arse {
-    type Stream = FancyStm<tokio_postgres::Socket>;
-
-    type TlsConnect = ArseConnect; // postgres_native_tls::TlsConnector;
-
-    type Error = tokio_rustls::rustls::Error;
-
-    fn make_tls_connect(&mut self, domain: &str) -> std::result::Result<Self::TlsConnect, Self::Error> {
-        let ctc = self.component_tls_configs.get_client_config(domain);
-        let rtls_conn = tokio_rustls::TlsConnector::from(ctc.inner().clone());
-        Ok(ArseConnect {
-            c: rtls_conn,
-            domain: tokio_rustls::rustls::pki_types::ServerName::try_from(domain.to_string()).unwrap(),
-        })
-        // rtls_conn.
-
-        // let builder = native_tls::TlsConnector::builder();
-        
-
-        // let nat_conn = builder.build()?;
-        // Ok(postgres_native_tls::TlsConnector::new(nat_conn, domain))
-    }
-}
-
-struct FancyStm<IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> {
-    inner: tokio_rustls::client::TlsStream<IO>
-}
-
-impl<IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> tokio_postgres::tls::TlsStream for FancyStm<IO> {
-    fn channel_binding(&self) -> tokio_postgres::tls::ChannelBinding {
-        let peer_certs = self.inner.get_ref().1.peer_certificates();
-        match peer_certs {
-            Some(certs) if certs.len() > 0 => tokio_postgres::tls::ChannelBinding::tls_server_end_point(certs[0].to_vec()),
-            _ => tokio_postgres::tls::ChannelBinding::none(),
-        }
-    }
-}
-
-impl<IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> tokio::io::AsyncRead for FancyStm<IO> {
-    fn poll_read(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        std::pin::Pin::new(&mut self.inner).poll_read(cx, buf)
-    }
-}
-
-
-impl<IO: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for FancyStm<IO> {
-    fn poll_write(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &[u8],
-    ) -> std::task::Poll<std::result::Result<usize, std::io::Error>> {
-        std::pin::Pin::new(&mut self.inner).poll_write(cx, buf)
-    }
-
-    fn poll_flush(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::result::Result<(), std::io::Error>> {
-        std::pin::Pin::new(&mut self.inner).poll_flush(cx)
-    }
-
-    fn poll_shutdown(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::result::Result<(), std::io::Error>> {
-        std::pin::Pin::new(&mut self.inner).poll_shutdown(cx)
-    }
 }
 
 #[async_trait]

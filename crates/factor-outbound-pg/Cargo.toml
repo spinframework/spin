@@ -16,14 +16,17 @@ postgres_range = "0.11"
 rust_decimal = { version = "1.37", features = ["db-tokio-postgres"] }
 tokio-rustls = { workspace = true }
 serde_json = { workspace = true }
+spin-common = { path = "../common" }
 spin-core = { path = "../core" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
+spin-locked-app = { path = "../locked-app" }
 spin-resource-table = { path = "../table" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
 tracing = { workspace = true }
+url = { workspace = true }
 uuid = "1"
 
 [dev-dependencies]

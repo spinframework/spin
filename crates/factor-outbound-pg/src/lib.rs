@@ -6,7 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use client::ClientFactory;
 use spin_factor_outbound_networking::{
-    ComponentTlsClientConfigs, OutboundNetworkingFactor, config::allowed_hosts::OutboundAllowedHosts
+    config::allowed_hosts::OutboundAllowedHosts, OutboundNetworkingFactor,
 };
 use spin_factors::{
     anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
@@ -51,14 +51,14 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
     ) -> anyhow::Result<Self::InstanceBuilder> {
         let outbound_networking = ctx.instance_builder::<OutboundNetworkingFactor>()?;
         let allowed_hosts = outbound_networking.allowed_hosts();
-        let component_tls_configs = outbound_networking.component_tls_configs();
         let cf = ctx.app_state().get(ctx.app_component().id()).unwrap();
+        let assets = ctx.app_component().files().cloned().collect();
 
         Ok(InstanceState {
             allowed_hosts,
             client_factory: cf.clone(),
             connections: Default::default(),
-            component_tls_configs,
+            assets,
         })
     }
 }
@@ -81,7 +81,7 @@ pub struct InstanceState<CF: ClientFactory> {
     allowed_hosts: OutboundAllowedHosts,
     client_factory: Arc<CF>,
     connections: spin_resource_table::Table<CF::Client>,
-    component_tls_configs: ComponentTlsClientConfigs,
+    assets: Vec<spin_locked_app::locked::ContentPath>,
 }
 
 impl<CF: ClientFactory> SelfInstanceBuilder for InstanceState<CF> {}
