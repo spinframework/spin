@@ -188,7 +188,7 @@ fn retarget_imports_and_get_exports(target: &str, module: &[u8]) -> Result<(Vec<
         match payload? {
             Payload::ImportSection(reader) => {
                 let mut imports = ImportSection::new();
-                for import in reader {
+                for import in reader.into_imports() {
                     let import = import?;
                     let (module, field) = if import.module == target {
                         (Cow::Borrowed(import.module), Cow::Borrowed(import.name))

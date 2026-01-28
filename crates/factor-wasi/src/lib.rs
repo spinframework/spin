@@ -240,7 +240,9 @@ impl Factor for WasiFactor {
         use wasmtime_wasi::{p2, p3};
 
         ctx.link_clocks_bindings(p2::bindings::clocks::wall_clock::add_to_linker::<_, WasiClocks>)?;
-        ctx.link_clocks_bindings(p3::bindings::clocks::wall_clock::add_to_linker::<_, WasiClocks>)?;
+        ctx.link_clocks_bindings(
+            p3::bindings::clocks::system_clock::add_to_linker::<_, WasiClocks>,
+        )?;
         ctx.link_clocks_bindings(
             p2::bindings::clocks::monotonic_clock::add_to_linker::<_, WasiClocks>,
         )?;

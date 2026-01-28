@@ -5,7 +5,7 @@ use wasmtime::component::InstancePre;
 use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi_http::bindings::ProxyIndices;
 use wasmtime_wasi_http::handler::{HandlerState, ProxyHandler, ProxyPre};
-use wasmtime_wasi_http::p3::bindings::ProxyPre as P3ProxyPre;
+use wasmtime_wasi_http::p3::bindings::ServicePre as P3ProxyPre;
 
 use crate::config::HttpExecutorType;
 

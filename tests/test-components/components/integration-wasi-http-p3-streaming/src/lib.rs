@@ -2,23 +2,22 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "wasi:http/proxy@0.3.0-rc-2025-09-16",
+    world: "wasi:http/service@0.3.0-rc-2026-01-06",
     generate_all,
-    debug: true
 });
 
 use {
     crate::{
-        exports::wasi::http0_3_0_rc_2025_09_16::handler::Guest,
-        wasi::http0_3_0_rc_2025_09_16::{
-            handler,
+        exports::wasi::http0_3_0_rc_2026_01_06::handler::Guest,
+        wasi::http0_3_0_rc_2026_01_06::{
+            client,
             types::{ErrorCode, Fields, Method, Request, Response, Scheme},
         },
     },
     core::mem,
-    futures::{StreamExt, stream},
+    futures::{stream, StreamExt},
     url::Url,
-    wit_bindgen::{StreamResult, rt::async_support},
+    wit_bindgen::{rt::async_support, StreamResult},
 };
 
 const MAX_CONCURRENCY: usize = 16;
@@ -125,7 +124,7 @@ impl Guest for Component {
                         outgoing_request
                             .set_authority(Some(url.authority()))
                             .unwrap();
-                        handler::handle(outgoing_request).await?
+                        client::send(outgoing_request).await?
                     } else {
                         bad_request()
                     }
@@ -163,7 +162,7 @@ async fn hash(url: &Url) -> Result<String, ErrorCode> {
         .unwrap();
     request.set_authority(Some(url.authority())).unwrap();
 
-    let response = handler::handle(request).await?;
+    let response = client::send(request).await?;
 
     let status = response.get_status_code();
 

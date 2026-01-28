@@ -179,16 +179,16 @@ tracing = { version = "0.1.41", features = ["log"] }
 url = "2.5.7"
 walkdir = "2"
 wac-graph = "0.8.1"
-wasm-encoder = "0.243.0"
-wasm-metadata = "0.243.0"
+wasm-encoder = "0.244.0"
+wasm-metadata = "0.244.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
-wasmparser = "0.243.0"
-wasmtime = { version = "40.0.0", features = ["component-model-async"] }
-wasmtime-wasi = { version = "40.0.0", features = ["p3"] }
-wasmtime-wasi-http = { version = "40.0.0", features = ["p3", "component-model-async"] }
-wit-component = "0.243.0"
-wit-parser = "0.243.0"
+wasmparser = "0.244.0"
+wasmtime = { version = "41.0.0", features = ["component-model-async"] }
+wasmtime-wasi = { version = "41.0.0", features = ["p3"] }
+wasmtime-wasi-http = { version = "41.0.0", features = ["p3", "component-model-async"] }
+wit-component = "0.244.0"
+wit-parser = "0.244.0"
 
 spin-componentize = { path = "crates/componentize" }
 
