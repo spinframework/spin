@@ -28,8 +28,11 @@ impl Complicator for HttpMiddlewareComplicator {
 }
 
 async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &'a ComplicationData>) -> anyhow::Result<Vec<u8>> {
-    const MW_NEXT_INBOUND: &str = "wasi:http/handler@0.3.0-rc-2025-09-16";
-    const MW_NEXT_OUTBOUND: &str = "spin:up/next@3.5.0";
+    const MW_NEXT_INBOUND: &str = "wasi:http/handler@0.3.0-rc-2026-01-06";
+    const MW_NEXT_OUTBOUND: &str = "wasi:http/handler@0.3.0-rc-2026-01-06";
+
+    // TODO: I wonder if we can shorten/simplify this (and avoid all the tempfile
+    // crap) with a sequence of `wac_graph::plug`s now inbound and outbound are the same?
     
     // `wasm-tools compose` relies on the components it's composing being in
     // files, so write all any in-memory blobs to a temp dir.

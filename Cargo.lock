@@ -9242,8 +9242,8 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.0",
  "tracing",
- "wasm-compose 0.239.0",
- "wasmparser 0.239.0",
+ "wasm-compose 0.244.0",
+ "wasmparser 0.244.0",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
@@ -10882,27 +10882,6 @@ dependencies = [
 
 [[package]]
 name = "wasm-compose"
-version = "0.239.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0ec5bc51a265c73434ede0659536ac9af486eebf0397ff073bfb19093421cd8"
-dependencies = [
- "anyhow",
- "heck 0.4.1",
- "im-rc",
- "indexmap 2.12.0",
- "log",
- "petgraph",
- "serde",
- "serde_derive",
- "serde_yaml",
- "smallvec",
- "wasm-encoder 0.239.0",
- "wasmparser 0.239.0",
- "wat",
-]
-
-[[package]]
-name = "wasm-compose"
 version = "0.243.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af801b6f36459023eaec63fdbaedad2fd5a4ab7dc74ecc110a8b5d375c5775e4"
@@ -10919,6 +10898,27 @@ dependencies = [
  "smallvec",
  "wasm-encoder 0.243.0",
  "wasmparser 0.243.0",
+ "wat",
+]
+
+[[package]]
+name = "wasm-compose"
+version = "0.244.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92cda9c76ca8dcac01a8b497860c2cb15cd6f216dc07060517df5abbe82512ac"
+dependencies = [
+ "anyhow",
+ "heck 0.5.0",
+ "im-rc",
+ "indexmap 2.12.0",
+ "log",
+ "petgraph",
+ "serde",
+ "serde_derive",
+ "serde_yaml",
+ "smallvec",
+ "wasm-encoder 0.244.0",
+ "wasmparser 0.244.0",
  "wat",
 ]
 

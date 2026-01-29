@@ -38,8 +38,8 @@ terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["full"] }
 tokio-rustls = { workspace = true }
 tracing = { workspace = true }
-wasm-compose = "0.239"
-wasmparser = "0.239"
+wasm-compose = "0.244"
+wasmparser = "0.244"
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
