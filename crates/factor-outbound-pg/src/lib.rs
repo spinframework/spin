@@ -1,5 +1,6 @@
 pub mod client;
 mod host;
+pub mod runtime_config;
 mod types;
 
 use std::sync::Arc;
@@ -18,7 +19,7 @@ pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {
 }
 
 impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
-    type RuntimeConfig = ();
+    type RuntimeConfig = runtime_config::RuntimeConfig;
     type AppState = Arc<CF>;
     type InstanceBuilder = InstanceState<CF>;
 
@@ -36,9 +37,14 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        _ctx: ConfigureAppContext<T, Self>,
+        ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        Ok(Arc::new(CF::default()))
+        let certificates = match ctx.runtime_config() {
+            Some(rc) => rc.certificates.clone(),
+            None => vec![],
+        };
+        // let certificates = certificate_paths.iter().map(std::fs::read).collect::<Result<Vec<_>, _>>()?;
+        Ok(Arc::new(CF::new(certificates)))
     }
 
     fn prepare<T: RuntimeFactors>(

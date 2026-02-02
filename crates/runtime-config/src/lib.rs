@@ -24,6 +24,7 @@ use spin_sqlite as sqlite;
 use spin_trigger::cli::UserProvidedPath;
 use toml::Value;
 
+mod pg;
 pub mod variables;
 
 /// The default state directory for the trigger.
@@ -137,9 +138,13 @@ where
         let outbound_networking = runtime_config_dir
             .clone()
             .map(OutboundNetworkingSpinRuntimeConfig::new);
-        let key_value_resolver = key_value_config_resolver(runtime_config_dir, state_dir.clone());
+        let key_value_resolver =
+            key_value_config_resolver(runtime_config_dir.clone(), state_dir.clone());
         let sqlite_resolver = sqlite_config_resolver(state_dir.clone())
             .context("failed to resolve sqlite runtime config")?;
+        let pg_resolver = pg::PgConfigResolver {
+            base_dir: runtime_config_dir.clone(),
+        };
 
         let toml = toml_resolver.toml();
         let log_dir = toml_resolver.log_dir()?;
@@ -150,6 +155,7 @@ where
             &key_value_resolver,
             outbound_networking.as_ref(),
             &sqlite_resolver,
+            &pg_resolver,
         );
 
         // Note: all valid fields in the runtime config must have been referenced at
@@ -302,6 +308,7 @@ pub struct TomlRuntimeConfigSource<'a, 'b> {
     key_value: &'a key_value::RuntimeConfigResolver,
     outbound_networking: Option<&'a OutboundNetworkingSpinRuntimeConfig>,
     sqlite: &'a sqlite::RuntimeConfigResolver,
+    pg_resolver: &'a pg::PgConfigResolver,
 }
 
 impl<'a, 'b> TomlRuntimeConfigSource<'a, 'b> {
@@ -310,12 +317,14 @@ impl<'a, 'b> TomlRuntimeConfigSource<'a, 'b> {
         key_value: &'a key_value::RuntimeConfigResolver,
         outbound_networking: Option<&'a OutboundNetworkingSpinRuntimeConfig>,
         sqlite: &'a sqlite::RuntimeConfigResolver,
+        pg_resolver: &'a pg::PgConfigResolver,
     ) -> Self {
         Self {
             toml: toml_resolver,
             key_value,
             outbound_networking,
             sqlite,
+            pg_resolver,
         }
     }
 }
@@ -349,8 +358,13 @@ impl FactorRuntimeConfigSource<VariablesFactor> for TomlRuntimeConfigSource<'_, 
 }
 
 impl FactorRuntimeConfigSource<OutboundPgFactor> for TomlRuntimeConfigSource<'_, '_> {
-    fn get_runtime_config(&mut self) -> anyhow::Result<Option<()>> {
-        Ok(None)
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<<OutboundPgFactor as spin_factors::Factor>::RuntimeConfig>> {
+        Ok(Some(
+            self.pg_resolver
+                .runtime_config_from_toml(&self.toml.table)?,
+        ))
     }
 }
 
