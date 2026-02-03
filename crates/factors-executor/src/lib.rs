@@ -127,23 +127,35 @@ pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
         component: &AppComponent,
         complicator: &impl Complicator,
     ) -> anyhow::Result<spin_core::InstancePre<InstanceState<T::InstanceState, U>>> {
-        let component = self.load_component(engine.as_ref(), component, complicator).await?;
+        let component = self
+            .load_component(engine.as_ref(), component, complicator)
+            .await?;
         engine.instantiate_pre(&component)
     }
 }
 
 #[async_trait]
 pub trait Complicator: Send + Sync {
-    async fn complicate(&self, complications: &HashMap<String, Vec<Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>>;
+    async fn complicate(
+        &self,
+        complications: &HashMap<String, Vec<Complication>>,
+        component: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>>;
 }
 
 #[async_trait]
 impl Complicator for () {
-    async fn complicate(&self, complications: &HashMap<String, Vec<Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    async fn complicate(
+        &self,
+        complications: &HashMap<String, Vec<Complication>>,
+        component: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>> {
         if complications.is_empty() {
             Ok(component)
         } else {
-            Err(anyhow::anyhow!("this trigger should not have complications"))
+            Err(anyhow::anyhow!(
+                "this trigger should not have complications"
+            ))
         }
     }
 }

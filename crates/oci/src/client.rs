@@ -370,10 +370,9 @@ impl Client {
         let locked_url = write_locked_app(&locked, working_dir).await.unwrap();
 
         for mut c in locked.components {
-            let complicate = |data: Vec<u8>| {
-                compose_trigger_extras(&c, &locked_url, working_dir, data)
-            };
-            
+            let complicate =
+                |data: Vec<u8>| compose_trigger_extras(&c, &locked_url, working_dir, data);
+
             let composed = spin_compose::compose(&ComponentSourceLoaderFs, &c, complicate)
                 .await
                 .with_context(|| {
@@ -403,7 +402,9 @@ impl Client {
                 .await
                 .with_context(|| format!("failed to write {}", quoted_path(&locked_path)))?;
             let locked_url = Url::from_file_path(&locked_path)
-                .map_err(|_| anyhow::anyhow!("cannot convert to file URL: {}", quoted_path(&locked_path)))?
+                .map_err(|_| {
+                    anyhow::anyhow!("cannot convert to file URL: {}", quoted_path(&locked_path))
+                })?
                 .to_string();
 
             Ok(locked_url)
@@ -937,10 +938,19 @@ fn add_inferred(map: &mut BTreeMap<String, String>, key: &str, value: Option<Str
 const SPIN_LOCKED_URL: &str = "SPIN_LOCKED_URL";
 const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
 
-async fn compose_trigger_extras(c: &LockedComponent, locked_url: &str, working_dir: &Path, data: Vec<u8>) -> Result<Vec<u8>, spin_compose::ComposeError> {
+async fn compose_trigger_extras(
+    c: &LockedComponent,
+    locked_url: &str,
+    working_dir: &Path,
+    data: Vec<u8>,
+) -> Result<Vec<u8>, spin_compose::ComposeError> {
     use spin_compose::ComposeError;
 
-    let Some(resolve_extras_using) = c.metadata.get("resolve-extras-using").and_then(|v| v.as_str()) else {
+    let Some(resolve_extras_using) = c
+        .metadata
+        .get("resolve-extras-using")
+        .and_then(|v| v.as_str())
+    else {
         return Result::<_, ComposeError>::Ok(data);
     };
 
@@ -960,19 +970,34 @@ async fn compose_trigger_extras(c: &LockedComponent, locked_url: &str, working_d
         .env(SPIN_LOCKED_URL, locked_url)
         .env(SPIN_WORKING_DIR, working_dir);
 
-    let mut child = cmd.spawn().map_err(|e| ComposeError::PrepareError(e.into()))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| ComposeError::PrepareError(e.into()))?;
 
     use tokio::io::AsyncWriteExt;
 
     let mut input = child.stdin.take().unwrap();
-    input.write_all(&data).await.map_err(|e| ComposeError::PrepareError(e.into()))?;
-    input.flush().await.map_err(|e| ComposeError::PrepareError(e.into()))?;
+    input
+        .write_all(&data)
+        .await
+        .map_err(|e| ComposeError::PrepareError(e.into()))?;
+    input
+        .flush()
+        .await
+        .map_err(|e| ComposeError::PrepareError(e.into()))?;
     drop(input);
 
-    let trigger_out = child.wait_with_output().await.map_err(|e| ComposeError::PrepareError(e.into()))?;
+    let trigger_out = child
+        .wait_with_output()
+        .await
+        .map_err(|e| ComposeError::PrepareError(e.into()))?;
 
     if !trigger_out.status.success() {
-        return Err(ComposeError::PrepareError(anyhow::anyhow!("unable to compose additional components for {} using `{}`", c.id, resolve_extras_using)));
+        return Err(ComposeError::PrepareError(anyhow::anyhow!(
+            "unable to compose additional components for {} using `{}`",
+            c.id,
+            resolve_extras_using
+        )));
     }
 
     let complicated = trigger_out.stdout;

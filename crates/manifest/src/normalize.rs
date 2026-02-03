@@ -19,22 +19,28 @@ pub fn normalize_manifest(manifest: &mut AppManifest) -> anyhow::Result<()> {
 fn normalize_inline_components(manifest: &mut AppManifest) {
     // Normalize inline components
     let components = &mut manifest.components;
-    let mut counter = 0;
+    let mut counter = 1;
 
-    let mut normalize_spec = |spec: &mut ComponentSpec| {
+    let mut normalize_spec = |spec: &mut ComponentSpec, trigger_id: &str, is_primary: bool| {
         if !matches!(spec, ComponentSpec::Inline(_)) {
             return;
         };
 
-        let inline_id = 
-            loop {
-                counter += 1;
-                let id = KebabId::try_from(format!("inline-component{counter}")).unwrap();  // I sacrificed naturality and I'D DO IT AGAIN HA HA HA okay Lann okay I'll put it back
-                if !components.contains_key(&id) {
-                    println!("derived id {id} for {spec:?}");
-                    break id;
-                }
-            };
+        let inline_id = {
+            // Try a "natural" component ID...
+            let mut id = KebabId::try_from(format!("{trigger_id}-component"));
+            // ...falling back to a counter-based component ID
+            if !is_primary || id.is_err() || components.contains_key(id.as_ref().unwrap()) {
+                id = Ok(loop {
+                    let id = KebabId::try_from(format!("inline-component{counter}")).unwrap();
+                    if !components.contains_key(&id) {
+                        break id;
+                    }
+                    counter += 1;
+                });
+            }
+            id.unwrap()
+        };
 
         // Replace the inline component with a reference...
         let inline_spec = std::mem::replace(spec, ComponentSpec::Reference(inline_id.clone()));
@@ -46,15 +52,15 @@ fn normalize_inline_components(manifest: &mut AppManifest) {
     };
 
     for trigger in manifest.triggers.values_mut().flatten() {
-        // let trigger_id = &trigger.id;
+        let trigger_id = &trigger.id;
 
         if let Some(primary_component) = trigger.component.as_mut() {
-            normalize_spec(primary_component);
+            normalize_spec(primary_component, trigger_id, true);
         }
 
         for complications in trigger.components.values_mut() {
             for spec in &mut complications.0 {
-                normalize_spec(spec);
+                normalize_spec(spec, trigger_id, false);
             }
         }
 

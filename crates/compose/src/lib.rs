@@ -27,7 +27,10 @@ use wac_graph::{CompositionGraph, NodeId};
 /// dependent component. Finally, the composer will export all exports from the
 /// dependent component to its dependents. The composer will then encode the
 /// composition graph into a byte array and return it.
-pub async fn compose<L: ComponentSourceLoader, Fut: std::future::Future<Output = Result<Vec<u8>, ComposeError>>>(
+pub async fn compose<
+    L: ComponentSourceLoader,
+    Fut: std::future::Future<Output = Result<Vec<u8>, ComposeError>>,
+>(
     loader: &L,
     component: &L::Component,
     complicator: impl Fn(Vec<u8>) -> Fut,
@@ -204,18 +207,20 @@ struct Composer<'a, L> {
 }
 
 impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
-    async fn compose<Fut: std::future::Future<Output = Result<Vec<u8>, ComposeError>>>(mut self, component: &L::Component,    complicator: impl Fn(Vec<u8>) -> Fut,
-) -> Result<Vec<u8>, ComposeError> {
+    async fn compose<Fut: std::future::Future<Output = Result<Vec<u8>, ComposeError>>>(
+        mut self,
+        component: &L::Component,
+        complicator: impl Fn(Vec<u8>) -> Fut,
+    ) -> Result<Vec<u8>, ComposeError> {
         let source = self
             .loader
             .load_component_source(component)
             .await
             .map_err(ComposeError::PrepareError)?;
 
-        let fulfilled_source =            if component.dependencies().len() == 0 {
+        let fulfilled_source = if component.dependencies().len() == 0 {
             source
         } else {
-
             let (world_id, instantiation_id) = self
                 .register_package(component.id(), None, source)
                 .map_err(ComposeError::PrepareError)?;

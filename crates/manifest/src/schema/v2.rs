@@ -665,9 +665,14 @@ mod one_or_many {
     {
         let value = toml::Value::deserialize(deserializer)?;
         if let Some(arr) = value.as_array() {
-            arr.iter().map(|v| T::deserialize(v.clone())).collect::<Result<Vec<_>, _>>().map_err(serde::de::Error::custom)
+            arr.iter()
+                .map(|v| T::deserialize(v.clone()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(serde::de::Error::custom)
         } else {
-            T::deserialize(value).map(|v| vec![v]).map_err(serde::de::Error::custom)
+            T::deserialize(value)
+                .map(|v| vec![v])
+                .map_err(serde::de::Error::custom)
         }
         // the follow is the original code but serde makes complete garbage of it, it treats an array as a sequence of fields to be assigned to a Component a la `Inline(Component { source: Local("middlybiddly"), description: "middlybiddly2", variables: {}, environment: {}...`
         // absolutely batshit

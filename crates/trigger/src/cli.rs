@@ -224,7 +224,8 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
         if self.resolve_extras_only {
             use spin_factors_executor::Complicator;
 
-            let Some(resolve_extras_component_id) = self.resolve_extras_component_id.as_ref() else {
+            let Some(resolve_extras_component_id) = self.resolve_extras_component_id.as_ref()
+            else {
                 anyhow::bail!("got --resolve-extras-only but no --resolve-extras-component-id");
             };
 
@@ -232,13 +233,23 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
             let Some(component) = app.get_component(resolve_extras_component_id) else {
                 anyhow::bail!("--resolve-extras-component-id: component does not exist");
             };
-            let Some(extras) = component.locked.metadata.get("trigger-extras").and_then(|v| v.as_object()) else {
+            let Some(extras) = component
+                .locked
+                .metadata
+                .get("trigger-extras")
+                .and_then(|v| v.as_object())
+            else {
                 anyhow::bail!("--resolve-extras-component-id: component has no extras");
             };
 
             // let loader = spin_compose::ComponentSourceLoaderFs;
 
-            let complications = crate::loader::load_complications(&app, extras, &spin_compose::ComponentSourceLoaderFs).await?;
+            let complications = crate::loader::load_complications(
+                &app,
+                extras,
+                &spin_compose::ComponentSourceLoaderFs,
+            )
+            .await?;
 
             // let complicand = loader.load_component_source(&component.locked).await.unwrap();
             use std::io::Read;
@@ -246,7 +257,10 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
             let read_count = std::io::stdin().read_to_end(&mut complicand)?;
             complicand.truncate(read_count);
 
-            let complicated = complicator.complicate(&complications, complicand).await.unwrap();
+            let complicated = complicator
+                .complicate(&complications, complicand)
+                .await
+                .unwrap();
 
             use std::io::Write;
             std::io::stdout().write_all(&complicated).unwrap();
@@ -411,7 +425,13 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> TriggerAppBuilder<T, B> {
         let configured_app = {
             let _sloth_guard = warn_if_wasm_build_slothful();
             executor
-                .load_app(app, runtime_config.into(), loader, Some(T::TYPE), T::complicator())
+                .load_app(
+                    app,
+                    runtime_config.into(),
+                    loader,
+                    Some(T::TYPE),
+                    T::complicator(),
+                )
                 .await?
         };
 

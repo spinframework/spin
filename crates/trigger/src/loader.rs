@@ -94,11 +94,21 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
         let loader = ComponentSourceLoaderFs;
 
         let empty: serde_json::Map<String, serde_json::Value> = Default::default();
-        let extras = component.locked.metadata.get("trigger-extras").and_then(|v| v.as_object()).unwrap_or(&empty);
+        let extras = component
+            .locked
+            .metadata
+            .get("trigger-extras")
+            .and_then(|v| v.as_object())
+            .unwrap_or(&empty);
 
         let complications = load_complications(component.app, extras, &loader).await?;
 
-        let complicate = async |c: Vec<u8>| complicator.complicate(&complications, c).await.map_err(spin_compose::ComposeError::PrepareError);
+        let complicate = async |c: Vec<u8>| {
+            complicator
+                .complicate(&complications, c)
+                .await
+                .map_err(spin_compose::ComposeError::PrepareError)
+        };
 
         let composed = spin_compose::compose(&loader, component.locked, complicate)
             .await
@@ -114,22 +124,38 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
     }
 }
 
-pub(crate) async fn load_complications(app: &spin_app::App, extras: &serde_json::Map<String, serde_json::Value>, loader: &spin_compose::ComponentSourceLoaderFs) -> Result<std::collections::HashMap<String, Vec<spin_factors_executor::Complication>>, anyhow::Error> {
+pub(crate) async fn load_complications(
+    app: &spin_app::App,
+    extras: &serde_json::Map<String, serde_json::Value>,
+    loader: &spin_compose::ComponentSourceLoaderFs,
+) -> Result<
+    std::collections::HashMap<String, Vec<spin_factors_executor::Complication>>,
+    anyhow::Error,
+> {
     use spin_factors_executor::Complication;
     use std::collections::HashMap;
 
-    let mut complications= HashMap::with_capacity(extras.len());
+    let mut complications = HashMap::with_capacity(extras.len());
 
     for (role, role_components) in extras {
-        let components = role_components.as_array().context("extra components should have been an array")?;
+        let components = role_components
+            .as_array()
+            .context("extra components should have been an array")?;
         let mut complications_for_role = Vec::with_capacity(components.len());
 
         for component_ref in components {
-            let component_ref = component_ref.as_str().context("middleware should be strings curently")?;
-            let reffed_component = app.get_component(component_ref).context("no such component")?;
+            let component_ref = component_ref
+                .as_str()
+                .context("middleware should be strings curently")?;
+            let reffed_component = app
+                .get_component(component_ref)
+                .context("no such component")?;
             let component_src = reffed_component.source().clone();
             let data = load_complication_data(loader, &component_src).await?;
-            complications_for_role.push(Complication { data, source: component_src });
+            complications_for_role.push(Complication {
+                data,
+                source: component_src,
+            });
         }
         complications.insert(role.clone(), complications_for_role);
     }
@@ -137,12 +163,22 @@ pub(crate) async fn load_complications(app: &spin_app::App, extras: &serde_json:
     Ok(complications)
 }
 
-async fn load_complication_data(loader: &ComponentSourceLoaderFs, source: &spin_app::locked::LockedComponentSource) -> anyhow::Result<ComplicationData> {
+async fn load_complication_data(
+    loader: &ComponentSourceLoaderFs,
+    source: &spin_app::locked::LockedComponentSource,
+) -> anyhow::Result<ComplicationData> {
     use spin_compose::ComponentSourceLoader;
 
-    if let Some(path) = source.content.source.as_ref().and_then(|url| parse_file_url(url).ok()) {
+    if let Some(path) = source
+        .content
+        .source
+        .as_ref()
+        .and_then(|url| parse_file_url(url).ok())
+    {
         Ok(ComplicationData::OnDisk(path))
     } else {
-        Ok(ComplicationData::InMemory(loader.load_source(source).await?))
+        Ok(ComplicationData::InMemory(
+            loader.load_source(source).await?,
+        ))
     }
 }

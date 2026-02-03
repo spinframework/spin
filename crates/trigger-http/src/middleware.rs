@@ -1,5 +1,8 @@
 use anyhow::{bail, Context};
-use wasm_compose::{composer::{ComponentComposer, ROOT_COMPONENT_NAME}, config::{Config, Dependency, Instantiation, InstantiationArg}};
+use wasm_compose::{
+    composer::{ComponentComposer, ROOT_COMPONENT_NAME},
+    config::{Config, Dependency, Instantiation, InstantiationArg},
+};
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -11,7 +14,11 @@ pub(crate) struct HttpMiddlewareComplicator;
 
 #[spin_core::async_trait]
 impl Complicator for HttpMiddlewareComplicator {
-    async fn complicate(&self, complications: &HashMap<String, Vec<Complication>>, component: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    async fn complicate(
+        &self,
+        complications: &HashMap<String, Vec<Complication>>,
+        component: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>> {
         let Some(middlewares) = complications.get("middleware") else {
             return Ok(component);
         };
@@ -27,13 +34,16 @@ impl Complicator for HttpMiddlewareComplicator {
     }
 }
 
-async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &'a ComplicationData>) -> anyhow::Result<Vec<u8>> {
+async fn compose_middlewares<'a>(
+    primary: Vec<u8>,
+    middleware_blobs: impl Iterator<Item = &'a ComplicationData>,
+) -> anyhow::Result<Vec<u8>> {
     const MW_NEXT_INBOUND: &str = "wasi:http/handler@0.3.0-rc-2026-01-06";
     const MW_NEXT_OUTBOUND: &str = "wasi:http/handler@0.3.0-rc-2026-01-06";
 
     // TODO: I wonder if we can shorten/simplify this (and avoid all the tempfile
     // crap) with a sequence of `wac_graph::plug`s now inbound and outbound are the same?
-    
+
     // `wasm-tools compose` relies on the components it's composing being in
     // files, so write all any in-memory blobs to a temp dir.
     let temp_dir = tempfile::tempdir().context("creating working dir for middleware")?;
@@ -49,7 +59,18 @@ async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterat
     let last_index = mw_blob_paths.len() - 1; // points to the end of the composition chain (which is the primary)
 
     // All blobs except the (already set aside) root are mapped in via dependencies
-    let dependencies = mw_blob_paths.iter().enumerate().map(|(index, mw_path)| (dep_ref(index), Dependency { path: mw_path.clone() })).collect();
+    let dependencies = mw_blob_paths
+        .iter()
+        .enumerate()
+        .map(|(index, mw_path)| {
+            (
+                dep_ref(index),
+                Dependency {
+                    path: mw_path.clone(),
+                },
+            )
+        })
+        .collect();
 
     let mut config = Config {
         skip_validation: true,
@@ -59,10 +80,20 @@ async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterat
 
     // The composition root hooks up to the start of the (remaining)
     // pipeline (which we will soon create as inst ref 0).
-    config.instantiations.insert(ROOT_COMPONENT_NAME.to_owned(), Instantiation {
-        dependency: None,
-        arguments: [(MW_NEXT_OUTBOUND.to_owned(), InstantiationArg { instance: inst_ref(0), export: Some(MW_NEXT_INBOUND.to_owned()) })].into(),
-    });
+    config.instantiations.insert(
+        ROOT_COMPONENT_NAME.to_owned(),
+        Instantiation {
+            dependency: None,
+            arguments: [(
+                MW_NEXT_OUTBOUND.to_owned(),
+                InstantiationArg {
+                    instance: inst_ref(0),
+                    export: Some(MW_NEXT_INBOUND.to_owned()),
+                },
+            )]
+            .into(),
+        },
+    );
 
     // Go through the remaining items of of the pipeline except for the last.
     // For each, create an instantiation (named by index) of the
@@ -77,7 +108,9 @@ async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterat
         };
         let inst = Instantiation {
             dependency: Some(dep_ref(index)),
-            arguments: [(MW_NEXT_OUTBOUND.to_owned(), next_inst_ref)].into_iter().collect(),
+            arguments: [(MW_NEXT_OUTBOUND.to_owned(), next_inst_ref)]
+                .into_iter()
+                .collect(),
         };
         config.instantiations.insert(inst_ref(index), inst);
     }
@@ -98,23 +131,31 @@ async fn compose_middlewares<'a>(primary: Vec<u8>, middleware_blobs: impl Iterat
 
 /// The return vector has the written-out paths in chain order:
 /// the middlewares in order, followed by the primary. This matters!
-async fn write_blobs_to(primary: Vec<u8>, middleware_blobs: impl Iterator<Item = &ComplicationData>, temp_path: &std::path::Path) -> anyhow::Result<Vec<PathBuf>> {
+async fn write_blobs_to(
+    primary: Vec<u8>,
+    middleware_blobs: impl Iterator<Item = &ComplicationData>,
+    temp_path: &std::path::Path,
+) -> anyhow::Result<Vec<PathBuf>> {
     let mut mw_blob_paths = vec![];
 
     for (mw_index, mw_blob) in middleware_blobs.enumerate() {
         let mw_blob_path = match mw_blob {
             ComplicationData::InMemory(data) => {
                 let mw_blob_path = temp_path.join(format!("middleware-blob-idx{mw_index}.wasm"));
-                tokio::fs::write(&mw_blob_path, data).await.context("writing middleware blob to temp dir")?;
+                tokio::fs::write(&mw_blob_path, data)
+                    .await
+                    .context("writing middleware blob to temp dir")?;
                 mw_blob_path
-            },
+            }
             ComplicationData::OnDisk(path) => path.clone(),
         };
         mw_blob_paths.push(mw_blob_path);
     }
 
     let primary_path = temp_path.join("primary.wasm");
-    tokio::fs::write(&primary_path, primary).await.context("writing component to temp dir for middleware composition")?;
+    tokio::fs::write(&primary_path, primary)
+        .await
+        .context("writing component to temp dir for middleware composition")?;
     mw_blob_paths.push(primary_path);
 
     Ok(mw_blob_paths)
