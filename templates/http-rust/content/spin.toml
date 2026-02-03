@@ -14,7 +14,22 @@ component = "{{project-name | kebab_case}}"
 
 [component.{{project-name | kebab_case}}]
 source = "target/wasm32-wasip1/release/{{project-name | snake_case}}.wasm"
+{% if explain %}# The network hosts to which the component may make requests to. E.g. ["https://example.com", "postgres://data.example.com:4004"]
+# Learn more: https://spinframework.dev/v3/http-outbound#granting-http-permissions-to-components, https://spinframework.dev/v3/mqtt-outbound#granting-network-permissions-to-components, https://spinframework.dev/v3/rdbms-storage#granting-network-permissions-to-components
 allowed_outbound_hosts = []
+# The files from your host system that should be included in the application and available to the component. E.g. [{ source = "assets", destination = "/"}]
+# Learn more: https://spinframework.dev/v3/writing-apps#including-files-with-components
+files = []
+# The key-value stores the component should have access to. E.g. ["default", "cache"]. Learn more: https://spinframework.dev/v3/kv-store-api-guide#granting-key-value-store-permissions-to-components
+# Non-default stores must be mapped in a runtime config file. Learn more: https://spinframework.dev/v3/dynamic-configuration#key-value-store-runtime-configuration
+key_value_stores = []
+# The SQLite databases the component should have access to. E.g. ["default", "accounts"]. Learn more: https://spinframework.dev/v3/sqlite-api-guide#granting-sqlite-database-permissions-to-components
+# Non-default databases must be mapped in a runtime config file. Learn more: hhttps://spinframework.dev/v3/dynamic-configuration#sqlite-storage-runtime-configuration
+sqlite_databases = []
+
+[component.{{project-name | kebab_case}}.dependencies]
+# Wasm components on which your Wasm binary depends. Learn more: https://spinframework.dev/v3/writing-apps#using-component-dependencies
+{% else %}allowed_outbound_hosts = []{% endif %}
 [component.{{project-name | kebab_case}}.build]
 command = "cargo build --target wasm32-wasip1 --release"
 watch = ["src/**/*.rs", "Cargo.toml"]

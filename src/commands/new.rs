@@ -72,6 +72,12 @@ pub struct TemplateNewCommandCore {
         takes_value = false
     )]
     pub allow_overwrite: bool,
+
+    /// Include additional explanatory information, where available, in the generated code.
+    /// This can be useful for learning about available options, but some users will find
+    /// the extra output burdensome.
+    #[clap(long = "explain", takes_value = false)]
+    explain: bool,
 }
 
 /// Scaffold a new application based on a template.
@@ -189,6 +195,7 @@ impl TemplateNewCommandCore {
             accept_defaults: self.accept_defaults,
             no_vcs: self.no_vcs,
             allow_overwrite: self.allow_overwrite,
+            explain: self.explain,
         };
 
         let run = template.run(options);
