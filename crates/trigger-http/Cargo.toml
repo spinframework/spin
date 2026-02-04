@@ -33,10 +33,13 @@ spin-http = { path = "../http" }
 spin-telemetry = { path = "../telemetry" }
 spin-trigger = { path = "../trigger" }
 spin-world = { path = "../world" }
+tempfile = { workspace = true }
 terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["full"] }
 tokio-rustls = { workspace = true }
 tracing = { workspace = true }
+wasm-compose = "0.244"
+wasmparser = "0.244"
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }

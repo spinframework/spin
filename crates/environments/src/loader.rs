@@ -146,7 +146,7 @@ impl ApplicationToValidate {
 
         let loader = ComponentSourceLoader::new(&self.wasm_loader);
 
-        let wasm = spin_compose::compose(&loader, &component).await.with_context(|| format!("Spin needed to compose dependencies for {} as part of target checking, but composition failed", component.id))?;
+        let wasm = spin_compose::compose(&loader, &component, async |data| Ok(data)).await.with_context(|| format!("Spin needed to compose dependencies for {} as part of target checking, but composition failed", component.id))?;
 
         let host_requirements = if component.requires_service_chaining {
             vec!["local_service_chaining".to_string()]
@@ -184,6 +184,7 @@ impl<'a> ComponentSourceLoader<'a> {
 impl<'a> spin_compose::ComponentSourceLoader for ComponentSourceLoader<'a> {
     type Component = ComponentSource<'a>;
     type Dependency = WrappedComponentDependency;
+    type Source = spin_manifest::schema::v2::ComponentSource;
     async fn load_component_source(&self, source: &Self::Component) -> anyhow::Result<Vec<u8>> {
         let path = self
             .wasm_loader
@@ -201,6 +202,19 @@ impl<'a> spin_compose::ComponentSourceLoader for ComponentSourceLoader<'a> {
         let (path, _) = self
             .wasm_loader
             .load_component_dependency(&source.name, &source.dependency)
+            .await?;
+        let bytes = tokio::fs::read(&path)
+            .await
+            .with_context(|| format!("reading {}", quoted_path(&path)))?;
+        let component = spin_componentize::componentize_if_necessary(&bytes)
+            .with_context(|| format!("componentizing {}", quoted_path(&path)))?;
+        Ok(component.into())
+    }
+
+    async fn load_source(&self, source: &Self::Source) -> anyhow::Result<Vec<u8>> {
+        let path = self
+            .wasm_loader
+            .load_component_source("bippety-boppety", source)
             .await?;
         let bytes = tokio::fs::read(&path)
             .await

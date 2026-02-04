@@ -55,6 +55,7 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutor<T, U> {
         runtime_config: T::RuntimeConfig,
         component_loader: &impl ComponentLoader<T, U>,
         trigger_type: Option<&str>,
+        complicator: impl Complicator,
     ) -> anyhow::Result<FactorsExecutorApp<T, U>> {
         let configured_app = self
             .factors
@@ -77,7 +78,7 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutor<T, U> {
 
         for component in components {
             let instance_pre = component_loader
-                .load_instance_pre(&self.core_engine, &component)
+                .load_instance_pre(&self.core_engine, &component, &complicator)
                 .await?;
             component_instance_pres.insert(component.id().to_string(), instance_pre);
         }
@@ -116,6 +117,7 @@ pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
         &self,
         engine: &spin_core::wasmtime::Engine,
         component: &AppComponent,
+        complicator: &impl Complicator,
     ) -> anyhow::Result<Component>;
 
     /// Loads [`InstancePre`] for the given [`AppComponent`].
@@ -123,10 +125,49 @@ pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
         &self,
         engine: &spin_core::Engine<InstanceState<T::InstanceState, U>>,
         component: &AppComponent,
+        complicator: &impl Complicator,
     ) -> anyhow::Result<spin_core::InstancePre<InstanceState<T::InstanceState, U>>> {
-        let component = self.load_component(engine.as_ref(), component).await?;
+        let component = self
+            .load_component(engine.as_ref(), component, complicator)
+            .await?;
         engine.instantiate_pre(&component)
     }
+}
+
+#[async_trait]
+pub trait Complicator: Send + Sync {
+    async fn complicate(
+        &self,
+        complications: &HashMap<String, Vec<Complication>>,
+        component: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>>;
+}
+
+#[async_trait]
+impl Complicator for () {
+    async fn complicate(
+        &self,
+        complications: &HashMap<String, Vec<Complication>>,
+        component: Vec<u8>,
+    ) -> anyhow::Result<Vec<u8>> {
+        if complications.is_empty() {
+            Ok(component)
+        } else {
+            Err(anyhow::anyhow!(
+                "this trigger should not have complications"
+            ))
+        }
+    }
+}
+
+pub struct Complication {
+    pub source: spin_app::locked::LockedComponentSource,
+    pub data: ComplicationData,
+}
+
+pub enum ComplicationData {
+    InMemory(Vec<u8>),
+    OnDisk(std::path::PathBuf),
 }
 
 type InstancePre<T, U> =
@@ -437,7 +478,7 @@ mod tests {
         let executor = Arc::new(FactorsExecutor::new(engine_builder, env.factors)?);
 
         let factors_app = executor
-            .load_app(app, Default::default(), &DummyComponentLoader, None)
+            .load_app(app, Default::default(), &DummyComponentLoader, None, ())
             .await?;
 
         let mut instance_builder = factors_app.prepare("empty")?;
@@ -463,6 +504,7 @@ mod tests {
             &self,
             engine: &spin_core::wasmtime::Engine,
             _component: &AppComponent,
+            _complicator: &impl Complicator,
         ) -> anyhow::Result<Component> {
             Component::new(engine, "(component)")
         }
