@@ -38,7 +38,7 @@ const WASI_HTTP_EXPORT_2023_11_10: &str = "wasi:http/incoming-handler@0.2.0-rc-2
 /// The `incoming-handler` export prefix for all `wasi:http` 0.2 versions
 const WASI_HTTP_EXPORT_0_2_PREFIX: &str = "wasi:http/incoming-handler@0.2";
 /// The `handler` export `wasi:http` version 0.3.0-rc-2025-08-15
-const WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16: &str = "wasi:http/handler@0.3.0-rc-2025-09-16";
+const WASI_HTTP_EXPORT_0_3_0_UNSTABLE: &str = "wasi:http/handler@0.3.0-rc-2026-01-06";
 /// The `inbound-http` export for `fermyon:spin`
 const SPIN_HTTP_EXPORT: &str = "fermyon:spin/inbound-http";
 
@@ -76,7 +76,7 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
                     `{WASI_HTTP_EXPORT_2023_10_18}`, \
                     `{WASI_HTTP_EXPORT_2023_11_10}`, \
                     `{WASI_HTTP_EXPORT_0_2_PREFIX}.*`, \
-                    `{WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16}`, \
+                    `{WASI_HTTP_EXPORT_0_3_0_UNSTABLE}`, \
                      or `{SPIN_HTTP_EXPORT}` but it exported none of those. \
                      This may mean the component handles a different trigger, or that its `wasi:http` export is newer then those supported by Spin. \
                      If you're sure this is an HTTP module, check if a Spin upgrade is available: this may handle the newer version."
@@ -102,7 +102,7 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
             }
             (HandlerType::Wasi0_3(_), Some(_) | None) => {
                 anyhow::bail!(
-                    "`{WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16}` is currently unstable and will be \
+                    "`{WASI_HTTP_EXPORT_0_3_0_UNSTABLE}` is currently unstable and will be \
                     removed in a future Spin release. You can opt-in to this unstable interface \
                     by adding `executor = {{ type = \"wasip3-unstable\" }}` to the appropriate \
                     `[[trigger.http]]` section of your spin.toml file."
@@ -111,7 +111,7 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
             (handler_type, Some(HttpExecutorType::Wasip3Unstable)) => {
                 anyhow::bail!(
                     "The wasip3-unstable trigger executor expected a component that \
-                    exports `{WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16}` but found a \
+                    exports `{WASI_HTTP_EXPORT_0_3_0_UNSTABLE}` but found a \
                     component with type {name}",
                     name = handler_type.name(),
                 )
@@ -124,7 +124,7 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
         match self {
             HandlerType::Spin => SPIN_HTTP_EXPORT,
             HandlerType::Wasi0_2(_) => WASI_HTTP_EXPORT_0_2_PREFIX,
-            HandlerType::Wasi0_3(_) => WASI_HTTP_EXPORT_0_3_0_RC_2025_09_16,
+            HandlerType::Wasi0_3(_) => WASI_HTTP_EXPORT_0_3_0_UNSTABLE,
             HandlerType::Wasi2023_11_10(_) => WASI_HTTP_EXPORT_2023_11_10,
             HandlerType::Wasi2023_10_18(_) => WASI_HTTP_EXPORT_2023_10_18,
             _ => unreachable!(), // WAGI variant will never appear here
