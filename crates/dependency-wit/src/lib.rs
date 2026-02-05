@@ -182,28 +182,131 @@ fn importize(
     Ok(DecodedWasm::Component(resolve, world_id))
 }
 
-// fn all_imports(wasm: &DecodedWasm) -> Vec<(wit_parser::PackageName, String)> {
-//     let mut itfs = vec![];
+#[cfg(test)]
+mod test {
+    use super::*;
 
-//     for (_pid, pp) in &wasm.resolve().packages {
-//         for (_w, wid) in &pp.worlds {
-//             if let Some(world) = wasm.resolve().worlds.get(*wid) {
-//                 for (_wk, witem) in &world.imports {
-//                     if let wit_parser::WorldItem::Interface { id, .. } = witem {
-//                         if let Some(itf) = wasm.resolve().interfaces.get(*id) {
-//                             if let Some(itfp) = itf.package.as_ref() {
-//                                 if let Some(ppp) = wasm.resolve().packages.get(*itfp) {
-//                                     if let Some(itfname) = itf.name.as_ref() {
-//                                         itfs.push((ppp.name.clone(), itfname.clone()));
-//                                     }
-//                                 }
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
+    fn parse_wit(wit: &str) -> anyhow::Result<wit_parser::Resolve> {
+        let mut resolve = wit_parser::Resolve::new();
+        resolve.push_str("dummy.wit", &wit)?;
+        Ok(resolve)
+    }
 
-//     itfs
-// }
+    fn generate_dummy_component(wit: &str, world: &str) -> Vec<u8> {
+        let mut resolve = wit_parser::Resolve::default();
+        let package_id = resolve.push_str("test", wit).expect("should parse WIT");
+        let world_id = resolve
+            .select_world(&[package_id], Some(world))
+            .expect("should select world");
+
+        let mut wasm = wit_component::dummy_module(
+            &resolve,
+            world_id,
+            wit_parser::ManglingAndAbi::Legacy(wit_parser::LiftLowerAbi::Sync),
+        );
+        wit_component::embed_component_metadata(
+            &mut wasm,
+            &resolve,
+            world_id,
+            wit_component::StringEncoding::UTF8,
+        )
+        .expect("should embed component metadata");
+
+        let mut encoder = wit_component::ComponentEncoder::default()
+            .validate(true)
+            .module(&wasm)
+            .expect("should set module");
+        encoder.encode().expect("should encode component")
+    }
+
+    #[tokio::test]
+    async fn if_no_dependencies_then_empty_valid_wit() -> anyhow::Result<()> {
+        let wit = extract_wits(std::iter::empty(), ".").await?;
+
+        let resolve = parse_wit(&wit).expect("should have emitted valid WIT");
+
+        assert_eq!(1, resolve.packages.len());
+        assert_eq!(
+            "root:component",
+            resolve.packages.iter().next().unwrap().1.name.to_string()
+        );
+
+        assert_eq!(0, resolve.interfaces.len());
+
+        assert_eq!(1, resolve.worlds.len());
+
+        let world = resolve.worlds.iter().next().unwrap().1;
+        assert_eq!("root", world.name);
+        assert_eq!(0, world.imports.len());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn single_dep_wit_extracted() -> anyhow::Result<()> {
+        let tempdir = tempfile::TempDir::new()?;
+        let dep_file = tempdir.path().join("regex.wasm");
+
+        let dep_wit = "package my:regex@1.0.0;\n\ninterface regex {\n  matches: func(s: string) -> bool;\n}\nworld matcher {\n  export regex;\n}";
+        let dep_wasm = generate_dummy_component(dep_wit, "matcher");
+        tokio::fs::write(&dep_file, &dep_wasm).await?;
+
+        let dep_name =
+            DependencyName::Package("my:regex/regex@1.0.0".to_string().try_into().unwrap());
+        let dep_src = ComponentDependency::Local {
+            path: dep_file,
+            export: None,
+        };
+        let deps = std::iter::once((&dep_name, &dep_src));
+
+        let wit = extract_wits(deps, ".").await?;
+
+        let resolve = parse_wit(&wit).expect("should have emitted valid WIT");
+
+        assert_eq!(2, resolve.packages.len()); // root:component and my:regex
+        let (_rc_pkg_id, rc_pkg) = resolve
+            .packages
+            .iter()
+            .find(|(_, p)| p.name.to_string() == "root:component")
+            .expect("should have had `root:component`");
+        let (_mr_pkg_id, _mr_pkg) = resolve
+            .packages
+            .iter()
+            .find(|(_, p)| p.name.to_string() == "my:regex@1.0.0")
+            .expect("should have had `my:regex`");
+
+        assert_eq!(1, resolve.interfaces.len());
+        assert_eq!(
+            "regex",
+            resolve
+                .interfaces
+                .iter()
+                .next()
+                .unwrap()
+                .1
+                .name
+                .as_ref()
+                .unwrap()
+        );
+        let regex_itf_id = resolve.interfaces.iter().next().unwrap().0;
+
+        assert_eq!(2, rc_pkg.worlds.len()); // root and synthetic "impo*" wart
+        let root_world_id = rc_pkg
+            .worlds
+            .iter()
+            .find(|w| w.0 == "root")
+            .expect("should have had `root` world")
+            .1;
+
+        let world = resolve.worlds.get(*root_world_id).unwrap();
+        assert_eq!(1, world.imports.len());
+        let expected_import = wit_parser::WorldItem::Interface {
+            id: regex_itf_id,
+            stability: wit_parser::Stability::Unknown,
+        };
+        let import = world.imports.values().next().unwrap();
+        assert_eq!(&expected_import, import);
+
+        Ok(())
+    }
+}

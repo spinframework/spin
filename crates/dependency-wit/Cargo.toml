@@ -14,3 +14,8 @@ tokio = { workspace = true, features = ["rt", "time"] }
 wasmparser = { workspace = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+wasm-pkg-common = { workspace = true }
+wit-component = { workspace = true, features = ["dummy-module"] }
