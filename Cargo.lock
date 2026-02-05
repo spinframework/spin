@@ -8251,6 +8251,7 @@ dependencies = [
  "anyhow",
  "serde",
  "spin-common",
+ "spin-dependency-wit",
  "spin-environments",
  "spin-manifest",
  "spin-serde",
@@ -8306,6 +8307,7 @@ dependencies = [
  "spin-app",
  "spin-build",
  "spin-common",
+ "spin-dependency-wit",
  "spin-doctor",
  "spin-environments",
  "spin-factor-outbound-networking",
@@ -8411,6 +8413,23 @@ dependencies = [
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
+]
+
+[[package]]
+name = "spin-dependency-wit"
+version = "3.6.0-pre0"
+dependencies = [
+ "anyhow",
+ "indexmap 2.12.0",
+ "spin-loader",
+ "spin-manifest",
+ "spin-serde",
+ "tempfile",
+ "tokio",
+ "wasm-pkg-common",
+ "wasmparser 0.244.0",
+ "wit-component 0.244.0",
+ "wit-parser 0.244.0",
 ]
 
 [[package]]
