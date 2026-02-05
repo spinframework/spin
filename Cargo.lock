@@ -8510,10 +8510,12 @@ dependencies = [
  "spin-loader",
  "spin-manifest",
  "spin-serde",
+ "tempfile",
  "tokio",
- "wasmparser 0.243.0",
- "wit-component 0.243.0",
- "wit-parser 0.243.0",
+ "wasm-pkg-common",
+ "wasmparser 0.244.0",
+ "wit-component 0.244.0",
+ "wit-parser 0.244.0",
 ]
 
 [[package]]
