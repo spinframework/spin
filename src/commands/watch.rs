@@ -44,6 +44,11 @@ pub struct WatchCommand {
     )]
     pub app_source: Option<PathBuf>,
 
+    /// The build profile to build and run. The default is the anonymous profile (usually
+    /// the release build).
+    #[clap(long)]
+    pub profile: Option<String>,
+
     /// Clear the screen before each run.
     #[clap(
             name = WATCH_CLEAR_OPT,
@@ -112,6 +117,7 @@ impl WatchCommand {
         let mut buildifier = Buildifier {
             spin_bin: spin_bin.clone(),
             manifest: manifest_file.clone(),
+            profile: self.profile.clone(),
             clear_screen: self.clear,
             has_ever_built: false,
             watched_changes: source_code_rx,
@@ -121,6 +127,7 @@ impl WatchCommand {
         let mut uppificator = Uppificator {
             spin_bin: spin_bin.clone(),
             manifest: manifest_file.clone(),
+            profile: self.profile.clone(),
             up_args: self.up_args.clone(),
             clear_screen: self.clear,
             watched_changes: artifact_rx,
@@ -249,6 +256,7 @@ impl WatchCommand {
         let rtf = RuntimeConfigFactory {
             manifest_file: manifest_file.to_owned(),
             manifest_dir: manifest_dir.to_owned(),
+            profile: self.profile.clone(),
             filter_factory,
             notifier,
             impact_description,
@@ -272,6 +280,7 @@ impl WatchCommand {
 pub struct RuntimeConfigFactory {
     manifest_file: PathBuf,
     manifest_dir: PathBuf,
+    profile: Option<String>,
     filter_factory: Box<dyn FilterFactory>,
     notifier: Arc<tokio::sync::watch::Sender<Uuid>>,
     impact_description: &'static str,
@@ -281,7 +290,9 @@ pub struct RuntimeConfigFactory {
 impl RuntimeConfigFactory {
     async fn build_config(&self, rt: &watchexec::Config) -> anyhow::Result<()> {
         let manifest_str = tokio::fs::read_to_string(&self.manifest_file).await?;
-        let manifest = spin_manifest::manifest_from_str(&manifest_str)?;
+        let mut manifest = spin_manifest::manifest_from_str(&manifest_str)?;
+        spin_manifest::normalize::normalize_manifest(&mut manifest, self.profile())?;
+
         let filterer = self
             .filter_factory
             .build_filter(&self.manifest_file, &self.manifest_dir, &manifest)
@@ -294,6 +305,10 @@ impl RuntimeConfigFactory {
         rt.throttle(self.debounce);
         rt.on_action(move |ah| handler.handle(ah));
         Ok(())
+    }
+
+    fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
     }
 }
 
