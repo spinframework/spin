@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factors = { path = "../factors" }
 spin-locked-app = { path = "../locked-app" }
 spin-resource-table = { path = "../table" }

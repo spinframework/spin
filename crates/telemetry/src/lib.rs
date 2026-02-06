@@ -9,7 +9,7 @@ use tracing_subscriber::{fmt, prelude::*, registry, EnvFilter, Layer};
 
 mod alert_in_dev;
 pub mod detector;
-mod env;
+pub mod env;
 pub mod logs;
 pub mod metrics;
 mod propagation;

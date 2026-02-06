@@ -1,0 +1,16 @@
+[package]
+name = "wasi-otel-tracing"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1"
+http = "0.2"
+opentelemetry = "0.31.0"
+opentelemetry_sdk = "0.31.0"
+opentelemetry-wasi = { git = "https://github.com/calebschoepp/opentelemetry-wasi", rev = "82eb583e3301860a976924de0fa305977f5ad1b0" }
+spin-sdk = "5.1.1"
+wit-bindgen = "0.30.0"

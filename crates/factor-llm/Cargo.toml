@@ -17,6 +17,7 @@ llm-cublas = ["llm", "spin-llm-local/cublas"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factors = { path = "../factors" }
 spin-llm-local = { path = "../llm-local", optional = true }
 spin-llm-remote-http = { path = "../llm-remote-http" }

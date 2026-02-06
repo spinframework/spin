@@ -2,6 +2,7 @@ use anyhow::bail;
 use opentelemetry::{global, trace::TracerProvider};
 use opentelemetry_sdk::{
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
+    runtime::Tokio,
     Resource,
 };
 use tracing::Subscriber;
@@ -42,7 +43,11 @@ pub(crate) fn otel_tracing_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
         OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
     };
 
-    let span_processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(exporter).build();
+    let span_processor =
+        opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor::builder(
+            exporter, Tokio,
+        )
+        .build();
 
     let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_resource(resource)

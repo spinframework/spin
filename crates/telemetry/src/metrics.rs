@@ -1,8 +1,9 @@
 use anyhow::{bail, Result};
 use opentelemetry::global;
 use opentelemetry_sdk::{
-    metrics::{PeriodicReader, SdkMeterProvider},
+    metrics::{periodic_reader_with_async_runtime::PeriodicReader, SdkMeterProvider},
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
+    runtime::Tokio,
     Resource,
 };
 use tracing::Subscriber;
@@ -45,7 +46,7 @@ pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
         OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
     };
 
-    let reader = PeriodicReader::builder(exporter).build();
+    let reader = PeriodicReader::builder(exporter, Tokio).build();
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(reader)
         .with_resource(resource)

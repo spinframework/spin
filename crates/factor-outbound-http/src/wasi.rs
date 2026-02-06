@@ -87,6 +87,20 @@ impl HasData for HasHttp {
 }
 
 impl p3::WasiHttpCtx for InstanceState {
+    #[instrument(
+        name = "spin_outbound_http.send_request",
+        skip_all,
+        fields(
+            otel.kind = "client",
+            url.full = Empty,
+            http.request.method = %request.method(),
+            otel.name = %request.method(),
+            http.response.status_code = Empty,
+            server.address = Empty,
+            server.port = Empty,
+        )
+    )]
+    #[allow(clippy::type_complexity)]
     fn send_request(
         &mut self,
         request: http::Request<UnsyncBoxBody<Bytes, p3_types::ErrorCode>>,
@@ -103,6 +117,8 @@ impl p3::WasiHttpCtx for InstanceState {
                 >,
             > + Send,
     > {
+        self.otel.reparent_tracing_span();
+
         // If the caller (i.e. the guest) has trouble consuming the response
         // (e.g. encountering a network error while forwarding it on to some
         // other place), it can report that error to us via `fut`.  However,
@@ -310,6 +326,8 @@ impl WasiHttpView for WasiHttpImplInner<'_> {
         request: OutgoingRequest,
         config: OutgoingRequestConfig,
     ) -> Result<wasmtime_wasi_http::types::HostFutureIncomingResponse, HttpError> {
+        self.state.otel.reparent_tracing_span();
+
         let request_sender = RequestSender {
             allowed_hosts: self.state.allowed_hosts.clone(),
             component_tls_configs: self.state.component_tls_configs.clone(),

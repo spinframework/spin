@@ -266,6 +266,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-global-executor"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05b1b633a2115cd122d73b955eadd9916c18c8f510ec9cd1686404c60ad1c29c"
+dependencies = [
+ "async-channel 2.3.1",
+ "async-executor",
+ "async-io",
+ "async-lock",
+ "blocking",
+ "futures-lite 2.5.0",
+ "once_cell",
+]
+
+[[package]]
 name = "async-io"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -356,6 +371,33 @@ dependencies = [
  "signal-hook-registry",
  "slab",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "async-std"
+version = "1.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c8e079a4ab67ae52b7403632e4618815d6db36d2a010cfe41b02c1b1578f93b"
+dependencies = [
+ "async-channel 1.9.0",
+ "async-global-executor",
+ "async-io",
+ "async-lock",
+ "async-process",
+ "crossbeam-utils",
+ "futures-channel",
+ "futures-core",
+ "futures-io",
+ "futures-lite 2.5.0",
+ "gloo-timers",
+ "kv-log-macro",
+ "log",
+ "memchr",
+ "once_cell",
+ "pin-project-lite",
+ "pin-utils",
+ "slab",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -2760,6 +2802,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "fake-opentelemetry-collector"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ce713bed1dfc379216421ebf0c4ee2268b5cb4d7894bed8a96d267834590916"
+dependencies = [
+ "futures",
+ "hex",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry-proto",
+ "opentelemetry_sdk",
+ "serde",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3719,6 +3780,18 @@ dependencies = [
  "log",
  "regex-automata",
  "regex-syntax",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -4779,6 +4852,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kv-log-macro"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0de8b303297635ad57c9f5059fd9cee7a47f8e8daa09df0fcd07dd39fb22977f"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "lazy_static"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5050,6 +5132,9 @@ name = "log"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+dependencies = [
+ "value-bag",
+]
 
 [[package]]
 name = "logos"
@@ -5959,7 +6044,6 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tonic",
- "tracing",
 ]
 
 [[package]]
@@ -5980,6 +6064,7 @@ version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84dfad6042089c7fc1f6118b7040dc2eb4ab520abbf410b79dc481032af39570"
 dependencies = [
+ "async-std",
  "async-trait",
  "futures-channel",
  "futures-executor",
@@ -8278,6 +8363,7 @@ dependencies = [
  "conformance-tests",
  "ctrlc",
  "dialoguer",
+ "fake-opentelemetry-collector",
  "futures",
  "hex",
  "http 1.3.1",
@@ -8489,6 +8575,7 @@ dependencies = [
  "anyhow",
  "serde",
  "spin-core",
+ "spin-factor-otel",
  "spin-factors",
  "spin-factors-test",
  "spin-key-value-redis",
@@ -8511,6 +8598,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "serde",
+ "spin-factor-otel",
  "spin-factors",
  "spin-factors-test",
  "spin-llm-local",
@@ -8522,6 +8610,25 @@ dependencies = [
  "toml 0.8.19",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "spin-factor-otel"
+version = "3.6.0-pre0"
+dependencies = [
+ "anyhow",
+ "indexmap 2.12.0",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "spin-core",
+ "spin-factors",
+ "spin-resource-table",
+ "spin-telemetry",
+ "spin-world",
+ "toml 0.5.11",
+ "tracing",
+ "tracing-opentelemetry",
 ]
 
 [[package]]
@@ -8540,6 +8647,7 @@ dependencies = [
  "rustls 0.23.18",
  "serde",
  "spin-common",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factor-variables",
  "spin-factors",
@@ -8562,6 +8670,7 @@ dependencies = [
  "anyhow",
  "rumqttc",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factor-variables",
  "spin-factors",
@@ -8579,6 +8688,7 @@ dependencies = [
  "anyhow",
  "mysql_async",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factor-variables",
  "spin-factors",
@@ -8633,6 +8743,7 @@ dependencies = [
  "rust_decimal",
  "serde_json",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factor-variables",
  "spin-factors",
@@ -8652,6 +8763,7 @@ dependencies = [
  "anyhow",
  "redis",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-networking",
  "spin-factor-variables",
  "spin-factors",
@@ -8667,6 +8779,7 @@ name = "spin-factor-sqlite"
 version = "3.6.0-pre0"
 dependencies = [
  "async-trait",
+ "spin-factor-otel",
  "spin-factors",
  "spin-factors-test",
  "spin-locked-app",
@@ -8681,6 +8794,7 @@ name = "spin-factor-variables"
 version = "3.6.0-pre0"
 dependencies = [
  "spin-expressions",
+ "spin-factor-otel",
  "spin-factors",
  "spin-factors-test",
  "spin-telemetry",
@@ -9026,6 +9140,7 @@ dependencies = [
  "spin-expressions",
  "spin-factor-key-value",
  "spin-factor-llm",
+ "spin-factor-otel",
  "spin-factor-outbound-http",
  "spin-factor-outbound-mqtt",
  "spin-factor-outbound-mysql",
@@ -9062,6 +9177,7 @@ dependencies = [
  "spin-common",
  "spin-factor-key-value",
  "spin-factor-llm",
+ "spin-factor-otel",
  "spin-factor-outbound-http",
  "spin-factor-outbound-mqtt",
  "spin-factor-outbound-mysql",
@@ -9228,6 +9344,7 @@ dependencies = [
  "serde_json",
  "spin-app",
  "spin-core",
+ "spin-factor-otel",
  "spin-factor-outbound-http",
  "spin-factor-outbound-networking",
  "spin-factor-wasi",
@@ -9318,7 +9435,13 @@ dependencies = [
 name = "spin-world"
 version = "3.6.0-pre0"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "base64 0.22.1",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
  "wasmtime",
 ]
 
@@ -10014,6 +10137,15 @@ dependencies = [
 
 [[package]]
 name = "toml"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "toml"
 version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1ed1f98e3fdc28d6d910e6737ae6ab1a93bf1985935a1193e68f93eeb68d24e"
@@ -10513,6 +10645,12 @@ name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
+
+[[package]]
+name = "value-bag"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ba6f5989077681266825251a52748b8c1d8a4ad098cc37e440103d0ea717fc0"
 
 [[package]]
 name = "vaultrs"
