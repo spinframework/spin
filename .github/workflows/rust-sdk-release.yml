@@ -19,6 +19,11 @@ jobs:
         shell: bash
         run: ./scripts/bump-rust-template-sdk.sh ${{ github.event.client_payload.version }}
 
+      # Run script to update the examples
+      - name: Bump Rust Examples SDK Dependency
+        shell: bash
+        run: ./scripts/bump-rust-examples-sdk.sh ${{ github.event.client_payload.version }}
+
       # Import GPG key for signing commits
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
@@ -32,10 +37,10 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
-          commit-message: "chore(rust-templates): bump Spin Rust SDK to ${{ github.event.client_payload.version }}"
-          title: "chore(rust-templates): bump Spin Rust SDK to ${{ github.event.client_payload.version }}"
+          commit-message: "chore(rust-sdk-release): bump Spin Rust SDK to ${{ github.event.client_payload.version }}"
+          title: "chore(rust-sdk-release): bump Spin Rust SDK to ${{ github.event.client_payload.version }}"
           body: |
-            Update the Spin Rust Templates SDK dependency to ${{ github.event.client_payload.version }}.
+            Update the Spin Rust Templates & Examples SDK dependency to ${{ github.event.client_payload.version }}.
           branch: bump-spin-rust-sdk-${{ github.event.client_payload.version }}
           base: main
           delete-branch: true
