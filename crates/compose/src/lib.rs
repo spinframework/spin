@@ -381,7 +381,7 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
 
             let export_id = self
                 .graph
-                .alias_instance_export(dependency_info.instantiation_id, &import_name)
+                .alias_instance_export(dependency_info.instantiation_id, &export_name)
                 .map_err(|e| ComposeError::PrepareError(e.into()))?;
 
             assert!(arguments.insert(import_name, export_id).is_none());
