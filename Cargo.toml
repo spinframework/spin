@@ -187,7 +187,7 @@ toml_edit = "0.22"
 tower-service = "0.3.3"
 tracing = { version = "0.1.41", features = ["log"] }
 url = "2.5.7"
-tracing-opentelemetry = "0.29"
+tracing-opentelemetry = { version = "0.29", default-features = false, features = ["metrics"] }
 walkdir = "2"
 wac-graph = "0.8.1"
 wasm-encoder = "0.244.0"

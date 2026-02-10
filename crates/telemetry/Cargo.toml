@@ -14,7 +14,7 @@ opentelemetry-otlp = { workspace = true, features = ["grpc-tonic"] }
 opentelemetry_sdk = { workspace = true, features = ["rt-tokio", "spec_unstable_logs_enabled", "metrics"] }
 terminal = { path = "../terminal" }
 tracing = { workspace = true }
-tracing-opentelemetry = { workspace = true, default-features = false, features = ["metrics"] }
+tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["smallvec", "fmt", "ansi", "std", "env-filter", "json", "registry"] }
 
 [features]
