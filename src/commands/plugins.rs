@@ -78,6 +78,7 @@ pub struct Install {
         long = "file",
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_NAME_OPT,
+        value_hint = clap::ValueHint::FilePath,
     )]
     pub local_manifest_src: Option<PathBuf>,
 
@@ -199,6 +200,7 @@ pub struct Upgrade {
         short = 'f',
         long = "file",
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
+        value_hint = clap::ValueHint::AnyPath,
     )]
     pub local_manifest_src: Option<PathBuf>,
 
@@ -627,6 +629,7 @@ pub struct List {
 pub enum ListFormat {
     Plain,
     Json,
+    NamesOnly,
 }
 
 impl List {
@@ -650,6 +653,7 @@ impl List {
         match self.format {
             ListFormat::Plain => Self::print_plain(&plugins),
             ListFormat::Json => Self::print_json(&plugins),
+            ListFormat::NamesOnly => Self::print_names_only(&plugins),
         }
     }
 
@@ -684,6 +688,16 @@ impl List {
 
         let json_text = serde_json::to_string_pretty(&json_vals)?;
         println!("{json_text}");
+        Ok(())
+    }
+
+    fn print_names_only(plugins: &[PluginDescriptor]) -> anyhow::Result<()> {
+        let names: std::collections::HashSet<_> = plugins.iter().map(|p| &p.name).collect();
+
+        for name in names {
+            println!("{name}");
+        }
+
         Ok(())
     }
 }

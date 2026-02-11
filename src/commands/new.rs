@@ -38,7 +38,7 @@ pub struct TemplateNewCommandCore {
 
     /// The directory in which to create the new application or component.
     /// The default is the name argument.
-    #[clap(short = 'o', long = "output", group = "location")]
+    #[clap(short = 'o', long = "output", group = "location", value_hint = clap::ValueHint::DirPath)]
     pub output_path: Option<PathBuf>,
 
     /// Create the new application or component in the current directory.
@@ -52,7 +52,7 @@ pub struct TemplateNewCommandCore {
     /// A TOML file which contains parameter values in name = "value" format.
     /// Parameters passed as CLI option overwrite parameters specified in the
     /// file.
-    #[clap(long = "values-file")]
+    #[clap(long = "values-file", value_hint = clap::ValueHint::FilePath)]
     pub values_file: Option<PathBuf>,
 
     /// An optional argument that allows to skip prompts for the manifest file
@@ -92,6 +92,7 @@ pub struct AddCommand {
         name = APP_MANIFEST_FILE_OPT,
         short = 'f',
         long = "file",
+        value_hint = clap::ValueHint::AnyPath,
     )]
     pub app: Option<PathBuf>,
 }
