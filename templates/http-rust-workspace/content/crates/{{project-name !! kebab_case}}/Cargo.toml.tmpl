@@ -1,0 +1,14 @@
+[package]
+name = "{{project-name | kebab_case}}"
+authors = ["{{authors}}"]
+description = "{{project-description}}"
+version = "0.1.0"
+rust-version = "1.78"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = { workspace = true }
+spin-sdk = { workspace = true }
