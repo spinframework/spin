@@ -8503,7 +8503,7 @@ dependencies = [
 
 [[package]]
 name = "spin-dependency-wit"
-version = "3.6.0-pre0"
+version = "3.7.0-pre0"
 dependencies = [
  "anyhow",
  "indexmap 2.12.0",

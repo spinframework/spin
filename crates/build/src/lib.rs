@@ -37,7 +37,18 @@ pub async fn build(
     let components_to_build = components_to_build(component_ids, build_info.components())?;
 
     if wit_generation.generate() {
-        regenerate_wits(&components_to_build, &app_dir).await?;
+        let wit_gen_errs = regenerate_wits(&components_to_build, &app_dir).await;
+        if !wit_gen_errs.is_empty() {
+            terminal::warn!("One or more components specified dependencies for which Spin couldn't generate import bindings.");
+            eprintln!(
+                "If these components rely on Spin-generated bindings they may fail to build."
+            );
+            eprintln!("Otherwise, to skip binding generation, use the --skip-generate-wits flag.");
+            eprintln!("Error details:");
+            for (component, err) in wit_gen_errs {
+                terminal::einfo!("{component}:", "{err:#}");
+            }
+        }
     }
 
     let build_result = build_components(components_to_build, &app_dir);
@@ -135,25 +146,31 @@ fn components_to_build(
     Ok(components_to_build)
 }
 
+#[must_use]
 async fn regenerate_wits(
     components_to_build: &[ComponentBuildInfo],
     app_root: &Path,
-) -> anyhow::Result<()> {
+) -> Vec<(String, anyhow::Error)> {
+    let mut errors = vec![];
+
     for component in components_to_build {
         let component_dir = match component.build.as_ref().and_then(|b| b.workdir.as_ref()) {
             None => app_root.to_owned(),
             Some(d) => app_root.join(d),
         };
         let dest_file = component_dir.join("spin-dependencies.wit");
-        spin_dependency_wit::extract_wits_into(
+        let extract_result = spin_dependency_wit::extract_wits_into(
             component.dependencies.inner.iter(),
             app_root,
             dest_file,
         )
-        .await?;
+        .await;
+        if let Err(e) = extract_result {
+            errors.push((component.id.clone(), e));
+        }
     }
 
-    Ok(())
+    errors
 }
 
 fn build_components(
