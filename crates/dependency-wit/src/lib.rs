@@ -5,6 +5,7 @@ use spin_loader::WasmLoader;
 use spin_manifest::schema::v2::ComponentDependency;
 use spin_serde::DependencyName;
 use wit_component::DecodedWasm;
+use wit_parser::Span;
 
 pub async fn extract_wits_into(
     source: impl Iterator<Item = (&DependencyName, &ComponentDependency)>,
@@ -13,7 +14,13 @@ pub async fn extract_wits_into(
 ) -> anyhow::Result<()> {
     let wit_text = extract_wits(source, app_root).await?;
 
-    tokio::fs::create_dir_all(dest_file.as_ref().parent().unwrap()).await?;
+    tokio::fs::create_dir_all(
+        dest_file
+            .as_ref()
+            .parent()
+            .context("file is root directory")?,
+    )
+    .await?;
     tokio::fs::write(dest_file, wit_text.as_bytes()).await?;
 
     Ok(())
@@ -39,33 +46,35 @@ pub async fn extract_wits(
             DependencyName::Plain(_) => None,
             DependencyName::Package(dependency_package_name) => {
                 dependency_package_name.interface.as_ref()
-                // match dependency_package_name.interface.as_ref() {
-                //     Some(itf) => Some(itf),
-                //     None => None,
-                // }
             }
         };
 
         let (wasm_path, export) = loader
             .load_component_dependency(dependency_name, dependency)
-            .await?;
+            .await
+            .with_context(|| format!("failed to load dependency {dependency_name}"))?;
         let wasm_bytes = tokio::fs::read(&wasm_path).await?;
 
         let decoded = read_wasm(&wasm_bytes)?;
         let decoded = match export {
             None => decoded,
-            Some(export) => munge_aliased_export(decoded, &export, dependency_name)?,
+            Some(export) => {
+                munge_aliased_export(decoded, &export, dependency_name).with_context(|| {
+                    format!("failed to map named export {export} to dependency {dependency_name}")
+                })?
+            }
         };
         let impo_world = format!("impo-world{index}");
-        let importised = importize(decoded, None, Some(&impo_world))?;
+        let importised = importize(decoded, Some(&impo_world))
+            .with_context(|| format!("failed to map importize dependency {dependency_name}"))?;
 
         let imports = match import_name {
             None => all_imports(&importised),
-            Some(itf) => one_import(&importised, itf.as_ref()),
+            Some(itf) => one_import(&importised, itf.as_ref())?,
         };
 
         // Capture WITs for all packages used in the importised thing.
-        // Things like WASI packages may be depended on my multiple packages
+        // Things like WASI packages may be depended on by multiple packages
         // so we index on the package name to avoid emitting them twice.
 
         let root_pkg = importised.package();
@@ -78,7 +87,13 @@ pub async fn extract_wits(
             .collect::<Vec<_>>();
 
         for p in &useful_pkgs {
-            let pkg_name = importised.resolve().packages.get(*p).unwrap().name.clone();
+            let pkg_name = importised
+                .resolve()
+                .packages
+                .get(*p)
+                .context("package not found in importised (id lookup failed)")? // shouldn't happen
+                .name
+                .clone();
             let output = wit_component::OutputToString::default();
             let mut printer = wit_component::WitPrinter::new(output);
             printer.print_package(importised.resolve(), *p, false)?;
@@ -89,18 +104,36 @@ pub async fn extract_wits(
 
         let remap = aggregating_resolve.merge(importised.resolve().clone())?;
         for iid in imports {
-            let mapped_iid = remap.map_interface(iid, None)?;
+            let mapped_iid = remap.map_interface(iid, Span::default())?;
             let wk = wit_parser::WorldKey::Interface(mapped_iid);
             let world_item = wit_parser::WorldItem::Interface {
                 id: mapped_iid,
                 stability: wit_parser::Stability::Unknown,
+                span: Span::default(),
             };
-            aggregating_resolve
+            let previous_world_item = aggregating_resolve
                 .worlds
                 .get_mut(aggregating_world_id)
-                .unwrap()
+                .context("aggregated dependency world doesn't exist")? // shouldn't happen
                 .imports
                 .insert(wk, world_item);
+            if let Some(previous_world_item) = previous_world_item {
+                debug_assert!({
+                    let wit_parser::WorldItem::Interface { id, .. } = previous_world_item else {
+                        debug_assert!(
+                            false,
+                            "previous WorldItem did not match inserted WorldItem: not an interface"
+                        );
+                        break;
+                    };
+                    debug_assert_eq!(
+                        id, mapped_iid,
+                        "replacing WorldItem had a different InterfaceId from replaced one"
+                    );
+
+                    true
+                });
+            }
         }
     }
 
@@ -127,12 +160,9 @@ fn munge_aliased_export(
     export: &str,
     new_name: &DependencyName,
 ) -> anyhow::Result<DecodedWasm> {
-    // TODO: I am not sure how `export` is meant to work if you are
-    // depping on a package rather than an itf
-
     let export_qname = spin_serde::DependencyPackageName::try_from(export.to_string())?;
     let Some(export_itf_name) = export_qname.interface.as_ref() else {
-        anyhow::bail!("the export name should be a qualified interface name - missing interface");
+        anyhow::bail!("the export name should be a qualified interface name - {export_qname} doesn't specify interface");
     };
     let export_pkg_name = wit_parser::PackageName {
         namespace: export_qname.package.namespace().to_string(),
@@ -141,11 +171,13 @@ fn munge_aliased_export(
     };
 
     let DependencyName::Package(new_name) = new_name else {
-        anyhow::bail!("the dependency name should be a qualified interface name - not qualified");
+        anyhow::bail!(
+            "the dependency name should be a qualified interface name - {new_name} not qualified"
+        );
     };
     let Some(new_itf_name) = new_name.interface.as_ref() else {
         anyhow::bail!(
-            "the dependency name should be a qualified interface name - missing interface"
+            "the dependency name should be a qualified interface name - {new_name} doesn't specify an interface"
         );
     };
     let new_pkg_name = wit_parser::PackageName {
@@ -172,56 +204,84 @@ fn munge_aliased_export(
 
     // We address the first level by creating the new-name package if it doesn't exist
     let (inserting_into_pkg_id, inserting_into_pkg) = match existing_pkg {
-        Some(tup) => tup,
+        Some(tuple) => tuple,
         None => {
             // insert the needed package
             let package_wit = format!("package {new_pkg_name};");
             let pkg_id = resolve
-                .push_str(std::env::current_dir().unwrap(), &package_wit)
-                .context("failed at setting up fake pkg")?;
-            let pkg = resolve.packages.get(pkg_id).unwrap();
+                .push_str(
+                    std::env::current_dir().context("no current dir")?, // unused
+                    &package_wit,
+                )
+                .with_context(|| format!("failed to create import alias package {new_pkg_name}"))?;
+            let pkg = resolve
+                .packages
+                .get(pkg_id)
+                .context("export alias package created but doesn't exist")?; // shouldn't happen
             (pkg_id, pkg)
         }
     };
 
-    // Second level asks if the package already contains the interface
+    // Second level asks if the new-name package already contains the interface
     let existing_itf = inserting_into_pkg.interfaces.get(new_itf_name.as_ref());
     if existing_itf.is_some() {
-        // no rename is needed, but we might need to do some extra work to make sure
-        // that the export, rather than the import, gets included in the aggregated world
+        // This makes the questionable assumption that the matchingly interface already
+        // in the package is the same as the export. E.g. given "a:b/i" = { export = "c:d/i" }
+        // where the dep contains an `a:b` package with an interface named `i`, we will generate
+        // from that rather than emitting the `c:d/i` WIT for `a:b/i`. We could be smarter about
+        // this but we don't know if other things depend on `a:b/i` so replacing it could result
+        // in a bad WIT. If this becomes a problem we could maybe try emitting it as something
+        // like `a:b/i-from-c-d` but I'd prefer to cross that bridge when we come to it.
         return Ok(decode_id.make_decoded_wasm(resolve));
     }
 
-    // It does not: we need to slurp the EXPORTED itf into the `inserting_into`
+    // The new-name package does not contain the interface: we need to slurp the EXPORTED itf into the `inserting_into`
     // package under the NEW (importing) interface name
     let Some(export_pkg_id) = resolve.package_names.get(&export_pkg_name) else {
-        anyhow::bail!("export is from a package that doesn't exist");
+        anyhow::bail!(
+            "export is from a package ({}) that doesn't exist (name lookup failed)",
+            export_pkg_name
+        );
     };
     let Some(export_pkg) = resolve.packages.get(*export_pkg_id) else {
-        anyhow::bail!("export pkg id doesn't point to a package wtf");
+        anyhow::bail!(
+            "export is from a package ({}) that doesn't exist (id lookup failed)",
+            export_pkg_name
+        );
     };
     let Some(export_itf_id) = export_pkg.interfaces.get(export_itf_name.as_ref()) else {
-        anyhow::bail!("export pkg doesn't contain export itf");
+        anyhow::bail!(
+            "export package ({}) doesn't contain interface {} (name lookup failed)",
+            export_pkg_name,
+            export_itf_name
+        );
     };
     let Some(export_itf) = resolve.interfaces.get(*export_itf_id) else {
-        anyhow::bail!("export pkg doesn't contain export itf part 2");
+        anyhow::bail!(
+            "export package ({}) doesn't contain interface {} (id lookup failed)",
+            export_pkg_name,
+            export_itf_name
+        );
     };
 
+    // Create the new-name interface by cloning the export interface
     let mut export_itf = export_itf.clone();
     export_itf.package = Some(inserting_into_pkg_id);
     export_itf.name = Some(new_itf_name.to_string());
-    let export_itf_id_2 = resolve.interfaces.alloc(export_itf);
 
-    // OKAY TIME TO ADD THIS UNDER THE WRONG NAME TO THE THINGY
-    // oh man there is some nonsense about worlds as well
-    let inserting_into_pkg_mut = resolve.packages.get_mut(inserting_into_pkg_id).unwrap(); // SHENANIGANS to get around a "mutable borrow at the same time as immutable borrow" woe
+    // Add the new-name interface to the resolve and to the new-name package
+    let export_itf_id_new = resolve.interfaces.alloc(export_itf);
+    let inserting_into_pkg_mut = resolve
+        .packages
+        .get_mut(inserting_into_pkg_id)
+        .context("package id lookup that succeeded before failed now")?; // we re-lookup to get around a "mutable borrow at the same time as immutable borrow" woe
     inserting_into_pkg_mut
         .interfaces
-        .insert(new_itf_name.to_string(), export_itf_id_2);
+        .insert(new_itf_name.to_string(), export_itf_id_new);
 
-    let thingy = decode_id.make_decoded_wasm(resolve);
+    let decoded = decode_id.make_decoded_wasm(resolve);
 
-    Ok(thingy)
+    Ok(decoded)
 }
 
 enum WorldOrPackageId {
@@ -254,14 +314,15 @@ fn as_interface(wi: &wit_parser::WorldItem) -> Option<wit_parser::InterfaceId> {
     }
 }
 
-fn one_import(wasm: &DecodedWasm, name: &str) -> Vec<wit_parser::InterfaceId> {
+fn one_import(wasm: &DecodedWasm, name: &str) -> anyhow::Result<Vec<wit_parser::InterfaceId>> {
     let id = wasm
         .resolve()
         .interfaces
         .iter()
         .find(|i| i.1.name == Some(name.to_string()))
-        .map(|t| t.0);
-    id.into_iter().collect()
+        .map(|t| t.0)
+        .with_context(|| format!("interface {name} not found in component binary"))?;
+    Ok(vec![id])
 }
 
 fn read_wasm(wasm_bytes: &[u8]) -> anyhow::Result<DecodedWasm> {
@@ -272,7 +333,7 @@ fn read_wasm(wasm_bytes: &[u8]) -> anyhow::Result<DecodedWasm> {
         if wasm.is_none() {
             anyhow::bail!(
                 "input is a core wasm module with no `component-type*` \
-                    custom sections meaning that there is not WIT information; \
+                    custom sections meaning that there is no WIT information; \
                     is the information not embedded or is this supposed \
                     to be a component?"
             )
@@ -281,21 +342,11 @@ fn read_wasm(wasm_bytes: &[u8]) -> anyhow::Result<DecodedWasm> {
     }
 }
 
-fn importize(
-    decoded: DecodedWasm,
-    world: Option<&str>,
-    out_world_name: Option<&String>,
-) -> anyhow::Result<DecodedWasm> {
-    let (mut resolve, world_id) = match (decoded, world) {
-        (DecodedWasm::Component(resolve, world), None) => (resolve, world),
-        (DecodedWasm::Component(..), Some(_)) => {
-            anyhow::bail!(
-                "the `--importize-world` flag is not compatible with a \
-                    component input, use `--importize` instead"
-            );
-        }
-        (DecodedWasm::WitPackage(resolve, id), world) => {
-            let world = resolve.select_world(&[id], world)?;
+fn importize(decoded: DecodedWasm, out_world_name: Option<&String>) -> anyhow::Result<DecodedWasm> {
+    let (mut resolve, world_id) = match decoded {
+        DecodedWasm::Component(resolve, world) => (resolve, world),
+        DecodedWasm::WitPackage(resolve, id) => {
+            let world = resolve.select_world(&[id], None)?;
             (resolve, world)
         }
     };
@@ -428,6 +479,7 @@ mod test {
         let expected_import = wit_parser::WorldItem::Interface {
             id: regex_itf_id,
             stability: wit_parser::Stability::Unknown,
+            span: Span::default(),
         };
         let import = world.imports.values().next().unwrap();
         assert_eq!(&expected_import, import);

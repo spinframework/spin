@@ -8518,19 +8518,18 @@ dependencies = [
 
 [[package]]
 name = "spin-dependency-wit"
-version = "3.6.0-pre0"
+version = "3.7.0-pre0"
 dependencies = [
  "anyhow",
- "indexmap 2.12.0",
+ "indexmap 2.13.0",
  "spin-loader",
  "spin-manifest",
  "spin-serde",
  "tempfile",
  "tokio",
- "wasm-pkg-common",
- "wasmparser 0.244.0",
- "wit-component 0.244.0",
- "wit-parser 0.244.0",
+ "wasmparser 0.245.1",
+ "wit-component 0.245.1",
+ "wit-parser 0.245.1",
 ]
 
 [[package]]
