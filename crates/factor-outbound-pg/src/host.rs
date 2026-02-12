@@ -58,10 +58,13 @@ impl<CF: ClientFactory> InstanceState<CF> {
                     // The port we use is either:
                     // * The port at the same index as the host
                     // * The first port if there is only one port
-                    let port =
-                        ports
-                            .get(i)
-                            .or_else(|| if ports.len() == 1 { ports.get(1) } else { None });
+                    let port = ports.get(i).or_else(|| {
+                        if ports.len() == 1 {
+                            ports.first()
+                        } else {
+                            None
+                        }
+                    });
                     let port_str = port.map(|p| format!(":{p}")).unwrap_or_default();
                     let url = format!("{address}{port_str}");
                     if !self
