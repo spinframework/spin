@@ -876,8 +876,8 @@ mod tests {
         assert!(cargo2.contains("name = \"hello-2\""));
 
         let spin_toml = tokio::fs::read_to_string(&spin_toml_path).await.unwrap();
-        assert!(spin_toml.contains("source = \"hello/target/wasm32-wasip1/release/hello.wasm\""));
-        assert!(spin_toml.contains("source = \"encore/target/wasm32-wasip1/release/hello_2.wasm\""));
+        assert!(spin_toml.contains("source = \"hello/target/wasm32-wasip2/release/hello.wasm\""));
+        assert!(spin_toml.contains("source = \"encore/target/wasm32-wasip2/release/hello_2.wasm\""));
     }
 
     #[tokio::test]
