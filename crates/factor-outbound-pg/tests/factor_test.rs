@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_outbound_pg::client::Client;
 use spin_factor_outbound_pg::client::ClientFactory;
+use spin_factor_outbound_pg::client::HashableCertificate;
 use spin_factor_outbound_pg::OutboundPgFactor;
 use spin_factor_variables::VariablesFactor;
 use spin_factors::{anyhow, RuntimeFactors};
@@ -112,7 +113,11 @@ pub struct MockClient {}
 #[async_trait]
 impl ClientFactory for MockClientFactory {
     type Client = MockClient;
-    async fn get_client(&self, _address: &str, _root_ca: Option<&String>) -> Result<Self::Client> {
+    async fn get_client(
+        &self,
+        _address: &str,
+        _root_ca: Option<HashableCertificate>,
+    ) -> Result<Self::Client> {
         Ok(MockClient {})
     }
 }

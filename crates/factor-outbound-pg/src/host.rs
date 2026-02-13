@@ -10,14 +10,14 @@ use tracing::field::Empty;
 use tracing::instrument;
 use tracing::Level;
 
-use crate::client::{Client, ClientFactory};
+use crate::client::{Client, ClientFactory, HashableCertificate};
 use crate::InstanceState;
 
 impl<CF: ClientFactory> InstanceState<CF> {
     async fn open_connection<Conn: 'static>(
         &mut self,
         address: &str,
-        root_ca: Option<&String>,
+        root_ca: Option<HashableCertificate>,
     ) -> Result<Resource<Conn>, v4::Error> {
         self.connections
             .push(
@@ -143,7 +143,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
 
 pub(crate) struct ConnectionBuilder {
     address: String,
-    root_ca: Option<String>,
+    root_ca: Option<HashableCertificate>,
 }
 
 impl<CF: ClientFactory> v4::HostConnectionBuilder for InstanceState<CF> {
@@ -165,11 +165,13 @@ impl<CF: ClientFactory> v4::HostConnectionBuilder for InstanceState<CF> {
         self_: Resource<v4::ConnectionBuilder>,
         certificate: String,
     ) -> Result<(), v4::Error> {
+        let root_ca = HashableCertificate::from_pem(&certificate)
+            .map_err(|e| v4::Error::Other(format!("invalid root certificate: {e}")))?;
         let builder = self
             .builders
             .get_mut(self_.rep())
             .ok_or_else(|| v4::Error::ConnectionFailed("no builder found".into()))?;
-        builder.root_ca = Some(certificate);
+        builder.root_ca = Some(root_ca);
         Ok(())
     }
 
@@ -184,7 +186,7 @@ impl<CF: ClientFactory> v4::HostConnectionBuilder for InstanceState<CF> {
         // borrow checker gets pedantic here, so we need to outsmart it
         let address = builder.address.clone();
         let root_ca = builder.root_ca.clone();
-        let conn = self.open_connection(&address, root_ca.as_ref()).await;
+        let conn = self.open_connection(&address, root_ca).await;
         conn
     }
 
