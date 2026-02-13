@@ -1154,30 +1154,6 @@ route = "/..."
         Ok(())
     }
 
-    // TODO: Test on Windows
-    #[cfg(not(target_os = "windows"))]
-    #[test]
-    fn test_cloud_plugin_autoinstall() -> anyhow::Result<()> {
-        let env = test_environment::TestEnvironment::<()>::boot(ServicesConfig::none())?;
-
-        let mut login = std::process::Command::new(spin_binary());
-        login
-            .args(["login", "--help"])
-            // Ensure that spin installs the plugins into the temporary directory
-            .env("SPIN_DATA_DIR", "./plugins");
-        let output = env.run_in(&mut login)?;
-
-        // Verify plugin successfully wrote to output file
-        assert!(std::str::from_utf8(&output.stdout)?
-            .trim()
-            .contains("The `cloud` plugin is required. Installing now."));
-        // Ensure login help info is displayed
-        assert!(std::str::from_utf8(&output.stdout)?
-            .trim()
-            .contains("Log into Fermyon Cloud"));
-        Ok(())
-    }
-
     #[test]
     fn test_build_command() -> anyhow::Result<()> {
         do_test_build_command("tests/testcases/simple-build")

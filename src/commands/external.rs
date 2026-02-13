@@ -37,10 +37,7 @@ fn parse_subcommand(mut cmd: Vec<String>) -> anyhow::Result<(String, Vec<String>
     ))
 }
 
-const PREDEFINED_EXTERNALS: &[(&str, &str)] = &[(
-    "cloud",
-    "Commands for publishing applications to the Fermyon Cloud.",
-)];
+const PREDEFINED_EXTERNALS: &[(&str, &str)] = &[];
 
 pub fn predefined_externals() -> Vec<(String, String)> {
     PREDEFINED_EXTERNALS
