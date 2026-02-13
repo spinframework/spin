@@ -1,0 +1,21 @@
+#:schema https://schemas.spinframework.dev/spin/manifest-v2/latest.json
+
+spin_manifest_version = 2
+
+[application]
+name = "pg-app"
+version = "0.1.0"
+authors = ["Kate Goldenring <kate.goldenring@fermyon.com>"]
+description = ""
+
+[[trigger.http]]
+route = "/..."
+component = "pg-app"
+
+[component.pg-app]
+source = "target/wasm32-wasip2/release/pg_app.wasm"
+# files = [{ source = "postgres-ssl", destination = "/" }]
+allowed_outbound_hosts = ["postgres://localhost"]
+[component.pg-app.build]
+command = "cargo build --target wasm32-wasip2 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]

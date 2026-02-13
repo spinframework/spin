@@ -1,7 +1,7 @@
 use anyhow::Result;
 use spin_core::wasmtime::component::Resource;
 use spin_world::spin::postgres3_0_0::postgres::{self as v3};
-use spin_world::spin::postgres4_0_0::postgres::{self as v4};
+use spin_world::spin::postgres4_1_0::postgres::{self as v4};
 use spin_world::v1::postgres as v1;
 use spin_world::v1::rdbms_types as v1_types;
 use spin_world::v2::postgres::{self as v2};
@@ -10,18 +10,19 @@ use tracing::field::Empty;
 use tracing::instrument;
 use tracing::Level;
 
-use crate::client::{Client, ClientFactory};
+use crate::client::{Client, ClientFactory, HashableCertificate};
 use crate::InstanceState;
 
 impl<CF: ClientFactory> InstanceState<CF> {
     async fn open_connection<Conn: 'static>(
         &mut self,
         address: &str,
+        root_ca: Option<HashableCertificate>,
     ) -> Result<Resource<Conn>, v4::Error> {
         self.connections
             .push(
                 self.client_factory
-                    .get_client(address)
+                    .get_client(address, root_ca)
                     .await
                     .map_err(|e| v4::Error::ConnectionFailed(format!("{e:?}")))?,
             )
@@ -102,7 +103,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
 
         self.ensure_address_allowed(&address).await?;
 
-        Ok(self.open_connection(&address).await?)
+        Ok(self.open_connection(&address, None).await?)
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
@@ -140,6 +141,61 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
     }
 }
 
+pub(crate) struct ConnectionBuilder {
+    address: String,
+    root_ca: Option<HashableCertificate>,
+}
+
+impl<CF: ClientFactory> v4::HostConnectionBuilder for InstanceState<CF> {
+    async fn new(&mut self, address: String) -> Result<Resource<v4::ConnectionBuilder>> {
+        let builder = ConnectionBuilder {
+            address,
+            root_ca: None,
+        };
+        let rep = self
+            .builders
+            .push(builder)
+            .map_err(|_| anyhow::anyhow!("out of builder table space"))?;
+        let rsrc = Resource::new_own(rep);
+        Ok(rsrc)
+    }
+
+    async fn set_ca_root(
+        &mut self,
+        self_: Resource<v4::ConnectionBuilder>,
+        certificate: String,
+    ) -> Result<(), v4::Error> {
+        let root_ca = HashableCertificate::from_pem(&certificate)
+            .map_err(|e| v4::Error::Other(format!("invalid root certificate: {e}")))?;
+        let builder = self
+            .builders
+            .get_mut(self_.rep())
+            .ok_or_else(|| v4::Error::ConnectionFailed("no builder found".into()))?;
+        builder.root_ca = Some(root_ca);
+        Ok(())
+    }
+
+    async fn build(
+        &mut self,
+        self_: Resource<v4::ConnectionBuilder>,
+    ) -> Result<Resource<v4::Connection>, v4::Error> {
+        let builder = self
+            .builders
+            .get_mut(self_.rep())
+            .ok_or_else(|| v4::Error::ConnectionFailed("no builder found".into()))?;
+        // borrow checker gets pedantic here, so we need to outsmart it
+        let address = builder.address.clone();
+        let root_ca = builder.root_ca.clone();
+        let conn = self.open_connection(&address, root_ca).await;
+        conn
+    }
+
+    async fn drop(&mut self, builder: Resource<v4::ConnectionBuilder>) -> Result<()> {
+        self.builders.remove(builder.rep());
+        Ok(())
+    }
+}
+
 impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v4::Connection>, v4::Error> {
@@ -147,7 +203,7 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
 
         self.ensure_address_allowed(&address).await?;
 
-        self.open_connection(&address).await
+        self.open_connection(&address, None).await
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
@@ -204,7 +260,7 @@ impl<CF: ClientFactory> v4::Host for InstanceState<CF> {
 macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
         $self.ensure_address_allowed(&$address).await?;
-        let connection = match $self.open_connection(&$address).await {
+        let connection = match $self.open_connection(&$address, None).await {
             Ok(c) => c,
             Err(e) => return Err(e.into()),
         };
@@ -224,7 +280,7 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
 
         self.ensure_address_allowed(&address).await?;
 
-        Ok(self.open_connection(&address).await?)
+        Ok(self.open_connection(&address, None).await?)
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]

@@ -3,7 +3,7 @@ use super::*;
 mod rdbms_types {
     use super::*;
     use spin::postgres3_0_0::postgres as pg3;
-    use spin::postgres4_0_0::postgres as pg4;
+    use spin::postgres4_1_0::postgres as pg4;
 
     impl From<v2::rdbms_types::Column> for v1::rdbms_types::Column {
         fn from(value: v2::rdbms_types::Column) -> Self {
@@ -15,7 +15,7 @@ mod rdbms_types {
     }
 
     impl From<pg4::Column> for v1::rdbms_types::Column {
-        fn from(value: spin::postgres4_0_0::postgres::Column) -> Self {
+        fn from(value: pg4::Column) -> Self {
             v1::rdbms_types::Column {
                 name: value.name,
                 data_type: value.data_type.into(),
@@ -422,7 +422,7 @@ mod rdbms_types {
 mod postgres {
     use super::*;
     use spin::postgres3_0_0::postgres as pg3;
-    use spin::postgres4_0_0::postgres as pg4;
+    use spin::postgres4_1_0::postgres as pg4;
 
     impl From<pg4::RowSet> for v1::postgres::RowSet {
         fn from(value: pg4::RowSet) -> v1::postgres::RowSet {

@@ -2,7 +2,7 @@
 //! the tokio_postgres driver.
 
 use anyhow::{anyhow, Context};
-use spin_world::spin::postgres4_0_0::postgres::{self as v4};
+use spin_world::spin::postgres4_1_0::postgres::{self as v4};
 
 use super::decimal::RangeableDecimal;
 

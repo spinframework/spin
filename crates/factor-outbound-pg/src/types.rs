@@ -1,4 +1,4 @@
-use spin_world::spin::postgres4_0_0::postgres::{DbDataType, DbValue, ParameterValue};
+use spin_world::spin::postgres4_1_0::postgres::{DbDataType, DbValue, ParameterValue};
 use tokio_postgres::types::{FromSql, Type};
 use tokio_postgres::{types::ToSql, Row};
 
