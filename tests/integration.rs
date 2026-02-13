@@ -887,7 +887,7 @@ mod integration_tests {
                 "oci",
                 "push",
                 &registry_url,
-                "./target/wasm32-wasip1/release/test.wasm",
+                "./target/wasm32-wasip2/release/test.wasm",
                 "--insecure",
             ]);
             registry_push.arg(format!("localhost:{port}"));
