@@ -204,7 +204,8 @@ impl Login {
             let mut buf = String::new();
             let mut stdin = std::io::stdin().lock();
             stdin.read_to_string(&mut buf)?;
-            buf
+            // trim trailing newlines and carriage returns (see https://blog.v-gar.de/2019/04/rust-remove-trailing-newline-after-input)
+            buf.trim_end_matches(&['\r', '\n'][..]).to_owned()
         } else {
             match self.password {
                 Some(p) => p,
