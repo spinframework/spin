@@ -1,0 +1,9 @@
+package component:{{project-name | kebab_case}};
+
+interface {{project-name | kebab_case}} {
+  hello: func() -> string;
+}
+
+world component {
+  export {{project-name | kebab_case}};
+}
