@@ -7,6 +7,7 @@ use super::uppificator::Pause;
 pub(crate) struct Buildifier {
     pub spin_bin: PathBuf,
     pub manifest: PathBuf,
+    pub profile: Option<String>,
     pub clear_screen: bool,
     pub has_ever_built: bool,
     pub watched_changes: tokio::sync::watch::Receiver<Uuid>, // TODO: refine which component(s) a change affects
@@ -49,6 +50,9 @@ impl Buildifier {
         loop {
             let mut cmd = tokio::process::Command::new(&self.spin_bin);
             cmd.arg("build").arg("-f").arg(&self.manifest);
+            if let Some(profile) = &self.profile {
+                cmd.arg("--profile").arg(profile);
+            }
             let mut child = cmd.group_spawn()?;
 
             tokio::select! {

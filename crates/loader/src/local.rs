@@ -26,12 +26,14 @@ pub struct LocalLoader {
     files_mount_strategy: FilesMountStrategy,
     file_loading_permits: std::sync::Arc<Semaphore>,
     wasm_loader: WasmLoader,
+    profile: Option<String>,
 }
 
 impl LocalLoader {
     pub async fn new(
         app_root: &Path,
         files_mount_strategy: FilesMountStrategy,
+        profile: Option<&str>,
         cache_root: Option<PathBuf>,
     ) -> Result<Self> {
         let app_root = safe_canonicalize(app_root)
@@ -44,6 +46,7 @@ impl LocalLoader {
             // Limit concurrency to avoid hitting system resource limits
             file_loading_permits: file_loading_permits.clone(),
             wasm_loader: WasmLoader::new(app_root, cache_root, Some(file_loading_permits)).await?,
+            profile: profile.map(|s| s.to_owned()),
         })
     }
 
@@ -59,7 +62,7 @@ impl LocalLoader {
             )
         })?;
         let mut locked = self
-            .load_manifest(manifest)
+            .load_manifest(manifest, self.profile())
             .await
             .with_context(|| format!("Failed to load Spin app from {}", quoted_path(path)))?;
 
@@ -68,12 +71,23 @@ impl LocalLoader {
             .metadata
             .insert("origin".into(), file_url(path)?.into());
 
+        // Set build profile metadata
+        if let Some(profile) = self.profile.as_ref() {
+            locked
+                .metadata
+                .insert("profile".into(), profile.as_str().into());
+        }
+
         Ok(locked)
     }
 
     // Load the given manifest into a LockedApp, ready for execution.
-    pub(crate) async fn load_manifest(&self, mut manifest: AppManifest) -> Result<LockedApp> {
-        spin_manifest::normalize::normalize_manifest(&mut manifest)?;
+    pub(crate) async fn load_manifest(
+        &self,
+        mut manifest: AppManifest,
+        profile: Option<&str>,
+    ) -> Result<LockedApp> {
+        spin_manifest::normalize::normalize_manifest(&mut manifest, profile)?;
 
         manifest.validate_dependencies()?;
 
@@ -538,6 +552,10 @@ impl LocalLoader {
             path: dest.into(),
         })
     }
+
+    fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
+    }
 }
 
 fn explain_file_mount_source_error(e: anyhow::Error, src: &Path) -> anyhow::Error {
@@ -927,6 +945,7 @@ mod test {
         let loader = LocalLoader::new(
             &app_root,
             FilesMountStrategy::Copy(wd.path().to_owned()),
+            None,
             None,
         )
         .await?;

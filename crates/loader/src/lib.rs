@@ -35,11 +35,12 @@ pub(crate) const MAX_FILE_LOADING_CONCURRENCY: usize = 16;
 pub async fn from_file(
     manifest_path: impl AsRef<Path>,
     files_mount_strategy: FilesMountStrategy,
+    profile: Option<&str>,
     cache_root: Option<PathBuf>,
 ) -> Result<LockedApp> {
     let path = manifest_path.as_ref();
     let app_root = parent_dir(path).context("manifest path has no parent directory")?;
-    let loader = LocalLoader::new(&app_root, files_mount_strategy, cache_root).await?;
+    let loader = LocalLoader::new(&app_root, files_mount_strategy, profile, cache_root).await?;
     loader.load_file(path).await
 }
 
@@ -47,8 +48,8 @@ pub async fn from_file(
 pub async fn from_wasm_file(wasm_path: impl AsRef<Path>) -> Result<LockedApp> {
     let app_root = std::env::current_dir()?;
     let manifest = single_file_manifest(wasm_path)?;
-    let loader = LocalLoader::new(&app_root, FilesMountStrategy::Direct, None).await?;
-    loader.load_manifest(manifest).await
+    let loader = LocalLoader::new(&app_root, FilesMountStrategy::Direct, None, None).await?;
+    loader.load_manifest(manifest, None).await
 }
 
 /// The strategy to use for mounting WASI files into a guest.

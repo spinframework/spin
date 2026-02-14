@@ -50,6 +50,7 @@ fn run_test(input: &Path, normalizer: &mut Normalizer) -> Result<String, Failed>
             input,
             spin_loader::FilesMountStrategy::Copy(files_mount_root),
             None,
+            None,
         )
         .await
         .map_err(|err| format!("{err:?}"))?;

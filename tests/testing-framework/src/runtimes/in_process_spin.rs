@@ -100,6 +100,7 @@ async fn initialize_trigger(
         env.path().join("spin.toml"),
         spin_loader::FilesMountStrategy::Direct,
         None,
+        None,
     )
     .await?;
 
