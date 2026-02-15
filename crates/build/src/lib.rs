@@ -21,6 +21,7 @@ pub async fn build(
     manifest_file: &Path,
     component_ids: &[String],
     target_checks: TargetChecking,
+    wit_generation: GenerateDependencyWits,
     cache_root: Option<PathBuf>,
 ) -> Result<()> {
     let build_info = component_build_configs(manifest_file)
@@ -33,7 +34,24 @@ pub async fn build(
         })?;
     let app_dir = parent_dir(manifest_file)?;
 
-    let build_result = build_components(component_ids, build_info.components(), &app_dir);
+    let components_to_build = components_to_build(component_ids, build_info.components())?;
+
+    if wit_generation.generate() {
+        let wit_gen_errs = regenerate_wits(&components_to_build, &app_dir).await;
+        if !wit_gen_errs.is_empty() {
+            terminal::warn!("One or more components specified dependencies for which Spin couldn't generate import bindings.");
+            eprintln!(
+                "If these components rely on Spin-generated bindings they may fail to build."
+            );
+            eprintln!("Otherwise, to skip binding generation, use the --skip-generate-wits flag.");
+            eprintln!("Error details:");
+            for (component, err) in wit_gen_errs {
+                terminal::einfo!("{component}:", "{err:#}");
+            }
+        }
+    }
+
+    let build_result = build_components(components_to_build, &app_dir);
 
     // Emit any required warnings now, so that they don't bury any errors.
     if let Some(e) = build_info.load_error() {
@@ -91,14 +109,20 @@ pub async fn build(
 /// components, perform target checking). We run a "default build" in several
 /// places and this centralises the logic of what such a "default build" means.
 pub async fn build_default(manifest_file: &Path, cache_root: Option<PathBuf>) -> Result<()> {
-    build(manifest_file, &[], TargetChecking::Check, cache_root).await
+    build(
+        manifest_file,
+        &[],
+        TargetChecking::Check,
+        GenerateDependencyWits::Generate,
+        cache_root,
+    )
+    .await
 }
 
-fn build_components(
+fn components_to_build(
     component_ids: &[String],
     components: Vec<ComponentBuildInfo>,
-    app_dir: &Path,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<Vec<ComponentBuildInfo>> {
     let components_to_build = if component_ids.is_empty() {
         components
     } else {
@@ -119,6 +143,40 @@ fn build_components(
             .collect()
     };
 
+    Ok(components_to_build)
+}
+
+#[must_use]
+async fn regenerate_wits(
+    components_to_build: &[ComponentBuildInfo],
+    app_root: &Path,
+) -> Vec<(String, anyhow::Error)> {
+    let mut errors = vec![];
+
+    for component in components_to_build {
+        let component_dir = match component.build.as_ref().and_then(|b| b.workdir.as_ref()) {
+            None => app_root.to_owned(),
+            Some(d) => app_root.join(d),
+        };
+        let dest_file = component_dir.join("spin-dependencies.wit");
+        let extract_result = spin_dependency_wit::extract_wits_into(
+            component.dependencies.inner.iter(),
+            app_root,
+            dest_file,
+        )
+        .await;
+        if let Err(e) = extract_result {
+            errors.push((component.id.clone(), e));
+        }
+    }
+
+    errors
+}
+
+fn build_components(
+    components_to_build: Vec<ComponentBuildInfo>,
+    app_dir: &Path,
+) -> anyhow::Result<()> {
     if components_to_build.iter().all(|c| c.build.is_none()) {
         println!("None of the components have a build command.");
         println!("For information on specifying a build command, see https://spinframework.dev/build#setting-up-for-spin-build.");
@@ -331,6 +389,21 @@ impl TargetChecking {
     }
 }
 
+/// Specifies dependency WIT generation behaviour
+pub enum GenerateDependencyWits {
+    /// The build should generate WITs for component dependencies.
+    Generate,
+    /// The build should not generate WITs.
+    Skip,
+}
+
+impl GenerateDependencyWits {
+    /// Should the build generate dependency WITs?
+    fn generate(&self) -> bool {
+        matches!(self, Self::Generate)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,26 +416,44 @@ mod tests {
     #[tokio::test]
     async fn can_load_even_if_trigger_invalid() {
         let bad_trigger_file = test_data_root().join("bad_trigger.toml");
-        build(&bad_trigger_file, &[], TargetChecking::Skip, None)
-            .await
-            .unwrap();
+        build(
+            &bad_trigger_file,
+            &[],
+            TargetChecking::Skip,
+            GenerateDependencyWits::Skip,
+            None,
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
     async fn succeeds_if_target_env_matches() {
         let manifest_path = test_data_root().join("good_target_env.toml");
-        build(&manifest_path, &[], TargetChecking::Check, None)
-            .await
-            .unwrap();
+        build(
+            &manifest_path,
+            &[],
+            TargetChecking::Check,
+            GenerateDependencyWits::Skip,
+            None,
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
     async fn fails_if_target_env_does_not_match() {
         let manifest_path = test_data_root().join("bad_target_env.toml");
-        let err = build(&manifest_path, &[], TargetChecking::Check, None)
-            .await
-            .expect_err("should have failed")
-            .to_string();
+        let err = build(
+            &manifest_path,
+            &[],
+            TargetChecking::Check,
+            GenerateDependencyWits::Skip,
+            None,
+        )
+        .await
+        .expect_err("should have failed")
+        .to_string();
 
         // build prints validation errors rather than returning them to top level
         // (because there could be multiple errors) - see has_meaningful_error_if_target_env_does_not_match

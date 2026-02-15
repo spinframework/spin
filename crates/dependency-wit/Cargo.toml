@@ -1,0 +1,21 @@
+[package]
+name = "spin-dependency-wit"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+indexmap = { workspace = true }
+spin-loader = { path = "../loader" }
+spin-manifest = { path = "../manifest" }
+spin-serde = { path = "../serde" }
+tokio = { workspace = true, features = ["rt", "time"] }
+wasmparser = { workspace = true }
+wit-component = { workspace = true }
+wit-parser = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+wasm-pkg-common = { workspace = true }
+wit-component = { workspace = true, features = ["dummy-module"] }

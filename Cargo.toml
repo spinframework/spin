@@ -56,6 +56,7 @@ watchexec-filterer-globset = "8.0"
 spin-app = { path = "crates/app" }
 spin-build = { path = "crates/build" }
 spin-common = { path = "crates/common" }
+spin-dependency-wit = { path = "crates/dependency-wit" }
 spin-factors-executor = { path = "crates/factors-executor" }
 spin-doctor = { path = "crates/doctor" }
 spin-environments = { path = "crates/environments" }
