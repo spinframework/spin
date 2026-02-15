@@ -365,8 +365,15 @@ impl Client {
         let mut components = Vec::new();
         let mut layers = Vec::new();
 
+        let temp_dir = tempfile::tempdir().unwrap();
+        let working_dir = temp_dir.path();
+        let locked_url = write_locked_app(&locked, working_dir).await.unwrap();
+
         for mut c in locked.components {
-            let composed = spin_compose::compose(&ComponentSourceLoaderFs, &c)
+            let complicate =
+                |data: Vec<u8>| compose_trigger_extras(&c, &locked_url, working_dir, data);
+
+            let composed = spin_compose::compose(&ComponentSourceLoaderFs, &c, complicate)
                 .await
                 .with_context(|| {
                     format!("failed to resolve dependencies for component {:?}", c.id)
@@ -374,12 +381,33 @@ impl Client {
             let layer = ImageLayer::new(composed, WASM_LAYER_MEDIA_TYPE.to_string(), None);
             c.source.content = self.content_ref_for_layer(&layer);
             c.dependencies.clear();
+            c.metadata.remove("trigger-extras");
             layers.push(layer);
 
             c.files = self
                 .assemble_content_layers(assembly_mode, &mut layers, c.files.as_slice())
                 .await?;
             components.push(c);
+        }
+
+        // Copied from `spin up`
+        async fn write_locked_app(
+            locked_app: &LockedApp,
+            working_dir: &Path,
+        ) -> Result<String, anyhow::Error> {
+            let locked_path = working_dir.join("spin.lock");
+            let locked_app_contents =
+                serde_json::to_vec_pretty(&locked_app).context("failed to serialize locked app")?;
+            tokio::fs::write(&locked_path, locked_app_contents)
+                .await
+                .with_context(|| format!("failed to write {}", quoted_path(&locked_path)))?;
+            let locked_url = Url::from_file_path(&locked_path)
+                .map_err(|_| {
+                    anyhow::anyhow!("cannot convert to file URL: {}", quoted_path(&locked_path))
+                })?
+                .to_string();
+
+            Ok(locked_url)
         }
 
         Ok((layers, components))
@@ -905,6 +933,75 @@ fn add_inferred(map: &mut BTreeMap<String, String>, key: &str, value: Option<Str
             e.insert(value);
         }
     }
+}
+
+const SPIN_LOCKED_URL: &str = "SPIN_LOCKED_URL";
+const SPIN_WORKING_DIR: &str = "SPIN_WORKING_DIR";
+
+async fn compose_trigger_extras(
+    c: &LockedComponent,
+    locked_url: &str,
+    working_dir: &Path,
+    data: Vec<u8>,
+) -> Result<Vec<u8>, spin_compose::ComposeError> {
+    use spin_compose::ComposeError;
+
+    let Some(resolve_extras_using) = c
+        .metadata
+        .get("resolve-extras-using")
+        .and_then(|v| v.as_str())
+    else {
+        return Result::<_, ComposeError>::Ok(data);
+    };
+
+    let resolver_subcmd = match resolve_extras_using {
+        "http" | "redis" => vec!["trigger".into(), resolve_extras_using.into()],
+        _ => vec![format!("trigger-{resolve_extras_using}")],
+    };
+
+    let mut cmd = tokio::process::Command::new(std::env::current_exe().unwrap());
+    cmd.args(resolver_subcmd)
+        .args(["--resolve-extras-only", "--resolve-extras-component-id"])
+        .arg(&c.id)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit())
+        .env("SPIN_PLUGINS_SUPPRESS_COMPATIBILITY_WARNINGS", "1")
+        .env(SPIN_LOCKED_URL, locked_url)
+        .env(SPIN_WORKING_DIR, working_dir);
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| ComposeError::PrepareError(e.into()))?;
+
+    use tokio::io::AsyncWriteExt;
+
+    let mut input = child.stdin.take().unwrap();
+    input
+        .write_all(&data)
+        .await
+        .map_err(|e| ComposeError::PrepareError(e.into()))?;
+    input
+        .flush()
+        .await
+        .map_err(|e| ComposeError::PrepareError(e.into()))?;
+    drop(input);
+
+    let trigger_out = child
+        .wait_with_output()
+        .await
+        .map_err(|e| ComposeError::PrepareError(e.into()))?;
+
+    if !trigger_out.status.success() {
+        return Err(ComposeError::PrepareError(anyhow::anyhow!(
+            "unable to compose additional components for {} using `{}`",
+            c.id,
+            resolve_extras_using
+        )));
+    }
+
+    let complicated = trigger_out.stdout;
+    Ok(complicated)
 }
 
 /// Takes a relative path and turns it into a format that is safe

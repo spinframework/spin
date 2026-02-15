@@ -129,7 +129,7 @@ impl LocalLoader {
 
         drop(sloth_guard);
 
-        Ok(LockedApp {
+        let locked = LockedApp {
             spin_lock_version: Default::default(),
             metadata,
             must_understand,
@@ -137,7 +137,11 @@ impl LocalLoader {
             variables,
             triggers,
             components,
-        })
+        };
+
+        let locked = reassign_extra_components_from_triggers(locked);
+
+        Ok(locked)
     }
 
     // Load the given component into a LockedComponent, ready for execution.
@@ -540,6 +544,133 @@ impl LocalLoader {
     }
 }
 
+/// We want all component/composition graph information to be in the component,
+/// because the component ID is how Spin looks this stuff up. So if a trigger
+/// contains a `components` table, e.g. specifying middleware, we want to move
+/// that to the component.
+///
+/// But it's possible to have two triggers pointing to the same primary component,
+/// but with different middleware. In this case, we will synthesise a component
+/// for each such trigger, with the same main configuration but with its own
+/// "extra" components.
+fn reassign_extra_components_from_triggers(mut locked: LockedApp) -> LockedApp {
+    use std::collections::{HashMap, HashSet};
+
+    let mut seen = HashSet::new();
+    let mut disambiguator = 0;
+
+    // We're going to be inspecting and mutating at the same time. After a while
+    // I gave up and:
+    let locked_clone = locked.clone();
+
+    fn component_id(trigger: &LockedTrigger) -> Option<String> {
+        trigger
+            .trigger_config
+            .get("component")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    }
+    fn set_component_id(app: &mut LockedApp, trigger_id: &str, component_id: &str) {
+        let trigger = app
+            .triggers
+            .iter_mut()
+            .find(|t| t.id == trigger_id)
+            .unwrap();
+        trigger
+            .trigger_config
+            .as_object_mut()
+            .unwrap()
+            .insert("component".into(), component_id.into());
+    }
+    fn extra_components(trigger: &LockedTrigger) -> Option<&ValuesMap> {
+        trigger
+            .trigger_config
+            .get("components")
+            .and_then(|v| v.as_object())
+    }
+    fn has_extra_components(trigger: &LockedTrigger) -> bool {
+        extra_components(trigger).is_some_and(|xcs| !xcs.is_empty())
+    }
+    fn triggers_referencing<'a>(
+        all_triggers: &'a [LockedTrigger],
+        cid: &String,
+    ) -> Vec<&'a LockedTrigger> {
+        all_triggers
+            .iter()
+            .filter(|t| component_id(t).as_ref() == Some(cid))
+            .collect()
+    }
+
+    let referenced_component_ids: Vec<_> = locked_clone
+        .triggers
+        .iter()
+        .filter_map(component_id)
+        .collect();
+    let cid_to_triggers: HashMap<_, _> = referenced_component_ids
+        .iter()
+        .map(|cid| (cid, triggers_referencing(&locked_clone.triggers, cid)))
+        .collect();
+    let needs_splitting = cid_to_triggers
+        .into_iter()
+        .filter(|(_, triggers)| {
+            triggers.len() > 1 && triggers.iter().any(|t| has_extra_components(t))
+        })
+        .collect::<HashMap<_, _>>();
+
+    for (cid, triggers) in needs_splitting {
+        for trigger in &triggers {
+            if !has_extra_components(trigger) {
+                // It's possible to have e.g. 3 triggers pointing to the same component,
+                // with only one enriched with middleware. The two unenriched ones can
+                // continue pointing to the original component.
+                continue;
+            }
+            let mut synthetic_id = format!("{cid}-for-{}", trigger.id);
+            if seen.contains(&synthetic_id) {
+                disambiguator += 1;
+                synthetic_id = format!("{synthetic_id}-d{disambiguator}");
+            }
+            seen.insert(synthetic_id.clone());
+            let mut component = locked
+                .components
+                .iter()
+                .find(|c| c.id == **cid)
+                .unwrap()
+                .clone();
+            component.id = synthetic_id.clone();
+            locked.components.push(component);
+            set_component_id(&mut locked, &trigger.id, &synthetic_id);
+        }
+    }
+
+    // Now we have cloned components so that each set of { primary + trigger extras }
+    // can have its own component, meaning that composition graphs remain uniquely
+    // identified by component ID.
+    for trigger in &mut locked.triggers {
+        if let Some(extras) = extra_components(trigger) {
+            if let Some(component_id) = component_id(trigger) {
+                if let Some(component) = locked.components.iter_mut().find(|c| c.id == component_id)
+                {
+                    component
+                        .metadata
+                        .insert("trigger-extras".into(), extras.clone().into());
+                    component.metadata.insert(
+                        "resolve-extras-using".into(),
+                        trigger.trigger_type.clone().into(),
+                    );
+                    trigger
+                        .trigger_config
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("components");
+                }
+            }
+        }
+    }
+
+    locked
+}
+
 fn explain_file_mount_source_error(e: anyhow::Error, src: &Path) -> anyhow::Error {
     if let Some(io_error) = e.downcast_ref::<std::io::Error>() {
         if io_error.kind() == std::io::ErrorKind::NotFound {
@@ -918,11 +1049,13 @@ fn warn_if_component_load_slothful() -> sloth::SlothGuard {
 mod test {
     use super::*;
 
-    #[tokio::test]
-    async fn bad_destination_filename_is_explained() -> anyhow::Result<()> {
+    async fn load_test_case(
+        testcase_dir: &str,
+        manifest_file: &str,
+    ) -> anyhow::Result<(tempfile::TempDir, LockedApp)> {
         let app_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
-            .join("file-errors");
+            .join(testcase_dir);
         let wd = tempfile::tempdir()?;
         let loader = LocalLoader::new(
             &app_root,
@@ -930,8 +1063,13 @@ mod test {
             None,
         )
         .await?;
-        let err = loader
-            .load_file(app_root.join("bad.toml"))
+        let locked_app = loader.load_file(app_root.join(manifest_file)).await;
+        locked_app.map(|locked| (wd, locked))
+    }
+
+    #[tokio::test]
+    async fn bad_destination_filename_is_explained() -> anyhow::Result<()> {
+        let err = load_test_case("file-errors", "bad.toml")
             .await
             .expect_err("loader should not have succeeded");
         let err_ctx = format!("{err:#}");
@@ -940,5 +1078,182 @@ mod test {
             "expected error to show destination file name but got {err_ctx}",
         );
         Ok(())
+    }
+
+    fn trigger_by_route<'a>(locked: &'a LockedApp, route: &str) -> &'a LockedTrigger {
+        fn route_of(trigger: &LockedTrigger) -> &str {
+            trigger
+                .trigger_config
+                .get("route")
+                .and_then(|v| v.as_str())
+                .unwrap()
+        }
+        locked
+            .triggers
+            .iter()
+            .find(|t| route_of(t) == route)
+            .unwrap()
+    }
+
+    fn component_for_route<'a>(locked: &'a LockedApp, route: &str) -> &'a LockedComponent {
+        let component_id = component_id(trigger_by_route(locked, route));
+        locked
+            .components
+            .iter()
+            .find(|c| c.id == component_id)
+            .unwrap()
+    }
+
+    fn component_id(trigger: &LockedTrigger) -> &str {
+        trigger
+            .trigger_config
+            .get("component")
+            .and_then(|v| v.as_str())
+            .unwrap()
+    }
+
+    fn component_trigger_extras_for_route<'a>(
+        locked: &'a LockedApp,
+        route: &str,
+        key: &str,
+    ) -> &'a Vec<serde_json::Value> {
+        let component = component_for_route(locked, route);
+        let extras = component
+            .metadata
+            .get("trigger-extras")
+            .expect("should have had trigger-extras");
+        extras
+            .get(key)
+            .expect("should have had extras for key")
+            .as_array()
+            .expect("extras for key should have been an array")
+    }
+
+    #[tokio::test]
+    async fn unenriched_lockfile_is_unchanged() {
+        let (_wd, locked_app) = load_test_case("extra-components", "vanilla.toml")
+            .await
+            .unwrap();
+        assert_eq!(3, locked_app.triggers.len());
+        assert_eq!(2, locked_app.components.len());
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_only_one_trigger_per_component_no_changes() {
+        let (_wd, locked_app) = load_test_case("extra-components", "inoffensive.toml")
+            .await
+            .unwrap();
+        assert_eq!(2, locked_app.triggers.len());
+        assert_eq!("a", component_id(trigger_by_route(&locked_app, "/a")));
+        assert_eq!("b", component_id(trigger_by_route(&locked_app, "/b")));
+        assert_eq!(5, locked_app.components.len());
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_multiple_enriched_triggers_per_component_get_split() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+        // Splitting should resultm in triggers pointing to different IDs, but the same primary source
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a1")));
+        assert!(component_for_route(&locked_app, "/a1")
+            .source
+            .content
+            .source
+            .as_ref()
+            .unwrap()
+            .ends_with("/a.dummy.wasm.txt"));
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a2")));
+        assert!(component_for_route(&locked_app, "/a3")
+            .source
+            .content
+            .source
+            .as_ref()
+            .unwrap()
+            .ends_with("/a.dummy.wasm.txt"));
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a3")));
+        assert!(component_for_route(&locked_app, "/a3")
+            .source
+            .content
+            .source
+            .as_ref()
+            .unwrap()
+            .ends_with("/a.dummy.wasm.txt"));
+        // Triggers that don't need splitting should be unaffected
+        assert_eq!("b", component_id(trigger_by_route(&locked_app, "/b")));
+        // There should be new components inserted for the split
+        assert_eq!(8, locked_app.components.len());
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_captures_composition_graph_in_split_component() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+
+        let a1_mw = component_trigger_extras_for_route(&locked_app, "/a1", "middleware");
+        assert_eq!(2, a1_mw.len());
+        assert_eq!(
+            "m1",
+            a1_mw[0].as_str().expect("a1 mw should have been strings")
+        );
+        assert_eq!(
+            "m2",
+            a1_mw[1].as_str().expect("a1 mw should have been strings")
+        );
+
+        let a2_mw = component_trigger_extras_for_route(&locked_app, "/a2", "middleware");
+        assert_eq!(2, a2_mw.len());
+        assert_eq!(
+            "m2",
+            a2_mw[0].as_str().expect("a2 mw should have been strings")
+        );
+        assert_eq!(
+            "m3",
+            a2_mw[1].as_str().expect("a2 mw should have been strings")
+        );
+
+        let a3_mw = component_trigger_extras_for_route(&locked_app, "/a3", "middleware");
+        assert_eq!(3, a3_mw.len());
+        assert_eq!(
+            "m3",
+            a3_mw[0].as_str().expect("a3 mw should have been strings")
+        );
+        assert_eq!(
+            "m2",
+            a3_mw[1].as_str().expect("a3 mw should have been strings")
+        );
+        assert_eq!(
+            "m1",
+            a3_mw[2].as_str().expect("a3 mw should have been strings")
+        );
+
+        // Unsplit things should still get the shunt
+        let b_mw = component_trigger_extras_for_route(&locked_app, "/b", "middleware");
+        assert_eq!(2, b_mw.len());
+        assert_eq!(
+            "m1",
+            b_mw[0].as_str().expect("b mw should have been strings")
+        );
+        assert_eq!(
+            "m3",
+            b_mw[1].as_str().expect("b mw should have been strings")
+        );
+    }
+
+    #[tokio::test]
+    async fn extras_moved_off_trigger() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+
+        for t in &locked_app.triggers {
+            assert!(t.trigger_config.get("components").is_none());
+        }
+
+        println!("{}", serde_json::to_string_pretty(&locked_app).unwrap());
     }
 }

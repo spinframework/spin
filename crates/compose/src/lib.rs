@@ -27,11 +27,15 @@ use wac_graph::{CompositionGraph, NodeId};
 /// dependent component. Finally, the composer will export all exports from the
 /// dependent component to its dependents. The composer will then encode the
 /// composition graph into a byte array and return it.
-pub async fn compose<L: ComponentSourceLoader>(
+pub async fn compose<
+    L: ComponentSourceLoader,
+    Fut: std::future::Future<Output = Result<Vec<u8>, ComposeError>>,
+>(
     loader: &L,
     component: &L::Component,
+    complicator: impl Fn(Vec<u8>) -> Fut,
 ) -> Result<Vec<u8>, ComposeError> {
-    Composer::new(loader).compose(component).await
+    Composer::new(loader).compose(component, complicator).await
 }
 
 /// A Spin component dependency. This abstracts over the metadata associated with the
@@ -93,8 +97,10 @@ impl DependencyLike for spin_app::locked::LockedComponentDependency {
 pub trait ComponentSourceLoader {
     type Component: ComponentLike<Dependency = Self::Dependency>;
     type Dependency: DependencyLike;
+    type Source;
     async fn load_component_source(&self, source: &Self::Component) -> anyhow::Result<Vec<u8>>;
     async fn load_dependency_source(&self, source: &Self::Dependency) -> anyhow::Result<Vec<u8>>;
+    async fn load_source(&self, source: &Self::Source) -> anyhow::Result<Vec<u8>>;
 }
 
 /// A ComponentSourceLoader that loads component sources from the filesystem.
@@ -104,6 +110,7 @@ pub struct ComponentSourceLoaderFs;
 impl ComponentSourceLoader for ComponentSourceLoaderFs {
     type Component = spin_app::locked::LockedComponent;
     type Dependency = spin_app::locked::LockedComponentDependency;
+    type Source = spin_app::locked::LockedComponentSource;
 
     async fn load_component_source(&self, source: &Self::Component) -> anyhow::Result<Vec<u8>> {
         Self::load_from_locked_source(&source.source).await
@@ -111,6 +118,10 @@ impl ComponentSourceLoader for ComponentSourceLoaderFs {
 
     async fn load_dependency_source(&self, source: &Self::Dependency) -> anyhow::Result<Vec<u8>> {
         Self::load_from_locked_source(&source.source).await
+    }
+
+    async fn load_source(&self, source: &Self::Source) -> anyhow::Result<Vec<u8>> {
+        Self::load_from_locked_source(source).await
     }
 }
 
@@ -196,39 +207,47 @@ struct Composer<'a, L> {
 }
 
 impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
-    async fn compose(mut self, component: &L::Component) -> Result<Vec<u8>, ComposeError> {
+    async fn compose<Fut: std::future::Future<Output = Result<Vec<u8>, ComposeError>>>(
+        mut self,
+        component: &L::Component,
+        complicator: impl Fn(Vec<u8>) -> Fut,
+    ) -> Result<Vec<u8>, ComposeError> {
         let source = self
             .loader
             .load_component_source(component)
             .await
             .map_err(ComposeError::PrepareError)?;
 
-        if component.dependencies().len() == 0 {
-            return Ok(source);
-        }
+        let fulfilled_source = if component.dependencies().len() == 0 {
+            source
+        } else {
+            let (world_id, instantiation_id) = self
+                .register_package(component.id(), None, source)
+                .map_err(ComposeError::PrepareError)?;
 
-        let (world_id, instantiation_id) = self
-            .register_package(component.id(), None, source)
-            .map_err(ComposeError::PrepareError)?;
+            let prepared = self.prepare_dependencies(world_id, component).await?;
 
-        let prepared = self.prepare_dependencies(world_id, component).await?;
+            let arguments = self
+                .build_instantiation_arguments(world_id, prepared)
+                .await?;
 
-        let arguments = self
-            .build_instantiation_arguments(world_id, prepared)
-            .await?;
+            for (argument_name, argument) in arguments {
+                self.graph
+                    .set_instantiation_argument(instantiation_id, &argument_name, argument)
+                    .map_err(|e| ComposeError::PrepareError(e.into()))?;
+            }
 
-        for (argument_name, argument) in arguments {
+            self.export_dependents_exports(world_id, instantiation_id)
+                .map_err(ComposeError::PrepareError)?;
+
             self.graph
-                .set_instantiation_argument(instantiation_id, &argument_name, argument)
-                .map_err(|e| ComposeError::PrepareError(e.into()))?;
-        }
+                .encode(Default::default())
+                .map_err(|e| ComposeError::EncodeError(e.into()))?
+        };
 
-        self.export_dependents_exports(world_id, instantiation_id)
-            .map_err(ComposeError::PrepareError)?;
+        let with_extras = complicator(fulfilled_source).await?;
 
-        self.graph
-            .encode(Default::default())
-            .map_err(|e| ComposeError::EncodeError(e.into()))
+        Ok(with_extras)
     }
 
     fn new(loader: &'a L) -> Self {
