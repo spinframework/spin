@@ -12,7 +12,7 @@
 //!    when an allocation would exceed the current memory size.
 //!
 //! 2. **Filter module** ([`generate_env_filter_module`]): Imports memory, `realloc`,
-//!    `reset`, and the lowered host functions. Each exported function calls `reset` at
+//!    `reset`, and the lowered host `get-environment`. Each exported function calls `reset` at
 //!    the top so that every call starts with a clean heap — safe because each call is
 //!    independent and the component model guarantees that memory contents aren't
 //!    observable between calls.
@@ -24,13 +24,6 @@
 //! - A return pointer parameter (i32) pointing to where the result is stored
 //! - The result at the return pointer is: (i32, i32) = (list_ptr, list_len)
 //! - Each list element is a tuple of two strings: (ptr, len, ptr, len) = 4 × i32 = 16 bytes
-//!
-//! For `get-arguments: func() -> list<string>`:
-//! - Return pointer parameter, result is (list_ptr, list_len)
-//! - Each element is (ptr, len) = 8 bytes
-//!
-//! For `initial-cwd: func() -> option<string>`:
-//! - Return pointer parameter, result is (i32_discriminant, ptr, len) = 12 bytes
 
 use wasm_encoder::{
     BlockType, CodeSection, ConstExpr, DataCountSection, DataSection, DataSegment, DataSegmentMode,
@@ -48,15 +41,11 @@ const FILTER_TY_RESET: u32 = 3; // () -> ()
 
 // Imported function indices (imports precede defined functions in Wasm)
 const FILTER_FN_GET_ENVIRONMENT: u32 = 0;
-const FILTER_FN_GET_ARGUMENTS: u32 = 1;
-const FILTER_FN_INITIAL_CWD: u32 = 2;
-const FILTER_FN_REALLOC: u32 = 3;
-const FILTER_FN_RESET: u32 = 4;
+const FILTER_FN_REALLOC: u32 = 1;
+const FILTER_FN_RESET: u32 = 2;
 
 // Defined function indices
-const FILTER_FN_GET_ARGS_ADAPTER: u32 = 5;
-const FILTER_FN_INITIAL_CWD_ADAPTER: u32 = 6;
-const FILTER_FN_GET_ENV_BASE: u32 = 7;
+const FILTER_FN_GET_ENV_BASE: u32 = 3;
 
 // --- Memory module indices ---
 
@@ -76,8 +65,6 @@ const MEM_GLOBAL_BUMP_PTR: u32 = 0;
 /// Imports are:
 /// - `"memory"`: linear memory
 /// - `"get-environment"`: lowered (i32) -> () [Return Pointer]
-/// - `"get-arguments"`: lowered (i32) -> () [Return Pointer]
-/// - `"initial-cwd"`: lowered (i32) -> () [Return Pointer]
 /// - `"realloc"`: (i32, i32, i32, i32) -> i32
 /// - `"reset"`: () -> () — resets the bump allocator (called at the start of each export)
 pub fn generate_env_filter_module(prefixes: &[&str]) -> Vec<u8> {
@@ -112,16 +99,6 @@ pub fn generate_env_filter_module(prefixes: &[&str]) -> Vec<u8> {
         "get-environment",
         EntityType::Function(FILTER_TY_LOWERED),
     );
-    imports.import(
-        "host",
-        "get-arguments",
-        EntityType::Function(FILTER_TY_LOWERED),
-    );
-    imports.import(
-        "host",
-        "initial-cwd",
-        EntityType::Function(FILTER_TY_LOWERED),
-    );
     imports.import("host", "realloc", EntityType::Function(FILTER_TY_REALLOC));
     imports.import("host", "reset", EntityType::Function(FILTER_TY_RESET));
     module.section(&imports);
@@ -129,8 +106,6 @@ pub fn generate_env_filter_module(prefixes: &[&str]) -> Vec<u8> {
     // === Function section ===
     let num_prefix_funcs = prefixes.len() as u32;
     let mut functions = FunctionSection::new();
-    functions.function(FILTER_TY_LIFTED);
-    functions.function(FILTER_TY_LIFTED);
     for _ in 0..num_prefix_funcs {
         functions.function(FILTER_TY_LIFTED);
     }
@@ -138,16 +113,6 @@ pub fn generate_env_filter_module(prefixes: &[&str]) -> Vec<u8> {
 
     // === Export section ===
     let mut exports = ExportSection::new();
-    exports.export(
-        "get-arguments",
-        ExportKind::Func,
-        FILTER_FN_GET_ARGS_ADAPTER,
-    );
-    exports.export(
-        "initial-cwd",
-        ExportKind::Func,
-        FILTER_FN_INITIAL_CWD_ADAPTER,
-    );
     for i in 0..num_prefix_funcs {
         exports.export(
             &format!("get-environment-{i}"),
@@ -163,40 +128,6 @@ pub fn generate_env_filter_module(prefixes: &[&str]) -> Vec<u8> {
 
     // === Code section ===
     let mut codes = CodeSection::new();
-
-    // get-arguments adapter: calls reset, allocates 8 bytes, calls host
-    {
-        let mut f = Function::new(vec![(1, ValType::I32)]);
-        f.instructions()
-            .call(FILTER_FN_RESET)
-            .i32_const(0)
-            .i32_const(0)
-            .i32_const(4)
-            .i32_const(8)
-            .call(FILTER_FN_REALLOC)
-            .local_tee(0)
-            .call(FILTER_FN_GET_ARGUMENTS)
-            .local_get(0)
-            .end();
-        codes.function(&f);
-    }
-
-    // initial-cwd adapter: calls reset, allocates 12 bytes, calls host
-    {
-        let mut f = Function::new(vec![(1, ValType::I32)]);
-        f.instructions()
-            .call(FILTER_FN_RESET)
-            .i32_const(0)
-            .i32_const(0)
-            .i32_const(4)
-            .i32_const(12)
-            .call(FILTER_FN_REALLOC)
-            .local_tee(0)
-            .call(FILTER_FN_INITIAL_CWD)
-            .local_get(0)
-            .end();
-        codes.function(&f);
-    }
 
     // Filtered get-environment for each prefix
     for (i, prefix) in prefixes.iter().enumerate() {
@@ -1013,28 +944,6 @@ mod tests {
             },
         );
 
-        // get-arguments: stub that writes empty list
-        let memory_for_args = memory;
-        let get_args = wasmtime::Func::wrap(
-            &mut store,
-            move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
-                let rp = ret_ptr as usize;
-                let data = memory_for_args.data_mut(&mut caller);
-                data[rp..rp + 8].fill(0);
-            },
-        );
-
-        // initial-cwd: stub that writes None (discriminant 0)
-        let memory_for_cwd = memory;
-        let initial_cwd = wasmtime::Func::wrap(
-            &mut store,
-            move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
-                let rp = ret_ptr as usize;
-                let data = memory_for_cwd.data_mut(&mut caller);
-                data[rp..rp + 12].fill(0);
-            },
-        );
-
         // Instantiate filter module with imports
         let filter_instance = wasmtime::Instance::new(
             &mut store,
@@ -1042,8 +951,6 @@ mod tests {
             &[
                 memory.into(),
                 get_env.into(),
-                get_args.into(),
-                initial_cwd.into(),
                 realloc_fn.into(),
                 reset_fn.into(),
             ],

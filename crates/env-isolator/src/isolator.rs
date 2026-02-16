@@ -3,7 +3,7 @@
 //! Constructs a WebAssembly component that:
 //! - Imports `wasi:cli/environment@{version}` from the host
 //! - Embeds a core filter module (from `core_module`)
-//! - Exports per-component isolated environment functions
+//! - Exports per-component filtered `get-environment` functions
 
 use anyhow::{Context, Result};
 use wasm_encoder::{
@@ -26,7 +26,7 @@ pub struct IsolationTarget {
 /// The generated component:
 /// 1. Imports `wasi:cli/environment@{wasi_env_version}`
 /// 2. Contains a core module that filters env vars by prefix
-/// 3. Exports `environment-{name}-get-environment` etc. for each target
+/// 3. Exports `environment-{name}-get-environment` for each target
 pub fn generate_isolator(targets: &[IsolationTarget], wasi_env_version: &str) -> Result<Vec<u8>> {
     anyhow::ensure!(
         !targets.is_empty(),
@@ -107,19 +107,12 @@ pub fn generate_isolator(targets: &[IsolationTarget], wasi_env_version: &str) ->
         ComponentTypeRef::Instance(env_instance_type_idx),
     );
 
-    // --- Alias functions from imported instance ---
+    // --- Alias get-environment from imported instance ---
     let host_get_env = builder.alias_export(
         host_env_instance,
         "get-environment",
         ComponentExportKind::Func,
     );
-    let host_get_args = builder.alias_export(
-        host_env_instance,
-        "get-arguments",
-        ComponentExportKind::Func,
-    );
-    let host_get_cwd =
-        builder.alias_export(host_env_instance, "initial-cwd", ComponentExportKind::Func);
 
     // --- Embed core modules ---
     let total_prefix_bytes: usize = targets.iter().map(|t| t.prefix.len()).sum();
@@ -145,22 +138,6 @@ pub fn generate_isolator(targets: &[IsolationTarget], wasi_env_version: &str) ->
             CanonicalOption::Realloc(realloc),
         ],
     );
-    let lowered_get_args = builder.lower_func(
-        None,
-        host_get_args,
-        [
-            CanonicalOption::Memory(memory),
-            CanonicalOption::Realloc(realloc),
-        ],
-    );
-    let lowered_get_cwd = builder.lower_func(
-        None,
-        host_get_cwd,
-        [
-            CanonicalOption::Memory(memory),
-            CanonicalOption::Realloc(realloc),
-        ],
-    );
 
     // --- Build import instance for filter module ---
     let host_for_filter = builder.core_instantiate_exports(
@@ -168,8 +145,6 @@ pub fn generate_isolator(targets: &[IsolationTarget], wasi_env_version: &str) ->
         vec![
             ("memory", ExportKind::Memory, memory),
             ("get-environment", ExportKind::Func, lowered_get_env),
-            ("get-arguments", ExportKind::Func, lowered_get_args),
-            ("initial-cwd", ExportKind::Func, lowered_get_cwd),
             ("realloc", ExportKind::Func, realloc),
             ("reset", ExportKind::Func, reset),
         ],
@@ -182,7 +157,7 @@ pub fn generate_isolator(targets: &[IsolationTarget], wasi_env_version: &str) ->
         vec![("host", ModuleArg::Instance(host_for_filter))],
     );
 
-    // --- For each target, lift the filtered functions and export ---
+    // --- For each target, lift the filtered get-environment and export ---
     for (i, target) in targets.iter().enumerate() {
         let filtered_get_env = builder.core_alias_export(
             None,
@@ -191,12 +166,6 @@ pub fn generate_isolator(targets: &[IsolationTarget], wasi_env_version: &str) ->
             ExportKind::Func,
         );
 
-        let passthrough_get_args =
-            builder.core_alias_export(None, filter_instance, "get-arguments", ExportKind::Func);
-        let passthrough_get_cwd =
-            builder.core_alias_export(None, filter_instance, "initial-cwd", ExportKind::Func);
-
-        // Lift core functions back to component functions
         let lifted_get_env = builder.lift_func(
             None,
             filtered_get_env,
@@ -206,43 +175,11 @@ pub fn generate_isolator(targets: &[IsolationTarget], wasi_env_version: &str) ->
                 CanonicalOption::Realloc(realloc),
             ],
         );
-        let lifted_get_args = builder.lift_func(
-            None,
-            passthrough_get_args,
-            get_args_func_type,
-            [
-                CanonicalOption::Memory(memory),
-                CanonicalOption::Realloc(realloc),
-            ],
-        );
-        let lifted_get_cwd = builder.lift_func(
-            None,
-            passthrough_get_cwd,
-            get_cwd_func_type,
-            [
-                CanonicalOption::Memory(memory),
-                CanonicalOption::Realloc(realloc),
-            ],
-        );
-
-        let export_name = format!("environment-{}", target.name);
 
         builder.export(
-            &format!("{export_name}-get-environment"),
+            &format!("environment-{}-get-environment", target.name),
             ComponentExportKind::Func,
             lifted_get_env,
-            None,
-        );
-        builder.export(
-            &format!("{export_name}-get-arguments"),
-            ComponentExportKind::Func,
-            lifted_get_args,
-            None,
-        );
-        builder.export(
-            &format!("{export_name}-get-cwd"),
-            ComponentExportKind::Func,
-            lifted_get_cwd,
             None,
         );
     }

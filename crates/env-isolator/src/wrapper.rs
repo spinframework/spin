@@ -1,10 +1,12 @@
 //! Wrapper component generation.
 //!
-//! Generates a WebAssembly component that imports flat functions from the isolator
-//! and re-exports them bundled as a `wasi:cli/environment` instance.
+//! Generates a WebAssembly component that imports a filtered `get-environment`
+//! function from the isolator and the original `wasi:cli/environment` instance
+//! (for `get-arguments` and `initial-cwd`), then re-exports them bundled as a
+//! `wasi:cli/environment` instance.
 //!
 //! Each target component gets its own wrapper that bridges:
-//! - Imports: `environment-{name}-get-environment`, `-get-arguments`, `-get-cwd`
+//! - Imports: `wasi:cli/environment@{version}` (passthrough), `environment-{name}-get-environment`
 //! - Export: `wasi:cli/environment@{version}` instance
 //!
 //! Note that these wrappers don't incur any runtime overhead: they get fully optimized
@@ -12,13 +14,15 @@
 
 use anyhow::Result;
 use wasm_encoder::{
-    Alias, Component, ComponentExportKind, ComponentExportSection, ComponentImportSection,
-    ComponentInstanceSection, ComponentOuterAliasKind, ComponentTypeRef, ComponentTypeSection,
-    ComponentValType, InstanceType, PrimitiveValType,
+    Alias, Component, ComponentAliasSection, ComponentExportKind, ComponentExportSection,
+    ComponentImportSection, ComponentInstanceSection, ComponentOuterAliasKind, ComponentTypeRef,
+    ComponentTypeSection, ComponentValType, InstanceType, PrimitiveValType,
 };
 
-/// Build a wrapper component that imports flat functions from the isolator
-/// and exports a bundled `wasi:cli/environment` instance.
+/// Build a wrapper component that imports a filtered `get-environment` from
+/// the isolator and `get-arguments`/`initial-cwd` from the original
+/// `wasi:cli/environment` instance, then exports them bundled as a
+/// `wasi:cli/environment` instance.
 pub fn build_env_wrapper_component(target_name: &str, wasi_env_version: &str) -> Result<Vec<u8>> {
     let mut component = Component::new();
     let mut types = ComponentTypeSection::new();
@@ -86,19 +90,31 @@ pub fn build_env_wrapper_component(target_name: &str, wasi_env_version: &str) ->
 
     let mut imports = ComponentImportSection::new();
     imports.import(
+        &format!("wasi:cli/environment@{wasi_env_version}"),
+        ComponentTypeRef::Instance(env_instance_idx),
+    );
+    imports.import(
         &format!("environment-{target_name}-get-environment"),
         ComponentTypeRef::Func(get_env_idx),
     );
-    imports.import(
-        &format!("environment-{target_name}-get-arguments"),
-        ComponentTypeRef::Func(get_args_idx),
-    );
-    imports.import(
-        &format!("environment-{target_name}-get-cwd"),
-        ComponentTypeRef::Func(get_cwd_idx),
-    );
     component.section(&imports);
 
+    // Alias get-arguments and initial-cwd from the imported instance
+    let mut aliases = ComponentAliasSection::new();
+    aliases.alias(Alias::InstanceExport {
+        instance: 0,
+        kind: ComponentExportKind::Func,
+        name: "get-arguments",
+    });
+    aliases.alias(Alias::InstanceExport {
+        instance: 0,
+        kind: ComponentExportKind::Func,
+        name: "initial-cwd",
+    });
+    component.section(&aliases);
+
+    // Bundle: func 0 = get-environment (imported), func 1 = get-arguments (aliased),
+    // func 2 = initial-cwd (aliased)
     let mut instances = ComponentInstanceSection::new();
     instances.export_items([
         ("get-environment", ComponentExportKind::Func, 0),
@@ -111,7 +127,7 @@ pub fn build_env_wrapper_component(target_name: &str, wasi_env_version: &str) ->
     exports.export(
         &format!("wasi:cli/environment@{wasi_env_version}"),
         ComponentExportKind::Instance,
-        0,
+        1,
         Some(ComponentTypeRef::Instance(env_instance_idx)),
     );
     component.section(&exports);

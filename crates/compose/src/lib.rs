@@ -562,15 +562,13 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
             let (_, wrapper_instance) =
                 self.register_package(&wrapper_pkg_name, None, wrapper_bytes)?;
 
-            // Wire isolator → wrapper (3 flat function exports)
-            for suffix in &["get-environment", "get-arguments", "get-cwd"] {
-                let export_name = format!("environment-{target_name}-{suffix}");
-                let node = self
-                    .graph
-                    .alias_instance_export(isolator_instance, &export_name)?;
-                self.graph
-                    .set_instantiation_argument(wrapper_instance, &export_name, node)?;
-            }
+            // Wire isolator → wrapper (filtered get-environment)
+            let export_name = format!("environment-{target_name}-get-environment");
+            let node = self
+                .graph
+                .alias_instance_export(isolator_instance, &export_name)?;
+            self.graph
+                .set_instantiation_argument(wrapper_instance, &export_name, node)?;
 
             // Wire wrapper → target (wasi:cli/environment instance)
             let env_import = format!("wasi:cli/environment@{target_wasi_env_version}");
