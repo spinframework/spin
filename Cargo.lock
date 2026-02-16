@@ -8334,6 +8334,7 @@ name = "spin-build"
 version = "3.7.0-pre0"
 dependencies = [
  "anyhow",
+ "indexmap 2.12.0",
  "serde",
  "spin-common",
  "spin-environments",
@@ -8475,6 +8476,7 @@ dependencies = [
  "spin-app",
  "spin-common",
  "spin-componentize",
+ "spin-env-isolator",
  "spin-serde",
  "thiserror 2.0.17",
  "tokio",
@@ -8518,6 +8520,16 @@ dependencies = [
  "toml_edit",
  "tracing",
  "ui-testing",
+]
+
+[[package]]
+name = "spin-env-isolator"
+version = "3.7.0-pre0"
+dependencies = [
+ "anyhow",
+ "wasm-encoder 0.244.0",
+ "wasmparser 0.244.0",
+ "wasmtime",
 ]
 
 [[package]]
@@ -9005,6 +9017,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "spin-common",
+ "spin-env-isolator",
  "spin-expressions",
  "spin-locked-app",
  "spin-manifest",

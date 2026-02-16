@@ -120,13 +120,18 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
             if let ComponentDependency::AppComponent {
                 component: depended_on_id,
                 export,
+                environment,
             } = dependency
             {
                 let depended_on = components
                     .get(depended_on_id)
                     .with_context(|| format!("dependency ID {depended_on_id} does not exist"))?;
                 ensure_is_acceptable_dependency(depended_on, depended_on_id, depender_id)?;
-                *dependency = component_source_to_dependency(&depended_on.source, export.clone());
+                // Merge: depended-on component's env as base, dependency spec's env as overrides
+                let mut merged_env = depended_on.environment.clone();
+                merged_env.extend(std::mem::take(environment));
+                *dependency =
+                    component_source_to_dependency(&depended_on.source, export.clone(), merged_env);
             }
         }
     }
@@ -137,16 +142,19 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
 fn component_source_to_dependency(
     source: &ComponentSource,
     export: Option<String>,
+    environment: indexmap::IndexMap<String, String>,
 ) -> ComponentDependency {
     match source {
         ComponentSource::Local(path) => ComponentDependency::Local {
             path: PathBuf::from(path),
             export,
+            environment,
         },
         ComponentSource::Remote { url, digest } => ComponentDependency::HTTP {
             url: url.clone(),
             digest: digest.clone(),
             export,
+            environment,
         },
         ComponentSource::Registry {
             registry,
@@ -157,6 +165,7 @@ fn component_source_to_dependency(
             registry: registry.as_ref().map(|r| r.to_string()),
             package: Some(package.to_string()),
             export,
+            environment,
         },
     }
 }
@@ -179,7 +188,7 @@ fn ensure_is_acceptable_dependency(
         source: _,
         description: _,
         variables,
-        environment,
+        environment: _,
         files,
         exclude_files: _,
         allowed_http_hosts,
@@ -205,9 +214,6 @@ fn ensure_is_acceptable_dependency(
     }
     if !dependencies.inner.is_empty() {
         surprises.push("dependencies");
-    }
-    if !environment.is_empty() {
-        surprises.push("environment");
     }
     if !files.is_empty() {
         surprises.push("files");
@@ -273,12 +279,18 @@ mod test {
             .get(&package_name("b:b"))
             .unwrap();
 
-        let ComponentDependency::Local { path, export } = dep else {
+        let ComponentDependency::Local {
+            path,
+            export,
+            environment,
+        } = dep
+        else {
             panic!("should have normalised to local dep");
         };
 
         assert_eq!(&PathBuf::from("b.wasm"), path);
         assert_eq!(&None, export);
+        assert!(environment.is_empty());
     }
 
     #[test]
@@ -317,6 +329,7 @@ mod test {
             url,
             digest,
             export,
+            environment,
         } = dep
         else {
             panic!("should have normalised to HTTP dep");
@@ -325,6 +338,7 @@ mod test {
         assert_eq!("http://example.com/b.wasm", url);
         assert_eq!("12345", digest);
         assert_eq!("c:d/e", export.as_ref().unwrap());
+        assert!(environment.is_empty());
     }
 
     #[test]
@@ -364,6 +378,7 @@ mod test {
             registry,
             package,
             export,
+            environment,
         } = dep
         else {
             panic!("should have normalised to HTTP dep");
@@ -373,5 +388,6 @@ mod test {
         assert_eq!("reginalds-registry.reg", registry.as_ref().unwrap());
         assert_eq!("bb:bb", package.as_ref().unwrap());
         assert_eq!(&None, export);
+        assert!(environment.is_empty());
     }
 }

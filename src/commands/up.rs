@@ -520,7 +520,10 @@ impl UpCommand {
     }
 
     fn update_locked_app(&self, locked_app: &mut LockedApp) {
-        // Apply --env to component environments
+        // Apply --env to component environments.
+        // Dynamic env vars are added as-is: if env isolation is active,
+        // the env map is already prefixed from lock time, and the isolator
+        // will route vars by prefix. The user provides the prefix they want.
         if !self.env.is_empty() {
             for component in locked_app.components.iter_mut() {
                 component.env.extend(self.env.iter().cloned());
@@ -923,5 +926,79 @@ mod test {
         assert_eq!(2, groups[2].len());
         assert_eq!("-L", groups[2][0]);
         assert_eq!("/fie", groups[2][1]);
+    }
+
+    #[test]
+    fn dynamic_env_vars_passed_through_unchanged() {
+        use spin_app::locked::{
+            ContentRef, LockedComponent, LockedComponentDependency, LockedComponentSource,
+        };
+
+        let dep_name = "hello:components/dependable".parse().unwrap();
+        let source = LockedComponentSource {
+            content_type: "application/wasm".into(),
+            content: ContentRef::default(),
+        };
+
+        // Simulate a locked app where env vars are already prefixed from lock time
+        let mut locked_app = LockedApp {
+            spin_lock_version: Default::default(),
+            must_understand: vec![],
+            metadata: Default::default(),
+            host_requirements: Default::default(),
+            variables: Default::default(),
+            triggers: vec![],
+            components: vec![LockedComponent {
+                id: "main".into(),
+                metadata: Default::default(),
+                source: source.clone(),
+                env: [
+                    ("MAIN_GREETING".into(), "hello from main".into()),
+                    ("DEPENDABLE_GREETING".into(), "hello from dep".into()),
+                ]
+                .into_iter()
+                .collect(),
+                files: vec![],
+                config: Default::default(),
+                dependencies: [(
+                    dep_name,
+                    LockedComponentDependency {
+                        source,
+                        export: None,
+                        inherit: Default::default(),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+                host_requirements: Default::default(),
+            }],
+        };
+
+        let cmd = UpCommand {
+            env: vec![
+                ("MAIN_FOO".into(), "bar".into()),
+                ("DEPENDABLE_BAZ".into(), "zorp".into()),
+            ],
+            ..Default::default()
+        };
+
+        cmd.update_locked_app(&mut locked_app);
+
+        let main = &locked_app.components[0];
+        // Dynamic vars are added as-is — the isolator routes them by prefix
+        assert_eq!(main.env.get("MAIN_FOO").map(String::as_str), Some("bar"));
+        assert_eq!(
+            main.env.get("DEPENDABLE_BAZ").map(String::as_str),
+            Some("zorp")
+        );
+        // Original prefixed env preserved
+        assert_eq!(
+            main.env.get("MAIN_GREETING").map(String::as_str),
+            Some("hello from main")
+        );
+        assert_eq!(
+            main.env.get("DEPENDABLE_GREETING").map(String::as_str),
+            Some("hello from dep")
+        );
     }
 }

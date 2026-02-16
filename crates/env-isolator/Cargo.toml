@@ -1,0 +1,20 @@
+[package]
+name = "spin-env-isolator"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+wasm-encoder = { workspace = true, features = ["component-model"] }
+wasmparser = { workspace = true, features = ["validate", "component-model"] }
+
+[dev-dependencies]
+wasmtime = { workspace = true }
+
+[lints]
+workspace = true
