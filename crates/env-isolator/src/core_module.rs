@@ -911,8 +911,6 @@ mod tests {
         //
         // get-environment writes the env vars into linear memory using realloc
         // for allocations, then writes (list_ptr, list_len) at the return pointer.
-        let memory_for_closure = memory;
-        let realloc_for_closure = realloc_fn.clone();
         let get_env = wasmtime::Func::wrap(&mut store, move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
             let env_vars = caller.data().env_vars.clone();
             let n = env_vars.len();
@@ -920,26 +918,26 @@ mod tests {
             // Allocate list: n entries × 16 bytes
             let list_size = (n * 16) as i32;
             let mut results = [wasmtime::Val::I32(0)];
-            realloc_for_closure.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(4), wasmtime::Val::I32(list_size)], &mut results).unwrap();
+            realloc_fn.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(4), wasmtime::Val::I32(list_size)], &mut results).unwrap();
             let list_ptr = results[0].unwrap_i32();
 
             // For each env var, allocate and write key and value strings
             for (i, (key, val)) in env_vars.iter().enumerate() {
                 // Allocate key
                 let mut kr = [wasmtime::Val::I32(0)];
-                realloc_for_closure.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(1), wasmtime::Val::I32(key.len() as i32)], &mut kr).unwrap();
+                realloc_fn.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(1), wasmtime::Val::I32(key.len() as i32)], &mut kr).unwrap();
                 let key_ptr = kr[0].unwrap_i32();
-                write_str(&memory_for_closure, &mut caller, key_ptr as usize, key);
+                write_str(&memory, &mut caller, key_ptr as usize, key);
 
                 // Allocate val
                 let mut vr = [wasmtime::Val::I32(0)];
-                realloc_for_closure.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(1), wasmtime::Val::I32(val.len() as i32)], &mut vr).unwrap();
+                realloc_fn.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(1), wasmtime::Val::I32(val.len() as i32)], &mut vr).unwrap();
                 let val_ptr = vr[0].unwrap_i32();
-                write_str(&memory_for_closure, &mut caller, val_ptr as usize, val);
+                write_str(&memory, &mut caller, val_ptr as usize, val);
 
                 // Write tuple into list
                 let base = (list_ptr + (i as i32) * 16) as usize;
-                let data = memory_for_closure.data_mut(&mut caller);
+                let data = memory.data_mut(&mut caller);
                 data[base..base + 4].copy_from_slice(&(key_ptr as u32).to_le_bytes());
                 data[base + 4..base + 8].copy_from_slice(&(key.len() as u32).to_le_bytes());
                 data[base + 8..base + 12].copy_from_slice(&(val_ptr as u32).to_le_bytes());
@@ -948,7 +946,7 @@ mod tests {
 
             // Write (list_ptr, list_len) at ret_ptr
             let rp = ret_ptr as usize;
-            let data = memory_for_closure.data_mut(&mut caller);
+            let data = memory.data_mut(&mut caller);
             data[rp..rp + 4].copy_from_slice(&(list_ptr as u32).to_le_bytes());
             data[rp + 4..rp + 8].copy_from_slice(&(n as u32).to_le_bytes());
         });
