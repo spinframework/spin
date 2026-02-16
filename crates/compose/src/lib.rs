@@ -488,10 +488,7 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
     // whether the main component or any dependency imports `wasi:cli/environment`,
     // but in practice almost all components will import `wasi:cli/environment`,
     // so we go with this simpler heuristic for now.
-    fn should_apply_env_isolation(
-        &self,
-        prepared: &IndexMap<String, DependencyInfo>,
-    ) -> bool {
+    fn should_apply_env_isolation(&self, prepared: &IndexMap<String, DependencyInfo>) -> bool {
         prepared.values().len() > 0
     }
 
@@ -555,14 +552,12 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
         let imported_wasi_env_version = max_wasi_env_version.unwrap();
 
         let isolator_bytes = generate_isolator(&targets, &imported_wasi_env_version)?;
-        let (_, isolator_instance) =
-            self.register_package("env-isolator", None, isolator_bytes)?;
+        let (_, isolator_instance) = self.register_package("env-isolator", None, isolator_bytes)?;
 
         // For each target, create a wrapper and wire isolator → wrapper → target.
         // Each wrapper uses the target's own wasi:cli/environment version.
         for (target_name, target_instance, target_wasi_env_version) in &target_instances {
-            let wrapper_bytes =
-                build_env_wrapper_component(target_name, target_wasi_env_version)?;
+            let wrapper_bytes = build_env_wrapper_component(target_name, target_wasi_env_version)?;
             let wrapper_pkg_name = format!("env-wrapper-{target_name}");
             let (_, wrapper_instance) =
                 self.register_package(&wrapper_pkg_name, None, wrapper_bytes)?;
@@ -570,8 +565,9 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
             // Wire isolator → wrapper (3 flat function exports)
             for suffix in &["get-environment", "get-arguments", "get-cwd"] {
                 let export_name = format!("environment-{target_name}-{suffix}");
-                let node =
-                    self.graph.alias_instance_export(isolator_instance, &export_name)?;
+                let node = self
+                    .graph
+                    .alias_instance_export(isolator_instance, &export_name)?;
                 self.graph
                     .set_instantiation_argument(wrapper_instance, &export_name, node)?;
             }

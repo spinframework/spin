@@ -33,10 +33,9 @@
 //! - Return pointer parameter, result is (i32_discriminant, ptr, len) = 12 bytes
 
 use wasm_encoder::{
-    BlockType, CodeSection, ConstExpr, DataCountSection, DataSection, DataSegment,
-    DataSegmentMode, EntityType, ExportKind, ExportSection, Function, FunctionSection,
-    GlobalSection, GlobalType, ImportSection, MemArg, MemorySection, MemoryType,
-    Module, TypeSection, ValType,
+    BlockType, CodeSection, ConstExpr, DataCountSection, DataSection, DataSegment, DataSegmentMode,
+    EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection, GlobalType,
+    ImportSection, MemArg, MemorySection, MemoryType, Module, TypeSection, ValType,
 };
 
 // --- Filter module indices ---
@@ -108,9 +107,21 @@ pub fn generate_env_filter_module(prefixes: &[&str]) -> Vec<u8> {
             page_size_log2: None,
         }),
     );
-    imports.import("host", "get-environment", EntityType::Function(FILTER_TY_LOWERED));
-    imports.import("host", "get-arguments", EntityType::Function(FILTER_TY_LOWERED));
-    imports.import("host", "initial-cwd", EntityType::Function(FILTER_TY_LOWERED));
+    imports.import(
+        "host",
+        "get-environment",
+        EntityType::Function(FILTER_TY_LOWERED),
+    );
+    imports.import(
+        "host",
+        "get-arguments",
+        EntityType::Function(FILTER_TY_LOWERED),
+    );
+    imports.import(
+        "host",
+        "initial-cwd",
+        EntityType::Function(FILTER_TY_LOWERED),
+    );
     imports.import("host", "realloc", EntityType::Function(FILTER_TY_REALLOC));
     imports.import("host", "reset", EntityType::Function(FILTER_TY_RESET));
     module.section(&imports);
@@ -127,10 +138,22 @@ pub fn generate_env_filter_module(prefixes: &[&str]) -> Vec<u8> {
 
     // === Export section ===
     let mut exports = ExportSection::new();
-    exports.export("get-arguments", ExportKind::Func, FILTER_FN_GET_ARGS_ADAPTER);
-    exports.export("initial-cwd", ExportKind::Func, FILTER_FN_INITIAL_CWD_ADAPTER);
+    exports.export(
+        "get-arguments",
+        ExportKind::Func,
+        FILTER_FN_GET_ARGS_ADAPTER,
+    );
+    exports.export(
+        "initial-cwd",
+        ExportKind::Func,
+        FILTER_FN_INITIAL_CWD_ADAPTER,
+    );
     for i in 0..num_prefix_funcs {
-        exports.export(&format!("get-environment-{i}"), ExportKind::Func, FILTER_FN_GET_ENV_BASE + i);
+        exports.export(
+            &format!("get-environment-{i}"),
+            ExportKind::Func,
+            FILTER_FN_GET_ENV_BASE + i,
+        );
     }
     module.section(&exports);
 
@@ -201,7 +224,6 @@ pub fn generate_env_filter_module(prefixes: &[&str]) -> Vec<u8> {
 
     module.finish()
 }
-
 
 /// Build a minimal core module that provides memory, a bump-allocator `realloc`,
 /// and a `reset` function.
@@ -307,23 +329,23 @@ pub fn build_memory_module(heap_start: u32) -> Module {
             .i32_mul()
             .i32_gt_u()
             .if_(BlockType::Empty)
-                // pages_needed = ceil((new_bump - mem_bytes) / 65536)
-                .local_get(5)
-                .memory_size(0)
-                .i32_const(65536)
-                .i32_mul()
-                .i32_sub()
-                .i32_const(65535)
-                .i32_add()
-                .i32_const(65536)
-                .i32_div_u()
-                .memory_grow(0)
-                // memory.grow returns -1 on failure
-                .i32_const(-1)
-                .i32_eq()
-                .if_(BlockType::Empty)
-                    .unreachable()
-                .end()
+            // pages_needed = ceil((new_bump - mem_bytes) / 65536)
+            .local_get(5)
+            .memory_size(0)
+            .i32_const(65536)
+            .i32_mul()
+            .i32_sub()
+            .i32_const(65535)
+            .i32_add()
+            .i32_const(65536)
+            .i32_div_u()
+            .memory_grow(0)
+            // memory.grow returns -1 on failure
+            .i32_const(-1)
+            .i32_eq()
+            .if_(BlockType::Empty)
+            .unreachable()
+            .end()
             .end()
             // bump_ptr = new_bump
             .local_get(5)
@@ -452,12 +474,12 @@ fn build_filter_env_function(prefix_offset: i32, prefix_len: i32) -> Function {
 
     // Read key_ptr from element
     insn.local_get(ELEMENT_PTR)
-    .i32_load(MemArg {
-        offset: 0,
-        align: 2,
-        memory_index: 0,
-    })
-    .local_set(KEY_PTR);
+        .i32_load(MemArg {
+            offset: 0,
+            align: 2,
+            memory_index: 0,
+        })
+        .local_set(KEY_PTR);
 
     // Read key_len from element
     insn.local_get(ELEMENT_PTR)
@@ -678,11 +700,7 @@ mod tests {
     /// Helper: instantiate the memory module in wasmtime and return (store, instance, memory).
     fn instantiate_memory_module(
         heap_start: u32,
-    ) -> (
-        wasmtime::Store<()>,
-        wasmtime::Instance,
-        wasmtime::Memory,
-    ) {
+    ) -> (wasmtime::Store<()>, wasmtime::Instance, wasmtime::Memory) {
         let module = build_memory_module(heap_start);
         let bytes = module.finish();
         wasmparser::validate(&bytes).expect("memory module should be valid");
@@ -735,7 +753,10 @@ mod tests {
         // Allocate with alignment 8
         let ptr2 = call_realloc(&mut store, &instance, 0, 0, 8, 20);
         assert_eq!(ptr2 % 8, 0, "pointer should be 8-byte aligned");
-        assert!(ptr2 >= ptr1 + 10, "second allocation should not overlap first");
+        assert!(
+            ptr2 >= ptr1 + 10,
+            "second allocation should not overlap first"
+        );
     }
 
     #[test]
@@ -846,7 +867,12 @@ mod tests {
     }
 
     /// Write a string into linear memory at `offset`, returning the number of bytes written.
-    fn write_str(memory: &wasmtime::Memory, store: &mut impl wasmtime::AsContextMut, offset: usize, s: &str) -> usize {
+    fn write_str(
+        memory: &wasmtime::Memory,
+        store: &mut impl wasmtime::AsContextMut,
+        offset: usize,
+        s: &str,
+    ) -> usize {
         let bytes = s.as_bytes();
         memory.data_mut(store)[offset..offset + bytes.len()].copy_from_slice(bytes);
         bytes.len()
@@ -911,61 +937,103 @@ mod tests {
         //
         // get-environment writes the env vars into linear memory using realloc
         // for allocations, then writes (list_ptr, list_len) at the return pointer.
-        let get_env = wasmtime::Func::wrap(&mut store, move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
-            let env_vars = caller.data().env_vars.clone();
-            let n = env_vars.len();
+        let get_env = wasmtime::Func::wrap(
+            &mut store,
+            move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
+                let env_vars = caller.data().env_vars.clone();
+                let n = env_vars.len();
 
-            // Allocate list: n entries × 16 bytes
-            let list_size = (n * 16) as i32;
-            let mut results = [wasmtime::Val::I32(0)];
-            realloc_fn.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(4), wasmtime::Val::I32(list_size)], &mut results).unwrap();
-            let list_ptr = results[0].unwrap_i32();
+                // Allocate list: n entries × 16 bytes
+                let list_size = (n * 16) as i32;
+                let mut results = [wasmtime::Val::I32(0)];
+                realloc_fn
+                    .call(
+                        &mut caller,
+                        &[
+                            wasmtime::Val::I32(0),
+                            wasmtime::Val::I32(0),
+                            wasmtime::Val::I32(4),
+                            wasmtime::Val::I32(list_size),
+                        ],
+                        &mut results,
+                    )
+                    .unwrap();
+                let list_ptr = results[0].unwrap_i32();
 
-            // For each env var, allocate and write key and value strings
-            for (i, (key, val)) in env_vars.iter().enumerate() {
-                // Allocate key
-                let mut kr = [wasmtime::Val::I32(0)];
-                realloc_fn.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(1), wasmtime::Val::I32(key.len() as i32)], &mut kr).unwrap();
-                let key_ptr = kr[0].unwrap_i32();
-                write_str(&memory, &mut caller, key_ptr as usize, key);
+                // For each env var, allocate and write key and value strings
+                for (i, (key, val)) in env_vars.iter().enumerate() {
+                    // Allocate key
+                    let mut kr = [wasmtime::Val::I32(0)];
+                    realloc_fn
+                        .call(
+                            &mut caller,
+                            &[
+                                wasmtime::Val::I32(0),
+                                wasmtime::Val::I32(0),
+                                wasmtime::Val::I32(1),
+                                wasmtime::Val::I32(key.len() as i32),
+                            ],
+                            &mut kr,
+                        )
+                        .unwrap();
+                    let key_ptr = kr[0].unwrap_i32();
+                    write_str(&memory, &mut caller, key_ptr as usize, key);
 
-                // Allocate val
-                let mut vr = [wasmtime::Val::I32(0)];
-                realloc_fn.call(&mut caller, &[wasmtime::Val::I32(0), wasmtime::Val::I32(0), wasmtime::Val::I32(1), wasmtime::Val::I32(val.len() as i32)], &mut vr).unwrap();
-                let val_ptr = vr[0].unwrap_i32();
-                write_str(&memory, &mut caller, val_ptr as usize, val);
+                    // Allocate val
+                    let mut vr = [wasmtime::Val::I32(0)];
+                    realloc_fn
+                        .call(
+                            &mut caller,
+                            &[
+                                wasmtime::Val::I32(0),
+                                wasmtime::Val::I32(0),
+                                wasmtime::Val::I32(1),
+                                wasmtime::Val::I32(val.len() as i32),
+                            ],
+                            &mut vr,
+                        )
+                        .unwrap();
+                    let val_ptr = vr[0].unwrap_i32();
+                    write_str(&memory, &mut caller, val_ptr as usize, val);
 
-                // Write tuple into list
-                let base = (list_ptr + (i as i32) * 16) as usize;
+                    // Write tuple into list
+                    let base = (list_ptr + (i as i32) * 16) as usize;
+                    let data = memory.data_mut(&mut caller);
+                    data[base..base + 4].copy_from_slice(&(key_ptr as u32).to_le_bytes());
+                    data[base + 4..base + 8].copy_from_slice(&(key.len() as u32).to_le_bytes());
+                    data[base + 8..base + 12].copy_from_slice(&(val_ptr as u32).to_le_bytes());
+                    data[base + 12..base + 16].copy_from_slice(&(val.len() as u32).to_le_bytes());
+                }
+
+                // Write (list_ptr, list_len) at ret_ptr
+                let rp = ret_ptr as usize;
                 let data = memory.data_mut(&mut caller);
-                data[base..base + 4].copy_from_slice(&(key_ptr as u32).to_le_bytes());
-                data[base + 4..base + 8].copy_from_slice(&(key.len() as u32).to_le_bytes());
-                data[base + 8..base + 12].copy_from_slice(&(val_ptr as u32).to_le_bytes());
-                data[base + 12..base + 16].copy_from_slice(&(val.len() as u32).to_le_bytes());
-            }
-
-            // Write (list_ptr, list_len) at ret_ptr
-            let rp = ret_ptr as usize;
-            let data = memory.data_mut(&mut caller);
-            data[rp..rp + 4].copy_from_slice(&(list_ptr as u32).to_le_bytes());
-            data[rp + 4..rp + 8].copy_from_slice(&(n as u32).to_le_bytes());
-        });
+                data[rp..rp + 4].copy_from_slice(&(list_ptr as u32).to_le_bytes());
+                data[rp + 4..rp + 8].copy_from_slice(&(n as u32).to_le_bytes());
+            },
+        );
 
         // get-arguments: stub that writes empty list
         let memory_for_args = memory;
-        let get_args = wasmtime::Func::wrap(&mut store, move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
-            let rp = ret_ptr as usize;
-            let data = memory_for_args.data_mut(&mut caller);
-            data[rp..rp + 8].fill(0);
-        });
+        let get_args = wasmtime::Func::wrap(
+            &mut store,
+            move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
+                let rp = ret_ptr as usize;
+                let data = memory_for_args.data_mut(&mut caller);
+                data[rp..rp + 8].fill(0);
+            },
+        );
 
         // initial-cwd: stub that writes None (discriminant 0)
         let memory_for_cwd = memory;
-        let initial_cwd = wasmtime::Func::wrap(&mut store, move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
-            let rp = ret_ptr as usize;
-            let data = memory_for_cwd.data_mut(&mut caller);
-            data[rp..rp + 12].fill(0);
-        });
+        let initial_cwd = wasmtime::Func::wrap(
+            &mut store,
+            move |mut caller: wasmtime::Caller<'_, FilterTestState>, ret_ptr: i32| {
+                let rp = ret_ptr as usize;
+                let data = memory_for_cwd.data_mut(&mut caller);
+                data[rp..rp + 12].fill(0);
+            },
+        );
 
         // Instantiate filter module with imports
         let filter_instance = wasmtime::Instance::new(
@@ -1032,8 +1100,7 @@ mod tests {
             ("SUB_D".into(), "4".into()),
             ("OTHER".into(), "5".into()),
         ];
-        let (mut store, instance, memory) =
-            instantiate_filter_module(&["MAIN_", "SUB_"], env_vars);
+        let (mut store, instance, memory) = instantiate_filter_module(&["MAIN_", "SUB_"], env_vars);
 
         // Check MAIN_ filter
         let get_env_0 = instance
@@ -1058,9 +1125,7 @@ mod tests {
 
     #[test]
     fn filter_repeated_calls_dont_leak_memory() {
-        let env_vars = vec![
-            ("APP_X".into(), "value".into()),
-        ];
+        let env_vars = vec![("APP_X".into(), "value".into())];
         let (mut store, instance, memory) = instantiate_filter_module(&["APP_"], env_vars);
 
         let get_env_0 = instance
@@ -1077,7 +1142,10 @@ mod tests {
 
         // Memory should not have grown beyond 1 page for this small dataset
         let pages = memory.size(&store);
-        assert_eq!(pages, 1, "memory should still be 1 page after repeated calls");
+        assert_eq!(
+            pages, 1,
+            "memory should still be 1 page after repeated calls"
+        );
     }
 
     #[test]
@@ -1100,7 +1168,7 @@ mod tests {
     fn filter_key_shorter_than_prefix_is_skipped() {
         let env_vars = vec![
             ("AB".into(), "short".into()),      // shorter than prefix "ABCDE_"
-            ("ABCDE_X".into(), "match".into()),  // matches
+            ("ABCDE_X".into(), "match".into()), // matches
         ];
         let (mut store, instance, memory) = instantiate_filter_module(&["ABCDE_"], env_vars);
 

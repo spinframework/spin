@@ -314,8 +314,7 @@ pub enum ComponentDependency {
 impl ComponentDependency {
     /// Returns the environment variables associated with this dependency, if any.
     pub fn environment(&self) -> &Map<String, String> {
-        static EMPTY: std::sync::LazyLock<Map<String, String>> =
-            std::sync::LazyLock::new(Map::new);
+        static EMPTY: std::sync::LazyLock<Map<String, String>> = std::sync::LazyLock::new(Map::new);
         match self {
             Self::Version(_) => &EMPTY,
             Self::Package { environment, .. }
