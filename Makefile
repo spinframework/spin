@@ -29,7 +29,7 @@ lint-rust-examples:
 	for manifest_path in $$(find examples  -name Cargo.toml); do \
 		echo "Linting $${manifest_path}" \
 		&& cargo clippy --manifest-path "$${manifest_path}" -- -D warnings \
-		&& cargo fmt --manifest-path "$${manifest_path}" -- --check \
+		&& cargo fmt --manifest-path "$${manifest_path}" --all -- --check \
 		|| exit 1 ; \
 	done
 
