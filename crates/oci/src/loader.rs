@@ -100,7 +100,17 @@ impl OciLoader {
         }
     }
 
-    async fn resolve_component_content_refs(
+    /// Resolves all digest references in the component (including source, dependencies,
+    /// and asset files). Wasm sources are replaced with cache paths. Asset files are
+    /// collected to a mount path, and the component `files` amended to reflect that.
+    ///
+    /// This function assumes that:
+    ///
+    /// 1. All resolvable items have digest or inline sources.
+    /// 2. All digest-addressed content is already in the cache.
+    ///
+    /// If either of these is not true, the function errors.
+    pub async fn resolve_component_content_refs(
         &self,
         component: &mut LockedComponent,
         cache: &Cache,
