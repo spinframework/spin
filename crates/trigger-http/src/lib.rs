@@ -82,7 +82,7 @@ pub struct CliArgs {
     /// e.g. 1..8.  If it's a range, a number will be selected from that range
     /// at random for each new instance.
     #[clap(long, value_parser = parse_usize_range)]
-    max_instance_reuse_count: Option<Range<usize>>,
+    pub max_instance_reuse_count: Option<Range<usize>>,
 
     /// Maximum number of concurrent requests to send to a single component
     /// instance.
@@ -95,7 +95,7 @@ pub struct CliArgs {
     /// e.g. 1..8.  If it's a range, a number will be selected from that range
     /// at random for each new instance.
     #[clap(long, value_parser = parse_usize_range)]
-    max_instance_concurrent_reuse_count: Option<Range<usize>>,
+    pub max_instance_concurrent_reuse_count: Option<Range<usize>>,
 
     /// Request timeout to enforce.
     ///
@@ -109,7 +109,7 @@ pub struct CliArgs {
     /// e.g. 1..8s.  If it's a range, a value will be selected from that range
     /// at random for each new instance.
     #[clap(long, value_parser = parse_duration_range)]
-    request_timeout: Option<Range<Duration>>,
+    pub request_timeout: Option<Range<Duration>>,
 
     /// Time to hold an idle component instance for possible reuse before
     /// dropping it.
@@ -122,7 +122,7 @@ pub struct CliArgs {
     /// e.g. 1..8s.  If it's a range, a value will be selected from that range
     /// at random for each new instance.
     #[clap(long, default_value = "1s", value_parser = parse_duration_range)]
-    idle_instance_timeout: Range<Duration>,
+    pub idle_instance_timeout: Range<Duration>,
 }
 
 impl CliArgs {
@@ -139,7 +139,7 @@ impl CliArgs {
 }
 
 #[derive(Copy, Clone)]
-enum Range<T> {
+pub enum Range<T> {
     Value(T),
     Bounds(T, T),
 }
