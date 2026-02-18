@@ -48,3 +48,13 @@ pub use fermyon::spin2_0_0 as v2;
 
 mod conversions;
 pub mod wasi_otel;
+
+impl spin::sqlite::sqlite::Value {
+    pub fn memory_size(&self) -> usize {
+        match self {
+            Self::Null | Self::Integer(_) | Self::Real(_) => std::mem::size_of::<Self>(),
+            Self::Text(t) => std::mem::size_of::<Self>() + t.len(),
+            Self::Blob(b) => std::mem::size_of::<Self>() + b.len(),
+        }
+    }
+}
