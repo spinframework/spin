@@ -118,6 +118,7 @@ impl spin_factor_sqlite::Connection for MockConnection {
         &self,
         query: &str,
         parameters: Vec<v3::Value>,
+        _max_result_bytes: usize,
     ) -> Result<v3::QueryResult, v3::Error> {
         let _ = (query, parameters);
         Err(v3::Error::Io("Mock connection".into()))

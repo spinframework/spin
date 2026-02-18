@@ -1,0 +1,32 @@
+{
+    "invocations": [
+        {
+            "request": {
+                "path": "/",
+                "headers": [
+                    {
+                        "name": "Host",
+                        "value": "example.com"
+                    }
+                ]
+            },
+            "response": {
+                "headers": [
+                    {
+                        "name": "transfer-encoding",
+                        "optional": true
+                    },
+                    {
+                        "name": "content-length",
+                        "optional": true
+                    },
+                    {
+                        "name": "Date",
+                        "optional": true
+                    }
+                ]
+            }
+        }
+    ],
+    "preconditions": [{"kind": "sqlite"}]
+}

@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use spin_core::async_trait;
-use spin_factor_sqlite::SqliteFactor;
+use spin_factor_sqlite::{SqliteFactor, MAX_RESULT_BYTES};
 use spin_factors::RuntimeFactors;
 use spin_factors_executor::ExecutorHooks;
 
@@ -52,11 +52,14 @@ impl SqlStatementExecutorHook {
                 })?;
             } else {
                 let Some(default) = get_database(DEFAULT_SQLITE_LABEL).await? else {
-                    debug_assert!(false, "the '{DEFAULT_SQLITE_LABEL}' sqlite database should always be available but for some reason was not");
+                    debug_assert!(
+                        false,
+                        "the '{DEFAULT_SQLITE_LABEL}' sqlite database should always be available but for some reason was not"
+                    );
                     return Ok(());
                 };
                 default
-                    .query(statement, Vec::new())
+                    .query(statement, Vec::new(), MAX_RESULT_BYTES)
                     .await
                     .with_context(|| format!("failed to execute following sql statement against default database: '{statement}'"))?;
             }
@@ -201,6 +204,7 @@ mod tests {
             &self,
             query: &str,
             parameters: Vec<v3::Value>,
+            _max_result_bytes: usize,
         ) -> Result<v3::QueryResult, v3::Error> {
             self.tx.send(Action::Query(query.to_string())).unwrap();
             let _ = parameters;

@@ -10,7 +10,7 @@ use spin_world::v2::sqlite as v2;
 use tracing::field::Empty;
 use tracing::{instrument, Level};
 
-use crate::{Connection, ConnectionCreator};
+use crate::{Connection, ConnectionCreator, MAX_RESULT_BYTES};
 
 pub struct InstanceState {
     allowed_databases: Arc<HashSet<String>>,
@@ -80,7 +80,7 @@ impl InstanceState {
             "sqlite.backend",
             conn.summary().as_deref().unwrap_or("unknown"),
         );
-        conn.query(&query, parameters).await
+        conn.query(&query, parameters, MAX_RESULT_BYTES).await
     }
 
     /// Get the set of allowed databases.
