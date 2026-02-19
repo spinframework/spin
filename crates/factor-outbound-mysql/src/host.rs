@@ -4,6 +4,7 @@ use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql::{self as v2, Connection};
 use spin_world::v2::rdbms_types as v2_types;
 use spin_world::v2::rdbms_types::ParameterValue;
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
 use tracing::{instrument, Level};
 
@@ -77,7 +78,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
         self.otel.reparent_tracing_span();
         self.get_client(connection)
             .await?
-            .query(statement, params)
+            .query(statement, params, MAX_HOST_BUFFERED_BYTES)
             .await
     }
 

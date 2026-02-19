@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use futures::stream::StreamExt as _;
+use futures::stream::TryStreamExt as _;
 use native_tls::TlsConnector;
 use postgres_native_tls::MakeTlsConnector;
 use spin_world::async_trait;
@@ -191,8 +191,7 @@ impl Client for deadpool_postgres::Object {
         let mut rows = Vec::new();
 
         async {
-            while let Some(row) = results.next().await {
-                let row = row?;
+            while let Some(row) = results.try_next().await? {
                 if columns.is_none() {
                     columns = Some(infer_columns(&row));
                 }
