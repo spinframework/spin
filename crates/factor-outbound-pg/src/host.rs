@@ -6,6 +6,7 @@ use spin_world::v1::postgres as v1;
 use spin_world::v1::rdbms_types as v1_types;
 use spin_world::v2::postgres::{self as v2};
 use spin_world::v2::rdbms_types as v2_types;
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
 use tracing::instrument;
 use tracing::Level;
@@ -132,7 +133,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
         Ok(self
             .get_client(connection)
             .await?
-            .query(statement, v3_params_to_v4(params))
+            .query(statement, v3_params_to_v4(params), MAX_HOST_BUFFERED_BYTES)
             .await?
             .into())
     }
@@ -175,7 +176,7 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     ) -> Result<v4::RowSet, v4::Error> {
         self.get_client(connection)
             .await?
-            .query(statement, params)
+            .query(statement, params, MAX_HOST_BUFFERED_BYTES)
             .await
     }
 
@@ -256,7 +257,7 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
         Ok(self
             .get_client(connection)
             .await?
-            .query(statement, v2_params_to_v3(params)?)
+            .query(statement, v2_params_to_v3(params)?, MAX_HOST_BUFFERED_BYTES)
             .await?
             .into())
     }
