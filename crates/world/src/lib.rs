@@ -109,3 +109,25 @@ impl spin::postgres4_0_0::postgres::DbValue {
         }
     }
 }
+
+impl v2::rdbms_types::DbValue {
+    pub fn memory_size(&self) -> usize {
+        match self {
+            Self::DbNull
+            | Self::Unsupported
+            | Self::Boolean(_)
+            | Self::Int8(_)
+            | Self::Int16(_)
+            | Self::Int32(_)
+            | Self::Int64(_)
+            | Self::Uint8(_)
+            | Self::Uint16(_)
+            | Self::Uint32(_)
+            | Self::Uint64(_)
+            | Self::Floating32(_)
+            | Self::Floating64(_) => std::mem::size_of::<Self>(),
+            Self::Str(s) => std::mem::size_of::<Self>() + s.len(),
+            Self::Binary(b) => std::mem::size_of::<Self>() + b.len(),
+        }
+    }
+}

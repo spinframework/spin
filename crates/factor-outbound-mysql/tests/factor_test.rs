@@ -126,6 +126,7 @@ impl Client for MockClient {
         &mut self,
         _statement: String,
         _params: Vec<ParameterValue>,
+        _max_result_bytes: usize,
     ) -> Result<RowSet, v2::Error> {
         Ok(RowSet {
             columns: vec![],

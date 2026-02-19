@@ -8686,6 +8686,7 @@ name = "spin-factor-outbound-mysql"
 version = "3.7.0-pre0"
 dependencies = [
  "anyhow",
+ "futures",
  "mysql_async",
  "spin-core",
  "spin-factor-otel",
