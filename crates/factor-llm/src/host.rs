@@ -1,5 +1,6 @@
 use spin_world::v1::llm::{self as v1};
 use spin_world::v2::llm::{self as v2};
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
 use tracing::{instrument, Level};
 
@@ -32,6 +33,7 @@ impl v2::Host for InstanceState {
                     top_k: 40,
                     top_p: 0.9,
                 }),
+                MAX_HOST_BUFFERED_BYTES,
             )
             .await
     }
@@ -49,7 +51,9 @@ impl v2::Host for InstanceState {
         }
         let mut engine = self.engine.lock().await;
         tracing::Span::current().record("llm.backend", engine.summary());
-        engine.generate_embeddings(model, data).await
+        engine
+            .generate_embeddings(model, data, MAX_HOST_BUFFERED_BYTES)
+            .await
     }
 
     fn convert_error(&mut self, error: v2::Error) -> anyhow::Result<v2::Error> {

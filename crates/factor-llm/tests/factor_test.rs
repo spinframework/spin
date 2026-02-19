@@ -114,6 +114,7 @@ impl LlmEngine for FakeLLm {
         model: v1::InferencingModel,
         prompt: String,
         params: v2::InferencingParams,
+        _max_result_bytes: usize,
     ) -> Result<v2::InferencingResult, v2::Error> {
         let OperationResult::Inferencing(i) = (self.handle)(Operation::Inference {
             model,
@@ -130,6 +131,7 @@ impl LlmEngine for FakeLLm {
         &mut self,
         model: v2::EmbeddingModel,
         data: Vec<String>,
+        _max_result_bytes: usize,
     ) -> Result<v2::EmbeddingsResult, v2::Error> {
         let OperationResult::Embeddings(e) = (self.handle)(Operation::Embedding { model, data })?
         else {

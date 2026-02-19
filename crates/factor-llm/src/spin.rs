@@ -23,16 +23,19 @@ mod local {
             model: v2::InferencingModel,
             prompt: String,
             params: v2::InferencingParams,
+            max_result_bytes: usize,
         ) -> Result<v2::InferencingResult, v2::Error> {
-            self.infer(model, prompt, params).await
+            self.infer(model, prompt, params, max_result_bytes).await
         }
 
         async fn generate_embeddings(
             &mut self,
             model: v2::EmbeddingModel,
             data: Vec<String>,
+            max_result_bytes: usize,
         ) -> Result<v2::EmbeddingsResult, v2::Error> {
-            self.generate_embeddings(model, data).await
+            self.generate_embeddings(model, data, max_result_bytes)
+                .await
         }
 
         fn summary(&self) -> Option<String> {
@@ -70,17 +73,20 @@ impl LlmEngine for RemoteHttpLlmEngine {
         model: v1::InferencingModel,
         prompt: String,
         params: v2::InferencingParams,
+        max_result_bytes: usize,
     ) -> Result<v2::InferencingResult, v2::Error> {
         spin_telemetry::monotonic_counter!(spin.llm_infer = 1, model_name = model);
-        self.infer(model, prompt, params).await
+        self.infer(model, prompt, params, max_result_bytes).await
     }
 
     async fn generate_embeddings(
         &mut self,
         model: v2::EmbeddingModel,
         data: Vec<String>,
+        max_result_bytes: usize,
     ) -> Result<v2::EmbeddingsResult, v2::Error> {
-        self.generate_embeddings(model, data).await
+        self.generate_embeddings(model, data, max_result_bytes)
+            .await
     }
 
     fn summary(&self) -> Option<String> {
@@ -152,6 +158,7 @@ mod noop {
             _model: v2::InferencingModel,
             _prompt: String,
             _params: v2::InferencingParams,
+            _max_result_bytes: usize,
         ) -> Result<v2::InferencingResult, v2::Error> {
             Err(v2::Error::RuntimeError(
                 "Local LLM operations are not supported in this version of Spin.".into(),
@@ -162,6 +169,7 @@ mod noop {
             &mut self,
             _model: v2::EmbeddingModel,
             _data: Vec<String>,
+            _max_result_bytes: usize,
         ) -> Result<v2::EmbeddingsResult, v2::Error> {
             Err(v2::Error::RuntimeError(
                 "Local LLM operations are not supported in this version of Spin.".into(),

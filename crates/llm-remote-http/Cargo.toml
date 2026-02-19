@@ -6,6 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+futures = { workspace = true }
 reqwest = { workspace = true, features = ["gzip", "json"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
