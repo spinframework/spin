@@ -16,11 +16,6 @@ use spin_world::v2::sqlite as v2;
 
 pub use runtime_config::RuntimeConfig;
 
-/// Maximum allowed size of a query result.  Results larger than this value will
-/// fail with an `Error::Io(_)`.
-// TODO: make this configurable
-pub const MAX_RESULT_BYTES: usize = 128 << 20;
-
 #[derive(Default)]
 pub struct SqliteFactor {
     _priv: (),

@@ -1,8 +1,9 @@
 use anyhow::Context as _;
 use spin_core::async_trait;
-use spin_factor_sqlite::{SqliteFactor, MAX_RESULT_BYTES};
+use spin_factor_sqlite::SqliteFactor;
 use spin_factors::RuntimeFactors;
 use spin_factors_executor::ExecutorHooks;
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 
 /// The default sqlite label
 const DEFAULT_SQLITE_LABEL: &str = "default";
@@ -59,7 +60,7 @@ impl SqlStatementExecutorHook {
                     return Ok(());
                 };
                 default
-                    .query(statement, Vec::new(), MAX_RESULT_BYTES)
+                    .query(statement, Vec::new(), MAX_HOST_BUFFERED_BYTES)
                     .await
                     .with_context(|| format!("failed to execute following sql statement against default database: '{statement}'"))?;
             }

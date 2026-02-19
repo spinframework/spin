@@ -8736,6 +8736,7 @@ dependencies = [
  "bytes",
  "chrono",
  "deadpool-postgres",
+ "futures",
  "moka",
  "native-tls",
  "postgres-native-tls",
