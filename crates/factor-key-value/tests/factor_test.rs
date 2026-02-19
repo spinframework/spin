@@ -121,8 +121,8 @@ struct MockStore;
 
 #[async_trait]
 impl Store for MockStore {
-    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, Error> {
-        let _ = key;
+    async fn get(&self, key: &str, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
+        let _ = (key, max_result_bytes);
         todo!()
     }
     async fn set(&self, key: &str, value: &[u8]) -> Result<(), Error> {
@@ -137,15 +137,17 @@ impl Store for MockStore {
         let _ = key;
         todo!()
     }
-    async fn get_keys(&self) -> Result<Vec<String>, Error> {
+    async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
+        let _ = max_result_bytes;
         todo!()
     }
 
     async fn get_many(
         &self,
         keys: Vec<String>,
+        max_result_bytes: usize,
     ) -> anyhow::Result<Vec<(String, Option<Vec<u8>>)>, Error> {
-        let _ = keys;
+        let _ = (keys, max_result_bytes);
         todo!()
     }
 

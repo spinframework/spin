@@ -145,7 +145,7 @@ fn execute_query(
         .into_iter()
         .map(ToOwned::to_owned)
         .collect();
-    let mut byte_count = 0;
+    let mut byte_count = std::mem::size_of::<sqlite::QueryResult>();
     let rows = statement
         .query_map(
             rusqlite::params_from_iter(convert_data(parameters.into_iter())),
