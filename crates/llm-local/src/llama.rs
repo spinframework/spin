@@ -81,6 +81,7 @@ impl InferencingModel for LlamaModels {
         &self,
         prompt: String,
         params: wasi_llm::InferencingParams,
+        max_result_bytes: usize,
     ) -> anyhow::Result<wasi_llm::InferencingResult> {
         let model = Arc::clone(&self.model);
         let config = &self.config;
@@ -163,6 +164,14 @@ impl InferencingModel for LlamaModels {
         let output_text = tokenizer
             .decode(&tokens, true)
             .map_err(|e| anyhow!(e.to_string()))?;
+
+        // There doesn't seem to currently be a way to stream the text without
+        // buffering, so the damage (in terms of host memory usage) is already
+        // done, but we can still enforce the limit:
+        if std::mem::size_of::<wasi_llm::InferencingResult>() + output_text.len() > max_result_bytes
+        {
+            anyhow::bail!("query result exceeds limit of {max_result_bytes} bytes")
+        }
 
         Ok(wasi_llm::InferencingResult {
             text: output_text,

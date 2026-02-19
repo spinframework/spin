@@ -51,6 +51,7 @@ trait InferencingModel: Send + Sync {
         &self,
         prompt: String,
         params: wasi_llm::InferencingParams,
+        max_result_bytes: usize,
     ) -> anyhow::Result<wasi_llm::InferencingResult>;
 }
 
@@ -60,11 +61,12 @@ impl LocalLlmEngine {
         model: wasi_llm::InferencingModel,
         prompt: String,
         params: wasi_llm::InferencingParams,
+        max_result_bytes: usize,
     ) -> Result<wasi_llm::InferencingResult, wasi_llm::Error> {
         let model = self.inferencing_model(model).await?;
 
         model
-            .infer(prompt, params)
+            .infer(prompt, params, max_result_bytes)
             .await
             .map_err(|e| wasi_llm::Error::RuntimeError(e.to_string()))
     }
@@ -73,11 +75,14 @@ impl LocalLlmEngine {
         &mut self,
         model: wasi_llm::EmbeddingModel,
         data: Vec<String>,
+        max_result_bytes: usize,
     ) -> Result<wasi_llm::EmbeddingsResult, wasi_llm::Error> {
         let model = self.embeddings_model(model).await?;
-        generate_embeddings(data, model).await.map_err(|e| {
-            wasi_llm::Error::RuntimeError(format!("Error occurred generating embeddings: {e}"))
-        })
+        generate_embeddings(data, model, max_result_bytes)
+            .await
+            .map_err(|e| {
+                wasi_llm::Error::RuntimeError(format!("Error occurred generating embeddings: {e}"))
+            })
     }
 }
 
@@ -248,6 +253,7 @@ async fn walk_registry_for_model(
 async fn generate_embeddings(
     data: Vec<String>,
     model: Arc<(tokenizers::Tokenizer, BertModel)>,
+    max_result_bytes: usize,
 ) -> anyhow::Result<wasi_llm::EmbeddingsResult> {
     let n_sentences = data.len();
     tokio::task::spawn_blocking(move || {
@@ -302,6 +308,19 @@ async fn generate_embeddings(
             let length: f32 = emb.iter().map(|x| x * x).sum::<f32>().sqrt();
             emb.iter_mut().for_each(|x| *x /= length);
             results.push(emb);
+        }
+
+        // There doesn't seem to currently be a way to stream the embeddings
+        // without buffering, so the damage (in terms of host memory usage) is
+        // already done, but we can still enforce the limit:
+        if std::mem::size_of::<wasi_llm::EmbeddingsResult>()
+            + results
+                .iter()
+                .map(|v| std::mem::size_of::<Vec<f32>>() + (v.len() * std::mem::size_of::<f32>()))
+                .sum::<usize>()
+            > max_result_bytes
+        {
+            anyhow::bail!("query result exceeds limit of {max_result_bytes} bytes")
         }
 
         let result = wasi_llm::EmbeddingsResult {
