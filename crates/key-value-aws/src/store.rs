@@ -175,7 +175,7 @@ const VER: &str = "VER";
 
 #[async_trait]
 impl Store for AwsDynamoStore {
-    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, Error> {
+    async fn get(&self, key: &str, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
         let response = self
             .client
             .get_item()
@@ -190,13 +190,25 @@ impl Store for AwsDynamoStore {
             .await
             .map_err(log_error)?;
 
+        let mut byte_count = std::mem::size_of::<Option<Vec<u8>>>();
         let item = response.item.and_then(|mut item| {
             if let Some(AttributeValue::B(val)) = item.remove(VAL) {
-                Some(val.into_inner())
+                let val = val.into_inner();
+                byte_count += val.len();
+                Some(val)
             } else {
                 None
             }
         });
+
+        // Currently there's no way to stream a `get_item` result without
+        // buffering using `aws-sdk-dynamodb`, so the damage (in terms of host
+        // memory usage) is already done, but we can still enforce the limit:
+        if byte_count > max_result_bytes {
+            return Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )));
+        }
 
         Ok(item)
     }
@@ -242,7 +254,7 @@ impl Store for AwsDynamoStore {
         Ok(item.map(|item| item.contains_key(PK)).unwrap_or(false))
     }
 
-    async fn get_keys(&self) -> Result<Vec<String>, Error> {
+    async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
         let mut primary_keys = Vec::new();
 
         let mut scan_paginator = self
@@ -253,11 +265,18 @@ impl Store for AwsDynamoStore {
             .into_paginator()
             .send();
 
+        let mut byte_count = std::mem::size_of::<Vec<String>>();
         while let Some(output) = scan_paginator.next().await {
             let scan_output = output.map_err(log_error)?;
             if let Some(items) = scan_output.items {
                 for mut item in items {
                     if let Some(AttributeValue::S(pk)) = item.remove(PK) {
+                        byte_count += std::mem::size_of::<String>() + pk.len();
+                        if byte_count > max_result_bytes {
+                            return Err(Error::Other(format!(
+                                "query result exceeds limit of {max_result_bytes} bytes"
+                            )));
+                        }
                         primary_keys.push(pk);
                     }
                 }
@@ -267,7 +286,11 @@ impl Store for AwsDynamoStore {
         Ok(primary_keys)
     }
 
-    async fn get_many(&self, keys: Vec<String>) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
+    async fn get_many(
+        &self,
+        keys: Vec<String>,
+        max_result_bytes: usize,
+    ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
         let mut results = Vec::with_capacity(keys.len());
         let mut keys_and_attributes_builder = KeysAndAttributes::builder()
             .projection_expression(format!("{PK},{VAL}"))
@@ -283,6 +306,7 @@ impl Store for AwsDynamoStore {
             keys_and_attributes_builder.build().map_err(log_error)?,
         )]));
 
+        let mut byte_count = 0;
         while request_items.is_some() {
             let BatchGetItemOutput {
                 responses,
@@ -302,12 +326,23 @@ impl Store for AwsDynamoStore {
                 for mut item in items {
                     match (item.remove(PK), item.remove(VAL)) {
                         (Some(AttributeValue::S(pk)), Some(AttributeValue::B(val))) => {
-                            results.push((pk, Some(val.into_inner())));
+                            let val = val.into_inner();
+                            byte_count += std::mem::size_of::<(String, Option<Vec<u8>>)>()
+                                + pk.len()
+                                + val.len();
+                            results.push((pk, Some(val)));
                         }
                         (Some(AttributeValue::S(pk)), None) => {
+                            byte_count +=
+                                std::mem::size_of::<(String, Option<Vec<u8>>)>() + pk.len();
                             results.push((pk, None));
                         }
                         _ => (),
+                    }
+                    if byte_count > max_result_bytes {
+                        return Err(Error::Other(format!(
+                            "query result exceeds limit of {max_result_bytes} bytes"
+                        )));
                     }
                 }
             }
@@ -467,7 +502,7 @@ impl Store for AwsDynamoStore {
 
 #[async_trait]
 impl Cas for CompareAndSwap {
-    async fn current(&self) -> Result<Option<Vec<u8>>, Error> {
+    async fn current(&self, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
         let GetItemOutput { item, .. } = self
             .client
             .get_item()
@@ -479,15 +514,19 @@ impl Cas for CompareAndSwap {
             .await
             .map_err(log_error)?;
 
-        match item {
+        let mut byte_count = std::mem::size_of::<Option<Vec<u8>>>();
+        let value = match item {
             Some(mut current_item) => match (current_item.remove(VAL), current_item.remove(VER)) {
                 (Some(AttributeValue::B(val)), Some(AttributeValue::N(ver))) => {
+                    let val = val.into_inner();
+                    byte_count += val.len();
+
                     self.state
                         .lock()
                         .unwrap()
                         .clone_from(&CasState::Versioned(ver));
 
-                    Ok(Some(val.into_inner()))
+                    Some(val)
                 }
                 (Some(AttributeValue::B(val)), _) => {
                     self.state
@@ -495,18 +534,32 @@ impl Cas for CompareAndSwap {
                         .unwrap()
                         .clone_from(&CasState::Unversioned(val.clone()));
 
-                    Ok(Some(val.into_inner()))
+                    let val = val.into_inner();
+                    byte_count += val.len();
+
+                    Some(val)
                 }
                 (_, _) => {
                     self.state.lock().unwrap().clone_from(&CasState::Unset);
-                    Ok(None)
+                    None
                 }
             },
             None => {
                 self.state.lock().unwrap().clone_from(&CasState::Unset);
-                Ok(None)
+                None
             }
+        };
+
+        // Currently there's no way to stream a `get_item` result without
+        // buffering using `aws-sdk-dynamodb`, so the damage (in terms of host
+        // memory usage) is already done, but we can still enforce the limit:
+        if byte_count > max_result_bytes {
+            return Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )));
         }
+
+        Ok(value)
     }
 
     /// `swap` updates the value for the key -- if possible, using the version saved in the `current` function for

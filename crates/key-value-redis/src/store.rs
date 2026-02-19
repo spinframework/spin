@@ -72,8 +72,26 @@ impl Store for RedisStore {
         Ok(())
     }
 
-    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, Error> {
-        self.connection.clone().get(key).await.map_err(log_error)
+    async fn get(&self, key: &str, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
+        let value = self
+            .connection
+            .clone()
+            .get::<_, Option<Vec<u8>>>(key)
+            .await
+            .map_err(log_error)?;
+
+        // Currently there's no way to stream a `GET` result using the `redis`
+        // crate without buffering, so the damage (in terms of host memory
+        // usage) is already done, but we can still enforce the limit:
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+            > max_result_bytes
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )))
+        } else {
+            Ok(value)
+        }
     }
 
     async fn set(&self, key: &str, value: &[u8]) -> Result<(), Error> {
@@ -92,12 +110,68 @@ impl Store for RedisStore {
         self.connection.clone().exists(key).await.map_err(log_error)
     }
 
-    async fn get_keys(&self) -> Result<Vec<String>, Error> {
-        self.connection.clone().keys("*").await.map_err(log_error)
+    async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
+        // There's currently no way to limit buffering for `KEYS` commands using
+        // the `redis` crate, so we can only ignore this:
+        _ = max_result_bytes;
+
+        let keys = self
+            .connection
+            .clone()
+            .keys::<_, Vec<String>>("*")
+            .await
+            .map_err(log_error)?;
+
+        // Currently there's no way to stream a `KEYS` result using the `redis`
+        // crate without buffering, so the damage (in terms of host memory
+        // usage) is already done, but we can still enforce the limit:
+        if std::mem::size_of::<Vec<String>>()
+            + keys
+                .iter()
+                .map(|v| std::mem::size_of::<String>() + v.len())
+                .sum::<usize>()
+            > max_result_bytes
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )))
+        } else {
+            Ok(keys)
+        }
     }
 
-    async fn get_many(&self, keys: Vec<String>) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
-        self.connection.clone().keys(keys).await.map_err(log_error)
+    async fn get_many(
+        &self,
+        keys: Vec<String>,
+        max_result_bytes: usize,
+    ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
+        let values = self
+            .connection
+            .clone()
+            .keys::<_, Vec<(String, Option<Vec<u8>>)>>(keys)
+            .await
+            .map_err(log_error)?;
+
+        // Currently there's no way to stream a `GET` result using the `redis`
+        // crate without buffering, so the damage (in terms of host memory
+        // usage) is already done, but we can still enforce the limit:
+        if std::mem::size_of::<Vec<(String, Option<Vec<u8>>)>>()
+            + values
+                .iter()
+                .map(|(k, v)| {
+                    std::mem::size_of::<(String, Option<Vec<u8>>)>()
+                        + k.len()
+                        + v.as_ref().map(|v| v.len()).unwrap_or(0)
+                })
+                .sum::<usize>()
+            > max_result_bytes
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )))
+        } else {
+            Ok(values)
+        }
     }
 
     async fn set_many(&self, key_values: Vec<(String, Vec<u8>)>) -> Result<(), Error> {
@@ -146,17 +220,31 @@ impl Store for RedisStore {
 impl Cas for CompareAndSwap {
     /// current will initiate a transaction by WATCH'ing a key in Redis, and then returning the
     /// current value for the key.
-    async fn current(&self) -> Result<Option<Vec<u8>>, Error> {
+    async fn current(&self, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
         redis::cmd("WATCH")
             .arg(&self.key)
             .exec_async(&mut self.connection.clone())
             .await
             .map_err(log_error)?;
-        self.connection
+        let value = self
+            .connection
             .clone()
-            .get(&self.key)
+            .get::<_, Option<Vec<u8>>>(&self.key)
             .await
-            .map_err(log_error)
+            .map_err(log_error)?;
+
+        // Currently there's no way to stream a `WATCH` result using the `redis`
+        // crate without buffering, so the damage (in terms of host memory
+        // usage) is already done, but we can still enforce the limit:
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+            > max_result_bytes
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )))
+        } else {
+            Ok(value)
+        }
     }
 
     /// swap will set the key to the new value only if the key has not changed. Afterward, the

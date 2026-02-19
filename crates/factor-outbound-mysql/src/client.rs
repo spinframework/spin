@@ -83,7 +83,7 @@ impl Client for MysqlClient {
             .ok_or_else(|| v2::Error::Other("unable to stream query result".into()))?;
 
         let mut rows = Vec::new();
-        let mut byte_count = 0;
+        let mut byte_count = std::mem::size_of::<RowSet>();
         while let Some(row) = query_result
             .try_next()
             .await

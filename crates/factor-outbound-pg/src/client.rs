@@ -187,7 +187,7 @@ impl Client for deadpool_postgres::Object {
             .map_err(query_failed)?);
 
         let mut columns = None;
-        let mut byte_count = 0;
+        let mut byte_count = std::mem::size_of::<RowSet>();
         let mut rows = Vec::new();
 
         async {
