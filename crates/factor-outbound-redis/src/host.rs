@@ -12,6 +12,7 @@ use spin_world::v1::{redis as v1, redis_types};
 use spin_world::v2::redis::{
     self as v2, Connection as RedisConnection, Error, RedisParameter, RedisResult,
 };
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
 use tracing::{instrument, Level};
 
@@ -105,8 +106,23 @@ impl v2::HostConnection for crate::InstanceState {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
-        let value = conn.get(&key).await.map_err(other_error)?;
-        Ok(value)
+        let value = conn
+            .get::<_, Option<Vec<u8>>>(&key)
+            .await
+            .map_err(other_error)?;
+
+        // Currently there's no way to stream a `GET` result using the `redis`
+        // crate without buffering, so the damage (in terms of host memory
+        // usage) is already done, but we can still enforce the limit:
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+            > MAX_HOST_BUFFERED_BYTES
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {MAX_HOST_BUFFERED_BYTES} bytes"
+            )))
+        } else {
+            Ok(value)
+        }
     }
 
     #[instrument(name = "spin_outbound_redis.set", skip(self, connection, value), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("SET {}", key)))]
@@ -218,10 +234,24 @@ impl v2::HostConnection for crate::InstanceState {
             }
         });
 
-        cmd.query_async::<RedisResults>(conn)
+        let results = cmd
+            .query_async::<RedisResults>(conn)
             .await
             .map(|values| values.0)
-            .map_err(other_error)
+            .map_err(other_error)?;
+
+        // Currently there's no way to stream results using the `redis`
+        // crate without buffering, so the damage (in terms of host memory
+        // usage) is already done, but we can still enforce the limit:
+        if std::mem::size_of::<Vec<RedisResult>>() + results.iter().map(memory_size).sum::<usize>()
+            > MAX_HOST_BUFFERED_BYTES
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {MAX_HOST_BUFFERED_BYTES} bytes"
+            )))
+        } else {
+            Ok(results)
+        }
     }
 
     async fn drop(&mut self, connection: Resource<RedisConnection>) -> anyhow::Result<()> {
@@ -390,6 +420,14 @@ impl FromRedisValue for RedisResults {
         let mut values = Vec::new();
         append(&mut values, value)?;
         Ok(RedisResults(values))
+    }
+}
+
+fn memory_size(value: &RedisResult) -> usize {
+    match value {
+        RedisResult::Nil | RedisResult::Int64(_) => std::mem::size_of::<RedisResult>(),
+        RedisResult::Binary(b) => std::mem::size_of::<RedisResult>() + b.len(),
+        RedisResult::Status(s) => std::mem::size_of::<RedisResult>() + s.len(),
     }
 }
 
