@@ -1734,7 +1734,7 @@ version = "3.7.0-pre0"
 dependencies = [
  "anyhow",
  "conformance-tests",
- "test-environment",
+ "test-environment 0.1.0 (git+https://github.com/fermyon/conformance-tests?rev=ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e)",
  "testing-framework",
 ]
 
@@ -1750,7 +1750,7 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "tar",
- "test-environment",
+ "test-environment 0.1.0 (git+https://github.com/fermyon/conformance-tests?rev=61f2799f92b5d85f342cc07e3f5dec5cd0a7bc9c)",
 ]
 
 [[package]]
@@ -7448,7 +7448,7 @@ dependencies = [
  "env_logger",
  "log",
  "test-components",
- "test-environment",
+ "test-environment 0.1.0 (git+https://github.com/fermyon/conformance-tests?rev=ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e)",
  "testing-framework",
 ]
 
@@ -8413,7 +8413,7 @@ dependencies = [
  "terminal",
  "test-codegen-macro",
  "test-components",
- "test-environment",
+ "test-environment 0.1.0 (git+https://github.com/fermyon/conformance-tests?rev=ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e)",
  "testing-framework",
  "tokio",
  "toml 0.8.19",
@@ -8637,6 +8637,7 @@ version = "3.7.0-pre0"
 dependencies = [
  "anyhow",
  "bytes",
+ "futures",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -9812,6 +9813,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-environment"
+version = "0.1.0"
+source = "git+https://github.com/fermyon/conformance-tests?rev=ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e#ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e"
+dependencies = [
+ "anyhow",
+ "fslock",
+ "regex",
+ "reqwest 0.12.9",
+ "temp-dir",
+ "tokio",
+]
+
+[[package]]
 name = "testing-framework"
 version = "0.1.0"
 dependencies = [
@@ -9827,7 +9841,7 @@ dependencies = [
  "spin-runtime-factors",
  "spin-trigger",
  "spin-trigger-http",
- "test-environment",
+ "test-environment 0.1.0 (git+https://github.com/fermyon/conformance-tests?rev=ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e)",
  "tokio",
 ]
 

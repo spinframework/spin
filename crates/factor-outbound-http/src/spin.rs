@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+use futures::stream::TryStreamExt as _;
 use http_body_util::BodyExt;
 use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
 use spin_world::v1::{
     http as spin_http,
     http_types::{self, HttpError, Method, Request, Response},
 };
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::{field::Empty, instrument, Span};
 
 use crate::intercept::InterceptOutcome;
@@ -181,18 +183,30 @@ fn hyper_method(m: Method) -> http::Method {
     }
 }
 
-async fn response_from_hyper(mut resp: crate::Response) -> Result<Response, HttpError> {
+async fn response_from_hyper(resp: crate::Response) -> Result<Response, HttpError> {
     let status = resp.status().as_u16();
 
     let headers = headers_from_map(resp.headers());
 
-    let body = resp
-        .body_mut()
-        .collect()
+    let header_bytes = std::mem::size_of::<Vec<(String, String)>>()
+        + headers
+            .iter()
+            .map(|(k, v)| std::mem::size_of::<(String, String)>() + k.len() + v.len())
+            .sum::<usize>();
+
+    let mut stream = resp.into_body().into_data_stream();
+    let mut body = Vec::new();
+    while let Some(chunk) = stream
+        .try_next()
         .await
         .map_err(|_| HttpError::RuntimeError)?
-        .to_bytes()
-        .to_vec();
+    {
+        body.extend(chunk);
+        check_byte_count(header_bytes + body.len())?;
+    }
+
+    // One more check in case the body was empty:
+    check_byte_count(header_bytes + body.len())?;
 
     Ok(Response {
         status,
@@ -229,17 +243,40 @@ async fn response_from_reqwest(res: reqwest::Response) -> Result<Response, HttpE
 
     let headers = headers_from_map(res.headers());
 
-    let body = res
-        .bytes()
+    let header_bytes = std::mem::size_of::<Vec<(String, String)>>()
+        + headers
+            .iter()
+            .map(|(k, v)| std::mem::size_of::<(String, String)>() + k.len() + v.len())
+            .sum::<usize>();
+
+    let mut stream = res.bytes_stream();
+    let mut body = Vec::new();
+    while let Some(chunk) = stream
+        .try_next()
         .await
         .map_err(|_| HttpError::RuntimeError)?
-        .to_vec();
+    {
+        body.extend(chunk);
+        check_byte_count(header_bytes + body.len())?;
+    }
+
+    // One more check in case the body was empty:
+    check_byte_count(header_bytes + body.len())?;
 
     Ok(Response {
         status,
         headers: Some(headers),
         body: Some(body),
     })
+}
+
+fn check_byte_count(count: usize) -> Result<(), HttpError> {
+    if count > MAX_HOST_BUFFERED_BYTES {
+        tracing::warn!("query result exceeds limit of {MAX_HOST_BUFFERED_BYTES} bytes");
+        Err(HttpError::RuntimeError)
+    } else {
+        Ok(())
+    }
 }
 
 fn headers_from_map(map: &http::HeaderMap) -> Vec<(String, String)> {

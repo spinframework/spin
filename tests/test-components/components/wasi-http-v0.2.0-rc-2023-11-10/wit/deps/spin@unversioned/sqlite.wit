@@ -1,0 +1,52 @@
+interface sqlite {
+  // A handle to an open sqlite instance
+  type connection = u32;
+
+  // The set of errors which may be raised by functions in this interface
+  variant error {
+    // The host does not recognize the database name requested.
+    no-such-database,
+    // The requesting component does not have access to the specified database (which may or may not exist).
+    access-denied,
+    // The provided connection is not valid
+    invalid-connection,
+    // The database has reached its capacity
+    database-full,
+    // Some implementation-specific error has occurred (e.g. I/O)
+    io(string)
+  }
+
+  // Open a connection to a named database instance.
+  //
+  // If `database` is "default", the default instance is opened.
+  //
+  // `error::no-such-database` will be raised if the `name` is not recognized.
+  open: func(database: string) -> result<connection, error>;
+
+  // Execute a statement returning back data if there is any
+  execute: func(conn: connection, statement: string, parameters: list<value>) -> result<query-result, error>;
+
+  // Close the specified `connection`.
+  close: func(conn: connection);
+
+  // A result of a query
+  record query-result {
+    // The names of the columns retrieved in the query
+    columns: list<string>,
+    // the row results each containing the values for all the columns for a given row
+    rows: list<row-result>,
+  }
+
+  // A set of values for each of the columns in a query-result
+  record row-result {
+    values: list<value>
+  }
+
+  variant value {
+    integer(s64),
+    real(f64),
+    text(string),
+    blob(list<u8>),
+    null
+  }
+}
