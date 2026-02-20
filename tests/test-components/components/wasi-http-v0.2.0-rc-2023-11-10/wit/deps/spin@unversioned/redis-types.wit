@@ -1,0 +1,24 @@
+interface redis-types {
+  // General purpose error.
+  enum error {
+      success,
+      error,
+  }
+
+  /// The message payload.
+  type payload = list<u8>;
+
+  /// A parameter type for the general-purpose `execute` function.
+  variant redis-parameter {
+      int64(s64),
+      binary(payload)
+  }
+
+  /// A return type for the general-purpose `execute` function.
+  variant redis-result {
+      nil,
+      status(string),
+      int64(s64),
+      binary(payload)
+  }
+}

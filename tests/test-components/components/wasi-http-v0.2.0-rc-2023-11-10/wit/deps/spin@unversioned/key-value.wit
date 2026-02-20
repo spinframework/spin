@@ -1,0 +1,80 @@
+interface key-value {
+  // A handle to an open key-value store
+  type store = u32;
+
+  // The set of errors which may be raised by functions in this interface
+  variant error {
+    // Too many stores have been opened simultaneously. Closing one or more
+    // stores prior to retrying may address this.
+    store-table-full,
+
+    // The host does not recognize the store name requested.  Defining and
+    // configuring a store with that name in a runtime configuration file
+    // may address this.
+    no-such-store,
+
+    // The requesting component does not have access to the specified store
+    // (which may or may not exist).
+    access-denied,
+
+    // The store handle provided is not recognized, i.e. it was either never
+    // opened or has been closed.
+    invalid-store,
+
+    // No key-value tuple exists for the specified key in the specified
+    // store.
+    no-such-key,
+
+    // Some implementation-specific error has occurred (e.g. I/O)
+    io(string)
+  }
+
+  // Open the store with the specified name.
+  //
+  // If `name` is "default", the default store is opened.  Otherwise,
+  // `name` must refer to a store defined and configured in a runtime
+  // configuration file supplied with the application.
+  //
+  // `error::no-such-store` will be raised if the `name` is not recognized.
+  open: func(name: string) -> result<store, error>;
+
+  // Get the value associated with the specified `key` from the specified
+  // `store`.
+  //
+  // `error::invalid-store` will be raised if `store` is not a valid handle
+  // to an open store, and `error::no-such-key` will be raised if there is no
+  // tuple for `key` in `store`.
+  get: func(store: store, key: string) -> result<list<u8>, error>;
+
+  // Set the `value` associated with the specified `key` in the specified
+  // `store`, overwriting any existing value.
+  //
+  // `error::invalid-store` will be raised if `store` is not a valid handle
+  // to an open store.
+  set: func(store: store, key: string, value: list<u8>) -> result<_, error>;
+
+  // Delete the tuple with the specified `key` from the specified `store`.
+  //
+  // `error::invalid-store` will be raised if `store` is not a valid handle
+  // to an open store.  No error is raised if a tuple did not previously
+  // exist for `key`.
+  delete: func(store: store, key: string) -> result<_, error>;
+
+  // Return whether a tuple exists for the specified `key` in the specified
+  // `store`.
+  //
+  // `error::invalid-store` will be raised if `store` is not a valid handle
+  // to an open store.
+  exists: func(store: store, key: string) -> result<bool, error>;
+
+  // Return a list of all the keys in the specified `store`.
+  //
+  // `error::invalid-store` will be raised if `store` is not a valid handle
+  // to an open store.
+  get-keys: func(store: store) -> result<list<string>, error>;
+
+  // Close the specified `store`.
+  //
+  // This has no effect if `store` is not a valid handle to an open store.
+  close: func(store: store);
+}

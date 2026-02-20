@@ -1,0 +1,44 @@
+interface http-types {
+   type http-status = u16;
+
+   type body = list<u8>;
+
+   type headers = list<tuple<string, string>>;
+
+   type params = list<tuple<string, string>>;
+
+   type uri = string;
+
+    enum method {
+        get,
+        post,
+        put,
+        delete,
+        patch,
+        head,
+        options,
+    }
+
+    record request {
+        method: method,
+        uri: uri,
+        headers: headers,
+        params: params,
+        body: option<body>,
+    }
+
+    record response {
+        status: http-status,
+        headers: option<headers>,
+        body: option<body>,
+    }
+
+    enum http-error {
+        success,
+        destination-not-allowed,
+        invalid-url,
+        request-error,
+        runtime-error,
+        too-many-requests,
+    }
+}

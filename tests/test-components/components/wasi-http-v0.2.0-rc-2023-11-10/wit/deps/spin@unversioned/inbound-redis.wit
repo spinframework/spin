@@ -1,0 +1,6 @@
+interface inbound-redis {
+  use redis-types.{payload, error};
+
+  // The entrypoint for a Redis handler.
+  handle-message: func(message: payload) -> result<_, error>;
+}

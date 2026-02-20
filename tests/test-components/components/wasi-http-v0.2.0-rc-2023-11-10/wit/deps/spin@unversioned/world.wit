@@ -1,0 +1,29 @@
+package fermyon:spin;
+
+world host {
+  include platform;
+
+  export inbound-http;
+  export inbound-redis;
+}
+
+world redis-trigger {
+  include platform;
+  export inbound-redis;
+}
+
+world http-trigger {
+  include platform;
+  export inbound-http;
+}
+
+world platform {
+  import config;
+  import http;
+  import postgres;
+  import mysql;
+  import sqlite;
+  import redis;
+  import key-value;
+  import llm;
+}
