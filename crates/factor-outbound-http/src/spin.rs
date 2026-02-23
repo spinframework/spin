@@ -127,7 +127,7 @@ impl reqwest::dns::Resolve for SpinDnsResolver {
     fn resolve(&self, name: reqwest::dns::Name) -> reqwest::dns::Resolving {
         let blocked_networks = self.0.clone();
         Box::pin(async move {
-            let mut addrs = tokio::net::lookup_host(name.as_str())
+            let mut addrs = tokio::net::lookup_host((name.as_str(), 0))
                 .await
                 .map_err(Box::new)?
                 .collect::<Vec<_>>();
