@@ -293,23 +293,31 @@ impl Client for Arc<deadpool_postgres::Object> {
                 let Some(row) = stm.next().await else {
                     break;
                 };
-                // TODO: figure out how to deal with errors here - I think there is like a FutureReader<Error> pattern?
+
                 let row = match row {
                     Ok(r) => r,
                     Err(e) => {
                         let err = query_failed(e);
-                        rows_tx.send(Err(err)).await.unwrap();
+                        _ = rows_tx.send(Err(err)).await;
                         break;
                     }
                 };
+
                 if let Some(cols_tx) = cols_tx_opt.take() {
-                    cols_tx.send(infer_columns(&row)).unwrap();
+                    _ = cols_tx.send(infer_columns(&row));
                 }
+
                 match convert_row(&row) {
-                    Ok(row) => rows_tx.send(Ok(row)).await.unwrap(),
+                    Ok(row) => {
+                        let send_res = rows_tx.send(Ok(row)).await;
+                        if send_res.is_err() {
+                            break;
+                        }
+                    }
                     Err(e) => {
                         let err = v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}")));
-                        rows_tx.send(Err(err)).await.unwrap();
+                        _ = rows_tx.send(Err(err)).await;
+                        break;
                     }
                 }
             }

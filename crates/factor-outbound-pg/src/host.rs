@@ -280,10 +280,9 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
         let (col_rx, row_rx) = client.query_async(statement, params).await?;
 
         let row_producer = spin_wasi_async::stream::producer(row_rx);
-        let col_producer = spin_wasi_async::future::producer(col_rx);
 
         let (fr, sr) = accessor.with(|mut access| {
-            let fr = FutureReader::new(access.as_context_mut(), col_producer);
+            let fr = FutureReader::new(access.as_context_mut(), col_rx);
             let sr = StreamReader::new(access.as_context_mut(), row_producer);
             (fr, sr)
         });

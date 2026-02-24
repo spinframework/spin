@@ -23,10 +23,6 @@ impl<D, T: Send + Sync + 'static> wasmtime::component::StreamProducer<D> for Str
         use std::task::Poll;
         use wasmtime::component::StreamResult;
 
-        if finish {
-            return Poll::Ready(Ok(StreamResult::Cancelled));
-        }
-
         let remaining = destination.remaining(store);
         if remaining.is_some_and(|r| r == 0) {
             return Poll::Ready(Ok(StreamResult::Completed));
@@ -35,7 +31,13 @@ impl<D, T: Send + Sync + 'static> wasmtime::component::StreamProducer<D> for Str
         let recv = self.get_mut().rx.poll_recv(cx);
         match recv {
             Poll::Ready(None) => Poll::Ready(Ok(StreamResult::Dropped)),
-            Poll::Pending => Poll::Pending,
+            Poll::Pending => {
+                if finish {
+                    Poll::Ready(Ok(StreamResult::Cancelled))
+                } else {
+                    Poll::Pending
+                }
+            }
             Poll::Ready(Some(row)) => {
                 destination.set_buffer(Some(row));
                 Poll::Ready(Ok(StreamResult::Completed))
