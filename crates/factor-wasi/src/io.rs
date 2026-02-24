@@ -4,7 +4,6 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 use async_trait::async_trait;
-use spin_factors::anyhow;
 use tokio::io::{AsyncRead, AsyncWrite};
 use wasmtime_wasi::cli::{IsTerminal, StdinStream, StdoutStream};
 use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
@@ -40,7 +39,7 @@ impl<T: Write + Send + Sync + 'static> OutputStream for PipedWriteStream<T> {
             .lock()
             .unwrap()
             .write_all(&bytes)
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+            .map_err(|e| StreamError::LastOperationFailed(e.into()))
     }
 
     fn flush(&mut self) -> Result<(), StreamError> {
@@ -48,7 +47,7 @@ impl<T: Write + Send + Sync + 'static> OutputStream for PipedWriteStream<T> {
             .lock()
             .unwrap()
             .flush()
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
+            .map_err(|e| StreamError::LastOperationFailed(e.into()))
     }
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
@@ -133,7 +132,7 @@ impl<T: Read + Send + Sync + 'static> InputStream for PipeReadStream<T> {
             .lock()
             .unwrap()
             .read(&mut self.buffer[..size])
-            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))?;
+            .map_err(|e| StreamError::LastOperationFailed(e.into()))?;
         if count == 0 {
             return Err(wasmtime_wasi::p2::StreamError::Closed);
         }

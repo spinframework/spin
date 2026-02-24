@@ -81,7 +81,6 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         let mut inner = wasmtime::Config::new();
-        inner.async_support(true);
         inner.epoch_interruption(true);
         inner.wasm_component_model(true);
         inner.wasm_component_model_async(true);
@@ -369,7 +368,7 @@ impl<T: 'static> Engine<T> {
     /// Creates a new [`InstancePre`] for the given [`Component`].
     #[instrument(skip_all, level = "debug")]
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
-        self.linker.instantiate_pre(component)
+        Ok(self.linker.instantiate_pre(component)?)
     }
 }
 

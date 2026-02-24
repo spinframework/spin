@@ -9,6 +9,7 @@ use spin_factor_outbound_http::intercept::{self, InterceptOutcome, InterceptRequ
 use spin_factor_outbound_networking::config::allowed_hosts::parse_service_chaining_target;
 use spin_factors::RuntimeFactors;
 use spin_http::routes::RouteMatch;
+use wasmtime::ToWasmtimeResult;
 use wasmtime_wasi_http::{HttpError, HttpResult};
 
 use crate::HttpServer;
@@ -38,6 +39,7 @@ impl<F: RuntimeFactors> intercept::OutboundHttpInterceptor for OutboundHttpInter
                 .server
                 .handle_trigger_route(req, route_match, Scheme::HTTP, CHAINED_CLIENT_ADDR)
                 .await
+                .to_wasmtime_result()
                 .map_err(HttpError::trap)?;
             Ok(InterceptOutcome::Complete(resp))
         } else {

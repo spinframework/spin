@@ -120,6 +120,7 @@ impl TimerTrigger {
         let instance_builder = trigger_app.prepare(component_id)?;
         let (instance, mut store) = instance_builder.instantiate(()).await?;
         let timer = SpinTimer::new(&mut store, &instance)?;
-        timer.call_handle_timer_request(&mut store).await
+        timer.call_handle_timer_request(&mut store).await?;
+        Ok(())
     }
 }

@@ -95,8 +95,8 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
             fn(&mut Self::StoreData) -> WasiClocksCtxView<'_>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), Self::get_clocks)
     }
 
@@ -113,8 +113,8 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
             fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), Self::get_cli)
     }
 
@@ -124,8 +124,8 @@ trait InitContextExt: InitContext<WasiFactor> {
             &mut wasmtime::component::Linker<Self::StoreData>,
             &O,
             fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), &O::default(), Self::get_cli)
     }
 
@@ -142,8 +142,8 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
             fn(&mut Self::StoreData) -> WasiFilesystemCtxView<'_>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), Self::get_filesystem)
     }
 
@@ -160,8 +160,8 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
             fn(&mut Self::StoreData) -> WasiSocketsCtxView<'_>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), Self::get_sockets)
     }
 
@@ -171,8 +171,8 @@ trait InitContextExt: InitContext<WasiFactor> {
             &mut wasmtime::component::Linker<Self::StoreData>,
             &O,
             fn(&mut Self::StoreData) -> WasiSocketsCtxView<'_>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), &O::default(), Self::get_sockets)
     }
 
@@ -181,8 +181,8 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
             fn(&mut Self::StoreData) -> &mut ResourceTable,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), Self::get_table)
     }
 
@@ -191,8 +191,8 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
             fn(&mut Self::StoreData) -> &mut WasiRandomCtx,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), |data| {
             let (state, _table) = Self::get_data_with_table(data);
             state.ctx.random()

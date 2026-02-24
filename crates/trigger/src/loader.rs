@@ -1,8 +1,8 @@
-use anyhow::Context as _;
 use spin_common::{ui::quoted_path, url::parse_file_url};
 use spin_compose::ComponentSourceLoaderFs;
 use spin_core::{async_trait, wasmtime, Component};
 use spin_factors::{AppComponent, RuntimeFactors};
+use wasmtime::error::Context as _;
 
 #[derive(Default)]
 pub struct ComponentLoader {
@@ -51,17 +51,17 @@ impl ComponentLoader {
         &self,
         engine: &wasmtime::Engine,
         path: &std::path::Path,
-    ) -> anyhow::Result<Component> {
+    ) -> wasmtime::Result<Component> {
         assert!(self.aot_compilation_enabled);
         match wasmtime::Engine::detect_precompiled_file(path)? {
             Some(wasmtime::Precompiled::Component) => unsafe {
                 Component::deserialize_file(engine, path)
             },
             Some(wasmtime::Precompiled::Module) => {
-                anyhow::bail!("expected AOT compiled component but found module");
+                wasmtime::bail!("expected AOT compiled component but found module");
             }
             None => {
-                anyhow::bail!("expected AOT compiled component but found other data");
+                wasmtime::bail!("expected AOT compiled component but found other data");
             }
         }
     }
@@ -84,9 +84,10 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
 
         #[cfg(feature = "unsafe-aot-compilation")]
         if self.aot_compilation_enabled {
-            return self
+            let component = self
                 .load_precompiled_component(engine, &path)
-                .with_context(|| format!("error deserializing component from {path:?}"));
+                .with_context(|| format!("error deserializing component from {path:?}"))?;
+            return Ok(component);
         }
 
         let composed = spin_compose::compose(&ComponentSourceLoaderFs, component.locked)
@@ -98,7 +99,8 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
                 )
             })?;
 
-        spin_core::Component::new(engine, composed)
-            .with_context(|| format!("failed to compile component from {}", quoted_path(&path)))
+        let component = spin_core::Component::new(engine, composed)
+            .with_context(|| format!("failed to compile component from {}", quoted_path(&path)))?;
+        Ok(component)
     }
 }

@@ -21,7 +21,7 @@
 
 #![deny(warnings)]
 
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{anyhow, bail, Result};
 use fermyon::spin::http_types::{Method, Request, Response};
 use serde::{Deserialize, Serialize};
 use std::{future::Future, str};
@@ -32,6 +32,7 @@ use test_llm::Llm;
 use test_mysql::Mysql;
 use test_postgres::Postgres;
 use test_redis::Redis;
+use wasmtime::error::Context as _;
 use wasmtime::{
     component::{Component, HasSelf, InstancePre, Linker},
     Engine, Store,
@@ -61,6 +62,7 @@ wasmtime::component::bindgen!({
     path: "../../wit",
     world: "fermyon:spin/host",
     imports: { default: async | trappable },
+    anyhow: true,
 });
 pub use fermyon::spin::*;
 

@@ -41,6 +41,7 @@ wasmtime::component::bindgen!({
         "wasi:keyvalue/store.error" => wasi::keyvalue::store::Error,
         "wasi:keyvalue/atomics.cas-error" => wasi::keyvalue::atomics::CasError,
     },
+    anyhow: true,
 });
 
 pub use fermyon::spin as v1;

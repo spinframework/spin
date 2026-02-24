@@ -109,7 +109,12 @@ async fn run_test(
     args: impl IntoIterator<Item = &'_ str>,
     update_store_builder: impl FnOnce(&mut StoreBuilder),
     update_store: impl FnOnce(&mut Store<TestState>),
-) -> anyhow::Result<()> {
+    // FIXME: this should be `anyhow::Error` and below there should be no usages
+    // of `map_err(wasmtime::Error::from_anyhow)` ideally. That requires
+    // bytecodealliance/wasmtime#12689 to be released first. Once that's
+    // released switch this back to `anyhow::Result` and delete usages of
+    // `from_anyhow` below.
+) -> wasmtime::Result<()> {
     let mut factors = TestFactors {
         wasi: WasiFactor::new(DummyFilesMounter),
     };
@@ -147,26 +152,32 @@ async fn run_test(
         factors: instance_state,
     };
 
-    let mut store = store_builder.build(state)?;
+    let mut store = store_builder
+        .build(state)
+        .map_err(wasmtime::Error::from_anyhow)?;
     update_store(&mut store);
 
     let module_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/test-programs/core-wasi-test.wasm");
     let module_bytes = fs::read(module_path).await?;
-    let component = spin_componentize::componentize_if_necessary(&module_bytes)?;
+    let component = spin_componentize::componentize_if_necessary(&module_bytes)
+        .map_err(wasmtime::Error::from_anyhow)?;
     let component = Component::new(engine.as_ref(), &component)?;
-    let instance_pre = engine.instantiate_pre(&component)?;
+    let instance_pre = engine
+        .instantiate_pre(&component)
+        .map_err(wasmtime::Error::from_anyhow)?;
     let instance = instance_pre.instantiate_async(&mut store).await?;
     let func = {
         let func = instance
             .get_export_index(&mut store, None, "wasi:cli/run@0.2.0")
             .and_then(|i| instance.get_export_index(&mut store, Some(&i), "run"))
-            .context("missing the expected 'wasi:cli/run@0.2.0/run' function")?;
+            .context("missing the expected 'wasi:cli/run@0.2.0/run' function")
+            .map_err(wasmtime::Error::from_anyhow)?;
         instance.get_typed_func::<(), (Result<(), ()>,)>(&mut store, &func)?
     };
 
     func.call_async(&mut store, ())
         .await?
         .0
-        .map_err(|()| anyhow::anyhow!("command failed"))
+        .map_err(|()| wasmtime::format_err!("command failed"))
 }

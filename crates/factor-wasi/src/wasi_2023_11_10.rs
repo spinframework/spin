@@ -1,5 +1,5 @@
 use super::wasi_2023_10_18::{convert, convert_result};
-use spin_factors::anyhow::{self, Result};
+use spin_factors::anyhow::Result;
 use wasmtime::component::{Linker, Resource, ResourceTable};
 use wasmtime_wasi::cli::{WasiCli, WasiCliCtxView};
 use wasmtime_wasi::clocks::{WasiClocks, WasiClocksCtxView};
@@ -946,7 +946,7 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         &mut self,
         _self_: Resource<TcpSocket>,
     ) -> wasmtime::Result<Result<bool, SocketErrorCode>> {
-        anyhow::bail!("ipv6-only API no longer supported")
+        wasmtime::bail!("ipv6-only API no longer supported")
     }
 
     fn set_ipv6_only(
@@ -954,7 +954,7 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         _self_: Resource<TcpSocket>,
         _value: bool,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
-        anyhow::bail!("ipv6-only API no longer supported")
+        wasmtime::bail!("ipv6-only API no longer supported")
     }
 
     fn set_listen_backlog_size(
@@ -1190,7 +1190,7 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         &mut self,
         _self_: Resource<UdpSocket>,
     ) -> wasmtime::Result<Result<bool, SocketErrorCode>> {
-        anyhow::bail!("ipv6-only API no longer supported")
+        wasmtime::bail!("ipv6-only API no longer supported")
     }
 
     fn set_ipv6_only(
@@ -1198,7 +1198,7 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         _self_: Resource<UdpSocket>,
         _value: bool,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
-        anyhow::bail!("ipv6-only API no longer supported")
+        wasmtime::bail!("ipv6-only API no longer supported")
     }
 
     fn unicast_hop_limit(

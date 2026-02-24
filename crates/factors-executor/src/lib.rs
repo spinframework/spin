@@ -304,7 +304,7 @@ impl CpuTimeCallHook {
         &self,
         state: &mut InstanceState<T::InstanceState, U>,
         ch: CallHook,
-    ) -> anyhow::Result<()> {
+    ) -> wasmtime::Result<()> {
         match ch {
             CallHook::CallingWasm | CallHook::ReturningFromHost => {
                 debug_assert!(state.cpu_time_last_entry.is_none());
@@ -464,7 +464,7 @@ mod tests {
             engine: &spin_core::wasmtime::Engine,
             _component: &AppComponent,
         ) -> anyhow::Result<Component> {
-            Component::new(engine, "(component)")
+            Ok(Component::new(engine, "(component)")?)
         }
     }
 }
