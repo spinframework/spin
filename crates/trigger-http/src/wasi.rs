@@ -19,6 +19,8 @@ use wasmtime_wasi_http::{
 
 use crate::{headers::prepare_request_headers, server::HttpExecutor, TriggerInstanceBuilder};
 
+const HEADERS_SIZE_LIMIT: usize = 128 * 1024;
+
 pub(super) fn prepare_request(
     route_match: &RouteMatch<'_, '_>,
     req: &mut Request<Body>,
@@ -74,12 +76,14 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
         let body = wasmtime_wasi_http::body::HostIncomingBody::new(
             body,
             std::time::Duration::from_secs(600),
+            HEADERS_SIZE_LIMIT,
         );
         let request = wasmtime_wasi_http::types::HostIncomingRequest::new(
             &mut wasi_http,
             parts,
             Scheme::Http,
             Some(body),
+            HEADERS_SIZE_LIMIT,
         )?;
         let request = wasi_http.table().push(request)?;
 
