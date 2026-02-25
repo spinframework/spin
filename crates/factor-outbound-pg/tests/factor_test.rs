@@ -146,7 +146,11 @@ impl Client for MockClient {
         })
     }
 
-    fn query_async(&self, _statement: String, _params: Vec<ParameterValue>) -> QueryAsyncResult {
+    async fn query_async(
+        &self,
+        _statement: String,
+        _params: Vec<ParameterValue>,
+    ) -> Result<QueryAsyncResult, v2::Error> {
         panic!("not implemented");
     }
 }

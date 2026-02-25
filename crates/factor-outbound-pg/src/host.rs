@@ -266,11 +266,14 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
         connection: Resource<v4::Connection>,
         statement: String,
         params: Vec<v4::ParameterValue>,
-    ) -> anyhow::Result<(
-        FutureReader<Vec<v4::Column>>,
-        StreamReader<v4::Row>,
-        FutureReader<Result<(), v4::Error>>,
-    )> {
+    ) -> Result<
+        (
+            Vec<v4::Column>,
+            StreamReader<v4::Row>,
+            FutureReader<Result<(), v4::Error>>,
+        ),
+        v4::Error,
+    > {
         use wasmtime::AsContextMut;
 
         let client = accessor.with(|mut access| {
@@ -282,18 +285,18 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
             columns,
             rows,
             error,
-        } = client.query_async(statement, params);
+        } = client.query_async(statement, params).await?;
 
         let row_producer = spin_wasi_async::stream::producer(rows);
 
-        let (fr, sr, efr) = accessor.with(|mut access| {
-            let fr = FutureReader::new(access.as_context_mut(), columns);
+        let (sr, efr) = accessor.with(|mut access| {
+            //let fr = FutureReader::new(access.as_context_mut(), columns);
             let sr = StreamReader::new(access.as_context_mut(), row_producer);
             let efr = FutureReader::new(access.as_context_mut(), error);
-            (fr, sr, efr)
+            (sr, efr)
         });
 
-        Ok((fr, sr, efr))
+        Ok((columns, sr, efr))
     }
 }
 

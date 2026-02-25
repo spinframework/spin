@@ -141,11 +141,15 @@ pub trait Client: Clone + Send + Sync + 'static {
         max_result_bytes: usize,
     ) -> Result<RowSet, v4::Error>;
 
-    fn query_async(&self, statement: String, params: Vec<ParameterValue>) -> QueryAsyncResult;
+    async fn query_async(
+        &self,
+        statement: String,
+        params: Vec<ParameterValue>,
+    ) -> Result<QueryAsyncResult, v4::Error>;
 }
 
 pub struct QueryAsyncResult {
-    pub columns: tokio::sync::oneshot::Receiver<Vec<v4::Column>>,
+    pub columns: Vec<v4::Column>,
     pub rows: tokio::sync::mpsc::Receiver<v4::Row>,
     pub error: tokio::sync::oneshot::Receiver<Result<(), v4::Error>>,
 }
@@ -257,39 +261,62 @@ impl Client for Arc<deadpool_postgres::Object> {
         })
     }
 
-    fn query_async(&self, statement: String, params: Vec<ParameterValue>) -> QueryAsyncResult {
+    async fn query_async(
+        &self,
+        statement: String,
+        params: Vec<ParameterValue>,
+    ) -> Result<QueryAsyncResult, v4::Error> {
+        use futures::StreamExt;
+
+        let params = to_sql_parameters(params)?;
+        let params_refs = as_sql_parameter_refs(&params);
+
         let this = self.clone();
 
+        let stm = this
+            .as_ref()
+            .query_raw(&statement, params_refs)
+            .await
+            .map_err(query_failed)?;
+        let mut stm = Box::pin(stm);
+
         let (rows_tx, rows_rx) = tokio::sync::mpsc::channel(1000);
-        let (cols_tx, cols_rx) = tokio::sync::oneshot::channel();
         let (err_tx, err_rx) = tokio::sync::oneshot::channel();
-        let mut cols_tx_opt = Some(cols_tx);
+
+        let Some(row) = stm.next().await else {
+            _ = err_tx.send(Ok(()));
+            return Ok(QueryAsyncResult {
+                columns: vec![],
+                rows: rows_rx,
+                error: err_rx,
+            });
+        };
+
+        let row = row.map_err(query_failed)?;
+
+        let cols = infer_columns(&row);
+
+        // macro rather than closure to avoid taking ownership of err_tx
+        macro_rules! try_send_row {
+            ($row:ident) => {
+                match convert_row(&$row) {
+                    Ok(row) => {
+                        let send_res = rows_tx.send(row).await;
+                        if send_res.is_err() {
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        let err = v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}")));
+                        _ = err_tx.send(Err(err));
+                        return;
+                    }
+                }
+            };
+        }
 
         tokio::spawn(async move {
-            use futures::StreamExt;
-
-            let params = match to_sql_parameters(params) {
-                Ok(p) => p,
-                Err(e) => {
-                    _ = err_tx.send(Err(e));
-                    return;
-                }
-            };
-            let params_refs = as_sql_parameter_refs(&params);
-
-            let stm = match this
-                .as_ref()
-                .query_raw(&statement, params_refs)
-                .await
-                .map_err(query_failed)
-            {
-                Ok(stm) => stm,
-                Err(e) => {
-                    _ = err_tx.send(Err(e));
-                    return;
-                }
-            };
-            let mut stm = Box::pin(stm);
+            try_send_row!(row);
 
             loop {
                 let Some(row) = stm.next().await else {
@@ -305,33 +332,17 @@ impl Client for Arc<deadpool_postgres::Object> {
                     }
                 };
 
-                if let Some(cols_tx) = cols_tx_opt.take() {
-                    _ = cols_tx.send(infer_columns(&row));
-                }
-
-                match convert_row(&row) {
-                    Ok(row) => {
-                        let send_res = rows_tx.send(row).await;
-                        if send_res.is_err() {
-                            return;
-                        }
-                    }
-                    Err(e) => {
-                        let err = v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}")));
-                        _ = err_tx.send(Err(err));
-                        return;
-                    }
-                }
+                try_send_row!(row);
             }
 
             _ = err_tx.send(Ok(()));
         });
 
-        QueryAsyncResult {
-            columns: cols_rx,
+        Ok(QueryAsyncResult {
+            columns: cols,
             rows: rows_rx,
             error: err_rx,
-        }
+        })
     }
 }
 
