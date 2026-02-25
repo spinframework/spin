@@ -71,7 +71,7 @@ impl Component {
 
         // Insert 256 copies of a 1MB string, which exceeds the 128MB query
         // result limit we impose in `factor-key-value`:
-        let big_text = std::iter::repeat('y').take(1 << 20).collect::<String>();
+        let big_text = "y".repeat(1 << 20);
         for i in 0..256 {
             ensure_ok!(store.set(&i.to_string(), big_text.as_bytes()));
         }

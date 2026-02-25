@@ -129,7 +129,7 @@ impl Component {
         ensure_ok!(connection.execute("del", &[redis::RedisParameter::Binary(b"foo".to_vec())]));
 
         // Add 256 1MB elements to the `foo` set.
-        let big_text = std::iter::repeat('y').take(1 << 20).collect::<String>();
+        let big_text = "y".repeat(1 << 20);
         for i in 0..256 {
             ensure_ok!(connection.execute(
                 "sadd",

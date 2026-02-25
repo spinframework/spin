@@ -12,7 +12,7 @@ mod spin_http {
     });
 }
 
-use helper::{bail, ensure_eq, ensure_ok};
+use helper::{ensure_eq, ensure_ok};
 use wasi::http::outgoing_handler;
 use wasi::http::types::{Headers, Method, OutgoingBody, OutgoingRequest, Scheme};
 use wasi::io::streams::StreamError;
@@ -115,7 +115,7 @@ fn test_big_response(uri: String) -> Result<(), String> {
         params: Vec::new(),
         body: None,
     }) {
-        Ok(_) => Err(format!("large response should not have succeeded")),
+        Ok(_) => Err("large response should not have succeeded".to_string()),
         Err(HttpError::RuntimeError) => Ok(()),
         Err(e) => Err(format!("unexpected error: {e}")),
     }
