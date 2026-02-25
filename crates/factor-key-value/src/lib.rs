@@ -165,7 +165,7 @@ pub enum SwapError {
 /// should **insert** the key and value, disallowing an update.
 #[async_trait]
 pub trait Cas: Sync + Send {
-    async fn current(&self) -> anyhow::Result<Option<Vec<u8>>, Error>;
+    async fn current(&self, max_result_bytes: usize) -> anyhow::Result<Option<Vec<u8>>, Error>;
     async fn swap(&self, value: Vec<u8>) -> anyhow::Result<(), SwapError>;
     async fn bucket_rep(&self) -> u32;
     async fn key(&self) -> String;

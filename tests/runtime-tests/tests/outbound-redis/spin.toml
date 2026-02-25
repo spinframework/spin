@@ -1,0 +1,15 @@
+spin_manifest_version = 2
+
+[application]
+name = "outbound-redis"
+authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+version = "0.1.0"
+
+[[trigger.http]]
+route = "/"
+component = "test"
+
+[component.test]
+source = "%{source=outbound-redis}"
+allowed_outbound_hosts = ["redis://localhost:%{port=6379}"]
+environment = { REDIS_ADDRESS = "redis://localhost:%{port=6379}" }

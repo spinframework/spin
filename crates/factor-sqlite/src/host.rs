@@ -7,6 +7,7 @@ use spin_factors::{anyhow, SelfInstanceBuilder};
 use spin_world::spin::sqlite::sqlite as v3;
 use spin_world::v1::sqlite as v1;
 use spin_world::v2::sqlite as v2;
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
 use tracing::{instrument, Level};
 
@@ -80,7 +81,8 @@ impl InstanceState {
             "sqlite.backend",
             conn.summary().as_deref().unwrap_or("unknown"),
         );
-        conn.query(&query, parameters).await
+        conn.query(&query, parameters, MAX_HOST_BUFFERED_BYTES)
+            .await
     }
 
     /// Get the set of allowed databases.

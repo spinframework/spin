@@ -1,4 +1,4 @@
-use helper::{ensure_eq, ensure_matches, ensure_ok, ensure_some};
+use helper::{bail, ensure_eq, ensure_matches, ensure_ok, ensure_some};
 
 const REDIS_ADDRESS_ENV: &str = "REDIS_ADDRESS";
 
@@ -94,13 +94,15 @@ impl Component {
             "smembers",
             &[redis::RedisParameter::Binary(b"foo".to_vec())],
         ));
-        let mut values: Vec<_> = ensure_ok!(values
-            .iter()
-            .map(|v| match v {
-                redis::RedisResult::Binary(v) => Ok(v.as_slice()),
-                v => Err(format!("unexpected value: {v:?}")),
-            })
-            .collect());
+        let mut values: Vec<_> = ensure_ok!(
+            values
+                .iter()
+                .map(|v| match v {
+                    redis::RedisResult::Binary(v) => Ok(v.as_slice()),
+                    v => Err(format!("unexpected value: {v:?}")),
+                })
+                .collect()
+        );
         // Ensure the values are always in a deterministic order
         values.sort();
 
@@ -123,6 +125,30 @@ impl Component {
             values.as_slice(),
             &[redis::RedisResult::Binary(ref bar)] if bar == b"bar"
         );
+
+        ensure_ok!(connection.execute("del", &[redis::RedisParameter::Binary(b"foo".to_vec())]));
+
+        // Add 256 1MB elements to the `foo` set.
+        let big_text = "y".repeat(1 << 20);
+        for i in 0..256 {
+            ensure_ok!(connection.execute(
+                "sadd",
+                &[
+                    redis::RedisParameter::Binary(b"foo".to_vec()),
+                    redis::RedisParameter::Binary(format!("{i}-{big_text}").into())
+                ]
+            ));
+        }
+
+        // This should exceed the 128MB query result limit in `factor-outbound-redis`:
+        match connection.execute(
+            "smembers",
+            &[redis::RedisParameter::Binary(b"foo".to_vec())],
+        ) {
+            Ok(_) => bail!("large select should not have succeeded",),
+            Err(redis::Error::Other(s)) if s.contains("query result exceeds limit") => {}
+            Err(e) => bail!("unexpected error: {e}",),
+        }
 
         Ok(())
     }

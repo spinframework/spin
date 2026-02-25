@@ -1,0 +1,32 @@
+{
+    "invocations": [
+        {
+            "request": {
+                "path": "/",
+                "headers": [
+                    {
+                        "name": "Host",
+                        "value": "example.com"
+                    },
+                    {
+                        "name": "redis_address",
+                        "value": "redis://localhost:%{port=6379}",
+                    }
+                ]
+            },
+            "response": {
+                "headers": [
+                    {
+                        "name": "Content-Length",
+                        "value": "0"
+                    },
+                    {
+                        "name": "Date",
+                        "optional": true
+                    }
+                ]
+            }
+        }
+    ],
+    "preconditions": [ { "kind": "redis" } ]
+}

@@ -1,0 +1,65 @@
+interface rdbms-types {
+  enum db-data-type {
+      boolean,
+      int8,
+      int16,
+      int32,
+      int64,
+      uint8,
+      uint16,
+      uint32,
+      uint64,
+      floating32,
+      floating64,
+      str,
+      binary,
+      other,
+  }
+
+  variant db-value {
+      boolean(bool),
+      int8(s8),
+      int16(s16),
+      int32(s32),
+      int64(s64),
+      uint8(u8),
+      uint16(u16),
+      uint32(u32),
+      uint64(u64),
+      floating32(f32),
+      floating64(f64),
+      str(string),
+      binary(list<u8>),
+      db-null,
+      unsupported,
+  }
+
+  variant parameter-value {
+      boolean(bool),
+      int8(s8),
+      int16(s16),
+      int32(s32),
+      int64(s64),
+      uint8(u8),
+      uint16(u16),
+      uint32(u32),
+      uint64(u64),
+      floating32(f32),
+      floating64(f64),
+      str(string),
+      binary(list<u8>),
+      db-null,
+  }
+
+  record column {
+      name: string,
+      data-type: db-data-type,
+  }
+
+  type row = list<db-value>;
+
+  record row-set {
+      columns: list<column>,
+      rows: list<row>,
+  }
+}

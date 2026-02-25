@@ -42,6 +42,7 @@ impl LlmWorker for AgentEngine {
         model: wasi_llm::InferencingModel,
         prompt: String,
         params: wasi_llm::InferencingParams,
+        max_result_bytes: usize,
     ) -> Result<wasi_llm::InferencingResult, wasi_llm::Error> {
         let client = self.client.get_or_insert_with(Default::default);
 
@@ -83,7 +84,9 @@ impl LlmWorker for AgentEngine {
                 ))
             })?;
 
-        match resp.json::<CreateChatCompletionResponseKind>().await {
+        match serde_json::from_slice::<CreateChatCompletionResponseKind>(
+            &crate::read_body(resp, max_result_bytes).await?,
+        ) {
             Ok(CreateChatCompletionResponseKind::Success(val)) => Ok(val.into()),
             Ok(CreateChatCompletionResponseKind::Error { error }) => Err(error.into()),
             Err(err) => Err(wasi_llm::Error::RuntimeError(format!(
@@ -96,6 +99,7 @@ impl LlmWorker for AgentEngine {
         &mut self,
         model: wasi_llm::EmbeddingModel,
         data: Vec<String>,
+        max_result_bytes: usize,
     ) -> Result<wasi_llm::EmbeddingsResult, wasi_llm::Error> {
         let client = self.client.get_or_insert_with(Default::default);
 
@@ -135,7 +139,9 @@ impl LlmWorker for AgentEngine {
                 ))
             })?;
 
-        match resp.json::<CreateEmbeddingResponseKind>().await {
+        match serde_json::from_slice::<CreateEmbeddingResponseKind>(
+            &crate::read_body(resp, max_result_bytes).await?,
+        ) {
             Ok(CreateEmbeddingResponseKind::Success(val)) => Ok(val.into()),
             Ok(CreateEmbeddingResponseKind::Error { error }) => Err(error.into()),
             Err(err) => Err(wasi_llm::Error::RuntimeError(format!(

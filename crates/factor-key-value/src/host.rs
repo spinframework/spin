@@ -6,6 +6,7 @@ use spin_resource_table::Table;
 use spin_telemetry::traces::{self, Blame};
 use spin_world::v2::key_value;
 use spin_world::wasi::keyvalue as wasi_keyvalue;
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use std::{collections::HashSet, sync::Arc};
 use tracing::instrument;
 
@@ -32,12 +33,16 @@ pub trait Store: Sync + Send {
     async fn after_open(&self) -> Result<(), Error> {
         Ok(())
     }
-    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, Error>;
+    async fn get(&self, key: &str, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error>;
     async fn set(&self, key: &str, value: &[u8]) -> Result<(), Error>;
     async fn delete(&self, key: &str) -> Result<(), Error>;
     async fn exists(&self, key: &str) -> Result<bool, Error>;
-    async fn get_keys(&self) -> Result<Vec<String>, Error>;
-    async fn get_many(&self, keys: Vec<String>) -> Result<Vec<(String, Option<Vec<u8>>)>, Error>;
+    async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error>;
+    async fn get_many(
+        &self,
+        keys: Vec<String>,
+        max_result_bytes: usize,
+    ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error>;
     async fn set_many(&self, key_values: Vec<(String, Vec<u8>)>) -> Result<(), Error>;
     async fn delete_many(&self, keys: Vec<String>) -> Result<(), Error>;
     async fn increment(&self, key: String, delta: i64) -> Result<i64, Error>;
@@ -147,7 +152,10 @@ impl key_value::HostStore for KeyValueDispatch {
     ) -> Result<Result<Option<Vec<u8>>, Error>> {
         self.otel.reparent_tracing_span();
         let store = self.get_store(store)?;
-        Ok(store.get(&key).await.map_err(track_error_on_span))
+        Ok(store
+            .get(&key, MAX_HOST_BUFFERED_BYTES)
+            .await
+            .map_err(track_error_on_span))
     }
 
     #[instrument(name = "spin_key_value.set", skip_all, fields(otel.kind = "client"))]
@@ -191,7 +199,10 @@ impl key_value::HostStore for KeyValueDispatch {
     ) -> Result<Result<Vec<String>, Error>> {
         self.otel.reparent_tracing_span();
         let store = self.get_store(store)?;
-        Ok(store.get_keys().await.map_err(track_error_on_span))
+        Ok(store
+            .get_keys(MAX_HOST_BUFFERED_BYTES)
+            .await
+            .map_err(track_error_on_span))
     }
 
     async fn drop(&mut self, store: Resource<key_value::Store>) -> Result<()> {
@@ -255,7 +266,10 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         key: String,
     ) -> Result<Option<Vec<u8>>, wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
-        store.get(&key).await.map_err(to_wasi_err)
+        store
+            .get(&key, MAX_HOST_BUFFERED_BYTES)
+            .await
+            .map_err(to_wasi_err)
     }
 
     #[instrument(name = "wasi_key_value.set", skip_all, fields(otel.kind = "client"))]
@@ -301,7 +315,10 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
             )),
             None => {
                 let store = self.get_store_wasi(self_)?;
-                let keys = store.get_keys().await.map_err(to_wasi_err)?;
+                let keys = store
+                    .get_keys(MAX_HOST_BUFFERED_BYTES)
+                    .await
+                    .map_err(to_wasi_err)?;
                 Ok(wasi_keyvalue::store::KeyResponse { keys, cursor: None })
             }
         }
@@ -325,7 +342,10 @@ impl wasi_keyvalue::batch::Host for KeyValueDispatch {
         if keys.is_empty() {
             return Ok(vec![]);
         }
-        store.get_many(keys).await.map_err(to_wasi_err)
+        store
+            .get_many(keys, MAX_HOST_BUFFERED_BYTES)
+            .await
+            .map_err(to_wasi_err)
     }
 
     #[instrument(name = "spin_key_value.set_many", skip_all, fields(otel.kind = "client"))]
@@ -387,7 +407,9 @@ impl wasi_keyvalue::atomics::HostCas for KeyValueDispatch {
         let cas = self
             .get_cas(cas)
             .map_err(|e| wasi_keyvalue::store::Error::Other(e.to_string()))?;
-        cas.current().await.map_err(to_wasi_err)
+        cas.current(MAX_HOST_BUFFERED_BYTES)
+            .await
+            .map_err(to_wasi_err)
     }
 
     async fn drop(&mut self, rep: Resource<wasi_keyvalue::atomics::Cas>) -> Result<()> {

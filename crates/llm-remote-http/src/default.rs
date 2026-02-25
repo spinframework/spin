@@ -35,6 +35,7 @@ impl LlmWorker for AgentEngine {
         model: wasi_llm::InferencingModel,
         prompt: String,
         params: wasi_llm::InferencingParams,
+        max_result_bytes: usize,
     ) -> Result<wasi_llm::InferencingResult, wasi_llm::Error> {
         let client = self.client.get_or_insert_with(Default::default);
 
@@ -78,7 +79,9 @@ impl LlmWorker for AgentEngine {
                 wasi_llm::Error::RuntimeError(format!("POST /infer request error: {err}"))
             })?;
 
-        match resp.json::<InferResponseBody>().await {
+        match serde_json::from_slice::<InferResponseBody>(
+            &crate::read_body(resp, max_result_bytes).await?,
+        ) {
             Ok(val) => Ok(val.into()),
             Err(err) => Err(wasi_llm::Error::RuntimeError(format!(
                 "Failed to deserialize response for \"POST  /index\": {err}"
@@ -90,6 +93,7 @@ impl LlmWorker for AgentEngine {
         &mut self,
         model: wasi_llm::EmbeddingModel,
         data: Vec<String>,
+        max_result_bytes: usize,
     ) -> Result<wasi_llm::EmbeddingsResult, wasi_llm::Error> {
         let client = self.client.get_or_insert_with(Default::default);
 
@@ -123,7 +127,9 @@ impl LlmWorker for AgentEngine {
                 wasi_llm::Error::RuntimeError(format!("POST /embed request error: {err}"))
             })?;
 
-        match resp.json::<EmbeddingResponseBody>().await {
+        match serde_json::from_slice::<EmbeddingResponseBody>(
+            &crate::read_body(resp, max_result_bytes).await?,
+        ) {
             Ok(val) => Ok(val.into()),
             Err(err) => Err(wasi_llm::Error::RuntimeError(format!(
                 "Failed to deserialize response  for \"POST  /embed\": {err}"

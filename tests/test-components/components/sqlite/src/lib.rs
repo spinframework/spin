@@ -1,5 +1,5 @@
 use helper::http_trigger_bindings::spin::sqlite::sqlite::{Connection, Error, Value};
-use helper::{ensure_eq, ensure_matches, ensure_ok, ensure_some};
+use helper::{bail, ensure_eq, ensure_matches, ensure_ok, ensure_some};
 
 helper::define_component!(Component);
 
@@ -40,6 +40,23 @@ impl Component {
 
         ensure_matches!(fetched_key, Value::Text(t) if t == "my_key");
         ensure_matches!(fetched_value, Value::Text(t) if t == "my_value");
+
+        // Insert 256 copies of a 1MB string, which exceeds the 128MB query
+        // result limit we impose in `factor-sqlite`:
+        let big_text = "y".repeat(1 << 20);
+        for i in 0..256 {
+            ensure_ok!(conn.execute(
+                "INSERT INTO test_data(key, value) VALUES(?, ?);",
+                &[Value::Text(i.to_string()), Value::Text(big_text.clone())]
+            ));
+        }
+
+        // This should exceed the 128MB query result limit:
+        match conn.execute("SELECT * FROM test_data", &[]) {
+            Ok(_) => bail!("large select should not have succeeded",),
+            Err(Error::Io(s)) if s.contains("query result exceeds limit") => {}
+            Err(e) => bail!("unexpected error: {e}",),
+        }
 
         Ok(())
     }

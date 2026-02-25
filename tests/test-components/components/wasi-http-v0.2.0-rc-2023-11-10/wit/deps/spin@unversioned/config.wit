@@ -1,0 +1,12 @@
+interface config {
+  // Get a configuration value for the current component.
+  // The config key must match one defined in in the component manifest.
+  get-config: func(key: string) -> result<string, error>;
+
+  variant error {
+      provider(string),
+      invalid-key(string),
+      invalid-schema(string),
+      other(string),
+  }
+}

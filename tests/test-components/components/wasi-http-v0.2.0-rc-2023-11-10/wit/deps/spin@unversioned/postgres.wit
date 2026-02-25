@@ -1,0 +1,19 @@
+interface postgres {
+  use rdbms-types.{parameter-value, row-set};
+
+  // General purpose error.
+  variant pg-error {
+      success,
+      connection-failed(string),
+      bad-parameter(string),
+      query-failed(string),
+      value-conversion-failed(string),
+      other-error(string)
+  }
+
+  // query the database: select
+  query: func(address: string, statement: string, params: list<parameter-value>) -> result<row-set, pg-error>;
+
+  // execute command to the database: insert, update, delete
+  execute: func(address: string, statement: string, params: list<parameter-value>) -> result<u64, pg-error>;
+}

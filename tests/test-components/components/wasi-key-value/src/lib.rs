@@ -1,8 +1,8 @@
-use helper::{ensure_matches, ensure_ok};
+use helper::{bail, ensure_matches, ensure_ok};
 
 use helper::http_trigger_bindings::wasi::keyvalue::atomics as wasi_atomics;
 use helper::http_trigger_bindings::wasi::keyvalue::batch as wasi_batch;
-use helper::http_trigger_bindings::wasi::keyvalue::store::{open, Error, KeyResponse};
+use helper::http_trigger_bindings::wasi::keyvalue::store::{Error, KeyResponse, open};
 
 helper::define_component!(Component);
 
@@ -68,6 +68,20 @@ impl Component {
         ensure_ok!(wasi_atomics::swap(cas, b"swapped"));
         ensure_matches!(store.get("bar"), Ok(Some(v)) if v == b"swapped");
         ensure_ok!(store.delete("bar"));
+
+        // Insert 256 copies of a 1MB string, which exceeds the 128MB query
+        // result limit we impose in `factor-key-value`:
+        let big_text = "y".repeat(1 << 20);
+        for i in 0..256 {
+            ensure_ok!(store.set(&i.to_string(), big_text.as_bytes()));
+        }
+
+        // This should exceed the 128MB query result limit:
+        match wasi_batch::get_many(&store, &(0..256).map(|i| i.to_string()).collect::<Vec<_>>()) {
+            Ok(_) => bail!("large get_many should not have succeeded",),
+            Err(Error::Other(s)) if s.contains("query result exceeds limit") => {}
+            Err(e) => bail!("unexpected error: {e}",),
+        }
 
         Ok(())
     }

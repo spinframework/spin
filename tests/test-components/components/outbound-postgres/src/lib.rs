@@ -1,5 +1,5 @@
 use helper::http_trigger_bindings::spin::postgres4_0_0::postgres;
-use helper::{ensure, ensure_eq, ensure_matches, ensure_ok};
+use helper::{bail, ensure, ensure_eq, ensure_matches, ensure_ok};
 
 helper::define_component!(Component);
 const DB_URL_ENV: &str = "DB_URL";
@@ -52,6 +52,32 @@ impl Component {
         let pid1 = format!("{:?}", ensure_ok!(pg_backend_pid(&conn)));
         let pid2 = format!("{:?}", ensure_ok!(pg_backend_pid(&conn)));
         ensure_eq!(pid1, pid2);
+
+        ensure_ok!(conn.execute(
+            "CREATE TEMPORARY TABLE big_text (key integer PRIMARY KEY, value text);",
+            &[]
+        ));
+
+        // Insert 256 copies of a 1MB string, which exceeds the 128MB query
+        // result limit we impose in `factor-outbound-pg`:
+        let big_text = "y".repeat(1 << 20);
+        for i in 0..256 {
+            ensure_ok!(conn.execute(
+                "INSERT INTO big_text(key, value) VALUES($1, $2);",
+                &[
+                    postgres::ParameterValue::Int32(i),
+                    postgres::ParameterValue::Str(big_text.clone())
+                ]
+            ));
+        }
+
+        // This should exceed the 128MB query result limit:
+        match conn.query("SELECT * FROM big_text", &[]) {
+            Ok(_) => bail!("large select should not have succeeded",),
+            Err(postgres::Error::QueryFailed(postgres::QueryError::Text(s)))
+                if s.contains("query result exceeds limit") => {}
+            Err(e) => bail!("unexpected error: {e}",),
+        }
 
         Ok(())
     }

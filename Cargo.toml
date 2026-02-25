@@ -133,7 +133,7 @@ base64 = "0.22"
 bytes = "1"
 chrono = "0.4"
 clap = "3.2"
-conformance-tests = { git = "https://github.com/fermyon/conformance-tests", rev = "61f2799f92b5d85f342cc07e3f5dec5cd0a7bc9c" }
+conformance-tests = { git = "https://github.com/fermyon/conformance-tests", rev = "ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e" }
 ctrlc = { version = "3.4", features = ["termination"] }
 dialoguer = "0.11"
 dirs = "6.0"
@@ -178,7 +178,7 @@ sha2 = "0.10"
 syn = "2"
 tar = "0.4"
 tempfile = "3"
-test-environment = { git = "https://github.com/fermyon/conformance-tests", rev = "61f2799f92b5d85f342cc07e3f5dec5cd0a7bc9c" }
+test-environment = { git = "https://github.com/fermyon/conformance-tests", rev = "ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e" }
 thiserror = "2"
 tokio = "1"
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }

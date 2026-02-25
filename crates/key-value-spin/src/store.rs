@@ -99,19 +99,32 @@ struct SqliteStore {
 
 #[async_trait]
 impl Store for SqliteStore {
-    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, Error> {
-        task::block_in_place(|| {
+    async fn get(&self, key: &str, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
+        let value = task::block_in_place(|| {
             self.connection
                 .lock()
                 .unwrap()
                 .prepare_cached("SELECT value FROM spin_key_value WHERE store=$1 AND key=$2")
                 .map_err(log_error)?
-                .query_map([&self.name, key], |row| row.get(0))
+                .query_map([&self.name, key], |row| row.get::<_, Vec<u8>>(0))
                 .map_err(log_error)?
                 .next()
                 .transpose()
                 .map_err(log_error)
-        })
+        })?;
+
+        // Currently there's no way to stream single row using the `rusqlite`
+        // crate without buffering, so the damage (in terms of host memory
+        // usage) is already done, but we can still enforce the limit:
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+            > max_result_bytes
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )))
+        } else {
+            Ok(value)
+        }
     }
 
     async fn set(&self, key: &str, value: &[u8]) -> Result<(), Error> {
@@ -144,28 +157,46 @@ impl Store for SqliteStore {
     }
 
     async fn exists(&self, key: &str) -> Result<bool, Error> {
-        Ok(self.get(key).await?.is_some())
+        Ok(self.get(key, usize::MAX).await?.is_some())
     }
 
-    async fn get_keys(&self) -> Result<Vec<String>, Error> {
+    async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
         task::block_in_place(|| {
+            let mut byte_count = std::mem::size_of::<Vec<String>>();
             self.connection
                 .lock()
                 .unwrap()
                 .prepare_cached("SELECT key FROM spin_key_value WHERE store=$1")
                 .map_err(log_error)?
-                .query_map([&self.name], |row| row.get(0))
+                .query_map([&self.name], |row| row.get::<_, String>(0))
                 .map_err(log_error)?
-                .map(|r| r.map_err(log_error))
+                .map(|r| match r {
+                    Ok(r) => {
+                        byte_count += std::mem::size_of::<String>() + r.len();
+                        if byte_count > max_result_bytes {
+                            Err(Error::Other(format!(
+                                "query result exceeds limit of {max_result_bytes} bytes"
+                            )))
+                        } else {
+                            Ok(r)
+                        }
+                    }
+                    Err(e) => Err(log_error(e)),
+                })
                 .collect()
         })
     }
 
-    async fn get_many(&self, keys: Vec<String>) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
+    async fn get_many(
+        &self,
+        keys: Vec<String>,
+        max_result_bytes: usize,
+    ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
         task::block_in_place(|| {
             let sql_value_keys: Vec<rusqlite::types::Value> =
                 keys.into_iter().map(rusqlite::types::Value::from).collect();
             let ptr = Rc::new(sql_value_keys);
+            let mut byte_count = std::mem::size_of::<Vec<String>>();
             let row_iter: Vec<Result<(String, Option<Vec<u8>>), Error>> = self.connection
                 .lock()
                 .unwrap()
@@ -175,7 +206,19 @@ impl Store for SqliteStore {
                     <(String, Option<Vec<u8>>)>::try_from(row)
                 })
                 .map_err(log_error)?
-                .map(|r: Result<(String, Option<Vec<u8>>), rusqlite::Error>| r.map_err(log_error))
+                .map(|r| match r {
+                    Ok((k, v)) => {
+                        byte_count += std::mem::size_of::<(String, Option<Vec<u8>>)>() + k.len() + v.as_ref().map(|v| v.len()).unwrap_or(0);
+                        if byte_count > max_result_bytes {
+                            Err(Error::Other(format!(
+                                "query result exceeds limit of {max_result_bytes} bytes"
+                            )))
+                        } else {
+                            Ok((k, v))
+                        }
+                    }
+                    Err(e) => Err(log_error(e)),
+                })
                 .collect();
 
             let mut keys_and_values: Vec<(String, Option<Vec<u8>>)> = Vec::new();
@@ -285,7 +328,7 @@ struct CompareAndSwap {
 
 #[async_trait]
 impl Cas for CompareAndSwap {
-    async fn current(&self) -> Result<Option<Vec<u8>>, Error> {
+    async fn current(&self, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
         task::block_in_place(|| {
             let value: Option<Vec<u8>> = self
                 .connection
@@ -300,7 +343,19 @@ impl Cas for CompareAndSwap {
                 .map_err(log_error)?;
 
             self.value.lock().unwrap().clone_from(&value);
-            Ok(value.clone())
+
+            // Currently there's no way to stream single row using the `rusqlite`
+            // crate without buffering, so the damage (in terms of host memory
+            // usage) is already done, but we can still enforce the limit:
+            if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+                > max_result_bytes
+            {
+                Err(Error::Other(format!(
+                    "query result exceeds limit of {max_result_bytes} bytes"
+                )))
+            } else {
+                Ok(value)
+            }
         })
     }
 

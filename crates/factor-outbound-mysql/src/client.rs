@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use futures::stream::TryStreamExt as _;
 use mysql_async::consts::ColumnType;
 use mysql_async::prelude::{FromValue, Queryable as _};
 use mysql_async::{from_value_opt, Conn as MysqlClient, Opts, OptsBuilder, SslOpts};
@@ -27,6 +28,7 @@ pub trait Client: Send + Sync + 'static {
         &mut self,
         statement: String,
         params: Vec<ParameterValue>,
+        max_result_bytes: usize,
     ) -> Result<RowSet, v2::Error>;
 }
 
@@ -62,6 +64,7 @@ impl Client for MysqlClient {
         &mut self,
         statement: String,
         params: Vec<ParameterValue>,
+        max_result_bytes: usize,
     ) -> Result<RowSet, v2::Error> {
         let db_params = params.into_iter().map(to_sql_parameter).collect::<Vec<_>>();
         let parameters = mysql_async::Params::Positional(db_params);
@@ -71,20 +74,32 @@ impl Client for MysqlClient {
             .await
             .map_err(|e| v2::Error::QueryFailed(format!("{e:?}")))?;
 
-        // We have to get these before collect() destroys them
         let columns = convert_columns(query_result.columns());
 
-        match query_result.collect::<mysql_async::Row>().await {
-            Err(e) => Err(v2::Error::Other(e.to_string())),
-            Ok(result_set) => {
-                let rows = result_set
-                    .into_iter()
-                    .map(|row| convert_row(row, &columns))
-                    .collect::<Result<Vec<_>, _>>()?;
+        let mut query_result = query_result
+            .stream()
+            .await
+            .map_err(|e| v2::Error::Other(e.to_string()))?
+            .ok_or_else(|| v2::Error::Other("unable to stream query result".into()))?;
 
-                Ok(v2_types::RowSet { columns, rows })
+        let mut rows = Vec::new();
+        let mut byte_count = std::mem::size_of::<RowSet>();
+        while let Some(row) = query_result
+            .try_next()
+            .await
+            .map_err(|e| v2::Error::Other(e.to_string()))?
+        {
+            let row = convert_row(row, &columns)?;
+            byte_count += row.iter().map(|v| v.memory_size()).sum::<usize>();
+            if byte_count > max_result_bytes {
+                return Err(v2::Error::Other(format!(
+                    "query result exceeds limit of {max_result_bytes} bytes"
+                )));
             }
+            rows.push(row);
         }
+
+        Ok(v2_types::RowSet { columns, rows })
     }
 }
 

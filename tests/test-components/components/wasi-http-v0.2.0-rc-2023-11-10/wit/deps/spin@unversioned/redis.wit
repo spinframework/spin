@@ -1,0 +1,31 @@
+interface redis {
+  use redis-types.{payload, redis-parameter, redis-result, error};
+
+  // Publish a Redis message to the specificed channel and return an error, if any.
+  publish: func(address: string, channel: string, payload: payload) -> result<_, error>;
+
+  // Get the value of a key.
+  get: func(address: string, key: string) -> result<payload, error>;
+
+  // Set key to value. If key alreads holds a value, it is overwritten.
+  set: func(address: string, key: string, value: payload) -> result<_, error>;
+
+  // Increments the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
+  // An error is returned if the key contains a value of the wrong type or contains a string that can not be represented as integer.
+  incr: func(address: string, key: string) -> result<s64, error>;
+
+  // Removes the specified keys. A key is ignored if it does not exist.
+  del: func(address: string, keys: list<string>) -> result<s64, error>;
+
+  // Add the specified `values` to the set named `key`, returning the number of newly-added values.
+  sadd: func(address: string, key: string, values: list<string>) -> result<s64, error>;
+
+  // Retrieve the contents of the set named `key`.
+  smembers: func(address: string, key: string) -> result<list<string>, error>;
+
+  // Remove the specified `values` from the set named `key`, returning the number of newly-removed values.
+  srem: func(address: string, key: string, values: list<string>) -> result<s64, error>;
+
+  // Execute an arbitrary Redis command and receive the result.
+  execute: func(address: string, command: string, arguments: list<redis-parameter>) -> result<list<redis-result>, error>;
+}

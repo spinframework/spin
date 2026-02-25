@@ -4,6 +4,14 @@ wit_bindgen::generate!({
     generate_all,
 });
 
+mod spin_http {
+    wit_bindgen::generate!({
+        path: "wit",
+        world: "fermyon:spin/platform",
+        generate_all,
+    });
+}
+
 use helper::{ensure_eq, ensure_ok};
 use wasi::http::outgoing_handler;
 use wasi::http::types::{Headers, Method, OutgoingBody, OutgoingRequest, Scheme};
@@ -89,6 +97,26 @@ impl Component {
 
         ensure_eq!(incoming_buffer, message.to_vec());
 
+        test_big_response(url.to_string())?;
+
         Ok(())
+    }
+}
+
+fn test_big_response(uri: String) -> Result<(), String> {
+    use spin_http::fermyon::spin::http_types::{HttpError, Method, Request};
+
+    // Request more bytes than `factor-outbound-http` is willing to buffer,
+    // which should fail:
+    match spin_http::fermyon::spin::http::send_request(&Request {
+        method: Method::Get,
+        uri,
+        headers: vec![("how-many-bytes".into(), "268435456".into())],
+        params: Vec::new(),
+        body: None,
+    }) {
+        Ok(_) => Err("large response should not have succeeded".to_string()),
+        Err(HttpError::RuntimeError) => Ok(()),
+        Err(e) => Err(format!("unexpected error: {e}")),
     }
 }

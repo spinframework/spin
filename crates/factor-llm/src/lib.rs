@@ -121,12 +121,14 @@ pub trait LlmEngine: Send + Sync {
         model: v1::InferencingModel,
         prompt: String,
         params: v2::InferencingParams,
+        max_result_bytes: usize,
     ) -> Result<v2::InferencingResult, v2::Error>;
 
     async fn generate_embeddings(
         &mut self,
         model: v2::EmbeddingModel,
         data: Vec<String>,
+        max_result_bytes: usize,
     ) -> Result<v2::EmbeddingsResult, v2::Error>;
 
     /// A human-readable summary of the given engine's configuration

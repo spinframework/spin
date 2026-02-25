@@ -148,9 +148,23 @@ struct AzureCosmosStore {
 
 #[async_trait]
 impl Store for AzureCosmosStore {
-    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>, Error> {
+    async fn get(&self, key: &str, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
         let pair = self.get_entity::<Pair>(key).await?;
-        Ok(pair.map(|p| p.value))
+        let value = pair.map(|p| p.value);
+
+        // Currently there's no way to stream a single query result using the
+        // `azure_data_cosmos` crate without buffering, so the damage (in terms
+        // of host memory usage) is already done, but we can still enforce the
+        // limit:
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+            > max_result_bytes
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )))
+        } else {
+            Ok(value)
+        }
     }
 
     async fn set(&self, key: &str, value: &[u8]) -> Result<(), Error> {
@@ -204,11 +218,15 @@ impl Store for AzureCosmosStore {
         }
     }
 
-    async fn get_keys(&self) -> Result<Vec<String>, Error> {
-        self.get_keys().await
+    async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
+        self.get_keys(max_result_bytes).await
     }
 
-    async fn get_many(&self, keys: Vec<String>) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
+    async fn get_many(
+        &self,
+        keys: Vec<String>,
+        max_result_bytes: usize,
+    ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
         let stmt = Query::new(self.get_in_query(keys));
         let query = self
             .client
@@ -217,11 +235,24 @@ impl Store for AzureCosmosStore {
 
         let mut res = Vec::new();
         let mut stream = query.into_stream::<Pair>();
+        let mut byte_count = std::mem::size_of::<Vec<(String, Option<Vec<u8>>)>>();
         while let Some(resp) = stream.next().await {
-            let resp = resp.map_err(log_error)?;
+            let resp = resp.map_err(log_error)?.results;
+            byte_count += resp
+                .iter()
+                .map(|(pair, _)| {
+                    std::mem::size_of::<(String, Option<Vec<u8>>)>()
+                        + pair.id.len()
+                        + pair.value.len()
+                })
+                .sum::<usize>();
+            if byte_count > max_result_bytes {
+                return Err(Error::Other(format!(
+                    "query result exceeds limit of {max_result_bytes} bytes"
+                )));
+            }
             res.extend(
-                resp.results
-                    .into_iter()
+                resp.into_iter()
                     .map(|(pair, _)| (pair.id, Some(pair.value))),
             );
         }
@@ -336,7 +367,7 @@ impl CompareAndSwap {
 impl Cas for CompareAndSwap {
     /// `current` will fetch the current value for the key and store the etag for the record. The
     /// etag will be used to perform and optimistic concurrency update using the `if-match` header.
-    async fn current(&self) -> Result<Option<Vec<u8>>, Error> {
+    async fn current(&self, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
         let mut stream = self
             .client
             .query_documents(Query::new(self.get_query()))
@@ -358,12 +389,26 @@ impl Cas for CompareAndSwap {
             None => None,
         };
 
-        match current_value {
+        let value = match current_value {
             Some((value, etag)) => {
                 self.etag.lock().unwrap().clone_from(&etag);
-                Ok(Some(value))
+                Some(value)
             }
-            None => Ok(None),
+            None => None,
+        };
+
+        // Currently there's no way to stream a single query result using the
+        // `azure_data_cosmos` crate without buffering, so the damage (in terms
+        // of host memory usage) is already done, but we can still enforce the
+        // limit:
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+            > max_result_bytes
+        {
+            Err(Error::Other(format!(
+                "query result exceeds limit of {max_result_bytes} bytes"
+            )))
+        } else {
+            Ok(value)
         }
     }
 
@@ -435,7 +480,7 @@ impl AzureCosmosStore {
             .map(|(p, _)| p.clone()))
     }
 
-    async fn get_keys(&self) -> Result<Vec<String>, Error> {
+    async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
         let query = self
             .client
             .query_documents(Query::new(self.get_keys_query()))
@@ -443,9 +488,19 @@ impl AzureCosmosStore {
         let mut res = Vec::new();
 
         let mut stream = query.into_stream::<Key>();
+        let mut byte_count = std::mem::size_of::<Vec<String>>();
         while let Some(resp) = stream.next().await {
-            let resp = resp.map_err(log_error)?;
-            res.extend(resp.results.into_iter().map(|(key, _)| key.id));
+            let resp = resp.map_err(log_error)?.results;
+            byte_count += resp
+                .iter()
+                .map(|(key, _)| std::mem::size_of::<String>() + key.id.len())
+                .sum::<usize>();
+            if byte_count > max_result_bytes {
+                return Err(Error::Other(format!(
+                    "query result exceeds limit of {max_result_bytes} bytes"
+                )));
+            }
+            res.extend(resp.into_iter().map(|(key, _)| key.id));
         }
 
         Ok(res)

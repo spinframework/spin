@@ -83,14 +83,17 @@ impl Connection for InProcConnection {
         &self,
         query: &str,
         parameters: Vec<sqlite::Value>,
+        max_result_bytes: usize,
     ) -> Result<sqlite::QueryResult, sqlite::Error> {
         let connection = self.db_connection()?;
         let query = query.to_owned();
         // Tell the tokio runtime that we're going to block while making the query
-        tokio::task::spawn_blocking(move || execute_query(&connection, &query, parameters))
-            .await
-            .context("internal runtime error")
-            .map_err(|e| sqlite::Error::Io(e.to_string()))?
+        tokio::task::spawn_blocking(move || {
+            execute_query(&connection, &query, parameters, max_result_bytes)
+        })
+        .await
+        .context("internal runtime error")
+        .map_err(|e| sqlite::Error::Io(e.to_string()))?
     }
 
     async fn execute_batch(&self, statements: &str) -> anyhow::Result<()> {
@@ -131,6 +134,7 @@ fn execute_query(
     connection: &Mutex<rusqlite::Connection>,
     query: &str,
     parameters: Vec<sqlite::Value>,
+    max_result_bytes: usize,
 ) -> Result<sqlite::QueryResult, sqlite::Error> {
     let conn = connection.lock().unwrap();
     let mut statement = conn
@@ -141,6 +145,7 @@ fn execute_query(
         .into_iter()
         .map(ToOwned::to_owned)
         .collect();
+    let mut byte_count = std::mem::size_of::<sqlite::QueryResult>();
     let rows = statement
         .query_map(
             rusqlite::params_from_iter(convert_data(parameters.into_iter())),
@@ -160,7 +165,19 @@ fn execute_query(
         .map_err(|e| sqlite::Error::Io(e.to_string()))?;
     let rows = rows
         .into_iter()
-        .map(|r| r.map_err(|e| sqlite::Error::Io(e.to_string())))
+        .map(|r| match r {
+            Ok(r) => {
+                byte_count += r.values.iter().map(|v| v.memory_size()).sum::<usize>();
+                if byte_count > max_result_bytes {
+                    Err(sqlite::Error::Io(format!(
+                        "query result exceeds limit of {max_result_bytes} bytes"
+                    )))
+                } else {
+                    Ok(r)
+                }
+            }
+            Err(e) => Err(sqlite::Error::Io(e.to_string())),
+        })
         .collect::<Result<_, sqlite::Error>>()?;
     Ok(sqlite::QueryResult { columns, rows })
 }

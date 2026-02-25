@@ -1,10 +1,12 @@
 use anyhow::{Context, Result};
+use futures::stream::TryStreamExt as _;
 use native_tls::TlsConnector;
 use postgres_native_tls::MakeTlsConnector;
 use spin_world::async_trait;
 use spin_world::spin::postgres4_0_0::postgres::{
     self as v4, Column, DbValue, ParameterValue, RowSet,
 };
+use std::pin::pin;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{config::SslMode, NoTls, Row};
 
@@ -96,6 +98,7 @@ pub trait Client: Send + Sync + 'static {
         &self,
         statement: String,
         params: Vec<ParameterValue>,
+        max_result_bytes: usize,
     ) -> Result<RowSet, v4::Error>;
 }
 
@@ -169,6 +172,7 @@ impl Client for deadpool_postgres::Object {
         &self,
         statement: String,
         params: Vec<ParameterValue>,
+        max_result_bytes: usize,
     ) -> Result<RowSet, v4::Error> {
         let params = params
             .iter()
@@ -176,32 +180,37 @@ impl Client for deadpool_postgres::Object {
             .collect::<Result<Vec<_>>>()
             .map_err(|e| v4::Error::BadParameter(format!("{e:?}")))?;
 
-        let params_refs: Vec<&(dyn ToSql + Sync)> = params
-            .iter()
-            .map(|b| b.as_ref() as &(dyn ToSql + Sync))
-            .collect();
-
-        let results = self
+        let mut results = pin!(self
             .as_ref()
-            .query(&statement, params_refs.as_slice())
+            .query_raw(&statement, params)
             .await
-            .map_err(query_failed)?;
+            .map_err(query_failed)?);
 
-        if results.is_empty() {
-            return Ok(RowSet {
-                columns: vec![],
-                rows: vec![],
-            });
+        let mut columns = None;
+        let mut byte_count = std::mem::size_of::<RowSet>();
+        let mut rows = Vec::new();
+
+        async {
+            while let Some(row) = results.try_next().await? {
+                if columns.is_none() {
+                    columns = Some(infer_columns(&row));
+                }
+                let row = convert_row(&row)?;
+                byte_count += row.iter().map(|v| v.memory_size()).sum::<usize>();
+                if byte_count > max_result_bytes {
+                    anyhow::bail!("query result exceeds limit of {max_result_bytes} bytes")
+                }
+                rows.push(row);
+            }
+            Ok(())
         }
+        .await
+        .map_err(|e| v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}"))))?;
 
-        let columns = infer_columns(&results[0]);
-        let rows = results
-            .iter()
-            .map(convert_row)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}"))))?;
-
-        Ok(RowSet { columns, rows })
+        Ok(RowSet {
+            columns: columns.unwrap_or_default(),
+            rows,
+        })
     }
 }
 

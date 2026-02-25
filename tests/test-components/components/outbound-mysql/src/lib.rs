@@ -1,5 +1,5 @@
 use helper::http_trigger_bindings::fermyon::spin2_0_0::{mysql, rdbms_types};
-use helper::{ensure, ensure_matches, ensure_ok};
+use helper::{bail, ensure, ensure_matches, ensure_ok};
 
 helper::define_component!(Component);
 const DB_URL_ENV: &str = "DB_URL";
@@ -24,6 +24,32 @@ impl Component {
         let rowset = ensure_ok!(test_character_types(&conn));
         ensure!(rowset.rows.iter().all(|r| r.len() == 6));
         ensure!(matches!(rowset.rows[0][0], rdbms_types::DbValue::Str(ref s) if s == "rvarchar"));
+
+        ensure_ok!(conn.execute(
+            "CREATE TEMPORARY TABLE big_text (rkey int, rvalue mediumtext);",
+            &[]
+        ));
+
+        // Insert 256 copies of a 1MB string, which exceeds the 128MB query
+        // result limit we impose in `factor-outbound-pg`:
+        let big_text = "y".repeat(1 << 20);
+        for i in 0..256 {
+            ensure_ok!(conn.execute(
+                "INSERT INTO big_text(rkey, rvalue) VALUES(?, ?);",
+                &[
+                    rdbms_types::ParameterValue::Int32(i),
+                    rdbms_types::ParameterValue::Str(big_text.clone())
+                ]
+            ));
+        }
+
+        // This should exceed the 128MB query result limit:
+        match conn.query("SELECT * FROM big_text", &[]) {
+            Ok(_) => bail!("large select should not have succeeded",),
+            Err(rdbms_types::Error::Other(s)) if s.contains("query result exceeds limit") => {}
+            Err(e) => bail!("unexpected error: {e}",),
+        }
+
         Ok(())
     }
 }

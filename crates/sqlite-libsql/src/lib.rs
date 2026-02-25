@@ -42,9 +42,10 @@ impl Connection for LazyLibSqlConnection {
         &self,
         query: &str,
         parameters: Vec<v3::Value>,
+        max_result_bytes: usize,
     ) -> Result<v3::QueryResult, v3::Error> {
         let client = self.get_or_create_connection().await?;
-        client.query(query, parameters).await
+        client.query(query, parameters, max_result_bytes).await
     }
 
     async fn execute_batch(&self, statements: &str) -> anyhow::Result<()> {
@@ -86,6 +87,7 @@ impl LibSqlConnection {
         &self,
         query: &str,
         parameters: Vec<sqlite::Value>,
+        max_result_bytes: usize,
     ) -> Result<sqlite::QueryResult, sqlite::Error> {
         let result = self
             .inner
@@ -95,7 +97,7 @@ impl LibSqlConnection {
 
         Ok(sqlite::QueryResult {
             columns: columns(&result),
-            rows: convert_rows(result)
+            rows: convert_rows(result, max_result_bytes)
                 .await
                 .map_err(|e| sqlite::Error::Io(e.to_string()))?,
         })
@@ -122,13 +124,21 @@ fn columns(rows: &libsql::Rows) -> Vec<String> {
         .collect()
 }
 
-async fn convert_rows(mut rows: libsql::Rows) -> anyhow::Result<Vec<RowResult>> {
+async fn convert_rows(
+    mut rows: libsql::Rows,
+    max_result_bytes: usize,
+) -> anyhow::Result<Vec<RowResult>> {
     let mut result_rows = vec![];
 
     let column_count = rows.column_count();
-
+    let mut byte_count = 0;
     while let Some(row) = rows.next().await? {
-        result_rows.push(convert_row(row, column_count));
+        let row = convert_row(row, column_count);
+        byte_count += row.values.iter().map(|v| v.memory_size()).sum::<usize>();
+        if byte_count > max_result_bytes {
+            anyhow::bail!("query result exceeds limit of {max_result_bytes} bytes")
+        }
+        result_rows.push(row);
     }
 
     Ok(result_rows)
