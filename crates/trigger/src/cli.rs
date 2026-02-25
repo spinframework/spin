@@ -89,6 +89,11 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
     #[clap(long = "disable-pooling")]
     pub disable_pooling: bool,
 
+    /// Enable Wasmtime's debug info for Wasm guests, allowing debugging
+    /// with gdb or lldb.
+    #[clap(long = "debug-info", takes_value = false)]
+    pub debug_info: bool,
+
     /// Print output to stdout/stderr only for given component(s)
     #[clap(
         name = FOLLOW_LOG_OPT,
@@ -225,6 +230,10 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
 
         if self.disable_pooling {
             config.disable_pooling();
+        }
+
+        if self.debug_info {
+            config.enable_debug_info();
         }
 
         #[cfg(feature = "experimental-wasm-features")]

@@ -67,6 +67,15 @@ impl Config {
             .allocation_strategy(wasmtime::InstanceAllocationStrategy::OnDemand);
         self
     }
+
+    /// Enable DWARF debug info emission and disable optimizations to allow
+    /// debugging Wasm guests with native debuggers (gdb/lldb).
+    pub fn enable_debug_info(&mut self) -> &mut Self {
+        self.inner
+            .debug_info(true)
+            .cranelift_opt_level(wasmtime::OptLevel::None);
+        self
+    }
 }
 
 impl Default for Config {
