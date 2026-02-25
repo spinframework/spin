@@ -13,12 +13,8 @@ use tracing::instrument;
 use tracing::Level;
 
 use crate::allowed_hosts::AllowedHostChecker;
-use crate::client::{Client, ClientFactory, HashableCertificate};
+use crate::client::{Client, ClientFactory, HashableCertificate, QueryAsyncResult};
 use crate::InstanceState;
-
-// Declare some types to make Clippy less mad
-pub type RowStream = StreamReader<Result<v4::Row, v4::Error>>;
-pub type ColumnsFuture = FutureReader<Vec<v4::Column>>;
 
 impl<CF: ClientFactory> InstanceState<CF> {
     async fn open_connection<Conn: 'static>(
@@ -263,13 +259,18 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
         client.execute(statement, params).await
     }
 
-    #[instrument(name = "spin_outbound_pg.query", skip(accessor, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
+    #[allow(clippy::type_complexity)] // blame bindgen, clippy, blame bindgen
+    #[instrument(name = "spin_outbound_pg.query_async", skip(accessor, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", otel.name = statement))]
     async fn query_async<T>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v4::Connection>,
         statement: String,
         params: Vec<v4::ParameterValue>,
-    ) -> Result<(ColumnsFuture, RowStream), v4::Error> {
+    ) -> anyhow::Result<(
+        FutureReader<Vec<v4::Column>>,
+        StreamReader<v4::Row>,
+        FutureReader<Result<(), v4::Error>>,
+    )> {
         use wasmtime::AsContextMut;
 
         let client = accessor.with(|mut access| {
@@ -277,17 +278,22 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
             host.connections.get(connection.rep()).unwrap().clone()
         });
 
-        let (col_rx, row_rx) = client.query_async(statement, params).await?;
+        let QueryAsyncResult {
+            columns,
+            rows,
+            error,
+        } = client.query_async(statement, params);
 
-        let row_producer = spin_wasi_async::stream::producer(row_rx);
+        let row_producer = spin_wasi_async::stream::producer(rows);
 
-        let (fr, sr) = accessor.with(|mut access| {
-            let fr = FutureReader::new(access.as_context_mut(), col_rx);
+        let (fr, sr, efr) = accessor.with(|mut access| {
+            let fr = FutureReader::new(access.as_context_mut(), columns);
             let sr = StreamReader::new(access.as_context_mut(), row_producer);
-            (fr, sr)
+            let efr = FutureReader::new(access.as_context_mut(), error);
+            (fr, sr, efr)
         });
 
-        Ok((fr, sr))
+        Ok((fr, sr, efr))
     }
 }
 

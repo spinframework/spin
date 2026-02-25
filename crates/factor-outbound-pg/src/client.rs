@@ -141,17 +141,13 @@ pub trait Client: Clone + Send + Sync + 'static {
         max_result_bytes: usize,
     ) -> Result<RowSet, v4::Error>;
 
-    async fn query_async(
-        &self,
-        statement: String,
-        params: Vec<ParameterValue>,
-    ) -> Result<
-        (
-            tokio::sync::oneshot::Receiver<Vec<v4::Column>>,
-            tokio::sync::mpsc::Receiver<Result<v4::Row, v4::Error>>,
-        ),
-        v4::Error,
-    >;
+    fn query_async(&self, statement: String, params: Vec<ParameterValue>) -> QueryAsyncResult;
+}
+
+pub struct QueryAsyncResult {
+    pub columns: tokio::sync::oneshot::Receiver<Vec<v4::Column>>,
+    pub rows: tokio::sync::mpsc::Receiver<v4::Row>,
+    pub error: tokio::sync::oneshot::Receiver<Result<(), v4::Error>>,
 }
 
 /// Extract weak-typed error data for WIT purposes
@@ -261,34 +257,40 @@ impl Client for Arc<deadpool_postgres::Object> {
         })
     }
 
-    async fn query_async(
-        &self,
-        statement: String,
-        params: Vec<ParameterValue>,
-    ) -> Result<
-        (
-            tokio::sync::oneshot::Receiver<Vec<v4::Column>>,
-            tokio::sync::mpsc::Receiver<Result<v4::Row, v4::Error>>,
-        ),
-        v4::Error,
-    > {
-        let params = to_sql_parameters(params)?;
-        let params_refs = as_sql_parameter_refs(&params);
-
-        let stm = self
-            .as_ref()
-            .query_raw(&statement, params_refs)
-            .await
-            .map_err(query_failed)?;
+    fn query_async(&self, statement: String, params: Vec<ParameterValue>) -> QueryAsyncResult {
+        let this = self.clone();
 
         let (rows_tx, rows_rx) = tokio::sync::mpsc::channel(1000);
         let (cols_tx, cols_rx) = tokio::sync::oneshot::channel();
+        let (err_tx, err_rx) = tokio::sync::oneshot::channel();
         let mut cols_tx_opt = Some(cols_tx);
-
-        let mut stm = Box::pin(stm);
 
         tokio::spawn(async move {
             use futures::StreamExt;
+
+            let params = match to_sql_parameters(params) {
+                Ok(p) => p,
+                Err(e) => {
+                    _ = err_tx.send(Err(e));
+                    return;
+                }
+            };
+            let params_refs = as_sql_parameter_refs(&params);
+
+            let stm = match this
+                .as_ref()
+                .query_raw(&statement, params_refs)
+                .await
+                .map_err(query_failed)
+            {
+                Ok(stm) => stm,
+                Err(e) => {
+                    _ = err_tx.send(Err(e));
+                    return;
+                }
+            };
+            let mut stm = Box::pin(stm);
+
             loop {
                 let Some(row) = stm.next().await else {
                     break;
@@ -298,8 +300,8 @@ impl Client for Arc<deadpool_postgres::Object> {
                     Ok(r) => r,
                     Err(e) => {
                         let err = query_failed(e);
-                        _ = rows_tx.send(Err(err)).await;
-                        break;
+                        _ = err_tx.send(Err(err));
+                        return;
                     }
                 };
 
@@ -309,21 +311,27 @@ impl Client for Arc<deadpool_postgres::Object> {
 
                 match convert_row(&row) {
                     Ok(row) => {
-                        let send_res = rows_tx.send(Ok(row)).await;
+                        let send_res = rows_tx.send(row).await;
                         if send_res.is_err() {
-                            break;
+                            return;
                         }
                     }
                     Err(e) => {
                         let err = v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}")));
-                        _ = rows_tx.send(Err(err)).await;
-                        break;
+                        _ = err_tx.send(Err(err));
+                        return;
                     }
                 }
             }
+
+            _ = err_tx.send(Ok(()));
         });
 
-        Ok((cols_rx, rows_rx))
+        QueryAsyncResult {
+            columns: cols_rx,
+            rows: rows_rx,
+            error: err_rx,
+        }
     }
 }
 

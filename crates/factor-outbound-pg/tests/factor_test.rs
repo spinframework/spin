@@ -3,6 +3,7 @@ use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_outbound_pg::client::Client;
 use spin_factor_outbound_pg::client::ClientFactory;
 use spin_factor_outbound_pg::client::HashableCertificate;
+use spin_factor_outbound_pg::client::QueryAsyncResult;
 use spin_factor_outbound_pg::OutboundPgFactor;
 use spin_factor_variables::VariablesFactor;
 use spin_factors::{anyhow, RuntimeFactors};
@@ -145,17 +146,7 @@ impl Client for MockClient {
         })
     }
 
-    async fn query_async(
-        &self,
-        _statement: String,
-        _params: Vec<ParameterValue>,
-    ) -> Result<
-        (
-            tokio::sync::oneshot::Receiver<Vec<v2::Column>>,
-            tokio::sync::mpsc::Receiver<Result<v2::Row, v2::Error>>,
-        ),
-        v2::Error,
-    > {
+    fn query_async(&self, _statement: String, _params: Vec<ParameterValue>) -> QueryAsyncResult {
         panic!("not implemented");
     }
 }

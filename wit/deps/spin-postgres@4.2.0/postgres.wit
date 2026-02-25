@@ -172,7 +172,7 @@ interface postgres {
 
     /// Query the database.
     @since(version = 4.2.0)
-    query-async: async func(statement: string, params: list<parameter-value>) -> result<tuple<future<list<column>>, stream<result<row, error>>>, error>;
+    query-async: async func(statement: string, params: list<parameter-value>) -> tuple<future<list<column>>, stream<row>, future<result<_, error>>>;
 
     /// Execute command to the database.
     execute: func(statement: string, params: list<parameter-value>) -> result<u64, error>;
