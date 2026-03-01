@@ -13,9 +13,7 @@ use tokio_postgres::config::SslMode;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{NoTls, Row};
 
-use crate::types::{
-    as_sql_parameter_refs, convert_data_type, convert_entry, to_sql_parameter, to_sql_parameters,
-};
+use crate::types::{convert_data_type, convert_entry, to_sql_parameter, to_sql_parameters};
 
 /// Max connections in a given address' connection pool
 const CONNECTION_POOL_SIZE: usize = 64;
@@ -145,6 +143,7 @@ pub trait Client: Clone + Send + Sync + 'static {
         &self,
         statement: String,
         params: Vec<ParameterValue>,
+        max_result_bytes: usize,
     ) -> Result<QueryAsyncResult, v4::Error>;
 }
 
@@ -265,25 +264,23 @@ impl Client for Arc<deadpool_postgres::Object> {
         &self,
         statement: String,
         params: Vec<ParameterValue>,
+        max_result_bytes: usize,
     ) -> Result<QueryAsyncResult, v4::Error> {
         use futures::StreamExt;
 
         let params = to_sql_parameters(params)?;
-        let params_refs = as_sql_parameter_refs(&params);
 
-        let this = self.clone();
+        let mut results = Box::pin(
+            self.as_ref()
+                .query_raw(&statement, params)
+                .await
+                .map_err(query_failed)?,
+        );
 
-        let stm = this
-            .as_ref()
-            .query_raw(&statement, params_refs)
-            .await
-            .map_err(query_failed)?;
-        let mut stm = Box::pin(stm);
-
-        let (rows_tx, rows_rx) = tokio::sync::mpsc::channel(1000);
+        let (rows_tx, rows_rx) = tokio::sync::mpsc::channel(4);
         let (err_tx, err_rx) = tokio::sync::oneshot::channel();
 
-        let Some(row) = stm.next().await else {
+        let Some(row) = results.next().await else {
             _ = err_tx.send(Ok(()));
             return Ok(QueryAsyncResult {
                 columns: vec![],
@@ -301,6 +298,14 @@ impl Client for Arc<deadpool_postgres::Object> {
             ($row:ident) => {
                 match convert_row(&$row) {
                     Ok(row) => {
+                        let byte_count = row.iter().map(|v| v.memory_size()).sum::<usize>();
+                        if byte_count > max_result_bytes {
+                            _ = err_tx.send(Err(v4::Error::QueryFailed(v4::QueryError::Text(
+                                format!("query result exceeds limit of {max_result_bytes} bytes"),
+                            ))));
+                            return;
+                        }
+
                         let send_res = rows_tx.send(row).await;
                         if send_res.is_err() {
                             return;
@@ -319,7 +324,7 @@ impl Client for Arc<deadpool_postgres::Object> {
             try_send_row!(row);
 
             loop {
-                let Some(row) = stm.next().await else {
+                let Some(row) = results.next().await else {
                     break;
                 };
 

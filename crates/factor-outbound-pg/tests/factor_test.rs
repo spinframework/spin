@@ -150,6 +150,7 @@ impl Client for MockClient {
         &self,
         _statement: String,
         _params: Vec<ParameterValue>,
+        _max_result_bytes: usize,
     ) -> Result<QueryAsyncResult, v2::Error> {
         panic!("not implemented");
     }

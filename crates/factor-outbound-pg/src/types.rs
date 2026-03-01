@@ -178,10 +178,3 @@ pub fn to_sql_parameters(
         .collect::<Result<Vec<_>>>()
         .map_err(|e| v4::Error::BadParameter(format!("{e:?}")))
 }
-
-pub fn as_sql_parameter_refs(params: &[Box<dyn ToSql + Send + Sync>]) -> Vec<&(dyn ToSql + Sync)> {
-    params
-        .iter()
-        .map(|b| b.as_ref() as &(dyn ToSql + Sync))
-        .collect()
-}

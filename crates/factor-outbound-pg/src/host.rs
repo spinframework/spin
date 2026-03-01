@@ -285,7 +285,9 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
             columns,
             rows,
             error,
-        } = client.query_async(statement, params).await?;
+        } = client
+            .query_async(statement, params, MAX_HOST_BUFFERED_BYTES)
+            .await?;
 
         let row_producer = spin_wasi_async::stream::producer(rows);
 
