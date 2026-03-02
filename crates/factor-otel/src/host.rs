@@ -74,7 +74,7 @@ impl wasi::otel::metrics::Host for InstanceState {
     async fn export(
         &mut self,
         metrics: wasi::otel::metrics::ResourceMetrics,
-    ) -> spin_core::wasmtime::Result<std::result::Result<(), wasi::otel::metrics::Error>> {
+    ) -> anyhow::Result<Result<(), wasi::otel::metrics::Error>> {
         // If the host does not have metrics enabled we just no-op
         let Some(metric_exporter) = self.metric_exporter.as_ref() else {
             return Ok(Ok(()));
@@ -104,10 +104,7 @@ impl wasi::otel::metrics::Host for InstanceState {
 }
 
 impl wasi::otel::logs::Host for InstanceState {
-    async fn on_emit(
-        &mut self,
-        data: wasi::otel::logs::LogRecord,
-    ) -> spin_core::wasmtime::Result<()> {
+    async fn on_emit(&mut self, data: wasi::otel::logs::LogRecord) -> anyhow::Result<()> {
         // If the host does not have logs enabled we just no-op
         let Some(log_processor) = self.log_processor.as_ref() else {
             return Ok(());

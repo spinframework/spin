@@ -96,8 +96,8 @@ pub trait InitContext<F: Factor> {
         add_to_linker: impl Fn(
             &mut Linker<Self::StoreData>,
             fn(&mut Self::StoreData) -> &mut FactorInstanceState<F>,
-        ) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), Self::get_data)
     }
 }

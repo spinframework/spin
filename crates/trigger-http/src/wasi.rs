@@ -156,6 +156,7 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
                         handle
                             .await
                             .context("guest invocation panicked")?
+                            .map_err(anyhow::Error::from)
                             .context("guest invocation failed")?;
 
                         Ok(())
@@ -176,6 +177,7 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
                 handle
                     .await
                     .context("guest invocation panicked")?
+                    .map_err(anyhow::Error::from)
                     .context("guest invocation failed")?;
 
                 Err(anyhow!(

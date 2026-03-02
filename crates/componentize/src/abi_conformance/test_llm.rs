@@ -23,7 +23,7 @@ impl llm::Host for Llm {
         model: llm::InferencingModel,
         prompt: String,
         _params: Option<llm::InferencingParams>,
-    ) -> wasmtime::Result<Result<llm::InferencingResult, llm::Error>> {
+    ) -> anyhow::Result<Result<llm::InferencingResult, llm::Error>> {
         Ok(self
             .inferences
             .remove(&(model, prompt.clone()))
@@ -47,7 +47,7 @@ impl llm::Host for Llm {
         &mut self,
         model: llm::EmbeddingModel,
         text: Vec<String>,
-    ) -> wasmtime::Result<Result<llm::EmbeddingsResult, llm::Error>> {
+    ) -> anyhow::Result<Result<llm::EmbeddingsResult, llm::Error>> {
         Ok(self
             .embeddings
             .remove(&(model, text.clone()))

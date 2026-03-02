@@ -115,10 +115,7 @@ impl v3::HostConnection for InstanceState {
         self.execute_impl(connection, query, parameters).await
     }
 
-    async fn changes(
-        &mut self,
-        connection: Resource<v3::Connection>,
-    ) -> spin_factors::wasmtime::Result<u64> {
+    async fn changes(&mut self, connection: Resource<v3::Connection>) -> anyhow::Result<u64> {
         let conn = match self.get_connection(connection) {
             Ok(c) => c,
             Err(err) => return Err(err.into()),
@@ -133,7 +130,7 @@ impl v3::HostConnection for InstanceState {
     async fn last_insert_rowid(
         &mut self,
         connection: Resource<v3::Connection>,
-    ) -> spin_factors::wasmtime::Result<i64> {
+    ) -> anyhow::Result<i64> {
         let conn = match self.get_connection(connection) {
             Ok(c) => c,
             Err(err) => return Err(err.into()),

@@ -1,7 +1,7 @@
 use spin_app::locked::LockedApp;
 use spin_factors::{
     anyhow::{self, Context},
-    wasmtime::{component::Linker, Config, Engine},
+    wasmtime::{component::Linker, Engine},
     App, RuntimeFactors,
 };
 use spin_loader::FilesMountStrategy;
@@ -24,8 +24,7 @@ impl<T: RuntimeFactors> TestEnvironment<T> {
     pub fn new(mut factors: T) -> Self {
         spin_telemetry::testing::init_test_telemetry();
 
-        let engine = Engine::new(Config::new().async_support(true))
-            .expect("wasmtime engine failed to initialize");
+        let engine = Engine::default();
         let mut linker = Linker::<T::InstanceState>::new(&engine);
         factors
             .init(&mut linker)

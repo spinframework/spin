@@ -39,6 +39,7 @@ use tokio::{
     task,
 };
 use tracing::Instrument;
+use wasmtime::ToWasmtimeResult;
 use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi_http::body::HyperOutgoingBody;
 use wasmtime_wasi_http::handler::{HandlerState, StoreBundle};
@@ -183,6 +184,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 );
                 HandlerType::Wagi(
                     CommandIndices::new(pre)
+                        .map_err(anyhow::Error::from)
                         .context("failed to find wasi command interface for wagi executor")?,
                 )
             }
@@ -647,12 +649,14 @@ pub(crate) struct HttpHandlerState<F: RuntimeFactors> {
 impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
     type StoreData = InstanceState<F::InstanceState, ()>;
 
-    fn new_store(&self, _req_id: Option<u64>) -> anyhow::Result<StoreBundle<Self::StoreData>> {
+    fn new_store(&self, _req_id: Option<u64>) -> wasmtime::Result<StoreBundle<Self::StoreData>> {
         Ok(StoreBundle {
             store: self
                 .trigger_app
-                .prepare(&self.component_id)?
-                .instantiate_store(())?
+                .prepare(&self.component_id)
+                .to_wasmtime_result()?
+                .instantiate_store(())
+                .to_wasmtime_result()?
                 .into_inner(),
             write_profile: Box::new(|_| ()),
         })
@@ -677,7 +681,7 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
         rand::rng().random_range(self.reuse_config.max_instance_concurrent_reuse_count)
     }
 
-    fn handle_worker_error(&self, error: anyhow::Error) {
+    fn handle_worker_error(&self, error: wasmtime::Error) {
         tracing::warn!("worker error: {error:?}")
     }
 }
