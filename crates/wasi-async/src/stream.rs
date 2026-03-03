@@ -19,7 +19,7 @@ impl<D, T: Send + Sync + 'static> wasmtime::component::StreamProducer<D> for Str
         store: wasmtime::StoreContextMut<'a, D>,
         mut destination: wasmtime::component::Destination<'a, Self::Item, Self::Buffer>,
         finish: bool,
-    ) -> std::task::Poll<anyhow::Result<wasmtime::component::StreamResult>> {
+    ) -> std::task::Poll<wasmtime::Result<wasmtime::component::StreamResult>> {
         use std::task::Poll;
         use wasmtime::component::StreamResult;
 

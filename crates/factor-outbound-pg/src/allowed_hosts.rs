@@ -19,6 +19,7 @@ impl AllowedHostChecker {
             allowed_hosts: Arc::new(allowed_hosts),
         }
     }
+
     #[allow(clippy::result_large_err)]
     pub async fn ensure_address_allowed(&self, address: &str) -> Result<(), v4::Error> {
         fn conn_failed(message: impl Into<String>) -> v4::Error {

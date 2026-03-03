@@ -8,7 +8,6 @@ use spin_world::async_trait;
 use spin_world::spin::postgres4_2_0::postgres::{
     self as v4, Column, DbValue, ParameterValue, RowSet,
 };
-use std::pin::pin;
 use tokio_postgres::config::SslMode;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{NoTls, Row};
@@ -63,9 +62,18 @@ impl Default for PooledTokioClientFactory {
     }
 }
 
+#[derive(Clone)]
+pub struct PooledTokioClient(Arc<deadpool_postgres::Object>);
+
+impl AsRef<deadpool_postgres::Object> for PooledTokioClient {
+    fn as_ref(&self) -> &deadpool_postgres::Object {
+        self.0.as_ref()
+    }
+}
+
 #[async_trait]
 impl ClientFactory for PooledTokioClientFactory {
-    type Client = Arc<deadpool_postgres::Object>;
+    type Client = PooledTokioClient;
 
     async fn get_client(
         &self,
@@ -83,7 +91,7 @@ impl ClientFactory for PooledTokioClientFactory {
             .map_err(ArcError)
             .context("establishing PostgreSQL connection pool")?;
 
-        Ok(Arc::new(pool.get().await?))
+        Ok(PooledTokioClient(Arc::new(pool.get().await?)))
     }
 }
 
@@ -195,8 +203,13 @@ fn query_failed(e: tokio_postgres::error::Error) -> v4::Error {
     v4::Error::QueryFailed(query_error)
 }
 
+fn query_failed_anyhow(e: anyhow::Error) -> v4::Error {
+    let text = format!("{e:?}");
+    v4::Error::QueryFailed(v4::QueryError::Text(text))
+}
+
 #[async_trait]
-impl Client for Arc<deadpool_postgres::Object> {
+impl Client for PooledTokioClient {
     async fn execute(
         &self,
         statement: String,
@@ -225,13 +238,7 @@ impl Client for Arc<deadpool_postgres::Object> {
         params: Vec<ParameterValue>,
         max_result_bytes: usize,
     ) -> Result<RowSet, v4::Error> {
-        let params = to_sql_parameters(params)?;
-
-        let mut results = pin!(self
-            .as_ref()
-            .query_raw(&statement, params)
-            .await
-            .map_err(query_failed)?);
+        let (cols_fut, mut results) = self.query_stream(statement, params).await?;
 
         let mut columns = None;
         let mut byte_count = std::mem::size_of::<RowSet>();
@@ -239,16 +246,13 @@ impl Client for Arc<deadpool_postgres::Object> {
 
         async {
             while let Some(row) = results.try_next().await? {
-                if columns.is_none() {
-                    columns = Some(infer_columns(&row));
-                }
-                let row = convert_row(&row)?;
                 byte_count += row.iter().map(|v| v.memory_size()).sum::<usize>();
                 if byte_count > max_result_bytes {
                     anyhow::bail!("query result exceeds limit of {max_result_bytes} bytes")
                 }
                 rows.push(row);
             }
+            columns = Some(cols_fut.await);
             Ok(())
         }
         .await
@@ -268,35 +272,18 @@ impl Client for Arc<deadpool_postgres::Object> {
     ) -> Result<QueryAsyncResult, v4::Error> {
         use futures::StreamExt;
 
-        let params = to_sql_parameters(params)?;
-
-        let mut results = Box::pin(
-            self.as_ref()
-                .query_raw(&statement, params)
-                .await
-                .map_err(query_failed)?,
-        );
+        let (cols_fut, mut rows) = self.query_stream(statement, params).await?;
 
         let (rows_tx, rows_rx) = tokio::sync::mpsc::channel(4);
         let (err_tx, err_rx) = tokio::sync::oneshot::channel();
 
-        let Some(row) = results.next().await else {
-            _ = err_tx.send(Ok(()));
-            return Ok(QueryAsyncResult {
-                columns: vec![],
-                rows: rows_rx,
-                error: err_rx,
-            });
-        };
-
-        let row = row.map_err(query_failed)?;
-
-        let cols = infer_columns(&row);
-
-        // macro rather than closure to avoid taking ownership of err_tx
-        macro_rules! try_send_row {
-            ($row:ident) => {
-                match convert_row(&$row) {
+        tokio::spawn(async move {
+            loop {
+                let Some(row) = rows.next().await else {
+                    _ = err_tx.send(Ok(()));
+                    return;
+                };
+                match row {
                     Ok(row) => {
                         let byte_count = row.iter().map(|v| v.memory_size()).sum::<usize>();
                         if byte_count > max_result_bytes {
@@ -306,48 +293,92 @@ impl Client for Arc<deadpool_postgres::Object> {
                             return;
                         }
 
-                        let send_res = rows_tx.send(row).await;
-                        if send_res.is_err() {
+                        if let Err(e) = rows_tx.send(row).await {
+                            _ = err_tx.send(Err(v4::Error::QueryFailed(v4::QueryError::Text(
+                                format!("async error: {e}"),
+                            ))));
                             return;
                         }
                     }
                     Err(e) => {
-                        let err = v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}")));
-                        _ = err_tx.send(Err(err));
+                        _ = err_tx.send(Err(e));
                         return;
                     }
                 }
-            };
-        }
-
-        tokio::spawn(async move {
-            try_send_row!(row);
-
-            loop {
-                let Some(row) = results.next().await else {
-                    break;
-                };
-
-                let row = match row {
-                    Ok(r) => r,
-                    Err(e) => {
-                        let err = query_failed(e);
-                        _ = err_tx.send(Err(err));
-                        return;
-                    }
-                };
-
-                try_send_row!(row);
             }
-
-            _ = err_tx.send(Ok(()));
         });
+
+        let cols = cols_fut.await;
 
         Ok(QueryAsyncResult {
             columns: cols,
             rows: rows_rx,
             error: err_rx,
         })
+    }
+}
+
+impl PooledTokioClient {
+    async fn query_stream(
+        &self,
+        statement: String,
+        params: Vec<ParameterValue>,
+    ) -> Result<
+        (
+            impl std::future::Future<Output = Vec<v4::Column>>,
+            impl futures::Stream<Item = Result<Vec<DbValue>, v4::Error>>,
+        ),
+        v4::Error,
+    > {
+        use futures::StreamExt;
+
+        let params = to_sql_parameters(params)?;
+
+        let results = Box::pin(
+            self.as_ref()
+                .query_raw(&statement, params)
+                .await
+                .map_err(query_failed)?,
+        );
+
+        // as far as I can tell, yes, we do need all these silly clones
+        let columns = Arc::new(std::sync::RwLock::new(None::<Vec<_>>));
+        let columns_poller = columns.clone();
+        let columns_defaulter = columns.clone();
+
+        let row_stm = results
+            .enumerate()
+            .map(move |(index, row_res)| {
+                let row_res = row_res.map_err(query_failed);
+                row_res.and_then(|r| {
+                    if index == 0 {
+                        let cols = infer_columns(&r);
+                        let mut cw = columns.write().unwrap();
+                        *cw = Some(cols);
+                    }
+                    convert_row(&r).map_err(query_failed_anyhow)
+                })
+            })
+            // presumably there is an easier way but I couldn't find it so
+            .chain(futures::stream::unfold((), move |_| {
+                let mut cw = columns_defaulter.write().unwrap();
+                if cw.is_none() {
+                    *cw = Some(vec![]);
+                }
+                async { None }
+            }));
+
+        let cols_fut = futures::future::poll_fn(move |cx| {
+            if let Ok(r) = columns_poller.read() {
+                if let Some(cs) = r.as_ref() {
+                    return std::task::Poll::Ready(cs.clone());
+                }
+            };
+            cx.waker().wake_by_ref();
+            std::task::Poll::Pending
+        });
+
+        Ok((cols_fut, Box::pin(row_stm)))
     }
 }
 

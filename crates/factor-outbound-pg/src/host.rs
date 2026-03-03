@@ -292,7 +292,6 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
         let row_producer = spin_wasi_async::stream::producer(rows);
 
         let (sr, efr) = accessor.with(|mut access| {
-            //let fr = FutureReader::new(access.as_context_mut(), columns);
             let sr = StreamReader::new(access.as_context_mut(), row_producer);
             let efr = FutureReader::new(access.as_context_mut(), error);
             (sr, efr)
