@@ -1,4 +1,4 @@
-package spin:up@3.6.0;
+package spin:up@3.7.0;
 
 /// The full world of a guest targeting an http-trigger
 world http-trigger {
