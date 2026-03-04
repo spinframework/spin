@@ -4855,6 +4855,7 @@ dependencies = [
  "spin-app",
  "spin-common",
  "spin-componentize",
+ "spin-env-isolator",
  "spin-serde",
  "thiserror 2.0.17",
  "tokio",
@@ -4869,6 +4870,15 @@ dependencies = [
  "async-trait",
  "tracing",
  "wasmtime",
+]
+
+[[package]]
+name = "spin-env-isolator"
+version = "3.7.0-pre0"
+dependencies = [
+ "anyhow",
+ "wasm-encoder 0.244.0",
+ "wasmparser 0.244.0",
 ]
 
 [[package]]

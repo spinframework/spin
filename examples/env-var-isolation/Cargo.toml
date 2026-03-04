@@ -1,0 +1,6 @@
+[workspace]
+members = ["crates/main", "crates/dependable"]
+resolver = "2"
+
+[workspace.dependencies]
+wit-bindgen = "0.53.1"

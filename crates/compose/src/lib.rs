@@ -213,6 +213,12 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
 
         let prepared = self.prepare_dependencies(world_id, component).await?;
 
+        // Apply env isolation when there is at least one dependency.
+        if self.should_apply_env_isolation(&prepared) {
+            self.apply_env_isolation(component.id(), instantiation_id, world_id, &prepared)
+                .map_err(ComposeError::PrepareError)?;
+        }
+
         let arguments = self
             .build_instantiation_arguments(world_id, prepared)
             .await?;
@@ -466,6 +472,115 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
 
         Ok(())
     }
+
+    /// Detect the WASI CLI environment version from a registered component's imports.
+    fn detect_wasi_env_version(&self, world_id: WorldId) -> Option<String> {
+        self.graph.types()[world_id]
+            .imports
+            .keys()
+            .find_map(|name| name.strip_prefix("wasi:cli/environment@").map(String::from))
+    }
+
+    /// Returns true when environment isolation should be applied.
+    ///
+    /// Environment isolation is applied if there is at least one dependency.
+    // Note: In principle this is overly conservative since we could check
+    // whether the main component or any dependency imports `wasi:cli/environment`,
+    // but in practice almost all components will import `wasi:cli/environment`,
+    // so we go with this simpler heuristic for now.
+    fn should_apply_env_isolation(&self, prepared: &IndexMap<String, DependencyInfo>) -> bool {
+        prepared.values().len() > 0
+    }
+
+    /// Apply environment variable isolation.
+    ///
+    /// Generates an isolator component shared across all targets, plus a small
+    /// wrapper component per target that bundles flat functions back into a
+    /// `wasi:cli/environment` instance.
+    fn apply_env_isolation(
+        &mut self,
+        component_id: &str,
+        main_instance: NodeId,
+        main_world: WorldId,
+        prepared: &IndexMap<String, DependencyInfo>,
+    ) -> anyhow::Result<()> {
+        use spin_env_isolator::isolator::{generate_isolator, IsolationTarget};
+        use spin_env_isolator::wrapper::build_env_wrapper_component;
+
+        // Collect isolation targets (components that import wasi:cli/environment).
+        // Each target tracks the specific wasi:cli/environment version it imports,
+        // since different components may import different versions.
+        let mut targets = Vec::new();
+        let mut target_instances: Vec<(String, NodeId, String)> = Vec::new();
+
+        // Track the highest WASI env version seen; used for the isolator's import.
+        let mut max_wasi_env_version: Option<String> = None;
+
+        // Main component
+        if let Some(version) = self.detect_wasi_env_version(main_world) {
+            let prefix = spin_env_isolator::compute_prefix(component_id);
+            targets.push(IsolationTarget {
+                name: component_id.to_string(),
+                prefix,
+            });
+            target_instances.push((component_id.to_string(), main_instance, version.clone()));
+            max_wasi_env_version = Some(version);
+        }
+
+        // Dependencies importing wasi:cli/environment (deduplicated by manifest name)
+        let mut seen_deps = std::collections::HashSet::new();
+        for (_, dep_info) in prepared {
+            if seen_deps.insert(&dep_info.manifest_name) {
+                let dep_name = dep_info.manifest_name.to_string();
+                if let Some(version) = self.detect_wasi_env_version(dep_info.world_id) {
+                    let prefix = spin_env_isolator::compute_prefix(&dep_name);
+                    targets.push(IsolationTarget {
+                        name: dep_name.clone(),
+                        prefix,
+                    });
+                    target_instances.push((dep_name, dep_info.instantiation_id, version.clone()));
+                    if is_higher_version(&version, max_wasi_env_version.as_deref()) {
+                        max_wasi_env_version = Some(version);
+                    }
+                }
+            }
+        }
+
+        if targets.is_empty() {
+            return Ok(());
+        }
+        let imported_wasi_env_version = max_wasi_env_version.unwrap();
+
+        let isolator_bytes = generate_isolator(&targets, &imported_wasi_env_version)?;
+        let (_, isolator_instance) = self.register_package("env-isolator", None, isolator_bytes)?;
+
+        // For each target, create a wrapper and wire isolator → wrapper → target.
+        // Each wrapper uses the target's own wasi:cli/environment version.
+        for (target_name, target_instance, target_wasi_env_version) in &target_instances {
+            let wrapper_bytes = build_env_wrapper_component(target_name, target_wasi_env_version)?;
+            let wrapper_pkg_name = format!("env-wrapper-{target_name}");
+            let (_, wrapper_instance) =
+                self.register_package(&wrapper_pkg_name, None, wrapper_bytes)?;
+
+            // Wire isolator → wrapper (filtered get-environment)
+            let export_name = format!("environment-{target_name}-get-environment");
+            let node = self
+                .graph
+                .alias_instance_export(isolator_instance, &export_name)?;
+            self.graph
+                .set_instantiation_argument(wrapper_instance, &export_name, node)?;
+
+            // Wire wrapper → target (wasi:cli/environment instance)
+            let env_import = format!("wasi:cli/environment@{target_wasi_env_version}");
+            let node = self
+                .graph
+                .alias_instance_export(wrapper_instance, &env_import)?;
+            self.graph
+                .set_instantiation_argument(*target_instance, &env_import, node)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -480,6 +595,18 @@ struct DependencyInfo {
     world_id: WorldId,
     // Name of optional export to use to satisfy the dependency.
     export_name: Option<String>,
+}
+
+/// Returns true if `candidate` is a higher semver version than `current`
+/// (or if `current` is `None`).
+fn is_higher_version(candidate: &str, current: Option<&str>) -> bool {
+    let Some(current) = current else {
+        return true;
+    };
+    match (Version::parse(candidate), Version::parse(current)) {
+        (Ok(c), Ok(cur)) => c > cur,
+        _ => candidate > current,
+    }
 }
 
 fn apply_deny_all_adapter(
@@ -638,5 +765,20 @@ mod test {
                 assert!(!matches_import(&dep_name, import_name).unwrap());
             }
         }
+    }
+
+    #[test]
+    fn test_is_higher_version() {
+        // Basic comparisons
+        assert!(is_higher_version("0.2.10", Some("0.2.9")));
+        assert!(!is_higher_version("0.2.9", Some("0.2.10")));
+        assert!(!is_higher_version("0.2.9", Some("0.2.9")));
+
+        // Major/minor differences
+        assert!(is_higher_version("1.0.0", Some("0.9.9")));
+        assert!(is_higher_version("0.3.0", Some("0.2.99")));
+
+        // None means no current version, so any candidate is higher
+        assert!(is_higher_version("0.2.6", None));
     }
 }

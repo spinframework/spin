@@ -191,7 +191,8 @@ impl LocalLoader {
             )
             .await?;
 
-        let env = component.environment.into_iter().collect();
+        let env =
+            Self::build_component_env(id.as_ref(), component.environment, &component.dependencies);
 
         let files = if component.files.is_empty() {
             vec![]
@@ -251,6 +252,45 @@ impl LocalLoader {
             dependencies,
             host_requirements,
         })
+    }
+
+    /// Build the env map for a locked component.
+    ///
+    /// When env isolation is active (at least one dependency exists), all env
+    /// vars are prefixed so the isolator can route them to the correct
+    /// component at runtime. Dependency env vars are merged into the
+    /// component's env map (prefixed), so the locked app carries a single,
+    /// flat, already-prefixed env map per component.
+    fn build_component_env(
+        component_id: &str,
+        component_environment: impl IntoIterator<Item = (String, String)>,
+        manifest_deps: &v2::ComponentDependencies,
+    ) -> BTreeMap<String, String> {
+        if manifest_deps.inner.is_empty() {
+            // Don't prefix env vars if there are no dependencies.
+            return component_environment.into_iter().collect();
+        }
+
+        let mut env = BTreeMap::new();
+
+        // Prefix the component's own env vars.
+        let main_prefix = spin_env_isolator::compute_prefix(component_id);
+        for (k, v) in component_environment {
+            env.insert(format!("{main_prefix}{k}"), v);
+        }
+
+        // Merge each dependency's env vars (prefixed) into the same map.
+        for (dep_name, dep) in &manifest_deps.inner {
+            let dep_env = dep.environment();
+            if !dep_env.is_empty() {
+                let prefix = spin_env_isolator::compute_prefix(&dep_name.to_string());
+                for (k, v) in dep_env {
+                    env.insert(format!("{prefix}{k}"), v.clone());
+                }
+            }
+        }
+
+        env
     }
 
     async fn load_component_dependencies(
@@ -840,6 +880,7 @@ impl WasmLoader {
                 registry,
                 package,
                 export,
+                ..
             } => {
                 let version = semver::VersionReq::parse(&version).with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid semantic version requirement ({version:?}) for its package version"))?;
 
@@ -873,7 +914,7 @@ impl WasmLoader {
                     .await?;
                 Ok((content, export))
             }
-            v2::ComponentDependency::Local { path, export } => {
+            v2::ComponentDependency::Local { path, export, .. } => {
                 let content = self.app_root.join(path);
                 Ok((content, export))
             }
@@ -881,6 +922,7 @@ impl WasmLoader {
                 url,
                 digest,
                 export,
+                ..
             } => {
                 let content = self.load_http_source(&url, &digest).await?;
                 Ok((content, export))
@@ -959,5 +1001,79 @@ mod test {
             "expected error to show destination file name but got {err_ctx}",
         );
         Ok(())
+    }
+
+    #[test]
+    fn build_component_env_prefixes_when_isolation_needed() {
+        let dep_name: DependencyName = "hello:components/dependable".parse().unwrap();
+        let mut locked_deps = BTreeMap::new();
+        locked_deps.insert(
+            dep_name.clone(),
+            LockedComponentDependency {
+                source: LockedComponentSource {
+                    content_type: "application/wasm".into(),
+                    content: ContentRef::default(),
+                },
+                export: None,
+                inherit: Default::default(),
+            },
+        );
+
+        let manifest_deps = v2::ComponentDependencies {
+            inner: std::iter::once((
+                dep_name,
+                v2::ComponentDependency::Local {
+                    path: "dep.wasm".into(),
+                    export: None,
+                    environment: std::iter::once((
+                        "GREETING".to_owned(),
+                        "hello from dep".to_owned(),
+                    ))
+                    .collect(),
+                },
+            ))
+            .collect(),
+        };
+
+        let component_environment = vec![
+            ("GREETING".to_owned(), "hello from main".to_owned()),
+            ("MAIN_ONLY".to_owned(), "only visible to main".to_owned()),
+        ];
+
+        let env = LocalLoader::build_component_env("main", component_environment, &manifest_deps);
+
+        // Component's own vars should be prefixed with MAIN_
+        assert_eq!(
+            env.get("MAIN_GREETING").map(String::as_str),
+            Some("hello from main")
+        );
+        assert_eq!(
+            env.get("MAIN_MAIN_ONLY").map(String::as_str),
+            Some("only visible to main")
+        );
+        // Dependency's vars should be prefixed with DEPENDABLE_
+        assert_eq!(
+            env.get("DEPENDABLE_GREETING").map(String::as_str),
+            Some("hello from dep")
+        );
+        // Unprefixed keys should not exist
+        assert!(!env.contains_key("GREETING"));
+    }
+
+    #[test]
+    fn build_component_env_no_prefixing_without_dependencies() {
+        let component_environment = vec![("GREETING".to_owned(), "hello".to_owned())];
+
+        let env = LocalLoader::build_component_env(
+            "main",
+            component_environment,
+            &v2::ComponentDependencies {
+                inner: Default::default(),
+            },
+        );
+
+        // No dependencies means no isolation — env should be unprefixed
+        assert_eq!(env.get("GREETING").map(String::as_str), Some("hello"));
+        assert!(!env.contains_key("MAIN_GREETING"));
     }
 }

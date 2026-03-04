@@ -16,6 +16,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 spin-common = { path = "../common" }
+spin-env-isolator = { path = "../env-isolator" }
 spin-expressions = { path = "../expressions" }
 spin-locked-app = { path = "../locked-app" }
 spin-manifest = { path = "../manifest" }

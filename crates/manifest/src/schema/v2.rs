@@ -257,6 +257,10 @@ pub enum ComponentDependency {
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-registry
         export: Option<String>,
+        /// Environment variables to set for this dependency. These are merged with
+        /// any environment variables declared on the referenced component.
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        environment: Map<String, String>,
     },
     /// `... = { path = "path/to/component.wasm", export = "my-export" }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -273,6 +277,10 @@ pub enum ComponentDependency {
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-local-component
         export: Option<String>,
+        /// Environment variables to set for this dependency. These are merged with
+        /// any environment variables declared on the referenced component.
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        environment: Map<String, String>,
     },
     /// `... = { url = "https://example.com/component.wasm", sha256 = "..." }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -295,6 +303,10 @@ pub enum ComponentDependency {
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-url
         export: Option<String>,
+        /// Environment variables to set for this dependency. These are merged with
+        /// any environment variables declared on the referenced component.
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        environment: Map<String, String>,
     },
     /// `... = { component = "my-dependency" }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -311,7 +323,25 @@ pub enum ComponentDependency {
         ///
         /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
         export: Option<String>,
+        /// Environment variables to set for this dependency. These override
+        /// the referenced component's own environment variables.
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        environment: Map<String, String>,
     },
+}
+
+impl ComponentDependency {
+    /// Returns the environment variables associated with this dependency, if any.
+    pub fn environment(&self) -> &Map<String, String> {
+        static EMPTY: std::sync::LazyLock<Map<String, String>> = std::sync::LazyLock::new(Map::new);
+        match self {
+            Self::Version(_) => &EMPTY,
+            Self::Package { environment, .. }
+            | Self::Local { environment, .. }
+            | Self::HTTP { environment, .. }
+            | Self::AppComponent { environment, .. } => environment,
+        }
+    }
 }
 
 /// A Spin component.
