@@ -24,6 +24,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 spin-app = { path = "../app" }
 spin-core = { path = "../core" }
+spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-http = { path = "../factor-outbound-http" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factor-wasi = { path = "../factor-wasi" }
@@ -33,11 +34,13 @@ spin-http = { path = "../http" }
 spin-telemetry = { path = "../telemetry" }
 spin-trigger = { path = "../trigger" }
 spin-world = { path = "../world" }
-spin-factor-otel = { path = "../factor-otel" }
+tempfile = { workspace = true }
 terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["full"] }
 tokio-rustls = { workspace = true }
 tracing = { workspace = true }
+wasm-compose = "0.244"
+wasmparser = "0.244"
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
