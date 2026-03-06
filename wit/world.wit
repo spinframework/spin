@@ -7,6 +7,14 @@ world http-trigger {
   export wasi:http/handler@0.3.0-rc-2026-01-06;
 }
 
+/// The full world of a stateful HTTP component.
+/// Stateful components export lifecycle hooks and an HTTP handler.
+world stateful-http-trigger {
+  include platform;
+  export spin:stateful-component/lifecycle@0.1.0;
+  export wasi:http/handler@0.3.0-rc-2026-01-06;
+}
+
 /// The imports needed for a guest to run on a Spin host
 world platform {
   include wasi:cli/imports@0.2.6;

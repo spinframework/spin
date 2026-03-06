@@ -22,6 +22,8 @@ pub const APP_VERSION_KEY: MetadataKey = MetadataKey::new("version");
 pub const APP_DESCRIPTION_KEY: MetadataKey = MetadataKey::new("description");
 /// MetadataKey for extracting the OCI image digest.
 pub const OCI_IMAGE_DIGEST_KEY: MetadataKey = MetadataKey::new("oci_image_digest");
+/// MetadataKey for extracting whether a component is stateful.
+pub const STATEFUL_KEY: MetadataKey<bool> = MetadataKey::new("stateful");
 
 /// Type alias for a [`Result`]s with [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;

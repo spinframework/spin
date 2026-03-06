@@ -5,6 +5,7 @@ mod instrument;
 mod outbound_http;
 mod server;
 mod spin;
+pub mod stateful;
 mod tls;
 mod wagi;
 mod wasi;

@@ -433,6 +433,12 @@ pub struct Component {
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     #[schemars(schema_with = "json_schema::map_of_toml_tables")]
     pub tool: Map<String, toml::Table>,
+    /// If true, this component is a stateful component. Stateful components are
+    /// long-lived, addressable by instance ID, and export lifecycle hooks
+    /// (instantiate/suspend). They are not publicly routable and must be called
+    /// via `spin.alt` from other components.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stateful: bool,
     /// If true, dependencies can invoke Spin APIs with the same permissions as the main
     /// component. If false, dependencies have no permissions (e.g. network,
     /// key-value stores, SQLite databases).
@@ -864,6 +870,7 @@ mod tests {
             key_value_stores: labels.clone(),
             sqlite_databases: labels,
             ai_models: vec![],
+            stateful: false,
             targets: None,
             build: None,
             tool: Map::new(),

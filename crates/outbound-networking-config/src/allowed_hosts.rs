@@ -11,6 +11,9 @@ pub const SERVICE_CHAINING_DOMAIN: &str = "spin.internal";
 /// The domain suffix used for service chaining.
 pub const SERVICE_CHAINING_DOMAIN_SUFFIX: &str = ".spin.internal";
 
+/// The domain used for stateful component addressing.
+pub const STATEFUL_DOMAIN: &str = "spin.alt";
+
 /// An easily cloneable, shared, boxed future of result
 pub type SharedFutureResult<T> = Shared<BoxFuture<'static, Result<Arc<T>, Arc<anyhow::Error>>>>;
 
@@ -323,6 +326,11 @@ impl HostConfig {
             Self::AnySubdomain(suffix) => suffix == SERVICE_CHAINING_DOMAIN_SUFFIX,
             _ => false,
         }
+    }
+
+    /// Returns true if this config is for stateful component addressing.
+    fn is_for_stateful(&self) -> bool {
+        matches!(self, Self::Literal(Host::Domain(domain)) if domain == STATEFUL_DOMAIN)
     }
 }
 
@@ -654,6 +662,38 @@ fn parse_service_chaining_host(host: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Checks if the host is the stateful component addressing domain.
+pub fn is_stateful_host(host: &str) -> bool {
+    let (host, _) = host.rsplit_once(':').unwrap_or((host, ""));
+    host == STATEFUL_DOMAIN
+}
+
+/// Parses a stateful component target from a URL.
+///
+/// URLs have the form: `https://spin.alt/component/<component-id>/<instance-id>/<path>`
+///
+/// Returns `(component_id, instance_id, remaining_path)` if the URL matches.
+pub fn parse_stateful_target(url: &http::Uri) -> Option<(String, String, String)> {
+    let host = url.authority().map(|a| a.host().trim())?;
+    let (host, _) = host.rsplit_once(':').unwrap_or((host, ""));
+
+    if host != STATEFUL_DOMAIN {
+        return None;
+    }
+
+    let path = url.path().trim_start_matches('/');
+    let path = path.strip_prefix("component/")?;
+
+    let (component_id, rest) = path.split_once('/')?;
+    let (instance_id, remaining) = rest.split_once('/').unwrap_or((rest, ""));
+
+    Some((
+        component_id.to_string(),
+        instance_id.to_string(),
+        format!("/{remaining}"),
+    ))
 }
 
 #[cfg(test)]

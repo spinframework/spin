@@ -20,7 +20,7 @@ pub const KEY_VALUE_STORES_KEY: MetadataKey<Vec<String>> = MetadataKey::new("key
 pub use host::{log_cas_error, log_error, Error, KeyValueDispatch, Store, StoreManager};
 pub use runtime_config::RuntimeConfig;
 use spin_core::async_trait;
-pub use util::DelegatingStoreManager;
+pub use util::{DelegatingStoreManager, InstanceScopedStoreManager, INSTANCE_STORE_LABEL};
 
 /// A factor that provides key-value storage.
 #[derive(Default)]

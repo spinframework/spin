@@ -169,14 +169,18 @@ impl LocalLoader {
 
         let component_requires_service_chaining = requires_service_chaining(&component);
 
-        let metadata = ValuesMapBuilder::new()
+        let mut metadata_builder = ValuesMapBuilder::new();
+        metadata_builder
             .string("description", component.description)
             .string_array("allowed_outbound_hosts", allowed_outbound_hosts)
             .string_array("key_value_stores", component.key_value_stores)
             .string_array("databases", component.sqlite_databases)
             .string_array("ai_models", component.ai_models)
-            .serializable("build", component.build)?
-            .take();
+            .serializable("build", component.build)?;
+        if component.stateful {
+            metadata_builder.serializable("stateful", true)?;
+        }
+        let metadata = metadata_builder.take();
 
         let source = self
             .load_component_source(id, component.source.clone())
