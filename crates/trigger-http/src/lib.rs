@@ -124,6 +124,15 @@ pub struct CliArgs {
     /// at random for each new instance.
     #[clap(long, default_value = "1s", value_parser = parse_duration_range)]
     pub idle_instance_timeout: Range<Duration>,
+
+    /// How long a stateful component instance can remain idle before being
+    /// suspended and removed from memory. Defaults to 300s (5 minutes).
+    ///
+    /// A number with no suffix or with an `s` suffix is interpreted as seconds;
+    /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
+    /// (microseconds), and `ns` (nanoseconds).
+    #[clap(long, default_value = "300s", value_parser = parse_duration)]
+    pub stateful_idle_timeout: Duration,
 }
 
 impl CliArgs {
@@ -224,6 +233,12 @@ fn parse_duration_range(s: &str) -> Result<Range<Duration>, String> {
     parse_range::<ParsedDuration>(s).map(|v| v.map(|v| v.0))
 }
 
+fn parse_duration(s: &str) -> Result<Duration, String> {
+    s.parse::<ParsedDuration>()
+        .map(|d| d.0)
+        .map_err(|e| e.to_string())
+}
+
 #[derive(Clone, Copy)]
 pub struct InstanceReuseConfig {
     max_instance_reuse_count: Range<usize>,
@@ -252,6 +267,7 @@ pub struct HttpTrigger {
     /// Note that this might not be the actual socket address that ends up being bound to.
     /// If the port is set to 0, the actual address will be determined by the OS.
     listen_addr: SocketAddr,
+    stateful_idle_timeout: Duration,
     tls_config: Option<TlsConfig>,
     find_free_port: bool,
     http1_max_buf_size: Option<usize>,
@@ -267,6 +283,7 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
     fn new(cli_args: Self::CliArgs, app: &spin_app::App) -> anyhow::Result<Self> {
         let find_free_port = cli_args.find_free_port;
         let http1_max_buf_size = cli_args.http1_max_buf_size;
+        let stateful_idle_timeout = cli_args.stateful_idle_timeout;
         let reuse_config = InstanceReuseConfig {
             max_instance_reuse_count: cli_args
                 .max_instance_reuse_count
@@ -287,6 +304,7 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
             find_free_port,
             http1_max_buf_size,
             reuse_config,
+            stateful_idle_timeout,
         )
     }
 
@@ -312,6 +330,7 @@ impl HttpTrigger {
         find_free_port: bool,
         http1_max_buf_size: Option<usize>,
         reuse_config: InstanceReuseConfig,
+        stateful_idle_timeout: Duration,
     ) -> anyhow::Result<Self> {
         Self::validate_app(app)?;
 
@@ -321,6 +340,7 @@ impl HttpTrigger {
             find_free_port,
             http1_max_buf_size,
             reuse_config,
+            stateful_idle_timeout,
         })
     }
 
@@ -335,6 +355,7 @@ impl HttpTrigger {
             find_free_port,
             http1_max_buf_size,
             reuse_config,
+            stateful_idle_timeout,
         } = self;
         let server = Arc::new(HttpServer::new(
             listen_addr,
@@ -343,6 +364,7 @@ impl HttpTrigger {
             trigger_app,
             http1_max_buf_size,
             reuse_config,
+            stateful_idle_timeout,
         )?);
         Ok(server)
     }

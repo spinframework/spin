@@ -89,6 +89,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         trigger_app: TriggerApp<F>,
         http1_max_buf_size: Option<usize>,
         reuse_config: InstanceReuseConfig,
+        stateful_idle_timeout: Duration,
     ) -> anyhow::Result<Self> {
         // This needs to be a vec before building the router to handle duplicate routes
         let component_trigger_configs = trigger_app
@@ -149,7 +150,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
             })
             .collect::<anyhow::Result<_>>()?;
 
-        let stateful_manager = Arc::new(StatefulInstanceManager::new(trigger_app.clone()));
+        let stateful_manager = Arc::new(StatefulInstanceManager::new(
+            trigger_app.clone(),
+            stateful_idle_timeout,
+        ));
         stateful_manager.start_idle_checker();
 
         Ok(Self {

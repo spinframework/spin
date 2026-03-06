@@ -166,6 +166,36 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutorApp<T, U> {
             .with_context(|| format!("no such component {component_id:?}"))
     }
 
+    /// Returns true if the given component ID has been loaded.
+    pub fn has_component(&self, component_id: &str) -> bool {
+        self.component_instance_pres.contains_key(component_id)
+    }
+
+    /// Load an additional component that wasn't included during initial app loading.
+    ///
+    /// This is used to pre-compile components that are reachable via service chaining
+    /// (e.g., stateful components) but don't have a direct trigger entry.
+    pub async fn load_component(
+        &mut self,
+        component_loader: &impl ComponentLoader<T, U>,
+        component_id: &str,
+    ) -> anyhow::Result<()> {
+        if self.component_instance_pres.contains_key(component_id) {
+            return Ok(());
+        }
+        let component = self
+            .configured_app
+            .app()
+            .get_component(component_id)
+            .with_context(|| format!("no such component {component_id:?}"))?;
+        let instance_pre = component_loader
+            .load_instance_pre(&self.executor.core_engine, &component)
+            .await?;
+        self.component_instance_pres
+            .insert(component_id.to_string(), instance_pre);
+        Ok(())
+    }
+
     /// Returns an instance builder for the given component ID.
     pub fn prepare(&self, component_id: &str) -> anyhow::Result<FactorsInstanceBuilder<'_, T, U>> {
         let app_component = self

@@ -112,6 +112,7 @@ async fn initialize_trigger(
         false,
         None,
         InstanceReuseConfig::default(),
+        std::time::Duration::from_secs(300),
     )?;
     let mut builder = TriggerAppBuilder::<_, FactorsBuilder>::new(trigger);
     let trigger_app = builder

@@ -379,12 +379,24 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> TriggerAppBuilder<T, B> {
         B::configure_app(&mut executor, &runtime_config, &common_options, &options)?;
         let executor = Arc::new(executor);
 
-        let configured_app = {
+        let mut configured_app = {
             let _sloth_guard = warn_if_wasm_build_slothful();
             executor
                 .load_app(app, runtime_config.into(), loader, Some(T::TYPE))
                 .await?
         };
+
+        // Also pre-compile any components not loaded by trigger-type filtering
+        // (e.g., stateful components reachable only via service chaining).
+        let unloaded: Vec<String> = configured_app
+            .app()
+            .components()
+            .filter(|c| !configured_app.has_component(c.id()))
+            .map(|c| c.id().to_string())
+            .collect();
+        for component_id in unloaded {
+            configured_app.load_component(loader, &component_id).await?;
+        }
 
         Ok(configured_app)
     }

@@ -2,11 +2,12 @@ package spin:stateful-component@0.1.0;
 
 /// Lifecycle hooks exported by every stateful component.
 interface lifecycle {
-  /// Called when the instance is instantiated. The component receives its
-  /// unique ID and should restore any needed state from its storage.
+  /// Called once when the instance is first activated. The component
+  /// receives its unique instance ID and should restore any needed
+  /// state from persistent storage.
   instantiate: func(id: string);
 
   /// Called before the instance is suspended (idle timeout or migration).
-  /// The component should flush any pending state.
+  /// The component should flush any pending in-memory state to storage.
   suspend: func();
 }
