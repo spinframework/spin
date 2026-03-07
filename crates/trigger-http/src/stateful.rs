@@ -30,6 +30,31 @@ struct HttpTask {
     response_tx: oneshot::Sender<Result<http::Response<Body>>>,
 }
 
+/// Task for handling a single HTTP request, spawned concurrently within
+/// a stateful instance's `run_concurrent` loop.
+struct HandleRequestTask<F: RuntimeFactors> {
+    service: Arc<wasmtime_wasi_http::p3::bindings::Service>,
+    getter: fn(&mut StoreData<F>) -> WasiHttpCtxView<'_>,
+    task: HttpTask,
+}
+
+impl<F: RuntimeFactors> wasmtime::component::AccessorTask<StoreData<F>>
+    for HandleRequestTask<F>
+{
+    fn run(
+        self,
+        accessor: &Accessor<StoreData<F>>,
+    ) -> impl std::future::Future<Output = wasmtime::Result<()>> + Send {
+        async move {
+            let result =
+                handle_single_request::<F>(accessor, &self.service, self.getter, self.task.request)
+                    .await;
+            let _ = self.task.response_tx.send(result);
+            Ok(())
+        }
+    }
+}
+
 /// Handle to a background worker managing a live stateful component instance.
 struct StatefulWorker {
     task_tx: mpsc::UnboundedSender<HttpTask>,
@@ -226,20 +251,26 @@ async fn run_stateful_worker<F: RuntimeFactors>(
     // 5. Prepare the HTTP Service from the same instance
     let service_indices =
         ServiceIndices::new(pre).map_err(|e| anyhow::anyhow!("missing wasi:http/handler: {e}"))?;
-    let service = service_indices
-        .load(&mut store, &instance)
-        .map_err(|e| anyhow::anyhow!("failed to load HTTP service: {e}"))?;
+    let service = Arc::new(
+        service_indices
+            .load(&mut store, &instance)
+            .map_err(|e| anyhow::anyhow!("failed to load HTTP service: {e}"))?,
+    );
 
-    // 6. Enter run_concurrent to handle HTTP requests
+    // 6. Enter run_concurrent to handle HTTP requests concurrently.
+    //    Each incoming request is spawned as a separate task so that multiple
+    //    requests to the same instance can interleave at async yield points.
     let getter = (|data: &mut StoreData<F>| wasi_http::<F>(data).unwrap())
         as fn(&mut StoreData<F>) -> WasiHttpCtxView<'_>;
 
     let run_result = store
         .run_concurrent(async |accessor: &Accessor<StoreData<F>>| {
             while let Some(task) = task_rx.recv().await {
-                let result = handle_single_request::<F>(&accessor, &service, getter, task.request)
-                    .await;
-                let _ = task.response_tx.send(result);
+                accessor.spawn(HandleRequestTask::<F> {
+                    service: Arc::clone(&service),
+                    getter,
+                    task,
+                });
             }
             anyhow::Ok(())
         })
