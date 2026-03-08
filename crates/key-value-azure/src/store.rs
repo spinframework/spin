@@ -8,7 +8,9 @@ use azure_data_cosmos::{
 };
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use spin_factor_key_value::{log_cas_error, log_error, Cas, Error, Store, StoreManager, SwapError};
+use spin_factor_key_value::{
+    log_cas_error, log_error, log_error_v3, v3, Cas, Error, Store, StoreManager, SwapError,
+};
 use std::sync::{Arc, Mutex};
 
 pub struct KeyValueAzureCosmos {
@@ -220,6 +222,46 @@ impl Store for AzureCosmosStore {
 
     async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
         self.get_keys(max_result_bytes).await
+    }
+
+    async fn get_keys_async(
+        &self,
+        max_result_bytes: usize,
+    ) -> (
+        tokio::sync::mpsc::Receiver<String>,
+        tokio::sync::oneshot::Receiver<Result<(), v3::Error>>,
+    ) {
+        let (keys_tx, keys_rx) = tokio::sync::mpsc::channel(4);
+        let (err_tx, err_rx) = tokio::sync::oneshot::channel();
+
+        let query = self
+            .client
+            .query_documents(Query::new(self.get_keys_query()))
+            .query_cross_partition(true);
+
+        let the_work = async move {
+            let mut stream = query.into_stream::<Key>();
+            while let Some(resp) = stream.next().await {
+                let resp = resp.map_err(log_error_v3)?;
+
+                if resp.results.iter().map(|(k, _)| k.id.len()).sum::<usize>() > max_result_bytes {
+                    return Err(v3::Error::Other(format!(
+                        "query exceeds limit of {max_result_bytes} bytes"
+                    )));
+                }
+
+                for (key, _) in resp.results {
+                    keys_tx.send(key.id).await.map_err(log_error_v3)?;
+                }
+            }
+            Ok(())
+        };
+        tokio::spawn(async move {
+            let res = the_work.await;
+            _ = err_tx.send(res);
+        });
+
+        (keys_rx, err_rx)
     }
 
     async fn get_many(

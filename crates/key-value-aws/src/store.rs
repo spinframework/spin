@@ -21,7 +21,9 @@ use aws_sdk_dynamodb::{
     Client,
 };
 use spin_core::async_trait;
-use spin_factor_key_value::{log_error, Cas, Error, Store, StoreManager, SwapError};
+use spin_factor_key_value::{
+    log_error, log_error_v3, v3, Cas, Error, Store, StoreManager, SwapError,
+};
 
 pub struct KeyValueAwsDynamo {
     /// AWS region
@@ -284,6 +286,51 @@ impl Store for AwsDynamoStore {
         }
 
         Ok(primary_keys)
+    }
+
+    async fn get_keys_async(
+        &self,
+        max_result_bytes: usize,
+    ) -> (
+        tokio::sync::mpsc::Receiver<String>,
+        tokio::sync::oneshot::Receiver<Result<(), v3::Error>>,
+    ) {
+        let (keys_tx, keys_rx) = tokio::sync::mpsc::channel(4);
+        let (err_tx, err_rx) = tokio::sync::oneshot::channel();
+
+        let mut scan_paginator = self
+            .client
+            .scan()
+            .table_name(self.table.as_str())
+            .projection_expression(PK)
+            .into_paginator()
+            .send();
+
+        let the_work = async move {
+            while let Some(output) = scan_paginator.next().await {
+                let scan_output = output.map_err(log_error_v3)?;
+                if let Some(items) = scan_output.items {
+                    for mut item in items {
+                        if let Some(AttributeValue::S(pk)) = item.remove(PK) {
+                            if pk.len() > max_result_bytes {
+                                return Err(v3::Error::Other(format!(
+                                    "key exceeds limit of {max_result_bytes} bytes"
+                                )));
+                            }
+                            keys_tx.send(pk).await.map_err(log_error_v3)?;
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        };
+        tokio::spawn(async move {
+            let res = the_work.await;
+            _ = err_tx.send(res);
+        });
+
+        (keys_rx, err_rx)
     }
 
     async fn get_many(

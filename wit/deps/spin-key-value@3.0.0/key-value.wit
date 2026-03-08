@@ -1,0 +1,49 @@
+package spin:key-value@3.0.0;
+
+interface key-value {
+  /// An open key-value store
+  resource store {
+    /// Open the store with the specified label.
+    ///
+    /// `label` must refer to a store allowed in the spin.toml manifest.
+    ///
+    /// `error::no-such-store` will be raised if the `label` is not recognized.
+    open: static async func(label: string) -> result<store, error>;
+
+    /// Get the value associated with the specified `key`
+    ///
+    /// Returns `ok(none)` if the key does not exist.
+    get: async func(key: string) -> result<option<list<u8>>, error>;
+
+    /// Set the `value` associated with the specified `key` overwriting any existing value.
+    set: async func(key: string, value: list<u8>) -> result<_, error>;
+
+    /// Delete the tuple with the specified `key`
+    ///
+    /// No error is raised if a tuple did not previously exist for `key`.
+    delete: async func(key: string) -> result<_, error>;
+
+    /// Return whether a tuple exists for the specified `key`
+    exists: async func(key: string) -> result<bool, error>;
+
+    /// Return a list of all the keys
+    get-keys: async func() -> tuple<stream<string>, future<result<_, error>>>;
+  }
+
+  /// The set of errors which may be raised by functions in this interface
+  variant error {
+    /// Too many stores have been opened simultaneously. Closing one or more
+    /// stores prior to retrying may address this.
+    store-table-full,
+
+    /// The host does not recognize the store label requested.
+    no-such-store,
+
+    /// The requesting component does not have access to the specified store
+    /// (which may or may not exist).
+    access-denied,
+
+    /// Some implementation-specific error has occurred (e.g. I/O)
+    other(string)
+  }
+}

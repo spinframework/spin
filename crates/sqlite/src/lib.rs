@@ -127,7 +127,7 @@ impl RuntimeConfigResolver {
         let factory = move || {
             let location = InProcDatabaseLocation::from_path(path.clone())?;
             let connection = spin_sqlite_inproc::InProcConnection::new(location)?;
-            Ok(Box::new(connection) as _)
+            Ok(Arc::new(connection) as _)
         };
         Arc::new(factory)
     }
@@ -154,7 +154,7 @@ impl InProcDatabase {
         let location = InProcDatabaseLocation::from_path(path)?;
         let factory = move || {
             let connection = spin_sqlite_inproc::InProcConnection::new(location.clone())?;
-            Ok(Box::new(connection) as _)
+            Ok(Arc::new(connection) as _)
         };
         Ok(factory)
     }
@@ -193,7 +193,7 @@ impl LibSqlDatabase {
             .to_owned();
         let factory = move || {
             let connection = LazyLibSqlConnection::new(url.clone(), self.token.clone());
-            Ok(Box::new(connection) as _)
+            Ok(Arc::new(connection) as _)
         };
         Ok(factory)
     }

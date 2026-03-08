@@ -1,5 +1,4 @@
 use anyhow::Result;
-use spin_core::wasmtime;
 use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
 use spin_world::spin::postgres3_0_0::postgres::{self as v3};
 use spin_world::spin::postgres4_2_0::postgres::{self as v4};
@@ -243,8 +242,6 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
         ),
         v4::Error,
     > {
-        use wasmtime::AsContextMut;
-
         let client = accessor.with(|mut access| {
             let host = access.get();
             host.connections.get(connection.rep()).unwrap().clone()
@@ -261,8 +258,8 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
         let row_producer = spin_wasi_async::stream::producer(rows);
 
         let (sr, efr) = accessor.with(|mut access| {
-            let sr = StreamReader::new(access.as_context_mut(), row_producer);
-            let efr = FutureReader::new(access.as_context_mut(), error);
+            let sr = StreamReader::new(&mut access, row_producer);
+            let efr = FutureReader::new(&mut access, error);
             (sr, efr)
         });
 

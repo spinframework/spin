@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use redis::{aio::ConnectionManager, parse_redis_url, AsyncCommands, Client, RedisError};
 use spin_core::async_trait;
-use spin_factor_key_value::{log_error, Cas, Error, Store, StoreManager, SwapError};
+use spin_factor_key_value::{
+    log_error, log_error_v3, v3, Cas, Error, Store, StoreManager, SwapError,
+};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use url::Url;
@@ -138,6 +140,43 @@ impl Store for RedisStore {
         } else {
             Ok(keys)
         }
+    }
+
+    async fn get_keys_async(
+        &self,
+        max_result_bytes: usize,
+    ) -> (
+        tokio::sync::mpsc::Receiver<String>,
+        tokio::sync::oneshot::Receiver<Result<(), v3::Error>>,
+    ) {
+        let (keys_tx, keys_rx) = tokio::sync::mpsc::channel(4);
+        let (err_tx, err_rx) = tokio::sync::oneshot::channel();
+
+        let mut conn = self.connection.clone();
+
+        let the_work = async move {
+            let mut scan = conn.scan::<String>().await.map_err(log_error_v3)?;
+            loop {
+                match scan.next_item().await {
+                    None => break,
+                    Some(k) => {
+                        if k.len() > max_result_bytes {
+                            return Err(v3::Error::Other(format!(
+                                "query result exceeds limit of {max_result_bytes} bytes"
+                            )));
+                        }
+                        keys_tx.send(k).await.map_err(log_error_v3)?;
+                    }
+                }
+            }
+            Ok(())
+        };
+        tokio::spawn(async move {
+            let res = the_work.await;
+            _ = err_tx.send(res);
+        });
+
+        (keys_rx, err_rx)
     }
 
     async fn get_many(
