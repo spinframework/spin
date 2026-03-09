@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::{ensure, Context};
+use rustls::client::danger::ServerCertVerifier;
 
 use crate::runtime_config::{ClientCertRuntimeConfig, ClientTlsRuntimeConfig};
 
@@ -23,6 +24,7 @@ impl TlsClientConfigs {
             components,
             hosts,
             root_certificates,
+            use_platform_roots,
             use_webpki_roots,
             client_cert,
         } in client_tls_configs
@@ -36,7 +38,7 @@ impl TlsClientConfigs {
                 "client TLS 'hosts' list may not be empty"
             );
             let tls_client_config =
-                TlsClientConfig::new(root_certificates, use_webpki_roots, client_cert)
+                TlsClientConfig::new(root_certificates, use_webpki_roots, use_platform_roots, client_cert)
                     .context("error building TLS client config")?;
             for component in components {
                 let host_configs = component_host_tls_client_configs
@@ -100,17 +102,43 @@ impl TlsClientConfig {
     fn new(
         root_certificates: Vec<rustls_pki_types::CertificateDer<'static>>,
         use_webpki_roots: bool,
+        use_platform_roots: bool,
         client_cert: Option<ClientCertRuntimeConfig>,
     ) -> anyhow::Result<Self> {
-        let mut root_store = rustls::RootCertStore::empty();
-        if use_webpki_roots {
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        }
-        for cert in root_certificates {
-            root_store.add(cert)?;
-        }
+        let builder = if use_platform_roots {
+            let crypto_provider = rustls::crypto::CryptoProvider::get_default()
+                .cloned()
+                .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
 
-        let builder = rustls::ClientConfig::builder().with_root_certificates(root_store);
+            let verifier: Arc<dyn ServerCertVerifier> = if root_certificates.is_empty() {
+                Arc::new(
+                    rustls_platform_verifier::Verifier::new(crypto_provider.clone())
+                        .context("failed to initialize platform certificate verifier")?,
+                )
+            } else {
+                Arc::new(
+                    rustls_platform_verifier::Verifier::new_with_extra_roots(
+                        root_certificates,
+                        crypto_provider.clone(),
+                    )
+                    .context("failed to initialize platform certificate verifier with extra roots")?,
+                )
+            };
+
+            rustls::ClientConfig::builder_with_provider(crypto_provider)
+                .with_safe_default_protocol_versions()?
+                .dangerous()
+                .with_custom_certificate_verifier(verifier)
+        } else {
+            let mut root_store = rustls::RootCertStore::empty();
+            if use_webpki_roots {
+                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            }
+            for cert in root_certificates {
+                root_store.add(cert)?;
+            }
+            rustls::ClientConfig::builder().with_root_certificates(root_store)
+        };
 
         let client_config = if let Some(ClientCertRuntimeConfig {
             cert_chain,
@@ -140,7 +168,7 @@ impl Deref for TlsClientConfig {
 
 impl Default for TlsClientConfig {
     fn default() -> Self {
-        Self::new(vec![], true, None).expect("default client config should be valid")
+        Self::new(vec![], false, true, None).expect("default client config should be valid")
     }
 }
 
@@ -179,6 +207,7 @@ mod tests {
             components: vec!["test-component".into()],
             hosts: vec!["test-host".into()],
             root_certificates: vec![],
+            use_platform_roots: false,
             use_webpki_roots: false,
             client_cert: None,
         }])?;
@@ -197,6 +226,7 @@ mod tests {
             components: vec!["test-component".into()],
             hosts: vec!["test-host".into()],
             root_certificates: vec![test_certs[0].clone()],
+            use_platform_roots: false,
             use_webpki_roots: false,
             client_cert: Some(ClientCertRuntimeConfig {
                 cert_chain: test_certs,

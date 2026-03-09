@@ -36,7 +36,8 @@ impl SpinRuntimeConfig {
     /// [[client_tls]]
     /// component_ids = ["example-component"]
     /// hosts = ["example.com"]
-    /// ca_use_webpki_roots = true
+    /// ca_use_platform_roots = true
+    /// ca_use_webpki_roots = false
     /// ca_roots_file = "path/to/roots.crt"
     /// client_cert_file = "path/to/client.crt"
     /// client_private_key_file = "path/to/client.key"
@@ -117,6 +118,7 @@ impl SpinRuntimeConfig {
         let ClientTlsToml {
             component_ids,
             hosts,
+            ca_use_platform_roots,
             ca_use_webpki_roots,
             ca_roots_file,
             client_cert_file,
@@ -138,12 +140,17 @@ impl SpinRuntimeConfig {
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
-        let use_webpki_roots = if let Some(ca_use_webpki_roots) = ca_use_webpki_roots {
-            ca_use_webpki_roots
-        } else {
-            // Use webpki roots by default *unless* explicit roots were given
-            ca_roots_file.is_none()
-        };
+        let (use_platform_roots, use_webpki_roots) =
+            match (ca_use_platform_roots, ca_use_webpki_roots) {
+                // Both explicitly set
+                (Some(platform), Some(webpki)) => (platform, webpki),
+                // Only platform roots explicitly set
+                (Some(platform), None) => (platform, false),
+                // Only webpki roots explicitly set; disable platform roots
+                (None, Some(webpki)) => (false, webpki),
+                // Neither set: use platform roots by default unless explicit roots were given
+                (None, None) => (ca_roots_file.is_none(), false),
+            };
 
         let root_certificates = ca_roots_file
             .map(|path| self.load_certs(path))
@@ -164,6 +171,7 @@ impl SpinRuntimeConfig {
             components,
             hosts,
             root_certificates,
+            use_platform_roots,
             use_webpki_roots,
             client_cert,
         })
@@ -197,6 +205,7 @@ struct ClientTlsToml {
     component_ids: Vec<spin_serde::KebabId>,
     #[serde(deserialize_with = "deserialize_hosts")]
     hosts: Vec<String>,
+    ca_use_platform_roots: Option<bool>,
     ca_use_webpki_roots: Option<bool>,
     ca_roots_file: Option<PathBuf>,
     client_cert_file: Option<PathBuf>,
@@ -314,7 +323,8 @@ mod tests {
 
         assert_eq!(tls_configs[0].components, ["test-component"]);
         assert_eq!(tls_configs[0].hosts[0].as_str(), "test-host");
-        assert!(tls_configs[0].use_webpki_roots);
+        assert!(tls_configs[0].use_platform_roots);
+        assert!(!tls_configs[0].use_webpki_roots);
         Ok(())
     }
 
@@ -336,6 +346,7 @@ mod tests {
         assert_eq!(tls_configs.len(), 1);
 
         assert!(tls_configs[0].use_webpki_roots);
+        assert!(!tls_configs[0].use_platform_roots);
         assert_eq!(tls_configs[0].root_certificates.len(), 2);
         assert!(tls_configs[0].client_cert.is_some());
         Ok(())
@@ -355,6 +366,7 @@ mod tests {
             .context("missing config section")?;
 
         assert!(!tls_configs[0].use_webpki_roots);
+        assert!(!tls_configs[0].use_platform_roots);
         Ok(())
     }
 
