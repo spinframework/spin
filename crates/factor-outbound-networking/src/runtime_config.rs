@@ -23,8 +23,12 @@ pub struct ClientTlsRuntimeConfig {
     pub hosts: Vec<String>,
     /// A set of CA certs that should be considered valid roots.
     pub root_certificates: Vec<CertificateDer<'static>>,
+    /// If true, the operating system's certificate store will be used for
+    /// root certificate verification via `rustls-platform-verifier`.
+    pub use_platform_roots: bool,
     /// If true, the "standard" CA certs defined by `webpki-roots` crate will be
     /// considered valid roots in addition to `root_certificates`.
+    /// Only used when `use_platform_roots` is false.
     pub use_webpki_roots: bool,
     /// A certificate and private key to be used as the client certificate for
     /// "mutual TLS" (mTLS).
@@ -37,8 +41,9 @@ impl Default for ClientTlsRuntimeConfig {
             components: vec![],
             hosts: vec![],
             root_certificates: vec![],
-            // Use webpki roots by default
-            use_webpki_roots: true,
+            // Use platform roots by default
+            use_platform_roots: true,
+            use_webpki_roots: false,
             client_cert: None,
         }
     }
