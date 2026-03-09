@@ -3,15 +3,16 @@ use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_outbound_pg::client::Client;
 use spin_factor_outbound_pg::client::ClientFactory;
 use spin_factor_outbound_pg::client::HashableCertificate;
+use spin_factor_outbound_pg::client::QueryAsyncResult;
 use spin_factor_outbound_pg::OutboundPgFactor;
 use spin_factor_variables::VariablesFactor;
 use spin_factors::{anyhow, RuntimeFactors};
 use spin_factors_test::{toml, TestEnvironment};
 use spin_world::async_trait;
-use spin_world::spin::postgres4_1_0::postgres::Error as PgError;
-use spin_world::spin::postgres4_1_0::postgres::HostConnection;
-use spin_world::spin::postgres4_1_0::postgres::{self as v2};
-use spin_world::spin::postgres4_1_0::postgres::{ParameterValue, RowSet};
+use spin_world::spin::postgres4_2_0::postgres::Error as PgError;
+use spin_world::spin::postgres4_2_0::postgres::HostConnection;
+use spin_world::spin::postgres4_2_0::postgres::{self as v2};
+use spin_world::spin::postgres4_2_0::postgres::{ParameterValue, RowSet};
 
 #[derive(RuntimeFactors)]
 struct TestFactors {
@@ -108,6 +109,7 @@ async fn exercise_query() -> anyhow::Result<()> {
 // TODO: We can expand this mock to track calls and simulate return values
 #[derive(Default)]
 pub struct MockClientFactory {}
+#[derive(Clone)]
 pub struct MockClient {}
 
 #[async_trait]
@@ -142,5 +144,14 @@ impl Client for MockClient {
             columns: vec![],
             rows: vec![],
         })
+    }
+
+    async fn query_async(
+        &self,
+        _statement: String,
+        _params: Vec<ParameterValue>,
+        _max_result_bytes: usize,
+    ) -> Result<QueryAsyncResult, v2::Error> {
+        panic!("not implemented");
     }
 }
