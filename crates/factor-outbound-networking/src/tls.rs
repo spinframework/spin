@@ -37,9 +37,13 @@ impl TlsClientConfigs {
                 !hosts.is_empty(),
                 "client TLS 'hosts' list may not be empty"
             );
-            let tls_client_config =
-                TlsClientConfig::new(root_certificates, use_webpki_roots, use_platform_roots, client_cert)
-                    .context("error building TLS client config")?;
+            let tls_client_config = TlsClientConfig::new(
+                root_certificates,
+                use_webpki_roots,
+                use_platform_roots,
+                client_cert,
+            )
+            .context("error building TLS client config")?;
             for component in components {
                 let host_configs = component_host_tls_client_configs
                     .entry(component.clone())
@@ -121,7 +125,9 @@ impl TlsClientConfig {
                         root_certificates,
                         crypto_provider.clone(),
                     )
-                    .context("failed to initialize platform certificate verifier with extra roots")?,
+                    .context(
+                        "failed to initialize platform certificate verifier with extra roots",
+                    )?,
                 )
             };
 
