@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use anyhow::Context;
 use async_trait::async_trait;
-use spin_factor_sqlite::Connection;
-use spin_world::spin::sqlite::sqlite as v3;
-use spin_world::spin::sqlite::sqlite::{self, RowResult};
+use spin_factor_sqlite::{Connection, QueryAsyncResult};
+use spin_world::spin::sqlite3_1_0::sqlite as v3;
+use spin_world::spin::sqlite3_1_0::sqlite::{self, RowResult};
 use tokio::sync::OnceCell;
 
 /// A lazy wrapper around a [`LibSqlConnection`] that implements the [`Connection`] trait.
@@ -12,7 +14,7 @@ pub struct LazyLibSqlConnection {
     // Since the libSQL client can only be created asynchronously, we wait until
     // we're in the `Connection` implementation to create. Since we only want to do
     // this once, we use a `OnceCell` to store it.
-    inner: OnceCell<LibSqlConnection>,
+    inner: OnceCell<Arc<LibSqlConnection>>,
 }
 
 impl LazyLibSqlConnection {
@@ -24,12 +26,13 @@ impl LazyLibSqlConnection {
         }
     }
 
-    pub async fn get_or_create_connection(&self) -> Result<&LibSqlConnection, v3::Error> {
+    pub async fn get_or_create_connection(&self) -> Result<&Arc<LibSqlConnection>, v3::Error> {
         self.inner
             .get_or_try_init(|| async {
                 LibSqlConnection::create(self.url.clone(), self.token.clone())
                     .await
                     .context("failed to create SQLite client")
+                    .map(Arc::new)
             })
             .await
             .map_err(|_| v3::Error::InvalidConnection)
@@ -46,6 +49,74 @@ impl Connection for LazyLibSqlConnection {
     ) -> Result<v3::QueryResult, v3::Error> {
         let client = self.get_or_create_connection().await?;
         client.query(query, parameters, max_result_bytes).await
+    }
+
+    async fn query_async(
+        &self,
+        query: &str,
+        parameters: Vec<v3::Value>,
+        max_result_bytes: usize,
+    ) -> Result<QueryAsyncResult, v3::Error> {
+        let client = self.get_or_create_connection().await?.clone();
+        let query = query.to_string();
+
+        let (cols_tx, cols_rx) = tokio::sync::oneshot::channel();
+        let (rows_tx, rows_rx) = tokio::sync::mpsc::channel(4);
+        let (err_tx, err_rx) = tokio::sync::oneshot::channel();
+
+        let the_work = async move {
+            let result = client
+                .inner
+                .query(&query, convert_parameters(&parameters))
+                .await
+                .map_err(|e| v3::Error::Io(e.to_string()));
+
+            let mut rows = match result {
+                Ok(r) => r,
+                Err(e) => {
+                    _ = cols_tx.send(Default::default());
+                    return Err(e);
+                }
+            };
+
+            let columns = columns(&rows);
+            cols_tx
+                .send(columns)
+                .map_err(|_| v3::Error::Io("column send error".into()))?;
+
+            let column_count = rows.column_count();
+
+            loop {
+                let row = match rows.next().await.map_err(io_error_v3)? {
+                    Some(r) => r,
+                    None => break,
+                };
+                let row = convert_row(row, column_count);
+                if row.values.iter().map(|v| v.memory_size()).sum::<usize>() > max_result_bytes {
+                    return Err(v3::Error::Io(format!(
+                        "query result exceeds limit of {max_result_bytes} bytes"
+                    )));
+                }
+                rows_tx
+                    .send(row)
+                    .await
+                    .map_err(|_| v3::Error::Io("column send error".into()))?;
+            }
+
+            Ok(())
+        };
+        tokio::spawn(async move {
+            let res = the_work.await;
+            _ = err_tx.send(res);
+        });
+
+        let columns = cols_rx.await.map_err(|e| v3::Error::Io(e.to_string()))?;
+
+        Ok(QueryAsyncResult {
+            columns,
+            rows: rows_rx,
+            error: err_rx,
+        })
     }
 
     async fn execute_batch(&self, statements: &str) -> anyhow::Result<()> {
@@ -176,4 +247,8 @@ fn convert_parameters(parameters: &[sqlite::Value]) -> Vec<libsql::Value> {
             sqlite::Value::Null => Value::Null,
         })
         .collect()
+}
+
+fn io_error_v3(err: libsql::Error) -> v3::Error {
+    v3::Error::Io(err.to_string())
 }

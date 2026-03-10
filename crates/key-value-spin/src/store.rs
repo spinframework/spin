@@ -1,7 +1,9 @@
 use anyhow::Result;
 use rusqlite::{named_params, Connection};
 use spin_core::async_trait;
-use spin_factor_key_value::{log_cas_error, log_error, Cas, Error, Store, StoreManager, SwapError};
+use spin_factor_key_value::{
+    log_cas_error, log_error, log_error_v3, v3, Cas, Error, Store, StoreManager, SwapError,
+};
 use std::rc::Rc;
 use std::{
     path::PathBuf,
@@ -185,6 +187,51 @@ impl Store for SqliteStore {
                 })
                 .collect()
         })
+    }
+
+    async fn get_keys_async(
+        &self,
+        max_result_bytes: usize,
+    ) -> (
+        tokio::sync::mpsc::Receiver<String>,
+        tokio::sync::oneshot::Receiver<Result<(), v3::Error>>,
+    ) {
+        let (keys_tx, keys_rx) = tokio::sync::mpsc::channel(4);
+        let (err_tx, err_rx) = tokio::sync::oneshot::channel();
+
+        let connection = self.connection.clone();
+        let name = self.name.clone();
+
+        let the_work = move || {
+            let conn = connection.lock().unwrap();
+            let mut stmt = conn
+                .prepare_cached("SELECT key FROM spin_key_value WHERE store=$1")
+                .map_err(log_error_v3)?;
+            let mut rows = stmt.query([&name]).map_err(log_error_v3)?;
+
+            loop {
+                let row = match rows.next().map_err(log_error_v3)? {
+                    None => break,
+                    Some(r) => r,
+                };
+
+                let key = row.get::<_, String>(0).map_err(log_error_v3)?;
+                if key.len() > max_result_bytes {
+                    return Err(v3::Error::Other(format!(
+                        "query result exceeds limit of {max_result_bytes} bytes"
+                    )));
+                }
+                keys_tx.blocking_send(key).map_err(log_error_v3)?;
+            }
+
+            Ok(())
+        };
+        tokio::task::spawn_blocking(move || {
+            let res = the_work();
+            _ = err_tx.send(res);
+        });
+
+        (keys_rx, err_rx)
     }
 
     async fn get_many(

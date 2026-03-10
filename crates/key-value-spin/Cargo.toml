@@ -10,6 +10,7 @@ rusqlite = { workspace = true, features = ["bundled", "array"] }
 serde = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-key-value = { path = "../factor-key-value" }
+spin-wasi-async = { path = "../wasi-async" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 

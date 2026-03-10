@@ -6,8 +6,9 @@ use std::{
 
 use anyhow::Context as _;
 use async_trait::async_trait;
-use spin_factor_sqlite::Connection;
-use spin_world::spin::sqlite::sqlite;
+use spin_factor_sqlite::{Connection, QueryAsyncResult};
+use spin_world::spin::sqlite3_1_0::sqlite;
+use spin_world::spin::sqlite3_1_0::sqlite::{self as v3};
 
 /// The location of an in-process sqlite database.
 #[derive(Debug, Clone)]
@@ -96,6 +97,79 @@ impl Connection for InProcConnection {
         .map_err(|e| sqlite::Error::Io(e.to_string()))?
     }
 
+    async fn query_async(
+        &self,
+        query: &str,
+        parameters: Vec<v3::Value>,
+        max_result_bytes: usize,
+    ) -> Result<QueryAsyncResult, v3::Error> {
+        let connection = self.db_connection()?;
+        let query = query.to_owned();
+
+        let (cols_tx, cols_rx) = tokio::sync::oneshot::channel();
+        let (rows_tx, rows_rx) = tokio::sync::mpsc::channel(4);
+        let (err_tx, err_rx) = tokio::sync::oneshot::channel();
+
+        let the_work = move || {
+            let conn = connection.lock().unwrap();
+            let mut statement = match conn.prepare_cached(&query) {
+                Ok(s) => s,
+                Err(e) => {
+                    _ = cols_tx.send(Default::default());
+                    return Err(io_error_v3(e));
+                }
+            };
+            let columns: Vec<_> = statement
+                .column_names()
+                .into_iter()
+                .map(ToOwned::to_owned)
+                .collect();
+            cols_tx
+                .send(columns)
+                .map_err(|_| v3::Error::Io("column send error".into()))?;
+
+            let mut rows = statement
+                .query(rusqlite::params_from_iter(convert_data(
+                    parameters.into_iter(),
+                )))
+                .map_err(io_error_v3)?;
+
+            loop {
+                let row = match rows.next().map_err(io_error_v3)? {
+                    None => break,
+                    Some(r) => r,
+                };
+
+                let row = convert_row(row).map_err(io_error_v3)?;
+
+                if row.values.iter().map(|v| v.memory_size()).sum::<usize>() > max_result_bytes {
+                    return Err(sqlite::Error::Io(format!(
+                        "query result exceeds limit of {max_result_bytes} bytes"
+                    )));
+                }
+
+                println!("it sends the row");
+                rows_tx
+                    .blocking_send(row)
+                    .map_err(|_| v3::Error::Io("row send error".into()))?;
+            }
+
+            Ok(())
+        };
+        tokio::task::spawn_blocking(move || {
+            let res = the_work();
+            _ = err_tx.send(res);
+        });
+
+        let columns = cols_rx.await.map_err(|e| v3::Error::Io(e.to_string()))?;
+
+        Ok(QueryAsyncResult {
+            columns,
+            rows: rows_rx,
+            error: err_rx,
+        })
+    }
+
     async fn execute_batch(&self, statements: &str) -> anyhow::Result<()> {
         let connection = self.db_connection()?;
         let statements = statements.to_owned();
@@ -129,6 +203,23 @@ impl Connection for InProcConnection {
     }
 }
 
+fn io_error_v3(err: rusqlite::Error) -> v3::Error {
+    v3::Error::Io(err.to_string())
+}
+
+fn convert_row(row: &rusqlite::Row) -> Result<sqlite::RowResult, rusqlite::Error> {
+    let mut values = vec![];
+    for column in 0.. {
+        let value = row.get::<usize, ValueWrapper>(column);
+        if let Err(rusqlite::Error::InvalidColumnIndex(_)) = value {
+            break;
+        }
+        let value = value?.0;
+        values.push(value);
+    }
+    Ok(sqlite::RowResult { values })
+}
+
 // This function lives outside the query function to make it more readable.
 fn execute_query(
     connection: &Mutex<rusqlite::Connection>,
@@ -149,18 +240,7 @@ fn execute_query(
     let rows = statement
         .query_map(
             rusqlite::params_from_iter(convert_data(parameters.into_iter())),
-            |row| {
-                let mut values = vec![];
-                for column in 0.. {
-                    let value = row.get::<usize, ValueWrapper>(column);
-                    if let Err(rusqlite::Error::InvalidColumnIndex(_)) = value {
-                        break;
-                    }
-                    let value = value?.0;
-                    values.push(value);
-                }
-                Ok(sqlite::RowResult { values })
-            },
+            convert_row,
         )
         .map_err(|e| sqlite::Error::Io(e.to_string()))?;
     let rows = rows

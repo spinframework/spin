@@ -36,7 +36,7 @@ wasmtime::component::bindgen!({
         "fermyon:spin/variables@2.0.0.error" => v2::variables::Error,
         "spin:postgres/postgres@3.0.0.error" => spin::postgres3_0_0::postgres::Error,
         "spin:postgres/postgres@4.2.0.error" => spin::postgres4_2_0::postgres::Error,
-        "spin:sqlite/sqlite.error" => spin::sqlite::sqlite::Error,
+        "spin:sqlite/sqlite@3.1.0.error" => spin::sqlite3_1_0::sqlite::Error,
         "wasi:config/store@0.2.0-draft-2024-09-27.error" => wasi::config::store::Error,
         "wasi:keyvalue/store.error" => wasi::keyvalue::store::Error,
         "wasi:keyvalue/atomics.cas-error" => wasi::keyvalue::atomics::CasError,
@@ -57,7 +57,7 @@ pub mod wasi_otel;
 // TODO: make this configurable
 pub const MAX_HOST_BUFFERED_BYTES: usize = 128 << 20;
 
-impl spin::sqlite::sqlite::Value {
+impl spin::sqlite3_1_0::sqlite::Value {
     pub fn memory_size(&self) -> usize {
         match self {
             Self::Null | Self::Integer(_) | Self::Real(_) => std::mem::size_of::<Self>(),

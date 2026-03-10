@@ -1,4 +1,4 @@
-use helper::http_trigger_bindings::spin::sqlite::sqlite::{Connection, Error, Value};
+use helper::http_trigger_bindings::spin::sqlite3_0_0::sqlite::{Connection, Error, Value};
 use helper::{bail, ensure_eq, ensure_matches, ensure_ok, ensure_some};
 
 helper::define_component!(Component);
