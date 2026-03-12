@@ -19,11 +19,7 @@ Building and running individual components or entire applications in configurati
 This very simple proposal consists of four parts:
 
 1. Adding an optional `[component.name.profile.profile-name]` table to use for defining additional build profiles of a component
-2. Adding a `-profile [profile-name]` CLI flag and `SPIN_PROFILE` env var to `spin {build, watch, up}` to use specific build profiles of all components (where available, with fallback to the default otherwise)
-   1. By popular demand, the `debug` profile can be selected using the `--debug` CLI flag
-   2. `release` is the default profile, but can also be explicitly named for regularity, including with the `--release` alias
-3. Adding a (repeatable) `-component-profile [component-name]=[profile-name]` CLI flag and `SPIN_COMPONENT_PROFILE="[component-name]=[profile-name],..."` env var to use specific profiles for specific components
-4. Any operations that publish a Spin application to a remote location (such as `spin registry push`) must implicitly run a `spin build --release` step before publishing build results
+2. Adding a `-profile [profile-name]` CLI flag to `spin {build, watch, up, deploy}` to use specific build profiles of all components (where available, with fallback to the default otherwise)
 
 ## Example
 
@@ -55,7 +51,7 @@ source = "target/spin-http-js.debug.wasm"
 command = "npm run build:debug"
 watch = ["src/**/*", "package.json", "package-lock.json"]
 
-# The `ui` component doesn't have a debug build, so the release build will always be used.
+# The `ui` component doesn't have a debug build, so the default build will always be used.
 [component.ui]
 source = { url = ".../spin_static_fs.wasm", digest = "..." }
 ...
@@ -77,26 +73,7 @@ The application defined in this manifest can be run in various configurations:
 
 ## Details of profile selection
 
-### Application-wide profile selection
-
-A profile can be selected for the entire application in three ways:
-1. Via the `--profile=[profile-name]` CLI flag to `spin {build, up, watch}`
-2. Via the `--debug` CLI flag to `spin {build, up, watch}` as an alias for `--profile=debug`
-3. Via the `SPIN_PROFILE=[profile-name]` env var
-
-If the `SPIN_PROFILE` env var is set and `--profile` / `--debug` are passed as CLI flags, the value of the CLI flag is used, and the env var ignored. `--profile` and `--debug` are mutually exclusive and lead `spin` to exit with an error.
-
-### Component-specific profile selection
-
-A profile can be selected for a specific component in two ways:
-1. Via the `--component-profile [component-name]=[profile-name],...` CLI flag
-2. Via the `SPIN_COMPONENT_PROFILE="[component-name]=[profile-name],..."` env var
-
-The CLI flag is repeatable, but can also support multiple comma-separated entries in a single instance.
-
-If both the `SPIN_COMPONENT_PROFILE` env var is set and `--component-profile` provided, they will be merged into a single list, with settings from the CLI flag taking precedence: if a profile is specified in both for the same component, the value from the CLI flag is used.
-
-Component-specific profile selection overrides the application-wide profile. E.g. the command `spin up --debug --component-profile foo=release` will cause all components to use the `debug` profile, except for the `foo` component, which will use the default/`release` profile.
+A profile can be selected `--profile=[profile-name]` CLI flag to `spin {build, up, watch, deploy}`
 
 ## Profile-overridable fields
 
@@ -105,30 +82,18 @@ This proposal is focused on build configurations. As such, the fields that are s
 - `source`
 - `command`
 - `watch`
+- `environment`
+- `dependencies`
 
 This set can be expanded in changes building on this initial support, as adding additional fields should always be backwards-compatible.
 
-## Profiles are atomic
+## Profiles are not atomic
 
-When running an application with a named profile applied, components that don’t define that profile fall back to the default build configuration. The same isn’t true for individual fields in a profile: if e.g. a profile contains the `source` field but no `command` field, running `spin build` will not try to run the default configuration’s build command. That also means that if a field is required, it must be included in all profiles, and omitting it in any profiles will cause the manifest to be rejected.
+When running an application with a named profile applied, components that don’t define that profile fall back to the default build configuration. All the individual fields in a profile are optional overrides.
 
-## Local testing only
+## Deployment plugins
 
-At least for now, this proposal is focused entirely on local testing: deployment through plugins is not proposed to gain support for a `--profile` flag.
-
-## Deploy implies release build
-
-To ensure that deployment operations always publishes up-to-date artifacts, they must implicitly run a build of the release profile of all components before performing the publishing itself. E.g., where currently one has to run `spin build && spin registry push` to ensure that the latest source code is compiled before publishing `.wasm` components to a registry, implementing this proposal would change behavior such that `spin registry push` automatically runs `SPIN_COMPONENT_PROFILE="" spin build --release`.
-
-We probably can't apply this to plugin-based deployment operations automatically, but should ensure that we provide documentation to plugin authors that instructs them to do this, and ideally an easy way to do it via a well-named function in the API.
-
-# Backwards-compatibility
-
-This proposal should be fully backwards-compatible in practice, but entails a change in behavior around publishing operations, as discussed in the previous section.
-
-# Implementation concerns
-
-I can't see any major implementation concerns: this should hopefully be pretty straightforward.
+Spin transparently passes command arguments to deployment plugins when the `deploy` subcommand is invoked. It is the responsibility of each deployment plugin to interpret these arguments, handle different profiles, and understand the updated manifest structure accordingly.
 
 # Alternatives considered
 
