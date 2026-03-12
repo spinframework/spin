@@ -1,5 +1,5 @@
 use super::{Cas, SwapError};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use spin_core::{
     async_trait,
     wasmtime::component::{Accessor, FutureReader, Resource, StreamReader},
@@ -356,10 +356,10 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
 
         let producer = spin_wasi_async::stream::producer(keys_rx);
         let (ksr, efr) = accessor.with(|mut access| {
-            let ksr = StreamReader::new(&mut access, producer);
-            let efr = FutureReader::new(&mut access, err_rx);
-            (ksr, efr)
-        });
+            let ksr = StreamReader::new(&mut access, producer).map_err(|e| anyhow!("stream error {e}"))?;
+            let efr = FutureReader::new(&mut access, err_rx).map_err(|e| anyhow!("future error {e}"))?;
+            anyhow::Ok((ksr, efr))
+        })?;
 
         Ok((ksr, efr))
     }

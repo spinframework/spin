@@ -218,10 +218,10 @@ impl v3::HostConnectionWithStore for crate::SqliteFactorData {
         let row_producer = spin_wasi_async::stream::producer(rows);
 
         let (sr, efr) = accessor.with(|mut access| {
-            let sr = StreamReader::new(&mut access, row_producer);
-            let efr = FutureReader::new(&mut access, error);
-            (sr, efr)
-        });
+            let sr = StreamReader::new(&mut access, row_producer).map_err(|e| v3::Error::Io(format!("stream error {e}")))?;
+            let efr = FutureReader::new(&mut access, error).map_err(|e| v3::Error::Io(format!("future error {e}")))?;
+            Ok((sr, efr))
+        })?;
 
         Ok((columns, sr, efr))
     }
