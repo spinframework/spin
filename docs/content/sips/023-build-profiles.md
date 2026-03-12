@@ -4,7 +4,7 @@ date = "2025-03-31T12:00:00Z"
 
 ---
 
-Summary: Support defining multiple build profiles for components, and running a Spin application in with those profiles.
+Summary: Support defining multiple build profiles for components, and running a Spin application with those profiles.
 
 Owner(s): [till@fermyon.com](mailto:till@fermyon.com)
 
@@ -16,10 +16,10 @@ Building and running individual components or entire applications in configurati
 
 # Proposal
 
-This very simple proposal consists of four parts:
+This proposal consists of two parts:
 
 1. Adding an optional `[component.name.profile.profile-name]` table to use for defining additional build profiles of a component
-2. Adding a `-profile [profile-name]` CLI flag to `spin {build, watch, up, deploy}` to use specific build profiles of all components (where available, with fallback to the default otherwise)
+2. Adding a `--profile [profile-name]` CLI flag to `spin {build, watch, up, deploy, registry push}` to use specific build profiles of all components (where available, with fallback to the default otherwise)
 
 ## Example
 
@@ -49,7 +49,6 @@ source = "target/spin-http-js.debug.wasm"
 
 [component.sentiment-analysis.profile.debug.build]
 command = "npm run build:debug"
-watch = ["src/**/*", "package.json", "package-lock.json"]
 
 # The `ui` component doesn't have a debug build, so the default build will always be used.
 [component.ui]
@@ -68,20 +67,18 @@ source = { url = ".../spin-kv-explorer.debug.wasm", digest = "..." }
 The application defined in this manifest can be run in various configurations:
 
 - `spin up`: uses the release/default builds for everything
-- `spin up --profile debug` or `spin up --debug`: uses builds of the profile named `debug` of all components that have them, default builds for the rest
-- `spin up --component-profile sentiment-analysis=debug`: uses the debug build of just the `sentiment-analysis` component, default builds for everything else
+- `spin up --profile debug`: uses builds of the profile named `debug` of all components that have them, default builds for the rest
 
 ## Details of profile selection
 
-A profile can be selected `--profile=[profile-name]` CLI flag to `spin {build, up, watch, deploy}`
+A profile can be selected `--profile=[profile-name]` CLI flag to `spin {build, up, watch, deploy, registry push}`
 
 ## Profile-overridable fields
 
 This proposal is focused on build configurations. As such, the fields that are supported in `[component.component-name.profile.profile-name]` tables are limited to:
 
 - `source`
-- `command`
-- `watch`
+- `build.command`
 - `environment`
 - `dependencies`
 
