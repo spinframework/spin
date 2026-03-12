@@ -1,0 +1,48 @@
+package wasi:clocks@0.3.0-rc-2026-03-15;
+/// WASI Monotonic Clock is a clock API intended to let users measure elapsed
+/// time.
+///
+/// It is intended to be portable at least between Unix-family platforms and
+/// Windows.
+///
+/// A monotonic clock is a clock which has an unspecified initial value, and
+/// successive reads of the clock will produce non-decreasing values.
+@since(version = 0.3.0-rc-2026-03-15)
+interface monotonic-clock {
+    use types.{duration};
+
+    /// A mark on a monotonic clock is a number of nanoseconds since an
+    /// unspecified initial value, and can only be compared to instances from
+    /// the same monotonic-clock.
+    @since(version = 0.3.0-rc-2026-03-15)
+    type mark = u64;
+
+    /// Read the current value of the clock.
+    ///
+    /// The clock is monotonic, therefore calling this function repeatedly will
+    /// produce a sequence of non-decreasing values.
+    ///
+    /// For completeness, this function traps if it's not possible to represent
+    /// the value of the clock in a `mark`. Consequently, implementations
+    /// should ensure that the starting time is low enough to avoid the
+    /// possibility of overflow in practice.
+    @since(version = 0.3.0-rc-2026-03-15)
+    now: func() -> mark;
+
+    /// Query the resolution of the clock. Returns the duration of time
+    /// corresponding to a clock tick.
+    @since(version = 0.3.0-rc-2026-03-15)
+    get-resolution: func() -> duration;
+
+    /// Wait until the specified mark has occurred.
+    @since(version = 0.3.0-rc-2026-03-15)
+    wait-until: async func(
+        when: mark,
+    );
+
+    /// Wait for the specified duration to elapse.
+    @since(version = 0.3.0-rc-2026-03-15)
+    wait-for: async func(
+        how-long: duration,
+    );
+}

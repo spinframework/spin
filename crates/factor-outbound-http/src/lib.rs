@@ -26,7 +26,7 @@ use spin_factors::{
 use tokio::sync::Semaphore;
 use wasmtime_wasi_http::WasiHttpCtx;
 
-pub use wasmtime_wasi_http::{
+pub use wasmtime_wasi_http::p2::{
     bindings::http::types::ErrorCode,
     body::HyperOutgoingBody,
     types::{HostFutureIncomingResponse, OutgoingRequestConfig},
@@ -78,25 +78,31 @@ impl Factor for OutboundHttpFactor {
         let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
         Ok(InstanceState {
             wasi_http_ctx: WasiHttpCtx::new(),
-            allowed_hosts,
-            blocked_networks,
-            component_tls_configs,
-            self_request_origin: None,
-            request_interceptor: None,
-            spin_http_client: None,
-            wasi_http_clients: ctx.app_state().wasi_http_clients.clone(),
-            connection_pooling_enabled: ctx.app_state().connection_pooling_enabled,
-            concurrent_outbound_connections_semaphore: ctx
-                .app_state()
-                .concurrent_outbound_connections_semaphore
-                .clone(),
-            otel,
+            hooks: InstanceHttpHooks {
+                allowed_hosts,
+                blocked_networks,
+                component_tls_configs,
+                self_request_origin: None,
+                request_interceptor: None,
+                spin_http_client: None,
+                wasi_http_clients: ctx.app_state().wasi_http_clients.clone(),
+                connection_pooling_enabled: ctx.app_state().connection_pooling_enabled,
+                concurrent_outbound_connections_semaphore: ctx
+                    .app_state()
+                    .concurrent_outbound_connections_semaphore
+                    .clone(),
+                otel,
+            },
         })
     }
 }
 
 pub struct InstanceState {
     wasi_http_ctx: WasiHttpCtx,
+    hooks: InstanceHttpHooks,
+}
+
+struct InstanceHttpHooks {
     allowed_hosts: OutboundAllowedHosts,
     blocked_networks: BlockedNetworks,
     component_tls_configs: ComponentTlsClientConfigs,
@@ -127,7 +133,7 @@ impl InstanceState {
     /// This is used to handle outbound requests to relative URLs. If unset,
     /// those requests will fail.
     pub fn set_self_request_origin(&mut self, origin: SelfRequestOrigin) {
-        self.self_request_origin = Some(origin);
+        self.hooks.self_request_origin = Some(origin);
     }
 
     /// Sets a [`OutboundHttpInterceptor`] for this instance.
@@ -137,10 +143,10 @@ impl InstanceState {
         &mut self,
         interceptor: impl OutboundHttpInterceptor + 'static,
     ) -> anyhow::Result<()> {
-        if self.request_interceptor.is_some() {
+        if self.hooks.request_interceptor.is_some() {
             anyhow::bail!("set_request_interceptor can only be called once");
         }
-        self.request_interceptor = Some(Arc::new(interceptor));
+        self.hooks.request_interceptor = Some(Arc::new(interceptor));
         Ok(())
     }
 }
@@ -207,8 +213,8 @@ mod concurrent_outbound_connections {
     }
 }
 
-pub type Request = http::Request<wasmtime_wasi_http::body::HyperOutgoingBody>;
-pub type Response = http::Response<wasmtime_wasi_http::body::HyperIncomingBody>;
+pub type Request = http::Request<wasmtime_wasi_http::p2::body::HyperOutgoingBody>;
+pub type Response = http::Response<wasmtime_wasi_http::p2::body::HyperIncomingBody>;
 
 /// SelfRequestOrigin indicates the base URI to use for "self" requests.
 #[derive(Clone, Debug)]

@@ -2,14 +2,14 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "wasi:http/service@0.3.0-rc-2026-01-06",
+    world: "wasi:http/service@0.3.0-rc-2026-03-15",
     generate_all,
 });
 
 use {
     crate::{
-        exports::wasi::http0_3_0_rc_2026_01_06::handler::Guest,
-        wasi::http0_3_0_rc_2026_01_06::{
+        exports::wasi::http0_3_0_rc_2026_03_15::handler::Guest,
+        wasi::http0_3_0_rc_2026_03_15::{
             client,
             types::{ErrorCode, Fields, Method, Request, Response, Scheme},
         },

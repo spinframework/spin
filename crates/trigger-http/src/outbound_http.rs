@@ -10,7 +10,7 @@ use spin_factor_outbound_networking::config::allowed_hosts::parse_service_chaini
 use spin_factors::RuntimeFactors;
 use spin_http::routes::RouteMatch;
 use wasmtime::ToWasmtimeResult;
-use wasmtime_wasi_http::{HttpError, HttpResult};
+use wasmtime_wasi_http::p2::{HttpError, HttpResult};
 
 use crate::HttpServer;
 

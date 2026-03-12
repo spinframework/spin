@@ -41,8 +41,8 @@ use tokio::{
 use tracing::Instrument;
 use wasmtime::ToWasmtimeResult;
 use wasmtime_wasi::p2::bindings::CommandIndices;
-use wasmtime_wasi_http::body::HyperOutgoingBody;
 use wasmtime_wasi_http::handler::{HandlerState, StoreBundle};
+use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
 
 use crate::{
     headers::strip_forbidden_headers,
@@ -165,18 +165,14 @@ impl<F: RuntimeFactors> HttpServer<F> {
     ) -> anyhow::Result<HandlerType<HttpHandlerState<F>>> {
         let pre = trigger_app.get_instance_pre(component_id)?;
         let handler_type = match executor {
-            None | Some(HttpExecutorType::Http) | Some(HttpExecutorType::Wasip3Unstable) => {
-                let handler_type = HandlerType::from_instance_pre(
-                    pre,
-                    HttpHandlerState {
-                        trigger_app: trigger_app.clone(),
-                        component_id: component_id.into(),
-                        reuse_config,
-                    },
-                )?;
-                handler_type.validate_executor(executor)?;
-                handler_type
-            }
+            None | Some(HttpExecutorType::Http) => HandlerType::from_instance_pre(
+                pre,
+                HttpHandlerState {
+                    trigger_app: trigger_app.clone(),
+                    component_id: component_id.into(),
+                    reuse_config,
+                },
+            )?,
             Some(HttpExecutorType::Wagi(wagi_config)) => {
                 anyhow::ensure!(
                     wagi_config.entrypoint == "_start",
@@ -397,7 +393,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         let executor = executor.as_ref().unwrap_or(&HttpExecutorType::Http);
 
         let res = match executor {
-            HttpExecutorType::Http | HttpExecutorType::Wasip3Unstable => match handler_type {
+            HttpExecutorType::Http => match handler_type {
                 HandlerType::Spin => {
                     SpinHttpExecutor
                         .execute(instance_builder, &route_match, req, client_addr)
@@ -553,7 +549,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
             let result = self
                 .handle(
                     request.map(|body: Incoming| {
-                        body.map_err(wasmtime_wasi_http::hyper_response_error)
+                        body.map_err(wasmtime_wasi_http::p2::hyper_response_error)
                             .boxed_unsync()
                     }),
                     server_scheme,

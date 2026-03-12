@@ -25,7 +25,7 @@ use spin_factor_outbound_networking::{
     config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
     ComponentTlsClientConfigs, TlsClientConfig,
 };
-use spin_factors::{wasmtime::component::ResourceTable, RuntimeFactorsInstanceState};
+use spin_factors::RuntimeFactorsInstanceState;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::TcpStream,
@@ -38,16 +38,19 @@ use tracing::{field::Empty, instrument, Instrument};
 use wasmtime::component::HasData;
 use wasmtime_wasi::TrappableError;
 use wasmtime_wasi_http::{
-    bindings::http::types::{self as p2_types, ErrorCode},
-    body::HyperOutgoingBody,
+    p2::{
+        self,
+        bindings::http::types::{self as p2_types, ErrorCode},
+        body::HyperOutgoingBody,
+        types::{HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
+        HttpError, WasiHttpCtxView,
+    },
     p3::{self, bindings::http::types as p3_types},
-    types::{HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
-    HttpError, WasiHttpCtx, WasiHttpImpl, WasiHttpView,
 };
 
 use crate::{
     intercept::{InterceptOutcome, OutboundHttpInterceptor},
-    wasi_2023_10_18, wasi_2023_11_10, InstanceState, OutboundHttpFactor, SelfRequestOrigin,
+    wasi_2023_10_18, wasi_2023_11_10, InstanceHttpHooks, OutboundHttpFactor, SelfRequestOrigin,
 };
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(600);
@@ -83,10 +86,10 @@ impl<T: Body + Unpin> Body for MutexBody<T> {
 pub(crate) struct HasHttp;
 
 impl HasData for HasHttp {
-    type Data<'a> = WasiHttpImpl<WasiHttpImplInner<'a>>;
+    type Data<'a> = WasiHttpCtxView<'a>;
 }
 
-impl p3::WasiHttpCtx for InstanceState {
+impl p3::WasiHttpHooks for InstanceHttpHooks {
     #[instrument(
         name = "spin_outbound_http.send_request",
         skip_all,
@@ -240,19 +243,24 @@ where
 {
     let linker = ctx.linker();
 
-    fn get_http<C>(store: &mut C::StoreData) -> WasiHttpImpl<WasiHttpImplInner<'_>>
+    fn get_http<C>(store: &mut C::StoreData) -> WasiHttpCtxView<'_>
     where
         C: spin_factors::InitContext<OutboundHttpFactor>,
     {
         let (state, table) = C::get_data_with_table(store);
-        WasiHttpImpl(WasiHttpImplInner { state, table })
+        let ctx = &mut state.wasi_http_ctx;
+        WasiHttpCtxView {
+            ctx,
+            table,
+            hooks: &mut state.hooks,
+        }
     }
 
-    let get_http = get_http::<C> as fn(&mut C::StoreData) -> WasiHttpImpl<WasiHttpImplInner<'_>>;
-    wasmtime_wasi_http::bindings::http::outgoing_handler::add_to_linker::<_, HasHttp>(
+    let get_http = get_http::<C> as fn(&mut C::StoreData) -> WasiHttpCtxView<'_>;
+    wasmtime_wasi_http::p2::bindings::http::outgoing_handler::add_to_linker::<_, HasHttp>(
         linker, get_http,
     )?;
-    wasmtime_wasi_http::bindings::http::types::add_to_linker::<_, HasHttp>(
+    wasmtime_wasi_http::p2::bindings::http::types::add_to_linker::<_, HasHttp>(
         linker,
         &Default::default(),
         get_http,
@@ -263,7 +271,12 @@ where
         C: spin_factors::InitContext<OutboundHttpFactor>,
     {
         let (state, table) = C::get_data_with_table(store);
-        p3::WasiHttpCtxView { ctx: state, table }
+        let ctx = &mut state.wasi_http_ctx;
+        p3::WasiHttpCtxView {
+            ctx,
+            table,
+            hooks: &mut state.hooks,
+        }
     }
 
     let get_http_p3 = get_http_p3::<C> as fn(&mut C::StoreData) -> p3::WasiHttpCtxView<'_>;
@@ -279,35 +292,32 @@ where
 impl OutboundHttpFactor {
     pub fn get_wasi_http_impl(
         runtime_instance_state: &mut impl RuntimeFactorsInstanceState,
-    ) -> Option<WasiHttpImpl<impl WasiHttpView + '_>> {
+    ) -> Option<WasiHttpCtxView<'_>> {
         let (state, table) = runtime_instance_state.get_with_table::<OutboundHttpFactor>()?;
-        Some(WasiHttpImpl(WasiHttpImplInner { state, table }))
+        let ctx = &mut state.wasi_http_ctx;
+        Some(WasiHttpCtxView {
+            ctx,
+            table,
+            hooks: &mut state.hooks,
+        })
     }
 
     pub fn get_wasi_p3_http_impl(
         runtime_instance_state: &mut impl RuntimeFactorsInstanceState,
     ) -> Option<p3::WasiHttpCtxView<'_>> {
         let (state, table) = runtime_instance_state.get_with_table::<OutboundHttpFactor>()?;
-        Some(p3::WasiHttpCtxView { ctx: state, table })
+        let ctx = &mut state.wasi_http_ctx;
+        Some(p3::WasiHttpCtxView {
+            ctx,
+            table,
+            hooks: &mut state.hooks,
+        })
     }
-}
-
-pub(crate) struct WasiHttpImplInner<'a> {
-    state: &'a mut InstanceState,
-    table: &'a mut ResourceTable,
 }
 
 type OutgoingRequest = http::Request<HyperOutgoingBody>;
 
-impl WasiHttpView for WasiHttpImplInner<'_> {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.state.wasi_http_ctx
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        self.table
-    }
-
+impl p2::WasiHttpHooks for InstanceHttpHooks {
     #[instrument(
         name = "spin_outbound_http.send_request",
         skip_all,
@@ -325,18 +335,17 @@ impl WasiHttpView for WasiHttpImplInner<'_> {
         &mut self,
         request: OutgoingRequest,
         config: OutgoingRequestConfig,
-    ) -> Result<wasmtime_wasi_http::types::HostFutureIncomingResponse, HttpError> {
-        self.state.otel.reparent_tracing_span();
+    ) -> Result<wasmtime_wasi_http::p2::types::HostFutureIncomingResponse, HttpError> {
+        self.otel.reparent_tracing_span();
 
         let request_sender = RequestSender {
-            allowed_hosts: self.state.allowed_hosts.clone(),
-            component_tls_configs: self.state.component_tls_configs.clone(),
-            request_interceptor: self.state.request_interceptor.clone(),
-            self_request_origin: self.state.self_request_origin.clone(),
-            blocked_networks: self.state.blocked_networks.clone(),
-            http_clients: self.state.wasi_http_clients.clone(),
+            allowed_hosts: self.allowed_hosts.clone(),
+            component_tls_configs: self.component_tls_configs.clone(),
+            request_interceptor: self.request_interceptor.clone(),
+            self_request_origin: self.self_request_origin.clone(),
+            blocked_networks: self.blocked_networks.clone(),
+            http_clients: self.wasi_http_clients.clone(),
             concurrent_outbound_connections_semaphore: self
-                .state
                 .concurrent_outbound_connections_semaphore
                 .clone(),
         };
@@ -869,10 +878,12 @@ fn hyper_legacy_request_error(err: hyper_util::client::legacy::Error) -> ErrorCo
 }
 
 fn dns_error(rcode: String, info_code: u16) -> ErrorCode {
-    ErrorCode::DnsError(wasmtime_wasi_http::bindings::http::types::DnsErrorPayload {
-        rcode: Some(rcode),
-        info_code: Some(info_code),
-    })
+    ErrorCode::DnsError(
+        wasmtime_wasi_http::p2::bindings::http::types::DnsErrorPayload {
+            rcode: Some(rcode),
+            info_code: Some(info_code),
+        },
+    )
 }
 
 // TODO: Remove this (and uses of it) once
