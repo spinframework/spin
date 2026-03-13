@@ -1,0 +1,27 @@
+spin_manifest_version = 2
+
+[application]
+name = "env-isolator-hello"
+version = "0.1.0"
+description = "Example demonstrating per-dependency environment variable isolation"
+
+[[trigger.http]]
+route = "/..."
+component = "main"
+
+[component.main]
+source = "target/wasm32-wasip2/release/main.wasm"
+environment = { GREETING = "hello from main", "MAIN_ONLY" = "only visible to main" }
+
+[component.main.build]
+command = "cargo build --target wasm32-wasip2 --release"
+
+[component.main.dependencies."hello:components/dependable"]
+component = "dependable"
+environment = { GREETING = "hello from dependable", "DEPENDABLE_ONLY" = "only visible to dependable" }
+
+[component.dependable]
+source = "target/wasm32-wasip2/release/dependable.wasm"
+
+[component.dependable.build]
+command = "cargo build --target wasm32-wasip2 --release"

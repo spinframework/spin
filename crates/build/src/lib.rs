@@ -517,6 +517,7 @@ mod tests {
             let dep = v2::ComponentDependency::Local {
                 path: path.into(),
                 export: None,
+                environment: indexmap::IndexMap::new(),
             };
             deps.push((dep_name, dep));
         }
