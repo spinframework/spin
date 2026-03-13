@@ -44,6 +44,15 @@ pub struct BuildCommand {
     )]
     skip_target_checks: bool,
 
+    /// By default, the build command generates WIT files for components' dependencies. Specify
+    /// this option to bypass generating WITs.
+    #[clap(
+        long = "skip-generate-wits",
+        alias = "skip-generate-wit",
+        takes_value = false
+    )]
+    skip_generate_wits: bool,
+
     /// Run the application after building.
     #[clap(name = BUILD_UP_OPT, short = 'u', long = "up")]
     pub up: bool,
@@ -63,6 +72,7 @@ impl BuildCommand {
             self.profile(),
             &self.component_id,
             self.target_checking(),
+            self.wit_generation(),
             None,
         )
         .await?;
@@ -92,5 +102,13 @@ impl BuildCommand {
 
     fn profile(&self) -> Option<&str> {
         self.profile.as_deref()
+    }
+
+    fn wit_generation(&self) -> spin_build::GenerateDependencyWits {
+        if self.skip_generate_wits {
+            spin_build::GenerateDependencyWits::Skip
+        } else {
+            spin_build::GenerateDependencyWits::Generate
+        }
     }
 }
