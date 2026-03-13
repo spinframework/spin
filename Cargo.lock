@@ -8493,7 +8493,7 @@ dependencies = [
  "spin-serde",
  "thiserror 2.0.17",
  "tokio",
- "wac-graph",
+ "wac-graph 0.8.1",
 ]
 
 [[package]]
@@ -8561,8 +8561,8 @@ dependencies = [
  "tokio",
  "toml 0.8.19",
  "tracing",
- "wac-graph",
- "wac-types",
+ "wac-graph 0.8.1",
+ "wac-types 0.8.1",
  "wasm-pkg-client",
  "wasmparser 0.245.1",
  "wit-component 0.245.1",
@@ -9391,6 +9391,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.0",
  "tracing",
+ "wac-graph 0.9.0",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
@@ -10759,10 +10760,29 @@ dependencies = [
  "petgraph",
  "semver",
  "thiserror 1.0.69",
- "wac-types",
+ "wac-types 0.8.1",
  "wasm-encoder 0.239.0",
  "wasm-metadata 0.239.0",
  "wasmparser 0.239.0",
+]
+
+[[package]]
+name = "wac-graph"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c22d99cf996435bda507f323cca418cd513c3c604ca3157f5e4e79990b47378"
+dependencies = [
+ "anyhow",
+ "id-arena",
+ "indexmap 2.13.0",
+ "log",
+ "petgraph",
+ "semver",
+ "thiserror 1.0.69",
+ "wac-types 0.9.0",
+ "wasm-encoder 0.244.0",
+ "wasm-metadata 0.244.0",
+ "wasmparser 0.244.0",
 ]
 
 [[package]]
@@ -10777,6 +10797,20 @@ dependencies = [
  "semver",
  "wasm-encoder 0.239.0",
  "wasmparser 0.239.0",
+]
+
+[[package]]
+name = "wac-types"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c86d6f994ea751789cd416144648039ee9bdb385dffb6d890bd51a90e2f50778"
+dependencies = [
+ "anyhow",
+ "id-arena",
+ "indexmap 2.13.0",
+ "semver",
+ "wasm-encoder 0.244.0",
+ "wasmparser 0.244.0",
 ]
 
 [[package]]
@@ -11191,6 +11225,25 @@ dependencies = [
  "url",
  "wasm-encoder 0.239.0",
  "wasmparser 0.239.0",
+]
+
+[[package]]
+name = "wasm-metadata"
+version = "0.244.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb0e353e6a2fbdc176932bbaab493762eb1255a7900fe0fea1a2f96c296cc909"
+dependencies = [
+ "anyhow",
+ "auditable-serde",
+ "flate2",
+ "indexmap 2.13.0",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spdx",
+ "url",
+ "wasm-encoder 0.244.0",
+ "wasmparser 0.244.0",
 ]
 
 [[package]]
