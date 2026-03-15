@@ -1,0 +1,9 @@
+package wasi:sockets@0.3.0-rc-2026-02-09;
+
+@since(version = 0.3.0-rc-2026-02-09)
+world imports {
+    @since(version = 0.3.0-rc-2026-02-09)
+    import types;
+    @since(version = 0.3.0-rc-2026-02-09)
+    import ip-name-lookup;
+}

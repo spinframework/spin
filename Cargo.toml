@@ -130,7 +130,7 @@ members = [
 anyhow = "1"
 async-trait = "0.1"
 base64 = "0.22"
-bytes = "1"
+bytes = "1.11.1"
 chrono = "0.4"
 clap = "3.2"
 conformance-tests = { git = "https://github.com/fermyon/conformance-tests", rev = "ffc2c879cdcb3c619c8f95ae8e0b847af8c8247e" }
@@ -195,9 +195,9 @@ wasm-metadata = "0.245.1"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 wasmparser = "0.245.1"
-wasmtime = { version = "42.0.1", features = ["component-model-async"] }
-wasmtime-wasi = { version = "42.0.1", features = ["p3"] }
-wasmtime-wasi-http = { version = "42.0.1", features = ["p3", "component-model-async"] }
+wasmtime = { version = "43", git = "https://github.com/bytecodealliance/wasmtime", branch = "release-43.0.0", features = ["component-model-async"] }
+wasmtime-wasi = { version = "43", git = "https://github.com/bytecodealliance/wasmtime", branch = "release-43.0.0", features = ["p3"] }
+wasmtime-wasi-http = { version = "43", git = "https://github.com/bytecodealliance/wasmtime", branch = "release-43.0.0", features = ["p3", "component-model-async"] }
 wit-component = "0.245.1"
 wit-parser = "0.245.1"
 

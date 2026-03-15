@@ -1,0 +1,6 @@
+@since(version = 0.3.0-rc-2026-02-09)
+interface run {
+  /// Run the program.
+  @since(version = 0.3.0-rc-2026-02-09)
+  run: async func() -> result;
+}
