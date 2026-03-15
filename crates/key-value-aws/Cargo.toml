@@ -19,6 +19,7 @@ aws-sdk-dynamodb = { version = "1.49.0", default-features = false, features = ["
 serde = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-key-value = { path = "../factor-key-value" }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

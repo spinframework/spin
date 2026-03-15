@@ -18,6 +18,7 @@ futures = { workspace = true }
 reqwest = { version = "0.12", default-features = false }
 serde = { workspace = true }
 spin-factor-key-value = { path = "../factor-key-value" }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

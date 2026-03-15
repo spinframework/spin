@@ -1,17 +1,16 @@
+mod allowed_hosts;
 pub mod client;
 mod host;
 mod types;
 
 use std::{collections::HashMap, sync::Arc};
 
+use allowed_hosts::AllowedHostChecker;
 use client::ClientFactory;
 use spin_factor_otel::OtelFactorState;
-use spin_factor_outbound_networking::{
-    config::allowed_hosts::OutboundAllowedHosts, OutboundNetworkingFactor,
-};
+use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
-    anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
-    SelfInstanceBuilder,
+    anyhow, ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
 };
 
 pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {
@@ -24,13 +23,13 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
     type InstanceBuilder = InstanceState<CF>;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::v1::postgres::add_to_linker::<_, FactorData<Self>>)?;
-        ctx.link_bindings(spin_world::v2::postgres::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(spin_world::v1::postgres::add_to_linker::<_, PgFactorData<CF>>)?;
+        ctx.link_bindings(spin_world::v2::postgres::add_to_linker::<_, PgFactorData<CF>>)?;
         ctx.link_bindings(
-            spin_world::spin::postgres3_0_0::postgres::add_to_linker::<_, FactorData<Self>>,
+            spin_world::spin::postgres3_0_0::postgres::add_to_linker::<_, PgFactorData<CF>>,
         )?;
         ctx.link_bindings(
-            spin_world::spin::postgres4_1_0::postgres::add_to_linker::<_, FactorData<Self>>,
+            spin_world::spin::postgres4_2_0::postgres::add_to_linker::<_, PgFactorData<CF>>,
         )?;
         Ok(())
     }
@@ -57,7 +56,7 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
         let cf = ctx.app_state().get(ctx.app_component().id()).unwrap();
 
         Ok(InstanceState {
-            allowed_hosts,
+            allowed_host_checker: AllowedHostChecker::new(allowed_hosts),
             client_factory: cf.clone(),
             connections: Default::default(),
             otel,
@@ -81,7 +80,7 @@ impl<C> OutboundPgFactor<C> {
 }
 
 pub struct InstanceState<CF: ClientFactory> {
-    allowed_hosts: OutboundAllowedHosts,
+    allowed_host_checker: AllowedHostChecker,
     client_factory: Arc<CF>,
     connections: spin_resource_table::Table<CF::Client>,
     otel: OtelFactorState,
@@ -89,3 +88,13 @@ pub struct InstanceState<CF: ClientFactory> {
 }
 
 impl<CF: ClientFactory> SelfInstanceBuilder for InstanceState<CF> {}
+
+pub struct PgFactorData<CF: ClientFactory>(OutboundPgFactor<CF>);
+
+impl<CF: ClientFactory> spin_core::wasmtime::component::HasData for PgFactorData<CF> {
+    type Data<'a> = &'a mut InstanceState<CF>;
+}
+
+impl<CF: ClientFactory> spin_core::wasmtime::component::HasData for InstanceState<CF> {
+    type Data<'a> = &'a mut InstanceState<CF>;
+}

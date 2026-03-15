@@ -8682,6 +8682,7 @@ dependencies = [
  "spin-locked-app",
  "spin-resource-table",
  "spin-telemetry",
+ "spin-wasi-async",
  "spin-world",
  "tempfile",
  "thiserror 2.0.17",
@@ -8854,6 +8855,7 @@ dependencies = [
  "spin-factors-test",
  "spin-locked-app",
  "spin-resource-table",
+ "spin-wasi-async",
  "spin-world",
  "tokio",
  "tokio-postgres",
@@ -8886,11 +8888,13 @@ name = "spin-factor-sqlite"
 version = "3.7.0-pre0"
 dependencies = [
  "async-trait",
+ "spin-core",
  "spin-factor-otel",
  "spin-factors",
  "spin-factors-test",
  "spin-locked-app",
  "spin-resource-table",
+ "spin-wasi-async",
  "spin-world",
  "tokio",
  "tracing",
@@ -9022,6 +9026,7 @@ dependencies = [
  "serde",
  "spin-core",
  "spin-factor-key-value",
+ "tokio",
 ]
 
 [[package]]
@@ -9037,6 +9042,7 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "spin-factor-key-value",
+ "tokio",
 ]
 
 [[package]]
@@ -9061,6 +9067,7 @@ dependencies = [
  "serde",
  "spin-core",
  "spin-factor-key-value",
+ "spin-wasi-async",
  "spin-world",
  "tokio",
 ]
@@ -9336,8 +9343,10 @@ version = "3.7.0-pre0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "rusqlite",
  "spin-factor-sqlite",
+ "spin-wasi-async",
  "spin-world",
  "tokio",
 ]
@@ -9538,6 +9547,15 @@ dependencies = [
  "spin-factors",
  "tracing",
  "vaultrs",
+]
+
+[[package]]
+name = "spin-wasi-async"
+version = "3.7.0-pre0"
+dependencies = [
+ "anyhow",
+ "spin-core",
+ "tokio",
 ]
 
 [[package]]

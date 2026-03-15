@@ -1,13 +1,17 @@
 use super::{Cas, SwapError};
 use anyhow::{Context, Result};
-use spin_core::{async_trait, wasmtime::component::Resource};
+use spin_core::{
+    async_trait,
+    wasmtime::component::{Accessor, FutureReader, Resource, StreamReader},
+};
 use spin_factor_otel::OtelFactorState;
 use spin_resource_table::Table;
 use spin_telemetry::traces::{self, Blame};
+use spin_world::spin::key_value::key_value as v3;
 use spin_world::v2::key_value;
 use spin_world::wasi::keyvalue as wasi_keyvalue;
 use spin_world::MAX_HOST_BUFFERED_BYTES;
-use std::{collections::HashSet, sync::Arc};
+use std::{any::Any, collections::HashSet, sync::Arc};
 use tracing::instrument;
 
 const DEFAULT_STORE_TABLE_CAPACITY: u32 = 256;
@@ -26,6 +30,11 @@ pub trait StoreManager: Sync + Send {
         let _ = store_name;
         None
     }
+
+    /// Metadata about the store manager that can be accessed for data collection or debugging purposes. This is opaque and can be in any format the store manager chooses.
+    fn metadata(&self) -> Arc<dyn Any> {
+        Arc::new(())
+    }
 }
 
 #[async_trait]
@@ -38,6 +47,13 @@ pub trait Store: Sync + Send {
     async fn delete(&self, key: &str) -> Result<(), Error>;
     async fn exists(&self, key: &str) -> Result<bool, Error>;
     async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error>;
+    async fn get_keys_async(
+        &self,
+        max_result_bytes: usize,
+    ) -> (
+        tokio::sync::mpsc::Receiver<String>,
+        tokio::sync::oneshot::Receiver<Result<(), v3::Error>>,
+    );
     async fn get_many(
         &self,
         keys: Vec<String>,
@@ -119,6 +135,10 @@ impl KeyValueDispatch {
             .ok_or(wasi_keyvalue::atomics::Error::Other(
                 "compare and swap not found".to_string(),
             ))
+    }
+
+    pub fn manager_metadata(&self) -> Arc<dyn Any> {
+        self.manager.metadata()
     }
 }
 
@@ -211,11 +231,155 @@ impl key_value::HostStore for KeyValueDispatch {
     }
 }
 
+impl spin_core::wasmtime::component::HasData for KeyValueDispatch {
+    type Data<'a> = &'a mut KeyValueDispatch;
+}
+
+impl v3::Host for KeyValueDispatch {}
+
+impl v3::HostStore for KeyValueDispatch {
+    async fn drop(&mut self, store: Resource<v3::Store>) -> Result<()> {
+        self.stores.remove(store.rep());
+        Ok(())
+    }
+}
+
+impl v3::HostStoreWithStore for crate::KeyValueFactorData {
+    async fn open<T>(
+        accessor: &Accessor<T, Self>,
+        label: String,
+    ) -> Result<Result<Resource<v3::Store>, v3::Error>> {
+        let (allowed, manager) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (host.allowed_stores.contains(&label), host.manager.clone())
+        });
+
+        if !allowed {
+            return Ok(Err(v3::Error::AccessDenied));
+        }
+
+        let store = manager.get(&label).await?;
+        store.after_open().await?;
+
+        let rsrc = accessor.with(|mut access| {
+            let host = access.get();
+            host.stores
+                .push(store)
+                .map(Resource::new_own)
+                .map_err(|()| v3::Error::StoreTableFull)
+        });
+
+        Ok(rsrc)
+    }
+
+    async fn get<T>(
+        accessor: &Accessor<T, Self>,
+        store: Resource<v3::Store>,
+        key: String,
+    ) -> Result<Result<Option<Vec<u8>>, v3::Error>> {
+        let store = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            host.get_store(store).cloned()
+        })?;
+        Ok(store
+            .get(&key, MAX_HOST_BUFFERED_BYTES)
+            .await
+            .map_err(to_v3_err)
+            .map_err(track_error_on_span_v3))
+    }
+
+    async fn set<T>(
+        accessor: &Accessor<T, Self>,
+        store: Resource<v3::Store>,
+        key: String,
+        value: Vec<u8>,
+    ) -> Result<Result<(), v3::Error>> {
+        let store = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            host.get_store(store).cloned()
+        })?;
+        Ok(store
+            .set(&key, &value)
+            .await
+            .map_err(to_v3_err)
+            .map_err(track_error_on_span_v3))
+    }
+
+    async fn delete<T>(
+        accessor: &Accessor<T, Self>,
+        store: Resource<v3::Store>,
+        key: String,
+    ) -> Result<Result<(), v3::Error>> {
+        let store = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            host.get_store(store).cloned()
+        })?;
+        Ok(store
+            .delete(&key)
+            .await
+            .map_err(to_v3_err)
+            .map_err(track_error_on_span_v3))
+    }
+
+    async fn exists<T>(
+        accessor: &Accessor<T, Self>,
+        store: Resource<v3::Store>,
+        key: String,
+    ) -> Result<Result<bool, v3::Error>> {
+        let store = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            host.get_store(store).cloned()
+        })?;
+        Ok(store
+            .exists(&key)
+            .await
+            .map_err(to_v3_err)
+            .map_err(track_error_on_span_v3))
+    }
+
+    async fn get_keys<T>(
+        accessor: &Accessor<T, Self>,
+        store: Resource<v3::Store>,
+    ) -> Result<(StreamReader<String>, FutureReader<Result<(), v3::Error>>)> {
+        let store = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            host.get_store(store).cloned()
+        })?;
+
+        let (keys_rx, err_rx) = store.get_keys_async(MAX_HOST_BUFFERED_BYTES).await;
+
+        let producer = spin_wasi_async::stream::producer(keys_rx);
+        let (ksr, efr) = accessor.with(|mut access| {
+            let ksr = StreamReader::new(&mut access, producer);
+            let efr = FutureReader::new(&mut access, err_rx);
+            (ksr, efr)
+        });
+
+        Ok((ksr, efr))
+    }
+}
+
 /// Make sure that infrastructure related errors are tracked in the current span.
 fn track_error_on_span(err: Error) -> Error {
     let blame = match err {
         Error::NoSuchStore | Error::AccessDenied => Blame::Guest,
         Error::StoreTableFull | Error::Other(_) => Blame::Host,
+    };
+    traces::mark_as_error(&err, Some(blame));
+    err
+}
+
+/// Make sure that infrastructure related errors are tracked in the current span.
+fn track_error_on_span_v3(err: v3::Error) -> v3::Error {
+    let blame = match err {
+        v3::Error::NoSuchStore | v3::Error::AccessDenied => Blame::Guest,
+        v3::Error::StoreTableFull | v3::Error::Other(_) => Blame::Host,
     };
     traces::mark_as_error(&err, Some(blame));
     err
@@ -227,6 +391,15 @@ fn to_wasi_err(e: Error) -> wasi_keyvalue::store::Error {
         Error::NoSuchStore => wasi_keyvalue::store::Error::NoSuchStore,
         Error::StoreTableFull => wasi_keyvalue::store::Error::Other("store table full".to_string()),
         Error::Other(msg) => wasi_keyvalue::store::Error::Other(msg),
+    }
+}
+
+pub fn to_v3_err(e: Error) -> v3::Error {
+    match track_error_on_span(e) {
+        Error::AccessDenied => v3::Error::AccessDenied,
+        Error::NoSuchStore => v3::Error::NoSuchStore,
+        Error::StoreTableFull => v3::Error::StoreTableFull,
+        Error::Other(msg) => v3::Error::Other(msg),
     }
 }
 
@@ -473,6 +646,11 @@ impl wasi_keyvalue::atomics::Host for KeyValueDispatch {
 pub fn log_error(err: impl std::fmt::Debug) -> Error {
     tracing::warn!("key-value error: {err:?}");
     Error::Other(format!("{err:?}"))
+}
+
+pub fn log_error_v3(err: impl std::fmt::Debug) -> v3::Error {
+    tracing::warn!("key-value error: {err:?}");
+    v3::Error::Other(format!("{err:?}"))
 }
 
 pub fn log_cas_error(err: impl std::fmt::Debug) -> SwapError {
