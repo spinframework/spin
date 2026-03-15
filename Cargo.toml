@@ -171,6 +171,7 @@ rusqlite = "0.34"
 # If both `aws_lc_rs` and `ring` are enabled, a panic at runtime will occur.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging", "tls12"] }
 rustls-pki-types = "1.12"
+rustls-platform-verifier = "0.6"
 semver = "1"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1.0"

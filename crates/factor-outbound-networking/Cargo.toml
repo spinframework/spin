@@ -11,6 +11,7 @@ http = { workspace = true }
 ip_network = "0.4.1"
 rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
+rustls-platform-verifier = { workspace = true }
 serde = { workspace = true }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factor-wasi = { path = "../factor-wasi" }
