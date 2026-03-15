@@ -1,0 +1,86 @@
+package wasi:http@0.3.0-rc-2026-02-09;
+
+/// The `wasi:http/service` world captures a broad category of HTTP services
+/// including web applications, API servers, and proxies. It may be `include`d
+/// in more specific worlds such as `wasi:http/middleware`.
+@since(version = 0.3.0-rc-2026-02-09)
+world service {
+  /// HTTP services have access to time and randomness.
+  include wasi:clocks/imports@0.3.0-rc-2026-02-09;
+  include wasi:random/imports@0.3.0-rc-2026-02-09;
+
+  /// Services have standard output and error streams which are expected to
+  /// terminate in a developer-facing console provided by the host.
+  import wasi:cli/stdout@0.3.0-rc-2026-02-09;
+  import wasi:cli/stderr@0.3.0-rc-2026-02-09;
+
+  /// TODO: this is a temporary workaround until component tooling is able to
+  /// gracefully handle the absence of stdin. Hosts must return an eof stream
+  /// for this import, which is what wasi-libc + tooling will do automatically
+  /// when this import is properly removed.
+  import wasi:cli/stdin@0.3.0-rc-2026-02-09;
+
+  /// This is the default `client` to use when user code simply wants to make an
+  /// HTTP request (e.g., via `fetch()`).
+  import client;
+
+  /// The host delivers incoming HTTP requests to a component by calling the
+  /// `handle` function of this exported interface. A host may arbitrarily reuse
+  /// or not reuse component instance when delivering incoming HTTP requests and
+  /// thus a component must be able to handle 0..N calls to `handle`.
+  ///
+  /// This may also be used to receive synthesized or forwarded requests from
+  /// another component.
+  export handler;
+}
+
+/// The `wasi:http/middleware` world captures HTTP services that forward HTTP
+/// Requests to another handler.
+///
+/// Components may implement this world to allow them to participate in handler
+/// "chains" where a `request` flows through handlers on its way to some terminal
+/// `service` and corresponding `response` flows in the opposite direction.
+@since(version = 0.3.0-rc-2026-02-09)
+world middleware {
+  include service;
+  import handler;
+}
+
+/// This interface defines a handler of HTTP Requests.
+///
+/// In a `wasi:http/service` this interface is exported to respond to an
+/// incoming HTTP Request with a Response.
+///
+/// In `wasi:http/middleware` this interface is both exported and imported as
+/// the "downstream" and "upstream" directions of the middleware chain.
+@since(version = 0.3.0-rc-2026-02-09)
+interface handler {
+  use types.{request, response, error-code};
+
+  /// This function may be called with either an incoming request read from the
+  /// network or a request synthesized or forwarded by another component.
+  handle: async func(
+    request: request,
+  ) -> result<response, error-code>;
+}
+
+/// This interface defines an HTTP client for sending "outgoing" requests.
+///
+/// Most components are expected to import this interface to provide the
+/// capability to send HTTP requests to arbitrary destinations on a network.
+///
+/// The type signature of `client.send` is the same as `handler.handle`. This
+/// duplication is currently necessary because some Component Model tooling
+/// (including WIT itself) is unable to represent a component importing two
+/// instances of the same interface. A `client.send` import may be linked
+/// directly to a `handler.handle` export to bypass the network.
+@since(version = 0.3.0-rc-2026-02-09)
+interface client {
+  use types.{request, response, error-code};
+
+  // This function may be used to either send an outgoing request over the
+  // network or to forward it to another component.
+  send: async func(
+    request: request,
+  ) -> result<response, error-code>;
+}

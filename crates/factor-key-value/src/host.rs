@@ -356,8 +356,10 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
 
         let producer = spin_wasi_async::stream::producer(keys_rx);
         let (ksr, efr) = accessor.with(|mut access| {
-            let ksr = StreamReader::new(&mut access, producer).map_err(|e| anyhow!("stream error {e}"))?;
-            let efr = FutureReader::new(&mut access, err_rx).map_err(|e| anyhow!("future error {e}"))?;
+            let ksr = StreamReader::new(&mut access, producer)
+                .map_err(|e| anyhow!("stream error {e}"))?;
+            let efr =
+                FutureReader::new(&mut access, err_rx).map_err(|e| anyhow!("future error {e}"))?;
             anyhow::Ok((ksr, efr))
         })?;
 

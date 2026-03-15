@@ -65,8 +65,6 @@ impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
 
                         _ = tx.send(response);
 
-                        // task.block(store).await;
-
                         anyhow::Ok(())
                     }
                     .in_current_span()
