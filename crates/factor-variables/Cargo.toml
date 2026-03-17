@@ -5,6 +5,7 @@ authors = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+spin-core = { path = "../core" }
 spin-expressions = { path = "../expressions" }
 spin-factor-otel = { path = "../factor-otel" }
 spin-factors = { path = "../factors" }
