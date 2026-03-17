@@ -1,9 +1,9 @@
+mod allowed_hosts;
 mod host;
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use host::other_error;
 use host::InstanceState;
 use rumqttc::{AsyncClient, Event, Incoming, Outgoing, QoS};
 use spin_core::async_trait;
@@ -12,10 +12,13 @@ use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
 };
-use spin_world::v2::mqtt::{self as v2, Error, Qos};
+use spin_world::spin::mqtt::mqtt as v3;
+use spin_world::v2::mqtt as v2;
 use tokio::sync::Mutex;
 
 pub use host::MqttClient;
+
+use crate::host::other_error_v3;
 
 pub struct OutboundMqttFactor {
     create_client: Arc<dyn ClientCreator>,
@@ -33,7 +36,8 @@ impl Factor for OutboundMqttFactor {
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::v2::mqtt::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(v2::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(v3::add_to_linker::<_, MqttFactorData>)?;
         Ok(())
     }
 
@@ -63,6 +67,12 @@ impl Factor for OutboundMqttFactor {
 
 impl SelfInstanceBuilder for InstanceState {}
 
+struct MqttFactorData;
+
+impl spin_core::wasmtime::component::HasData for MqttFactorData {
+    type Data<'a> = &'a mut InstanceState;
+}
+
 // This is a concrete implementation of the MQTT client using rumqttc.
 pub struct NetworkedMqttClient {
     inner: rumqttc::AsyncClient,
@@ -90,10 +100,10 @@ impl NetworkedMqttClient {
         username: String,
         password: String,
         keep_alive_interval: Duration,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, v3::Error> {
         let mut conn_opts = rumqttc::MqttOptions::parse_url(address).map_err(|e| {
             tracing::error!("MQTT URL parse error: {e:?}");
-            Error::InvalidAddress
+            v3::Error::InvalidAddress
         })?;
         conn_opts.set_credentials(username, password);
         conn_opts.set_keep_alive(keep_alive_interval);
@@ -107,17 +117,22 @@ impl NetworkedMqttClient {
 
 #[async_trait]
 impl MqttClient for NetworkedMqttClient {
-    async fn publish_bytes(&self, topic: String, qos: Qos, payload: Vec<u8>) -> Result<(), Error> {
+    async fn publish_bytes(
+        &self,
+        topic: String,
+        qos: v3::Qos,
+        payload: Vec<u8>,
+    ) -> Result<(), v3::Error> {
         let qos = match qos {
-            Qos::AtMostOnce => rumqttc::QoS::AtMostOnce,
-            Qos::AtLeastOnce => rumqttc::QoS::AtLeastOnce,
-            Qos::ExactlyOnce => rumqttc::QoS::ExactlyOnce,
+            v3::Qos::AtMostOnce => rumqttc::QoS::AtMostOnce,
+            v3::Qos::AtLeastOnce => rumqttc::QoS::AtLeastOnce,
+            v3::Qos::ExactlyOnce => rumqttc::QoS::ExactlyOnce,
         };
         // Message published to EventLoop (not MQTT Broker)
         self.inner
             .publish_bytes(topic, qos, false, payload.into())
             .await
-            .map_err(other_error)?;
+            .map_err(other_error_v3)?;
 
         // Poll event loop until outgoing publish event is iterated over to send the message to MQTT broker or capture/throw error.
         // We may revisit this later to manage long running connections, high throughput use cases and their issues in the connection pool.
@@ -126,7 +141,7 @@ impl MqttClient for NetworkedMqttClient {
             let event = lock
                 .poll()
                 .await
-                .map_err(|err| v2::Error::ConnectionFailed(err.to_string()))?;
+                .map_err(|err| v3::Error::ConnectionFailed(err.to_string()))?;
 
             match (qos, event) {
                 (QoS::AtMostOnce, Event::Outgoing(Outgoing::Publish(_)))
@@ -149,12 +164,12 @@ pub trait ClientCreator: Send + Sync {
         username: String,
         password: String,
         keep_alive_interval: Duration,
-    ) -> Result<Arc<dyn MqttClient>, Error>;
+    ) -> Result<Arc<dyn MqttClient>, v3::Error>;
 }
 
 impl<F> ClientCreator for F
 where
-    F: Fn(String, String, String, Duration) -> Result<Arc<dyn MqttClient>, Error> + Send + Sync,
+    F: Fn(String, String, String, Duration) -> Result<Arc<dyn MqttClient>, v3::Error> + Send + Sync,
 {
     fn create(
         &self,
@@ -162,7 +177,7 @@ where
         username: String,
         password: String,
         keep_alive_interval: Duration,
-    ) -> Result<Arc<dyn MqttClient>, Error> {
+    ) -> Result<Arc<dyn MqttClient>, v3::Error> {
         self(address, username, password, keep_alive_interval)
     }
 }

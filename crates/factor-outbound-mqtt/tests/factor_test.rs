@@ -8,7 +8,7 @@ use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_variables::VariablesFactor;
 use spin_factors::{anyhow, RuntimeFactors};
 use spin_factors_test::{toml, TestEnvironment};
-use spin_world::v2::mqtt::{self as v2, Error, HostConnection, Qos};
+use spin_world::spin::mqtt::mqtt::{Error, Qos};
 
 pub struct MockMqttClient {}
 
@@ -61,6 +61,9 @@ fn test_env() -> TestEnvironment<TestFactors> {
 
 #[tokio::test]
 async fn disallowed_host_fails() -> anyhow::Result<()> {
+    use spin_world::v2::mqtt as v2;
+    use v2::HostConnection;
+
     let env = TestEnvironment::new(factors()).extend_manifest(toml! {
         [component.test-component]
         source = "does-not-exist.wasm"
@@ -86,6 +89,9 @@ async fn disallowed_host_fails() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn allowed_host_succeeds() -> anyhow::Result<()> {
+    use spin_world::v2::mqtt as v2;
+    use v2::HostConnection;
+
     let mut state = test_env().build_instance_state().await?;
 
     let res = state
@@ -106,6 +112,9 @@ async fn allowed_host_succeeds() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn exercise_publish() -> anyhow::Result<()> {
+    use spin_world::v2::mqtt as v2;
+    use v2::HostConnection;
+
     let mut state = test_env().build_instance_state().await?;
 
     let res = state
@@ -124,7 +133,7 @@ async fn exercise_publish() -> anyhow::Result<()> {
             res,
             "message".to_string(),
             b"test message".to_vec(),
-            Qos::ExactlyOnce,
+            v2::Qos::ExactlyOnce,
         )
         .await?;
 

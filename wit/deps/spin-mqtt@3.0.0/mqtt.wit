@@ -1,0 +1,33 @@
+package spin:mqtt@3.0.0;
+
+interface mqtt {
+  /// Errors related to interacting with Mqtt
+  variant error {
+      /// An invalid address string
+      invalid-address,
+      /// There are too many open connections
+      too-many-connections,
+      /// Connection failure e.g. address not allowed.
+      connection-failed(string),
+      /// Some other error occurred
+      other(string),
+  }
+
+  /// QoS for publishing Mqtt messages
+     enum qos {
+      at-most-once,
+      at-least-once,
+      exactly-once,
+  }
+
+  resource connection {
+    /// Open a connection to the Mqtt instance at `address`.
+    open: static async func(address: string, username: string, password: string, keep-alive-interval-in-secs: u64) -> result<connection, error>;
+
+    /// Publish an Mqtt message to the specified `topic`.
+    publish: async func(topic: string, payload: payload, qos: qos) -> result<_, error>;
+  }
+
+  /// The message payload.
+  type payload = list<u8>;
+}
