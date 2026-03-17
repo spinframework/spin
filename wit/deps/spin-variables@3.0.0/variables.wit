@@ -1,0 +1,20 @@
+package spin:variables@3.0.0;
+
+interface variables {
+    /// Get an application variable value for the current component.
+    ///
+    /// The name must match one defined in in the component manifest.
+    get: async func(name: string) -> result<string, error>;
+
+    /// The set of errors which may be raised by functions in this interface.
+    variant error {
+        /// The provided variable name is invalid.
+        invalid-name(string),
+        /// The provided variable is undefined.
+        undefined(string),
+        /// A variables provider specific error has occurred.
+        provider(string),
+        /// Some implementation-specific error has occurred.
+        other(string),
+    }
+}

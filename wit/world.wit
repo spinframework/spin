@@ -20,5 +20,6 @@ world platform {
   import spin:postgres/postgres@3.0.0;
   import spin:postgres/postgres@4.2.0;
   import spin:sqlite/sqlite@3.1.0;
+  import spin:variables/variables@3.0.0;
   import wasi:config/store@0.2.0-draft-2024-09-27;
 }
