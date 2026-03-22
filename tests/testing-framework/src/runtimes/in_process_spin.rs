@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use spin_runtime_factors::{FactorsBuilder, TriggerAppArgs, TriggerFactors};
 use spin_trigger::{cli::TriggerAppBuilder, loader::ComponentLoader};
-use spin_trigger_http::{HttpServer, HttpTrigger, InstanceReuseConfig};
+use spin_trigger_http::{HttpServer, HttpTrigger, InstanceReuseConfig, OutputFormat};
 use test_environment::{
     http::{Request, Response},
     services::ServicesConfig,
@@ -112,6 +112,7 @@ async fn initialize_trigger(
         false,
         None,
         InstanceReuseConfig::default(),
+        OutputFormat::default(),
     )?;
     let mut builder = TriggerAppBuilder::<_, FactorsBuilder>::new(trigger);
     let trigger_app = builder

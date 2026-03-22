@@ -52,7 +52,8 @@ use crate::{
     wagi::WagiHttpExecutor,
     wasi::WasiHttpExecutor,
     wasip3::Wasip3HttpExecutor,
-    Body, InstanceReuseConfig, NotFoundRouteKind, TlsConfig, TriggerApp, TriggerInstanceBuilder,
+    Body, InstanceReuseConfig, NotFoundRouteKind, OutputFormat, TlsConfig, TriggerApp,
+    TriggerInstanceBuilder,
 };
 
 pub const MAX_RETRIES: u16 = 10;
@@ -67,6 +68,8 @@ pub struct HttpServer<F: RuntimeFactors> {
     http1_max_buf_size: Option<usize>,
     /// Whether to find a free port if the specified port is already in use.
     find_free_port: bool,
+    /// The output format for the server's startup information.
+    output_format: OutputFormat,
     /// Request router.
     router: Router,
     /// The app being triggered.
@@ -86,6 +89,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         trigger_app: TriggerApp<F>,
         http1_max_buf_size: Option<usize>,
         reuse_config: InstanceReuseConfig,
+        output_format: OutputFormat,
     ) -> anyhow::Result<Self> {
         // This needs to be a vec before building the router to handle duplicate routes
         let component_trigger_configs = trigger_app
@@ -154,6 +158,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
             http1_max_buf_size,
             component_trigger_configs,
             component_handler_types,
+            output_format,
         })
     }
 
@@ -569,18 +574,63 @@ impl<F: RuntimeFactors> HttpServer<F> {
     fn print_startup_msgs(&self, scheme: &str, listener: &TcpListener) -> anyhow::Result<()> {
         let local_addr = listener.local_addr()?;
         let base_url = format!("{scheme}://{local_addr:?}");
-        terminal::step!("\nServing", "{base_url}");
         tracing::info!("Serving {base_url}");
 
-        println!("Available Routes:");
-        for (route, key) in self.router.routes() {
-            println!("  {key}: {base_url}{route}");
-            if let spin_http::routes::TriggerLookupKey::Component(component_id) = &key {
-                if let Some(component) = self.trigger_app.app().get_component(component_id) {
-                    if let Some(description) = component.get_metadata(APP_DESCRIPTION_KEY)? {
-                        println!("    {description}");
+        match self.output_format {
+            OutputFormat::Plain => {
+                terminal::step!("\nServing", "{base_url}");
+                println!("Available Routes:");
+                for (route, key) in self.router.routes() {
+                    println!("  {key}: {base_url}{route}");
+                    if let spin_http::routes::TriggerLookupKey::Component(component_id) = &key {
+                        if let Some(component) = self.trigger_app.app().get_component(component_id) {
+                            if let Some(description) = component.get_metadata(APP_DESCRIPTION_KEY)? {
+                                println!("    {description}");
+                            }
+                        }
                     }
                 }
+            }
+            OutputFormat::Json => {
+                #[derive(serde::Serialize)]
+                struct RoutesOutput {
+                    base_url: String,
+                    routes: Vec<RouteEntry>,
+                }
+
+                #[derive(serde::Serialize)]
+                struct RouteEntry {
+                    id: String,
+                    url: String,
+                    route: String,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    description: Option<String>,
+                }
+                let mut routes = Vec::new();
+                for (route, key) in self.router.routes() {
+                    let description = if let spin_http::routes::TriggerLookupKey::Component(
+                        component_id,
+                    ) = &key
+                    {
+                        self.trigger_app
+                            .app()
+                            .get_component(component_id)
+                            .and_then(|c| c.get_metadata(APP_DESCRIPTION_KEY).transpose())
+                            .transpose()?
+                    } else {
+                        None
+                    };
+
+                    routes.push(RouteEntry {
+                        id: key.to_string(),
+                        url: format!("{base_url}{route}"),
+                        route: route.to_string(),
+                        description,
+                    });
+                }
+
+                let output = RoutesOutput { base_url, routes };
+                println!("{}", serde_json::to_string_pretty(&output)?);
             }
         }
         Ok(())
