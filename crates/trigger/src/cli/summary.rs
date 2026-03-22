@@ -21,7 +21,7 @@ impl<F: RuntimeFactors, U> ExecutorHooks<F, U> for KeyValueDefaultStoreSummaryHo
             return Ok(());
         }
         if let Some(default_store_summary) = kv_app_state.store_summary("default") {
-            println!("Storing default key-value data to {default_store_summary}.");
+            eprintln!("Storing default key-value data to {default_store_summary}.");
         }
         Ok(())
     }
@@ -49,7 +49,7 @@ impl<F: RuntimeFactors, U> ExecutorHooks<F, U> for SqliteDefaultStoreSummaryHook
             .and_then(Result::ok)
             .and_then(|conn| conn.summary())
         {
-            println!("Storing default SQLite data to {default_database_summary}.");
+            eprintln!("Storing default SQLite data to {default_database_summary}.");
         }
         Ok(())
     }

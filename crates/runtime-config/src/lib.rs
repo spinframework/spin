@@ -84,7 +84,7 @@ impl<T> ResolvedRuntimeConfig<T> {
             let from_path = runtime_config_path
                 .map(|path| format!("from {}", quoted_path(path)))
                 .unwrap_or_default();
-            println!("Using runtime config {summaries} {from_path}");
+            eprintln!("Using runtime config {summaries} {from_path}");
         }
     }
 }
