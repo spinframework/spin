@@ -618,13 +618,14 @@ pub struct List {
     #[clap(long = "filter")]
     pub filter: Option<String>,
 
-    /// The format in which to list the templates.
-    #[clap(value_enum, long = "format", default_value = "plain")]
+    /// The format in which to list the plugins.
+    #[clap(value_enum, long = "format", default_value_t = ListFormat::default())]
     pub format: ListFormat,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, Default)]
 pub enum ListFormat {
+    #[default]
     Plain,
     Json,
 }
@@ -695,7 +696,7 @@ pub struct Search {
     pub filter: Option<String>,
 
     /// The format in which to list the plugins.
-    #[clap(value_enum, long = "format", default_value = "plain")]
+    #[clap(value_enum, long = "format", default_value_t = ListFormat::default())]
     pub format: ListFormat,
 }
 
