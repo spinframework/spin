@@ -479,7 +479,7 @@ pub struct List {
     pub tags: Vec<String>,
 
     /// The format in which to list the templates.
-    #[clap(value_enum, long = "format", default_value = "table", hide = true)]
+    #[clap(value_enum, long = "format", default_value_t = ListFormat::default(), hide = true)]
     pub format: ListFormat,
 
     /// Whether to show additional template details in the list.
@@ -487,8 +487,9 @@ pub struct List {
     pub verbose: bool,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, Default)]
 pub enum ListFormat {
+    #[default]
     Table,
     Json,
 }
