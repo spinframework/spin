@@ -13,7 +13,7 @@ use spin_factors::{anyhow, RuntimeFactors};
 use spin_factors_test::{toml, TestEnvironment};
 use spin_world::async_trait;
 use wasmtime_wasi::p2::Pollable;
-use wasmtime_wasi_http::{types::OutgoingRequestConfig, WasiHttpView};
+use wasmtime_wasi_http::p2::types::OutgoingRequestConfig;
 
 #[derive(RuntimeFactors)]
 struct TestFactors {
@@ -25,11 +25,11 @@ struct TestFactors {
 #[tokio::test(flavor = "multi_thread")]
 async fn allowed_host_is_allowed() -> anyhow::Result<()> {
     let mut state = test_instance_state("https://*", true).await?;
-    let mut wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
+    let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
 
     // [100::] is the IPv6 "Discard Prefix", which should always fail
     let req = Request::get("https://[100::1]:443").body(Default::default())?;
-    let mut future_resp = wasi_http.send_request(req, test_request_config())?;
+    let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
     future_resp.ready().await;
 
     assert_discard_prefix_error(future_resp);
@@ -43,9 +43,9 @@ async fn self_request_smoke_test() -> anyhow::Result<()> {
     let origin = SelfRequestOrigin::from_uri(&Uri::from_static("http://[100::1]"))?;
     state.http.set_self_request_origin(origin);
 
-    let mut wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
+    let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
     let req = Request::get("/self-request").body(Default::default())?;
-    let mut future_resp = wasi_http.send_request(req, test_request_config())?;
+    let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
     future_resp.ready().await;
 
     assert_discard_prefix_error(future_resp);
@@ -55,10 +55,10 @@ async fn self_request_smoke_test() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn disallowed_host_fails() -> anyhow::Result<()> {
     let mut state = test_instance_state("https://allowed.test", true).await?;
-    let mut wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
+    let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
 
     let req = Request::get("https://denied.test").body(Default::default())?;
-    let mut future_resp = wasi_http.send_request(req, test_request_config())?;
+    let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
     future_resp.ready().await;
     assert_matches!(
         future_resp.unwrap_ready().unwrap(),
@@ -72,9 +72,9 @@ async fn disallowed_host_fails() -> anyhow::Result<()> {
 async fn disallowed_private_ips_fails() -> anyhow::Result<()> {
     async fn run_test(allow_private_ips: bool) -> anyhow::Result<()> {
         let mut state = test_instance_state("http://*", allow_private_ips).await?;
-        let mut wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
+        let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
         let req = Request::get("http://localhost").body(Default::default())?;
-        let mut future_resp = wasi_http.send_request(req, test_request_config())?;
+        let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
         future_resp.ready().await;
         match future_resp.unwrap_ready().unwrap() {
             // If we don't allow private IPs, we should not get a response
@@ -111,16 +111,16 @@ async fn override_connect_addr_disallowed_private_ip_fails() -> anyhow::Result<(
             async fn intercept(
                 &self,
                 mut request: InterceptRequest,
-            ) -> wasmtime_wasi_http::HttpResult<InterceptOutcome> {
+            ) -> wasmtime_wasi_http::p2::HttpResult<InterceptOutcome> {
                 request.override_connect_addr("[::1]:80".parse().unwrap());
                 Ok(InterceptOutcome::Continue(request))
             }
         }
         Interceptor
     })?;
-    let mut wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
+    let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
     let req = Request::get("http://1.1.1.1").body(Default::default())?;
-    let mut future_resp = wasi_http.send_request(req, test_request_config())?;
+    let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
     future_resp.ready().await;
     assert_matches!(
         future_resp.unwrap_ready().unwrap(),

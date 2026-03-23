@@ -12,14 +12,11 @@ use spin_http::routes::RouteMatch;
 use spin_http::trigger::HandlerType;
 use tokio::{sync::oneshot, task};
 use tracing::{instrument, Instrument, Level};
-use wasmtime_wasi_http::bindings::http::types::Scheme;
-use wasmtime_wasi_http::{
-    bindings::Proxy, body::HyperIncomingBody as Body, handler::HandlerState, WasiHttpView,
-};
+use wasmtime_wasi_http::handler::HandlerState;
+use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
+use wasmtime_wasi_http::p2::{bindings::Proxy, body::HyperIncomingBody as Body};
 
 use crate::{headers::prepare_request_headers, server::HttpExecutor, TriggerInstanceBuilder};
-
-const HEADERS_SIZE_LIMIT: usize = 128 * 1024;
 
 pub(super) fn prepare_request(
     route_match: &RouteMatch<'_, '_>,
@@ -72,25 +69,10 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
         )
         .context("missing OutboundHttpFactor")?;
 
-        let (parts, body) = req.into_parts();
-        let body = wasmtime_wasi_http::body::HostIncomingBody::new(
-            body,
-            std::time::Duration::from_secs(600),
-            HEADERS_SIZE_LIMIT,
-        );
-        let request = wasmtime_wasi_http::types::HostIncomingRequest::new(
-            &mut wasi_http,
-            parts,
-            Scheme::Http,
-            Some(body),
-            HEADERS_SIZE_LIMIT,
-        )?;
-        let request = wasi_http.table().push(request)?;
+        let request = wasi_http.new_incoming_request(Scheme::Http, req)?;
 
         let (response_tx, response_rx) = oneshot::channel();
         let response = wasi_http.new_response_outparam(response_tx)?;
-
-        drop(wasi_http);
 
         enum Handler {
             Latest(Proxy),

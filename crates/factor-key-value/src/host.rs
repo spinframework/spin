@@ -356,10 +356,10 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
 
         let producer = spin_wasi_async::stream::producer(keys_rx);
         let (ksr, efr) = accessor.with(|mut access| {
-            let ksr = StreamReader::new(&mut access, producer);
-            let efr = FutureReader::new(&mut access, err_rx);
-            (ksr, efr)
-        });
+            let ksr = StreamReader::new(&mut access, producer)?;
+            let efr = FutureReader::new(&mut access, err_rx)?;
+            anyhow::Ok((ksr, efr))
+        })?;
 
         Ok((ksr, efr))
     }

@@ -10,8 +10,8 @@ use std::net::SocketAddr;
 use tracing::{instrument, Instrument, Level};
 use wasmtime::component::Accessor;
 use wasmtime_wasi_http::{
-    body::HyperIncomingBody as Body,
     handler::{Proxy, ProxyHandler},
+    p2::body::HyperIncomingBody as Body,
     p3::{bindings::http::types, WasiHttpCtxView},
 };
 
@@ -52,7 +52,7 @@ impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
                             anyhow::Ok(wasi_http::<F>(store.data_mut())?.table.push(request)?)
                         })?;
 
-                        let (response, task) = guest
+                        let response = guest
                             .wasi_http_handler()
                             .call_handle(store, request)
                             .await?;
@@ -64,8 +64,6 @@ impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
                         })?;
 
                         _ = tx.send(response);
-
-                        task.block(store).await;
 
                         anyhow::Ok(())
                     }

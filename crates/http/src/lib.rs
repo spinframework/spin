@@ -1,5 +1,5 @@
 #[cfg(feature = "runtime")]
-pub use wasmtime_wasi_http::body::HyperIncomingBody as Body;
+pub use wasmtime_wasi_http::p2::body::HyperIncomingBody as Body;
 
 pub mod app_info;
 pub mod config;

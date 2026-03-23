@@ -1,0 +1,46 @@
+package wasi:clocks@0.3.0-rc-2026-03-15;
+
+@unstable(feature = clocks-timezone)
+interface timezone {
+    @unstable(feature = clocks-timezone)
+    use system-clock.{instant};
+
+    /// Return the IANA identifier of the currently configured timezone. This
+    /// should be an identifier from the IANA Time Zone Database.
+    ///
+    /// For displaying to a user, the identifier should be converted into a
+    /// localized name by means of an internationalization API.
+    ///
+    /// If the implementation does not expose an actual timezone, or is unable
+    /// to provide mappings from times to deltas between the configured timezone
+    /// and UTC, or determining the current timezone fails, or the timezone does
+    /// not have an IANA identifier, this returns nothing.
+    @unstable(feature = clocks-timezone)
+    iana-id: func() -> option<string>;
+
+    /// The number of nanoseconds difference between UTC time and the local
+    /// time of the currently configured timezone, at the exact time of
+    /// `instant`.
+    ///
+    /// The magnitude of the returned value will always be less than
+    /// 86,400,000,000,000 which is the number of nanoseconds in a day
+    /// (24*60*60*1e9).
+    ///
+    /// If the implementation does not expose an actual timezone, or is unable
+    /// to provide mappings from times to deltas between the configured timezone
+    /// and UTC, or determining the current timezone fails, this returns
+    /// nothing.
+    @unstable(feature = clocks-timezone)
+    utc-offset: func(when: instant) -> option<s64>;
+
+    /// Returns a string that is suitable to assist humans in debugging whether
+    /// any timezone is available, and if so, which. This may be the same string
+    /// as `iana-id`, or a formatted representation of the UTC offset such as
+    /// `-04:00`, or something else.
+    ///
+    /// WARNING: The returned string should not be consumed mechanically! It may
+    /// change across platforms, hosts, or other implementation details. Parsing
+    /// this string is a major platform-compatibility hazard.
+    @unstable(feature = clocks-timezone)
+    to-debug-string: func() -> string;
+}

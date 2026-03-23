@@ -30,13 +30,13 @@ use serde::Deserialize;
 use spin_app::App;
 use spin_factors::RuntimeFactors;
 use spin_trigger::Trigger;
-use wasmtime_wasi_http::bindings::http::types::ErrorCode;
+use wasmtime_wasi_http::p2::bindings::http::types::ErrorCode;
 
 pub use server::HttpServer;
 
 pub use tls::TlsConfig;
 
-pub(crate) use wasmtime_wasi_http::body::HyperIncomingBody as Body;
+pub(crate) use wasmtime_wasi_http::p2::body::HyperIncomingBody as Body;
 
 const DEFAULT_WASIP3_MAX_INSTANCE_REUSE_COUNT: usize = 128;
 const DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT: usize = 16;
@@ -401,10 +401,12 @@ pub fn hyper_request_error(err: hyper::Error) -> ErrorCode {
 }
 
 pub fn dns_error(rcode: String, info_code: u16) -> ErrorCode {
-    ErrorCode::DnsError(wasmtime_wasi_http::bindings::http::types::DnsErrorPayload {
-        rcode: Some(rcode),
-        info_code: Some(info_code),
-    })
+    ErrorCode::DnsError(
+        wasmtime_wasi_http::p2::bindings::http::types::DnsErrorPayload {
+            rcode: Some(rcode),
+            info_code: Some(info_code),
+        },
+    )
 }
 
 #[cfg(test)]

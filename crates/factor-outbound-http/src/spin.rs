@@ -17,7 +17,7 @@ impl spin_http::Host for crate::InstanceState {
         fields(otel.kind = "client", url.full = Empty, http.request.method = Empty,
         http.response.status_code = Empty, otel.name = Empty, server.address = Empty, server.port = Empty))]
     async fn send_request(&mut self, req: Request) -> Result<Response, HttpError> {
-        self.otel.reparent_tracing_span();
+        self.hooks.otel.reparent_tracing_span();
 
         let span = Span::current();
         record_request_fields(&span, &req);
@@ -31,6 +31,7 @@ impl spin_http::Host for crate::InstanceState {
         let req_url = if !uri.starts_with('/') {
             // Absolute URI
             let is_allowed = self
+                .hooks
                 .allowed_hosts
                 .check_url(&uri, "https")
                 .await
@@ -42,6 +43,7 @@ impl spin_http::Host for crate::InstanceState {
         } else {
             // Relative URI ("self" request)
             let is_allowed = self
+                .hooks
                 .allowed_hosts
                 .check_relative_url(&["http", "https"])
                 .await
@@ -50,7 +52,7 @@ impl spin_http::Host for crate::InstanceState {
                 return Err(HttpError::DestinationNotAllowed);
             }
 
-            let Some(origin) = &self.self_request_origin else {
+            let Some(origin) = &self.hooks.self_request_origin else {
                 tracing::error!(
                     "Couldn't handle outbound HTTP request to relative URI; no origin set"
                 );
@@ -77,7 +79,7 @@ impl spin_http::Host for crate::InstanceState {
 
         spin_telemetry::inject_trace_context(req.headers_mut());
 
-        if let Some(interceptor) = &self.request_interceptor {
+        if let Some(interceptor) = &self.hooks.request_interceptor {
             let intercepted_request = std::mem::take(&mut req).into();
             match interceptor.intercept(intercepted_request).await {
                 Ok(InterceptOutcome::Continue(intercepted_request)) => {
@@ -96,10 +98,11 @@ impl spin_http::Host for crate::InstanceState {
 
         // Allow reuse of Client's internal connection pool for multiple requests
         // in a single component execution
-        let client = self.spin_http_client.get_or_insert_with(|| {
-            let mut builder = reqwest::Client::builder()
-                .dns_resolver(Arc::new(SpinDnsResolver(self.blocked_networks.clone())));
-            if !self.connection_pooling_enabled {
+        let client = self.hooks.spin_http_client.get_or_insert_with(|| {
+            let mut builder = reqwest::Client::builder().dns_resolver(Arc::new(SpinDnsResolver(
+                self.hooks.blocked_networks.clone(),
+            )));
+            if !self.hooks.connection_pooling_enabled {
                 builder = builder.pool_max_idle_per_host(0);
             }
             builder.build().unwrap()
@@ -110,7 +113,7 @@ impl spin_http::Host for crate::InstanceState {
         // limit the number of concurrent requests, not connections.
         let permit = crate::concurrent_outbound_connections::acquire_semaphore(
             "spin",
-            &self.concurrent_outbound_connections_semaphore,
+            &self.hooks.concurrent_outbound_connections_semaphore,
         )
         .await;
         let resp = client.execute(req).await.map_err(log_reqwest_error)?;

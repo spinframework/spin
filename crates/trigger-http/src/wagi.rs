@@ -9,7 +9,7 @@ use spin_http::{config::WagiTriggerConfig, routes::RouteMatch, wagi};
 use tracing::{instrument, Level};
 use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
-use wasmtime_wasi_http::body::HyperIncomingBody as Body;
+use wasmtime_wasi_http::p2::body::HyperIncomingBody as Body;
 
 use crate::{headers::compute_default_headers, server::HttpExecutor, TriggerInstanceBuilder};
 

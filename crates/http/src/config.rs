@@ -43,8 +43,6 @@ pub enum HttpExecutorType {
     Http,
     /// The component implements the Wagi CGI interface.
     Wagi(WagiTriggerConfig),
-    /// The component implements the WASIp3 HTTP interface (unstable).
-    Wasip3Unstable,
 }
 
 /// Wagi specific configuration for the http executor.
