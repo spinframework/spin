@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 /// Commands for Spin maintenance tasks.
 #[derive(Subcommand, Debug)]
@@ -12,9 +12,9 @@ pub enum MaintenanceCommands {
 }
 
 impl MaintenanceCommands {
-    pub async fn run(&self, app: clap::Command<'_>) -> anyhow::Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         match self {
-            MaintenanceCommands::GenerateReference(cmd) => cmd.run(app).await,
+            MaintenanceCommands::GenerateReference(cmd) => cmd.run().await,
             MaintenanceCommands::GenerateManifestSchema(cmd) => cmd.run().await,
         }
     }
@@ -28,8 +28,8 @@ pub struct GenerateReference {
 }
 
 impl GenerateReference {
-    pub async fn run(&self, app: clap::Command<'_>) -> anyhow::Result<()> {
-        let markdown = crate::clap_markdown::help_markdown_command(&app);
+    pub async fn run(&self) -> anyhow::Result<()> {
+        let markdown = crate::clap_markdown::help_markdown_command(&crate::SpinApp::command());
         write(&self.output, &markdown)?;
         Ok(())
     }
