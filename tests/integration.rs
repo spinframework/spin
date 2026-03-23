@@ -111,31 +111,30 @@ mod integration_tests {
                 let stdout = env.runtime_mut().stdout().to_owned();
 
                 let check_json = || -> anyhow::Result<()> {
-                    let parsed: serde_json::Value = serde_json::from_str(&stdout)
-                        .context(format!("stdout was not valid JSON:\n{stdout}"))?;
+                    let parsed: serde_json::Value =
+                        serde_json::from_str(&stdout).context("stdout was not valid JSON")?;
 
-                    let base_url = parsed["base_url"].as_str().context(format!(
-                        "JSON output missing 'base_url' string field\nGot: {parsed}"
-                    ))?;
+                    let base_url = parsed["base_url"]
+                        .as_str()
+                        .context("JSON output missing 'base_url' string field")?;
                     anyhow::ensure!(
                         !base_url.is_empty(),
-                        "JSON output 'base_url' field is empty\nGot: {parsed}"
+                        "JSON output 'base_url' field is empty"
                     );
 
-                    let url = url::Url::parse(base_url).context(format!(
-                        "'base_url' field is not a valid URL\nGot: {parsed}"
-                    ))?;
+                    let url =
+                        url::Url::parse(base_url).context("'base_url' field is not a valid URL")?;
                     anyhow::ensure!(
                         url.scheme() == "http" || url.scheme() == "https",
-                        "JSON output 'base_url' field does not have http or https scheme\nGot: {parsed}"
+                        "'base_url' does not have http or https scheme"
                     );
 
-                    let routes = parsed["routes"].as_array().context(format!(
-                        "JSON output missing 'routes' array field\nGot: {parsed}"
-                    ))?;
+                    let routes = parsed["routes"]
+                        .as_array()
+                        .context("JSON output missing 'routes' array field")?;
                     anyhow::ensure!(
                         routes.len() == 1,
-                        "Expected exactly 1 route, got {}\nGot: {parsed}",
+                        "Expected exactly 1 route, got {}",
                         routes.len()
                     );
 
@@ -157,7 +156,7 @@ mod integration_tests {
                     );
                     Ok(())
                 };
-                check_json()?;
+                check_json().with_context(|| format!("Actual output:\n{stdout}"))?;
 
                 Ok(())
             },
