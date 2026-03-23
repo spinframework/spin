@@ -30,7 +30,7 @@ use spin_http::{
     app_info::AppInfo,
     body,
     config::{HttpExecutorType, HttpTriggerConfig},
-    routes::{RouteMatch, Router},
+    routes::{RouteInfo, RouteMatch, Router},
     trigger::HandlerType,
 };
 use tokio::{
@@ -571,6 +571,22 @@ impl<F: RuntimeFactors> HttpServer<F> {
         .await
     }
 
+    fn get_description_for_route(
+        &self,
+        key: &spin_http::routes::TriggerLookupKey,
+    ) -> anyhow::Result<Option<String>> {
+        if let spin_http::routes::TriggerLookupKey::Component(component_id) = key {
+            self.trigger_app
+                .app()
+                .get_component(component_id)
+                .and_then(|c| c.get_metadata(APP_DESCRIPTION_KEY).transpose())
+                .transpose()
+                .map_err(Into::into)
+        } else {
+            Ok(None)
+        }
+    }
+
     fn print_startup_msgs(&self, scheme: &str, listener: &TcpListener) -> anyhow::Result<()> {
         let local_addr = listener.local_addr()?;
         let base_url = format!("{scheme}://{local_addr:?}");
@@ -582,12 +598,8 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 println!("Available Routes:");
                 for (route, key) in self.router.routes() {
                     println!("  {key}: {base_url}{route}");
-                    if let spin_http::routes::TriggerLookupKey::Component(component_id) = &key {
-                        if let Some(component) = self.trigger_app.app().get_component(component_id) {
-                            if let Some(description) = component.get_metadata(APP_DESCRIPTION_KEY)? {
-                                println!("    {description}");
-                            }
-                        }
+                    if let Some(description) = self.get_description_for_route(key)? {
+                        println!("    {description}");
                     }
                 }
             }
@@ -601,31 +613,18 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 #[derive(serde::Serialize)]
                 struct RouteEntry {
                     id: String,
-                    url: String,
                     route: String,
+                    wildcard: bool,
                     #[serde(skip_serializing_if = "Option::is_none")]
                     description: Option<String>,
                 }
                 let mut routes = Vec::new();
                 for (route, key) in self.router.routes() {
-                    let description = if let spin_http::routes::TriggerLookupKey::Component(
-                        component_id,
-                    ) = &key
-                    {
-                        self.trigger_app
-                            .app()
-                            .get_component(component_id)
-                            .and_then(|c| c.get_metadata(APP_DESCRIPTION_KEY).transpose())
-                            .transpose()?
-                    } else {
-                        None
-                    };
-
                     routes.push(RouteEntry {
                         id: key.to_string(),
-                        url: format!("{base_url}{route}"),
-                        route: route.to_string(),
-                        description,
+                        route: route.path().to_string(),
+                        wildcard: route.is_wildcard(),
+                        description: self.get_description_for_route(key)?,
                     });
                 }
 

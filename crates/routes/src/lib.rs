@@ -164,9 +164,7 @@ impl Router {
     }
 
     /// Returns the constructed routes.
-    pub fn routes(
-        &self,
-    ) -> impl Iterator<Item = (&(impl fmt::Display + fmt::Debug), &TriggerLookupKey)> {
+    pub fn routes(&self) -> impl Iterator<Item = (&impl RouteInfo, &TriggerLookupKey)> {
         self.router
             .iter()
             .map(|(_spec, handler)| (&handler.parsed_based_route, &handler.lookup_key))
@@ -219,6 +217,14 @@ impl DuplicateRoute {
     }
 }
 
+/// Information about a parsed route.
+pub trait RouteInfo: fmt::Display + fmt::Debug {
+    /// Returns the route path without any wildcard annotation.
+    fn path(&self) -> &str;
+    /// Returns true if this route has a trailing wildcard.
+    fn is_wildcard(&self) -> bool;
+}
+
 #[derive(Clone, Debug)]
 enum ParsedRoute {
     Exact(String),
@@ -232,6 +238,24 @@ impl ParsedRoute {
 
     fn trailing_wildcard(route: impl Into<String>) -> Self {
         Self::TrailingWildcard(route.into())
+    }
+}
+
+impl RouteInfo for ParsedRoute {
+    fn path(&self) -> &str {
+        let p = match self {
+            ParsedRoute::Exact(path) => path,
+            ParsedRoute::TrailingWildcard(pattern) => pattern,
+        };
+        if p.is_empty() {
+            "/"
+        } else {
+            p
+        }
+    }
+
+    fn is_wildcard(&self) -> bool {
+        matches!(self, ParsedRoute::TrailingWildcard(_))
     }
 }
 

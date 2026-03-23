@@ -114,32 +114,47 @@ mod integration_tests {
                     let parsed: serde_json::Value = serde_json::from_str(&stdout)
                         .context(format!("stdout was not valid JSON:\n{stdout}"))?;
 
-                    let base_url = parsed["base_url"]
-                        .as_str()
-                        .context(format!("JSON output missing 'base_url' string field\nGot: {parsed}"))?;
-                    anyhow::ensure!(!base_url.is_empty(), "JSON output 'base_url' field is empty\nGot: {parsed}");
+                    let base_url = parsed["base_url"].as_str().context(format!(
+                        "JSON output missing 'base_url' string field\nGot: {parsed}"
+                    ))?;
+                    anyhow::ensure!(
+                        !base_url.is_empty(),
+                        "JSON output 'base_url' field is empty\nGot: {parsed}"
+                    );
 
-                    let url = url::Url::parse(base_url)
-                        .context(format!("'base_url' field is not a valid URL\nGot: {parsed}"))?;
+                    let url = url::Url::parse(base_url).context(format!(
+                        "'base_url' field is not a valid URL\nGot: {parsed}"
+                    ))?;
                     anyhow::ensure!(
                         url.scheme() == "http" || url.scheme() == "https",
                         "JSON output 'base_url' field does not have http or https scheme\nGot: {parsed}"
                     );
 
-
-                    let routes = parsed["routes"]
-                        .as_array()
-                        .context(format!("JSON output missing 'routes' array field\nGot: {parsed}"))?;
-                    anyhow::ensure!(routes.len() == 1, "Expected exactly 1 route, got {}\nGot: {parsed}", routes.len());
+                    let routes = parsed["routes"].as_array().context(format!(
+                        "JSON output missing 'routes' array field\nGot: {parsed}"
+                    ))?;
+                    anyhow::ensure!(
+                        routes.len() == 1,
+                        "Expected exactly 1 route, got {}\nGot: {parsed}",
+                        routes.len()
+                    );
 
                     let route = &routes[0];
-                    anyhow::ensure!(route["id"] == "hello", "Expected route id 'hello', got: {}", route["id"]);
-                    anyhow::ensure!(route["route"] == "/hello (wildcard)", "Expected route '/hello (wildcard)', got: {}", route["route"]);
-
-                    let route_url = route["url"]
-                        .as_str()
-                        .context(format!("Route entry missing 'url' string field\nEntry: {route}"))?;
-                    anyhow::ensure!(route_url.starts_with(base_url), "Route url '{route_url}' does not start with base_url '{base_url}'");
+                    anyhow::ensure!(
+                        route["id"] == "hello",
+                        "Expected route id 'hello', got: {}",
+                        route["id"]
+                    );
+                    anyhow::ensure!(
+                        route["route"] == "/hello",
+                        "Expected route '/hello', got: {}",
+                        route["route"]
+                    );
+                    anyhow::ensure!(
+                        route["wildcard"] == true,
+                        "Expected wildcard true, got: {}",
+                        route["wildcard"]
+                    );
                     Ok(())
                 };
                 check_json()?;
