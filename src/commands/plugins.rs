@@ -618,7 +618,7 @@ pub struct List {
     #[clap(long = "filter")]
     pub filter: Option<String>,
 
-    /// The format in which to list the templates.
+    /// The format in which to list the plugins.
     #[clap(value_enum, long = "format", default_value_t = ListFormat::default())]
     pub format: ListFormat,
 }
