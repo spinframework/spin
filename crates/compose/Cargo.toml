@@ -16,6 +16,7 @@ semver = { workspace = true }
 spin-app = { path = "../app" }
 spin-common = { path = "../common" }
 spin-componentize = { path = "../componentize" }
+spin-env-isolator = { path = "../env-isolator" }
 spin-serde = { path = "../serde" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }

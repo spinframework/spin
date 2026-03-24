@@ -1,0 +1,13 @@
+package hello:components;
+
+interface dependable {
+  get-message: func() -> string;
+}
+
+world main {
+  import dependable;
+}
+
+world dependable-world {
+  export dependable;
+}
