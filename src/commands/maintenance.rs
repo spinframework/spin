@@ -29,10 +29,82 @@ pub struct GenerateReference {
 
 impl GenerateReference {
     pub async fn run(&self) -> anyhow::Result<()> {
-        let markdown = crate::clap_markdown::help_markdown_command(&crate::SpinApp::command());
+        let cmd = sorted_command(&crate::SpinApp::command());
+        let markdown = clap_markdown::help_markdown_command_custom(
+            &cmd,
+            &clap_markdown::MarkdownOptions::new().show_aliases(false),
+        );
         write(&self.output, &markdown)?;
         Ok(())
     }
+}
+
+/// Rebuild a `clap::Command` with subcommands and options sorted alphabetically.
+/// This preserves the sorted output from the previously vendored clap-markdown fork.
+fn sorted_command(cmd: &clap::Command) -> clap::Command {
+    let mut new_cmd = clap::Command::new(cmd.get_name().to_owned());
+
+    if let Some(v) = cmd.get_display_name() {
+        new_cmd = new_cmd.display_name(v);
+    }
+    if let Some(v) = cmd.get_bin_name() {
+        new_cmd = new_cmd.bin_name(v);
+    }
+    if let Some(v) = cmd.get_about() {
+        new_cmd = new_cmd.about(v.to_owned());
+    }
+    if let Some(v) = cmd.get_long_about() {
+        new_cmd = new_cmd.long_about(v.to_owned());
+    }
+    if let Some(v) = cmd.get_before_help() {
+        new_cmd = new_cmd.before_help(v.to_owned());
+    }
+    if let Some(v) = cmd.get_before_long_help() {
+        new_cmd = new_cmd.before_long_help(v.to_owned());
+    }
+    if let Some(v) = cmd.get_after_help() {
+        new_cmd = new_cmd.after_help(v.to_owned());
+    }
+    if let Some(v) = cmd.get_after_long_help() {
+        new_cmd = new_cmd.after_long_help(v.to_owned());
+    }
+    new_cmd = new_cmd.hide(cmd.is_hide_set());
+    new_cmd = new_cmd.subcommand_required(cmd.is_subcommand_required_set());
+
+    // Copy positional arguments (preserve definition order)
+    for arg in cmd.get_positionals() {
+        new_cmd = new_cmd.arg(arg.clone());
+    }
+
+    // Copy non-positional arguments sorted by short flag / long name
+    let mut non_pos: Vec<_> = cmd
+        .get_arguments()
+        .filter(|a| !a.is_positional())
+        .cloned()
+        .collect();
+    non_pos.sort_by_key(|arg| {
+        arg.get_short()
+            .map(|c| c.to_string())
+            .or_else(|| arg.get_long().map(|l| l.to_string()))
+            .unwrap_or_else(|| "zzz".to_string())
+    });
+    for arg in non_pos {
+        new_cmd = new_cmd.arg(arg);
+    }
+
+    // Copy argument groups
+    for group in cmd.get_groups() {
+        new_cmd = new_cmd.group(group.clone());
+    }
+
+    // Add subcommands sorted alphabetically (recursively)
+    let mut subs: Vec<clap::Command> = cmd.get_subcommands().cloned().collect();
+    subs.sort_by_key(|c| c.get_name().to_owned());
+    for sub in subs {
+        new_cmd = new_cmd.subcommand(sorted_command(&sub));
+    }
+
+    new_cmd
 }
 
 #[derive(Parser, Debug)]

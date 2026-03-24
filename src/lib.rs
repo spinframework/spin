@@ -4,12 +4,6 @@ mod directory_rels;
 pub(crate) mod opts;
 pub mod subprocess;
 
-// This is included third-party code (see NOTICES and included licence files)
-// Skip formatting to minimise changes from upstream.
-#[rustfmt::skip]
-#[allow(clippy::all, dead_code)]
-mod clap_markdown;
-
 use anyhow::{Context, Error};
 use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
 use commands::external::predefined_externals;

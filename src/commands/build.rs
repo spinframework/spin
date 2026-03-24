@@ -42,11 +42,7 @@ pub struct BuildCommand {
 
     /// By default, the build command generates WIT files for components' dependencies. Specify
     /// this option to bypass generating WITs.
-    #[clap(
-        long = "skip-generate-wits",
-        alias = "skip-generate-wit",
-        takes_value = false
-    )]
+    #[clap(long = "skip-generate-wits", alias = "skip-generate-wit")]
     skip_generate_wits: bool,
 
     /// Run the application after building.

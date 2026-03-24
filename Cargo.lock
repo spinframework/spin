@@ -1576,6 +1576,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap-markdown"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2a2617956a06d4885b490697b5307ebb09fec10b088afc18c81762d848c2339"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_builder"
 version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8399,6 +8408,7 @@ dependencies = [
  "bytes",
  "cargo-target-dep",
  "clap",
+ "clap-markdown",
  "clap_lex 0.7.7",
  "clearscreen",
  "comfy-table",

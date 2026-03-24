@@ -19,6 +19,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "env", "string", "wrap_help"] }
+clap-markdown = "0.1.5"
 clap_lex = "0.7.5"
 clearscreen = "4"
 comfy-table = "7"
