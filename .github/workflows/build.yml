@@ -65,7 +65,7 @@ jobs:
           rust-wasm: true
 
       - name: Cargo Build
-        run: cargo build --workspace --release --all-targets --features openssl/vendored --features all-tests
+        run: cargo build --locked --workspace --release --all-targets --features openssl/vendored --features all-tests
         env:
           CARGO_INCREMENTAL: 0
 
@@ -128,7 +128,7 @@ jobs:
           openssl-windows: "${{ matrix.os == 'windows-latest' }}"
 
       - name: Cargo Build
-        run: cargo build --workspace --release --all-targets
+        run: cargo build --locked --workspace --release --all-targets
         env:
           CARGO_INCREMENTAL: 0
 
@@ -305,4 +305,4 @@ jobs:
 
       - name: build release
         shell: bash
-        run: cargo build --release ${{ matrix.config.extraArgs }}
+        run: cargo build --locked --release ${{ matrix.config.extraArgs }}

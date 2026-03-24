@@ -123,12 +123,12 @@ jobs:
       - name: build release (canary)
         if: github.ref == 'refs/heads/main'
         shell: bash
-        run: cargo build --features experimental-wasm-features --release ${{ matrix.config.extraArgs }}
+        run: cargo build --locked --features experimental-wasm-features --release ${{ matrix.config.extraArgs }}
 
       - name: build release
         if: github.ref != 'refs/heads/main'
         shell: bash
-        run: cargo build --release ${{ matrix.config.extraArgs }}
+        run: cargo build --locked --release ${{ matrix.config.extraArgs }}
 
       - name: Sign the binary with GitHub OIDC token
         shell: bash
