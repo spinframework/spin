@@ -1,6 +1,6 @@
 use crate::commands::external::execute_external_subcommand;
 use anyhow::Result;
-use clap::Args;
+use clap::{Args, CommandFactory};
 
 #[derive(Debug, Args, PartialEq)]
 #[clap(
@@ -41,7 +41,7 @@ impl DeployCommand {
         let deploy_plugin = deployment_plugin(SUBCMD)?;
         let mut subcmd = vec![deploy_plugin, SUBCMD.to_string()];
         subcmd.append(&mut self.args.clone());
-        execute_external_subcommand(subcmd).await
+        execute_external_subcommand(subcmd, crate::SpinApp::command()).await
     }
 }
 
@@ -52,7 +52,7 @@ impl LoginCommand {
         let deploy_plugin = deployment_plugin(SUBCMD)?;
         let mut args = vec![deploy_plugin, SUBCMD.to_string()];
         args.append(&mut self.args.clone());
-        execute_external_subcommand(args).await
+        execute_external_subcommand(args, crate::SpinApp::command()).await
     }
 }
 

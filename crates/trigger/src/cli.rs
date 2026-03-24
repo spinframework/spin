@@ -332,7 +332,7 @@ fn help_heading<T: Trigger<F>, F: RuntimeFactors>() -> Option<&'static str> {
     if T::TYPE == <help::HelpArgsOnlyTrigger as Trigger<F>>::TYPE {
         Some("Trigger Options")
     } else {
-        let heading = format!("{} Trigger Options", T::TYPE.to_uppercase());
+        let heading = format!("{} Trigger Options", T::display_name());
         let as_str = Box::new(heading).leak();
         Some(as_str)
     }

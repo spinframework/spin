@@ -52,12 +52,12 @@ pub async fn run() -> anyhow::Result<()> {
         cmd = cmd.after_help("* implemented via plugin");
     }
 
-    let matches = cmd.get_matches();
+    let matches = cmd.clone().get_matches();
 
     if let Some((subcmd, _)) = matches.subcommand() {
         if plugin_help_entries.iter().any(|e| e.name == subcmd) {
             let args = std::env::args().skip(1).collect();
-            return execute_external_subcommand(args).await;
+            return execute_external_subcommand(args, cmd).await;
         }
     }
 
@@ -132,7 +132,7 @@ impl SpinApp {
             Self::Trigger(TriggerCommands::Redis(cmd)) => cmd.run().await,
             Self::Trigger(TriggerCommands::HelpArgsOnly(cmd)) => cmd.run().await,
             Self::Plugins(cmd) => cmd.run().await,
-            Self::External(args) => execute_external_subcommand(args).await,
+            Self::External(args) => execute_external_subcommand(args, SpinApp::command()).await,
             Self::Watch(cmd) => cmd.run().await,
             Self::Doctor(cmd) => cmd.run().await,
             Self::Maintenance(cmd) => cmd.run().await,
