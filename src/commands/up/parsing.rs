@@ -28,6 +28,148 @@ fn arg_num_vals(arg: &clap::Arg) -> usize {
     }
 }
 
+/// Lookup tables mapping flag names to their argument definitions.
+///
+/// Used to identify which flags belong to `UpCommandInner` vs. trigger-specific
+/// flags that should be passed through untouched.
+struct FlagIndex<'a> {
+    long: HashMap<&'a str, &'a clap::Arg>,
+    short: HashMap<char, &'a clap::Arg>,
+}
+
+impl<'a> FlagIndex<'a> {
+    fn from_command(cmd: &'a clap::Command) -> Self {
+        let mut long = HashMap::new();
+        let mut short = HashMap::new();
+        for arg in cmd.get_arguments() {
+            for name in arg
+                .get_long()
+                .into_iter()
+                .chain(arg.get_all_aliases().unwrap_or_default())
+            {
+                long.insert(name, arg);
+            }
+            for ch in arg
+                .get_short()
+                .into_iter()
+                .chain(arg.get_all_short_aliases().unwrap_or_default())
+            {
+                short.insert(ch, arg);
+            }
+        }
+        Self { long, short }
+    }
+}
+
+/// Consume the next `n` raw values from the cursor and append them to `dest`.
+fn take_values(
+    dest: &mut Vec<OsString>,
+    raw_args: &clap_lex::RawArgs,
+    cursor: &mut clap_lex::ArgCursor,
+    n: usize,
+) {
+    for _ in 0..n {
+        dest.extend(raw_args.next_os(cursor).map(ToOwned::to_owned));
+    }
+}
+
+/// Split raw arguments into those recognized by `UpCommandInner` ("up args")
+/// and everything else ("trigger args").
+///
+/// Unrecognized arguments are kept as trigger args so that each trigger's
+/// own parser can handle them. If something truly invalid slips through,
+/// the later `try_parse_from` call will produce a clear clap error.
+fn split_args(flags: &FlagIndex, raw_args: clap_lex::RawArgs) -> (Vec<OsString>, Vec<OsString>) {
+    let mut up_args: Vec<OsString> = vec!["spin up".into()];
+    let mut trigger_args: Vec<OsString> = vec![];
+    let mut cursor = raw_args.cursor();
+
+    while let Some(parsed) = raw_args.next(&mut cursor) {
+        if let Some((Ok(long), eq_value)) = parsed.to_long() {
+            classify_long_flag(
+                long,
+                eq_value,
+                &parsed,
+                flags,
+                &raw_args,
+                &mut cursor,
+                &mut up_args,
+                &mut trigger_args,
+            );
+        } else if let Some(shorts) = parsed.to_short() {
+            classify_short_flags(
+                shorts,
+                flags,
+                &raw_args,
+                &mut cursor,
+                &mut up_args,
+                &mut trigger_args,
+            );
+        } else {
+            // Not a flag — UpCommandInner has no positional args, so this
+            // belongs to a trigger.
+            trigger_args.push(parsed.to_value_os().into());
+        }
+    }
+
+    (up_args, trigger_args)
+}
+
+/// Route a `--long` flag (and its value(s)) to either up_args or trigger_args.
+#[allow(clippy::too_many_arguments)]
+fn classify_long_flag(
+    long: &str,
+    eq_value: Option<&OsStr>,
+    parsed: &clap_lex::ParsedArg<'_>,
+    flags: &FlagIndex,
+    raw_args: &clap_lex::RawArgs,
+    cursor: &mut clap_lex::ArgCursor,
+    up_args: &mut Vec<OsString>,
+    trigger_args: &mut Vec<OsString>,
+) {
+    let Some(arg) = flags.long.get(long) else {
+        trigger_args.push(parsed.to_value_os().into());
+        return;
+    };
+
+    up_args.push(parsed.to_value_os().to_os_string());
+
+    // Determine how many trailing values to consume. If the value was
+    // provided inline (e.g. `--key=value`), one has already been consumed.
+    let mut remaining = arg_num_vals(arg);
+    if remaining > 0 && eq_value.is_some() {
+        remaining -= 1;
+    }
+    take_values(up_args, raw_args, cursor, remaining);
+}
+
+/// Route each flag in a short-flag cluster (e.g. `-abc`) to up_args or
+/// trigger_args. Clap allows stacking, so `-abc` is equivalent to `-a -b -c`.
+fn classify_short_flags(
+    shorts: clap_lex::ShortFlags<'_>,
+    flags: &FlagIndex,
+    raw_args: &clap_lex::RawArgs,
+    cursor: &mut clap_lex::ArgCursor,
+    up_args: &mut Vec<OsString>,
+    trigger_args: &mut Vec<OsString>,
+) {
+    for short_res in shorts {
+        match short_res {
+            Ok(ch) if flags.short.contains_key(&ch) => {
+                up_args.push(format!("-{ch}").into());
+                let remaining = arg_num_vals(flags.short[&ch]);
+                take_values(up_args, raw_args, cursor, remaining);
+            }
+            Ok(ch) => {
+                trigger_args.push(format!("-{ch}").into());
+            }
+            Err(invalid) => {
+                trigger_args.push(OsString::from_iter([OsStr::new("-"), invalid]));
+            }
+        }
+    }
+}
+
 impl Args for UpCommand {
     fn augment_args(cmd: clap::Command) -> clap::Command {
         // The FromArgMatches impl below depends on some restrictions on
@@ -61,81 +203,10 @@ impl Args for UpCommand {
 impl clap::FromArgMatches for UpCommand {
     fn from_arg_matches(matches: &clap::ArgMatches) -> std::result::Result<Self, clap::Error> {
         let cmd = UpCommandInner::command();
+        let flags = FlagIndex::from_command(&cmd);
 
-        // Build our own maps of flags -> arguments, because clap doesn't like to share
-        let mut long_flags = HashMap::new();
-        let mut short_flags = HashMap::new();
-        for arg in cmd.get_arguments() {
-            for long in arg
-                .get_long()
-                .into_iter()
-                .chain(arg.get_all_aliases().unwrap_or_default())
-            {
-                long_flags.insert(long, arg);
-            }
-            for short in arg
-                .get_short()
-                .into_iter()
-                .chain(arg.get_all_short_aliases().unwrap_or_default())
-            {
-                short_flags.insert(short, arg);
-            }
-        }
-
-        // Use clap's own lexer against it
         let raw_args = clap_lex::RawArgs::new(matches.get_raw("args").into_iter().flatten());
-        let mut cursor = raw_args.cursor();
-
-        // Split the arguments into those recognized by UpInnerCommand and all
-        // others. As a general strategy if we see something unexpected at this
-        // stage we let it through with the expectation that later parsing will
-        // catch it and produce a nice clap error.
-        let mut up_args = vec!["spin up".into()];
-        let mut trigger_args = vec![];
-        while let Some(parsed) = raw_args.next(&mut cursor) {
-            // --long flags
-            if let Some((Ok(long), eq_value)) = parsed.to_long() {
-                if let Some(arg) = long_flags.get(long) {
-                    up_args.push(parsed.to_value_os().to_os_string());
-                    // We asserted earlier that there are a fixed number of values
-                    let mut need_args = arg_num_vals(arg);
-                    // For --key=value args `value` needs to be counted
-                    if need_args > 0 && eq_value.is_some() {
-                        need_args -= 1;
-                    }
-                    // Grab any required value(s)
-                    for _ in 0..need_args {
-                        up_args.extend(raw_args.next_os(&mut cursor).map(ToOwned::to_owned));
-                    }
-                } else {
-                    trigger_args.push(parsed.to_value_os().into());
-                }
-            // -short flags; note that clap allows "stacked" flags, i.e. `-abc` == `-a -b -c`
-            } else if let Some(shorts) = parsed.to_short() {
-                for short_res in shorts {
-                    match short_res {
-                        Ok(short) if short_flags.contains_key(&short) => {
-                            up_args.push(format!("-{short}").into());
-                            let arg = short_flags[&short];
-                            let need_args = arg_num_vals(arg);
-                            for _ in 0..need_args {
-                                up_args
-                                    .extend(raw_args.next_os(&mut cursor).map(ToOwned::to_owned));
-                            }
-                        }
-                        Ok(short) => {
-                            trigger_args.push(format!("-{short}").into());
-                        }
-                        Err(invalid) => {
-                            trigger_args.push(OsString::from_iter([OsStr::new("-"), invalid]));
-                        }
-                    }
-                }
-            } else {
-                // We asserted that UpCommandInner has no positional args
-                trigger_args.push(parsed.to_value_os().into());
-            }
-        }
+        let (up_args, trigger_args) = split_args(&flags, raw_args);
 
         let mut inner = UpCommandInner::try_parse_from(up_args)?;
         inner.trigger_args = trigger_args;

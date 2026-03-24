@@ -957,4 +957,44 @@ mod test {
         assert_eq!("-L", groups[2][0]);
         assert_eq!("/fie", groups[2][1]);
     }
+
+    #[test]
+    fn splits_up_and_trigger_args() {
+        // Mix known UpCommandInner flags with unknown trigger-specific flags.
+        let cmd = UpCommand::try_parse_from([
+            "up",
+            "-f",
+            "app.wasm",
+            "--direct-mounts",
+            "-e",
+            "KEY=VAL",
+            "--listen",
+            "127.0.0.1:3000",
+            "--unknown-trigger-flag",
+            "trigger-value",
+        ])
+        .unwrap();
+
+        // Known flags are routed into UpCommandInner fields.
+        assert_eq!(cmd.0.app_source.as_deref(), Some("app.wasm"));
+        assert!(cmd.0.direct_mounts);
+        assert_eq!(cmd.0.env, vec![("KEY".to_owned(), "VAL".to_owned())]);
+
+        // Unknown flags end up in trigger_args.
+        let ta: Vec<&str> = cmd
+            .0
+            .trigger_args
+            .iter()
+            .map(|s| s.to_str().unwrap())
+            .collect();
+        assert_eq!(
+            ta,
+            [
+                "--listen",
+                "127.0.0.1:3000",
+                "--unknown-trigger-flag",
+                "trigger-value"
+            ]
+        );
+    }
 }
