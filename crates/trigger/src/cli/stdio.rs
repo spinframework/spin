@@ -71,9 +71,9 @@ impl StdioLoggingExecutorHooks {
 
         let follow = self.follow_components.should_follow(component_id);
         match log_path {
-            Some(log_path) => ComponentStdioWriter::new_forward(log_path, follow)
+            Some(log_path) => ComponentStdioWriter::new_forward(component_id, log_path, follow)
                 .with_context(|| format!("Failed to open log file {}", quoted_path(log_path))),
-            None => ComponentStdioWriter::new_inherit(),
+            None => ComponentStdioWriter::new_inherit(component_id),
         }
     }
 
@@ -161,6 +161,7 @@ impl<F: RuntimeFactors, U> ExecutorHooks<F, U> for StdioLoggingExecutorHooks {
 /// ComponentStdioWriter forwards output to a log file, (optionally) stderr, and (optionally) to a
 /// tracing compatibility layer.
 pub struct ComponentStdioWriter {
+    component_id: String,
     inner: ComponentStdioWriterInner,
 }
 
@@ -183,7 +184,7 @@ enum ComponentStdioWriterState {
 }
 
 impl ComponentStdioWriter {
-    fn new_forward(log_path: &Path, follow: bool) -> anyhow::Result<Self> {
+    fn new_forward(component_id: &str, log_path: &Path, follow: bool) -> anyhow::Result<Self> {
         let sync_file = std::fs::File::options()
             .create(true)
             .append(true)
@@ -195,6 +196,7 @@ impl ComponentStdioWriter {
             .into();
 
         Ok(Self {
+            component_id: component_id.to_string(),
             inner: ComponentStdioWriterInner::Forward {
                 sync_file,
                 async_file,
@@ -204,8 +206,9 @@ impl ComponentStdioWriter {
         })
     }
 
-    fn new_inherit() -> anyhow::Result<Self> {
+    fn new_inherit(component_id: &str) -> anyhow::Result<Self> {
         Ok(Self {
+            component_id: component_id.to_string(),
             inner: ComponentStdioWriterInner::Inherit,
         })
     }
@@ -317,7 +320,7 @@ impl AsyncWrite for ComponentStdioWriter {
 
 impl std::io::Write for ComponentStdioWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        spin_telemetry::logs::handle_app_log(buf);
+        spin_telemetry::logs::handle_app_log(buf, &self.component_id);
 
         match &mut self.inner {
             ComponentStdioWriterInner::Inherit => {
