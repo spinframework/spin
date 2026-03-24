@@ -10,6 +10,7 @@ use spin_factors::{
     anyhow, ConfigureAppContext, Factor, FactorData, InitContext, PrepareContext, RuntimeFactors,
     SelfInstanceBuilder,
 };
+use spin_world::spin::variables::variables as v3;
 
 /// A factor for providing variables to components.
 #[derive(Default)]
@@ -33,6 +34,7 @@ impl Factor for VariablesFactor {
         ctx.link_bindings(spin_world::v1::config::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(spin_world::v2::variables::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(spin_world::wasi::config::store::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(v3::add_to_linker::<_, VariablesFactorData>)?;
         Ok(())
     }
 
@@ -107,3 +109,9 @@ impl InstanceState {
 }
 
 impl SelfInstanceBuilder for InstanceState {}
+
+pub struct VariablesFactorData(VariablesFactor);
+
+impl spin_core::wasmtime::component::HasData for VariablesFactorData {
+    type Data<'a> = &'a mut InstanceState;
+}

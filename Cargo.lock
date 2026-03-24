@@ -8923,6 +8923,7 @@ dependencies = [
 name = "spin-factor-variables"
 version = "3.7.0-pre0"
 dependencies = [
+ "spin-core",
  "spin-expressions",
  "spin-factor-otel",
  "spin-factors",

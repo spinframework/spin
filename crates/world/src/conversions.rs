@@ -482,6 +482,7 @@ mod mysql {
 
 mod redis {
     use super::*;
+    use crate::spin::redis::redis as v3;
 
     impl From<v1::redis::RedisParameter> for v2::redis::RedisParameter {
         fn from(value: v1::redis::RedisParameter) -> Self {
@@ -499,6 +500,17 @@ mod redis {
                 v2::redis::RedisResult::Status(s) => v1::redis::RedisResult::Status(s),
                 v2::redis::RedisResult::Int64(i) => v1::redis::RedisResult::Int64(i),
                 v2::redis::RedisResult::Binary(b) => v1::redis::RedisResult::Binary(b),
+            }
+        }
+    }
+
+    impl From<v3::Error> for v2::redis::Error {
+        fn from(value: v3::Error) -> Self {
+            match value {
+                v3::Error::InvalidAddress => Self::InvalidAddress,
+                v3::Error::TooManyConnections => Self::TooManyConnections,
+                v3::Error::TypeError => Self::TypeError,
+                v3::Error::Other(m) => Self::Other(m),
             }
         }
     }
@@ -549,6 +561,22 @@ mod llm {
                 v2::llm::Error::ModelNotSupported => Self::ModelNotSupported,
                 v2::llm::Error::RuntimeError(s) => Self::RuntimeError(s),
                 v2::llm::Error::InvalidInput(s) => Self::InvalidInput(s),
+            }
+        }
+    }
+}
+
+mod mqtt {
+    use crate::fermyon::spin2_0_0::mqtt as v2;
+    use crate::spin::mqtt::mqtt as v3;
+
+    impl From<v3::Error> for v2::Error {
+        fn from(value: v3::Error) -> Self {
+            match value {
+                v3::Error::InvalidAddress => v2::Error::InvalidAddress,
+                v3::Error::TooManyConnections => v2::Error::TooManyConnections,
+                v3::Error::ConnectionFailed(e) => v2::Error::ConnectionFailed(e),
+                v3::Error::Other(e) => v2::Error::Other(e),
             }
         }
     }

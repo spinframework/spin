@@ -235,7 +235,11 @@ impl spin_core::wasmtime::component::HasData for KeyValueDispatch {
     type Data<'a> = &'a mut KeyValueDispatch;
 }
 
-impl v3::Host for KeyValueDispatch {}
+impl v3::Host for KeyValueDispatch {
+    fn convert_error(&mut self, err: v3::Error) -> anyhow::Result<v3::Error> {
+        Ok(err)
+    }
+}
 
 impl v3::HostStore for KeyValueDispatch {
     async fn drop(&mut self, store: Resource<v3::Store>) -> Result<()> {
@@ -248,7 +252,7 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
     async fn open<T>(
         accessor: &Accessor<T, Self>,
         label: String,
-    ) -> Result<Result<Resource<v3::Store>, v3::Error>> {
+    ) -> Result<Resource<v3::Store>, v3::Error> {
         let (allowed, manager) = accessor.with(|mut access| {
             let host = access.get();
             host.otel.reparent_tracing_span();
@@ -256,11 +260,11 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
         });
 
         if !allowed {
-            return Ok(Err(v3::Error::AccessDenied));
+            return Err(v3::Error::AccessDenied);
         }
 
-        let store = manager.get(&label).await?;
-        store.after_open().await?;
+        let store = manager.get(&label).await.map_err(to_v3_err)?;
+        store.after_open().await.map_err(to_v3_err)?;
 
         let rsrc = accessor.with(|mut access| {
             let host = access.get();
@@ -270,24 +274,26 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
                 .map_err(|()| v3::Error::StoreTableFull)
         });
 
-        Ok(rsrc)
+        rsrc
     }
 
     async fn get<T>(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
         key: String,
-    ) -> Result<Result<Option<Vec<u8>>, v3::Error>> {
-        let store = accessor.with(|mut access| {
-            let host = access.get();
-            host.otel.reparent_tracing_span();
-            host.get_store(store).cloned()
-        })?;
-        Ok(store
+    ) -> Result<Option<Vec<u8>>, v3::Error> {
+        let store = accessor
+            .with(|mut access| {
+                let host = access.get();
+                host.otel.reparent_tracing_span();
+                host.get_store(store).cloned()
+            })
+            .map_err(|_| v3::Error::NoSuchStore)?;
+        store
             .get(&key, MAX_HOST_BUFFERED_BYTES)
             .await
             .map_err(to_v3_err)
-            .map_err(track_error_on_span_v3))
+            .map_err(track_error_on_span_v3)
     }
 
     async fn set<T>(
@@ -295,62 +301,70 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
         store: Resource<v3::Store>,
         key: String,
         value: Vec<u8>,
-    ) -> Result<Result<(), v3::Error>> {
-        let store = accessor.with(|mut access| {
-            let host = access.get();
-            host.otel.reparent_tracing_span();
-            host.get_store(store).cloned()
-        })?;
-        Ok(store
+    ) -> Result<(), v3::Error> {
+        let store = accessor
+            .with(|mut access| {
+                let host = access.get();
+                host.otel.reparent_tracing_span();
+                host.get_store(store).cloned()
+            })
+            .map_err(|_| v3::Error::NoSuchStore)?;
+        store
             .set(&key, &value)
             .await
             .map_err(to_v3_err)
-            .map_err(track_error_on_span_v3))
+            .map_err(track_error_on_span_v3)
     }
 
     async fn delete<T>(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
         key: String,
-    ) -> Result<Result<(), v3::Error>> {
-        let store = accessor.with(|mut access| {
-            let host = access.get();
-            host.otel.reparent_tracing_span();
-            host.get_store(store).cloned()
-        })?;
-        Ok(store
+    ) -> Result<(), v3::Error> {
+        let store = accessor
+            .with(|mut access| {
+                let host = access.get();
+                host.otel.reparent_tracing_span();
+                host.get_store(store).cloned()
+            })
+            .map_err(|_| v3::Error::NoSuchStore)?;
+        store
             .delete(&key)
             .await
             .map_err(to_v3_err)
-            .map_err(track_error_on_span_v3))
+            .map_err(track_error_on_span_v3)
     }
 
     async fn exists<T>(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
         key: String,
-    ) -> Result<Result<bool, v3::Error>> {
-        let store = accessor.with(|mut access| {
-            let host = access.get();
-            host.otel.reparent_tracing_span();
-            host.get_store(store).cloned()
-        })?;
-        Ok(store
+    ) -> Result<bool, v3::Error> {
+        let store = accessor
+            .with(|mut access| {
+                let host = access.get();
+                host.otel.reparent_tracing_span();
+                host.get_store(store).cloned()
+            })
+            .map_err(|_| v3::Error::NoSuchStore)?;
+        store
             .exists(&key)
             .await
             .map_err(to_v3_err)
-            .map_err(track_error_on_span_v3))
+            .map_err(track_error_on_span_v3)
     }
 
     async fn get_keys<T>(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
     ) -> Result<(StreamReader<String>, FutureReader<Result<(), v3::Error>>)> {
-        let store = accessor.with(|mut access| {
-            let host = access.get();
-            host.otel.reparent_tracing_span();
-            host.get_store(store).cloned()
-        })?;
+        let store = accessor
+            .with(|mut access| {
+                let host = access.get();
+                host.otel.reparent_tracing_span();
+                host.get_store(store).cloned()
+            })
+            .map_err(|_| v3::Error::NoSuchStore)?;
 
         let (keys_rx, err_rx) = store.get_keys_async(MAX_HOST_BUFFERED_BYTES).await;
 

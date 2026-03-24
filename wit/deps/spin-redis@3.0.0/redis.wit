@@ -1,0 +1,72 @@
+package spin:redis@3.0.0;
+
+interface redis {
+  /// Errors related to interacting with Redis
+  variant error {
+      /// An invalid address string
+      invalid-address,
+      /// There are too many open connections
+      too-many-connections,
+      /// A retrieved value was not of the correct type
+      type-error,
+      /// Some other error occurred
+      other(string),
+  }
+
+  resource connection {
+    /// Open a connection to the Redis instance at `address`.
+    open: static async func(address: string) -> result<connection, error>;
+
+    /// Publish a Redis message to the specified channel.
+    publish: async func(channel: string, payload: payload) -> result<_, error>;
+
+    /// Get the value of a key.
+    get: async func(key: string) -> result<option<payload>, error>;
+
+    /// Set key to value.
+    ///
+    /// If key already holds a value, it is overwritten.
+    set: async func(key: string, value: payload) -> result<_, error>;
+
+    /// Increments the number stored at key by one.
+    ///
+    /// If the key does not exist, it is set to 0 before performing the operation.
+    /// An `error::type-error` is returned if the key contains a value of the wrong type
+    /// or contains a string that can not be represented as integer.
+    incr: async func(key: string) -> result<s64, error>;
+
+    /// Removes the specified keys.
+    ///
+    /// A key is ignored if it does not exist. Returns the number of keys deleted.
+    del: async func(keys: list<string>) -> result<u32, error>;
+
+    /// Add the specified `values` to the set named `key`, returning the number of newly-added values.
+    sadd: async func(key: string, values: list<string>) -> result<u32, error>;
+
+    /// Retrieve the contents of the set named `key`.
+    smembers: async func(key: string) -> result<list<string>, error>;
+
+    /// Remove the specified `values` from the set named `key`, returning the number of newly-removed values.
+    srem: async func(key: string, values: list<string>) -> result<u32, error>;
+
+    /// Execute an arbitrary Redis command and receive the result.
+    execute: async func(command: string, arguments: list<redis-parameter>) -> result<list<redis-result>, error>;
+  }
+
+  /// The message payload.
+  type payload = list<u8>;
+
+  /// A parameter type for the general-purpose `execute` function.
+  variant redis-parameter {
+      int64(s64),
+      binary(payload)
+  }
+
+  /// A return type for the general-purpose `execute` function.
+  variant redis-result {
+      nil,
+      status(string),
+      int64(s64),
+      binary(payload)
+  }
+}
