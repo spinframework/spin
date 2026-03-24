@@ -214,7 +214,7 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(value)
     }
 
-    #[instrument(name = "spin_outbound_redis.execute", skip(self, connection), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("{}", command)))]
+    #[instrument(name = "spin_outbound_redis.execute", skip(self, connection, arguments), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("{}", command)))]
     async fn execute(
         &mut self,
         connection: Resource<RedisConnection>,
