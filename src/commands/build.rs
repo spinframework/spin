@@ -37,20 +37,12 @@ pub struct BuildCommand {
     /// By default, if the application manifest specifies one or more deployment targets, Spin
     /// checks that all components are compatible with those deployment targets. Specify
     /// this option to bypass those target checks.
-    #[clap(
-        long = "skip-target-checks",
-        alias = "skip-target-check",
-        takes_value = false
-    )]
+    #[clap(long = "skip-target-checks", alias = "skip-target-check")]
     skip_target_checks: bool,
 
     /// By default, the build command generates WIT files for components' dependencies. Specify
     /// this option to bypass generating WITs.
-    #[clap(
-        long = "skip-generate-wits",
-        alias = "skip-generate-wit",
-        takes_value = false
-    )]
+    #[clap(long = "skip-generate-wits", alias = "skip-generate-wit")]
     skip_generate_wits: bool,
 
     /// Run the application after building.
@@ -78,15 +70,7 @@ impl BuildCommand {
         .await?;
 
         if self.up {
-            let mut cmd = UpCommand::parse_from(
-                std::iter::once(OsString::from(format!(
-                    "{} up",
-                    std::env::args().next().unwrap()
-                )))
-                .chain(self.up_args),
-            );
-            cmd.file_source = Some(manifest_file);
-            cmd.run().await
+            UpCommand::run_as_flag(manifest_file, self.up_args).await
         } else {
             Ok(())
         }

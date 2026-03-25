@@ -50,7 +50,6 @@ pub struct Push {
         name = INSECURE_OPT,
         short = 'k',
         long = "insecure",
-        takes_value = false,
     )]
     pub insecure: bool,
 
@@ -60,11 +59,11 @@ pub struct Push {
     /// different Spin runtime hosts. Turning composition off can optimise
     /// bandwidth for shared dependencies, but makes the pushed image incompatible
     /// with hosts that cannot carry out composition themselves.
-    #[clap(long = "compose", default_value_t = true)]
+    #[clap(long, default_value_t = true)]
     pub compose: bool,
 
-    /// Specifies to perform `spin build` (with the default options) before pushing the application.
-    #[clap(long, takes_value = false, env = ALWAYS_BUILD_ENV)]
+    /// Specifies to perform `spin build` before pushing the application.
+    #[clap(long, env = ALWAYS_BUILD_ENV)]
     pub build: bool,
 
     /// Reference in the registry of the Spin application.
@@ -140,7 +139,6 @@ pub struct Pull {
         name = INSECURE_OPT,
         short = 'k',
         long = "insecure",
-        takes_value = false,
     )]
     pub insecure: bool,
 
@@ -170,19 +168,15 @@ impl Pull {
 #[derive(Parser, Debug)]
 pub struct Login {
     /// Username for the registry
-    #[clap(long = "username", short = 'u')]
+    #[clap(long, short = 'u')]
     pub username: Option<String>,
 
     /// Password for the registry
-    #[clap(long = "password", short = 'p')]
+    #[clap(long, short = 'p')]
     pub password: Option<String>,
 
     /// Take the password from stdin
-    #[clap(
-        long = "password-stdin",
-        takes_value = false,
-        conflicts_with = "password"
-    )]
+    #[clap(long, conflicts_with = "password")]
     pub password_stdin: bool,
 
     /// OCI registry server (e.g. ghcr.io)

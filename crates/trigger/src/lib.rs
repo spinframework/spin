@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod loader;
 
+use heck::ToTitleCase;
 use std::future::Future;
 
 use clap::Args;
@@ -70,5 +71,10 @@ pub trait Trigger<F: RuntimeFactors>: Sized + Send {
     /// See [`App::ensure_needs_only`].
     fn supported_host_requirements() -> Vec<&'static str> {
         Vec::new()
+    }
+
+    /// Returns the display name for the type of this trigger. Defaults to title case.
+    fn display_name() -> String {
+        Self::TYPE.to_title_case()
     }
 }

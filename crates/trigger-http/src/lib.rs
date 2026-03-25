@@ -57,11 +57,11 @@ pub struct CliArgs {
     pub address: SocketAddr,
 
     /// The path to the certificate to use for https, if this is not set, normal http will be used. The cert should be in PEM format
-    #[clap(long, env = "SPIN_TLS_CERT", requires = "tls-key")]
+    #[clap(long, env = "SPIN_TLS_CERT", requires = "tls_key")]
     pub tls_cert: Option<PathBuf>,
 
     /// The path to the certificate key to use for https, if this is not set, normal http will be used. The key should be in PKCS#8 format
-    #[clap(long, env = "SPIN_TLS_KEY", requires = "tls-cert")]
+    #[clap(long, env = "SPIN_TLS_KEY", requires = "tls_cert")]
     pub tls_key: Option<PathBuf>,
 
     /// Sets the maximum buffer size (in bytes) for the HTTP connection. The minimum value allowed is 8192.
@@ -299,6 +299,10 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
 
     fn supported_host_requirements() -> Vec<&'static str> {
         vec![spin_app::locked::SERVICE_CHAINING_KEY]
+    }
+
+    fn display_name() -> String {
+        "HTTP".to_string()
     }
 }
 

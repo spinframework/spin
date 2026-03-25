@@ -6,7 +6,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.68"
-clap = { version = "3.1.15", features = ["derive", "env"] }
+clap = { version = "4.6.0", features = ["derive", "env"] }
 serde = "1.0.188"
 spin-factors = { path = "../../crates/factors" }
 spin-runtime-factors = { path = "../../crates/runtime-factors" }
