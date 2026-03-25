@@ -14,6 +14,7 @@ wasmtime::component::bindgen!({
         include spin:up/platform@3.4.0;
         include spin:up/platform@3.7.0;
         include wasi:keyvalue/imports@0.2.0-draft2;
+        export spin:redis/inbound-redis@3.0.0;
     }
     "#,
     path: "../../wit",

@@ -6,6 +6,12 @@ world http-trigger {
   export wasi:http/handler@0.3.0-rc-2026-03-15;
 }
 
+/// The full world of a guest targeting a redis-trigger
+world redis-trigger {
+  include platform;
+  export spin:redis/inbound-redis@3.0.0;
+}
+
 /// The imports needed for a guest to run on a Spin host
 world platform {
   include wasi:cli/imports@0.2.6;
