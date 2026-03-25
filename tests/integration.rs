@@ -97,6 +97,75 @@ mod integration_tests {
     }
 
     #[test]
+    /// Test that the HTTP trigger outputs valid JSON to stdout when --format json is passed
+    fn http_smoke_test_json_format() -> anyhow::Result<()> {
+        run_test(
+            "http-smoke-test",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: vec!["--format".into(), "json".into()],
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let stdout = env.runtime_mut().stdout().to_owned();
+
+                let check_json = || -> anyhow::Result<()> {
+                    let parsed: serde_json::Value =
+                        serde_json::from_str(&stdout).context("stdout was not valid JSON")?;
+
+                    let base_url = parsed["base_url"]
+                        .as_str()
+                        .context("JSON output missing 'base_url' string field")?;
+                    anyhow::ensure!(
+                        !base_url.is_empty(),
+                        "JSON output 'base_url' field is empty"
+                    );
+
+                    let url =
+                        url::Url::parse(base_url).context("'base_url' field is not a valid URL")?;
+                    anyhow::ensure!(
+                        url.scheme() == "http" || url.scheme() == "https",
+                        "'base_url' does not have http or https scheme"
+                    );
+
+                    let routes = parsed["routes"]
+                        .as_array()
+                        .context("JSON output missing 'routes' array field")?;
+                    anyhow::ensure!(
+                        routes.len() == 1,
+                        "Expected exactly 1 route, got {}",
+                        routes.len()
+                    );
+
+                    let route = &routes[0];
+                    anyhow::ensure!(
+                        route["id"] == "hello",
+                        "Expected route id 'hello', got: {}",
+                        route["id"]
+                    );
+                    anyhow::ensure!(
+                        route["route"] == "/hello",
+                        "Expected route '/hello', got: {}",
+                        route["route"]
+                    );
+                    anyhow::ensure!(
+                        route["wildcard"] == true,
+                        "Expected wildcard true, got: {}",
+                        route["wildcard"]
+                    );
+                    Ok(())
+                };
+                check_json().with_context(|| format!("Actual output:\n{stdout}"))?;
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
     #[cfg(feature = "extern-dependencies-tests")]
     #[allow(dependency_on_unit_never_type_fallback)]
     /// Test that if you have an app where some but not all components use service

@@ -43,6 +43,16 @@ const DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT: usize = 16;
 const DEFAULT_REQUEST_TIMEOUT: Option<Range<Duration>> = None;
 const DEFAULT_IDLE_INSTANCE_TIMEOUT: Range<Duration> = Range::Value(Duration::from_secs(1));
 
+/// The format in which to print startup route information.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Default)]
+pub enum OutputFormat {
+    /// Human-readable plain text output (the default).
+    #[default]
+    Plain,
+    /// Machine-readable JSON output.
+    Json,
+}
+
 /// A [`spin_trigger::TriggerApp`] for the HTTP trigger.
 pub(crate) type TriggerApp<F> = spin_trigger::TriggerApp<HttpTrigger, F>;
 
@@ -70,6 +80,9 @@ pub struct CliArgs {
 
     #[clap(long = "find-free-port")]
     pub find_free_port: bool,
+
+    #[clap(value_enum, long = "format", default_value_t = OutputFormat::default())]
+    pub format: OutputFormat,
 
     /// Maximum number of requests to send to a single component instance before
     /// dropping it.
@@ -255,6 +268,7 @@ pub struct HttpTrigger {
     find_free_port: bool,
     http1_max_buf_size: Option<usize>,
     reuse_config: InstanceReuseConfig,
+    output_format: OutputFormat,
 }
 
 impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
@@ -266,6 +280,7 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
     fn new(cli_args: Self::CliArgs, app: &spin_app::App) -> anyhow::Result<Self> {
         let find_free_port = cli_args.find_free_port;
         let http1_max_buf_size = cli_args.http1_max_buf_size;
+        let output_format = cli_args.format;
         let reuse_config = InstanceReuseConfig {
             max_instance_reuse_count: cli_args
                 .max_instance_reuse_count
@@ -286,6 +301,7 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
             find_free_port,
             http1_max_buf_size,
             reuse_config,
+            output_format,
         )
     }
 
@@ -315,6 +331,7 @@ impl HttpTrigger {
         find_free_port: bool,
         http1_max_buf_size: Option<usize>,
         reuse_config: InstanceReuseConfig,
+        output_format: OutputFormat,
     ) -> anyhow::Result<Self> {
         Self::validate_app(app)?;
 
@@ -324,6 +341,7 @@ impl HttpTrigger {
             find_free_port,
             http1_max_buf_size,
             reuse_config,
+            output_format,
         })
     }
 
@@ -338,6 +356,7 @@ impl HttpTrigger {
             find_free_port,
             http1_max_buf_size,
             reuse_config,
+            output_format,
         } = self;
         let server = Arc::new(HttpServer::new(
             listen_addr,
@@ -346,6 +365,7 @@ impl HttpTrigger {
             trigger_app,
             http1_max_buf_size,
             reuse_config,
+            output_format,
         )?);
         Ok(server)
     }

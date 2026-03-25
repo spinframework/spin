@@ -131,7 +131,7 @@ impl<F: RuntimeFactors, U> ExecutorHooks<F, U> for StdioLoggingExecutorHooks {
                 Self::truncate_log_files(dir);
             }
 
-            println!("Logging component stdio to {}", quoted_path(dir.join("")))
+            eprintln!("Logging component stdio to {}", quoted_path(dir.join("")))
         }
         Ok(())
     }
