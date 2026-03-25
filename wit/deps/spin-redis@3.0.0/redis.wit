@@ -70,3 +70,10 @@ interface redis {
       binary(payload)
   }
 }
+
+interface inbound-redis {
+    use redis.{payload, error};
+
+    // The entrypoint for a Redis handler.
+    handle-message: async func(message: payload) -> result<_, error>;
+}

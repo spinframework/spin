@@ -1,0 +1,20 @@
+spin_manifest_version = 2
+
+[application]
+authors = ["Spin Framework Contributors"]
+description = "A simple redis application that exercises the Rust SDK in the current branch"
+name = "redis-async-trigger-smoke-test"
+version = "1.0.0"
+
+[application.trigger.redis]
+address = "redis://localhost:%{port=6379}"
+
+[[trigger.redis]]
+channel = "my-channel"
+component = "hello"
+
+[component.hello]
+source = "%{source=redis-async-trigger-smoke-test}"
+key_value_stores = ["default"]
+[component.hello.build]
+command = "cargo build --target wasm32-wasip2 --release"

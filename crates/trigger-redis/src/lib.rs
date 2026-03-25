@@ -7,7 +7,8 @@ use serde::Deserialize;
 use spin_factor_variables::VariablesFactor;
 use spin_factors::RuntimeFactors;
 use spin_trigger::{cli::NoCliArgs, App, Trigger, TriggerApp};
-use spin_world::exports::fermyon::spin::inbound_redis;
+use spin_world::exports::fermyon::spin::inbound_redis as v1;
+use spin_world::exports::spin::redis::inbound_redis as v3;
 use tracing::{instrument, Level};
 
 pub struct RedisTrigger;
@@ -211,14 +212,60 @@ impl<F: RuntimeFactors> Subscriber<F> {
             .await?;
 
         let pre = instance.instance_pre(&store);
-        let guest_indices = inbound_redis::GuestIndices::new(&pre)?;
-        let guest = guest_indices.load(&mut store, &instance)?;
 
-        let payload = msg.get_payload_bytes().to_vec();
+        match HandlerType::from_instance_pre(&pre)? {
+            HandlerType::V1(guest_indices) => {
+                let guest = guest_indices.load(&mut store, &instance)?;
 
-        guest
-            .call_handle_message(&mut store, &payload)
-            .await?
-            .context("Redis handler returned an error")
+                let payload = msg.get_payload_bytes().to_vec();
+
+                guest
+                    .call_handle_message(&mut store, &payload)
+                    .await?
+                    .context("Redis handler returned an error")
+            }
+            HandlerType::V3(guest_indices) => {
+                let guest = guest_indices.load(&mut store, &instance)?;
+
+                let payload = msg.get_payload_bytes().to_vec();
+                let res = std::pin::pin!(store.as_mut().run_concurrent(async |accessor| {
+                    guest.call_handle_message(accessor, payload).await
+                }))
+                .await;
+
+                res.map_err(|e| anyhow::anyhow!("{e}"))
+                    .context("Redis handler returned an error (run_concurrent)")?
+                    .map_err(|e| anyhow::anyhow!("{e}"))
+                    .context("Redis handler returned an error")?
+                    .context("Redis handler returned an error")
+            }
+        }
+    }
+}
+
+/// The type of Redis handler export used by a component.
+pub enum HandlerType /*<S: HandlerState>*/ {
+    V1(v1::GuestIndices),
+    V3(v3::GuestIndices),
+}
+
+impl HandlerType {
+    /// Determine the handler type from the exports of a component.
+    pub fn from_instance_pre<T: 'static>(
+        pre: &spin_factors::wasmtime::component::InstancePre<T>, /*, handler_state: S*/
+    ) -> anyhow::Result<Self> {
+        let mut candidates = Vec::new();
+        if let Ok(indices) = v1::GuestIndices::new(pre) {
+            candidates.push(HandlerType::V1(indices));
+        }
+        if let Ok(indices) = v3::GuestIndices::new(pre) {
+            candidates.push(HandlerType::V3(indices));
+        }
+
+        match candidates.len() {
+            0 => anyhow::bail!("component does not export a Redis interface"),
+            1 => Ok(candidates.pop().unwrap()),
+            _ => anyhow::bail!("component exports multiple Redis interfaces"),
+        }
     }
 }

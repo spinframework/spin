@@ -1042,6 +1042,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "redis-async-trigger-smoke-test"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "wit-bindgen 0.54.0",
+]
+
+[[package]]
 name = "routefinder"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
