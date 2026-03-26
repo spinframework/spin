@@ -4,7 +4,7 @@ const KV_KEY: &str = "message";
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "spin:up/redis-trigger@3.7.0",
+    world: "spin:up/redis-trigger@4.0.0",
     generate_all,
 });
 
