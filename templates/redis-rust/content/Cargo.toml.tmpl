@@ -12,9 +12,7 @@ crate-type = [ "cdylib" ]
 [dependencies]
 # Useful crate to handle errors.
 anyhow = "1"
-# Crate to simplify working with bytes.
-bytes = "1"
 # The Spin SDK.
-spin-sdk = "5.2.0"
+spin-sdk = { git = "https://github.com/spinframework/spin-rust-sdk" }
 
 [workspace]
