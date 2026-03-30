@@ -18,13 +18,13 @@ static LOGGER: OnceLock<SdkLogger> = OnceLock::new();
 
 /// Handle an application log. Has the potential to both forward the log to OTel and to emit it as a
 /// tracing event.
-pub fn handle_app_log(buf: &[u8]) {
-    app_log_to_otel(buf);
+pub fn handle_app_log(buf: &[u8], component_id: &str) {
+    app_log_to_otel(buf, component_id);
     app_log_to_tracing_event(buf);
 }
 
 /// Forward the app log to OTel.
-fn app_log_to_otel(buf: &[u8]) {
+fn app_log_to_otel(buf: &[u8], component_id: &str) {
     if !otel_logs_enabled() {
         return;
     }
@@ -33,11 +33,13 @@ fn app_log_to_otel(buf: &[u8]) {
         if let Ok(s) = std::str::from_utf8(buf) {
             let mut record = logger.create_log_record();
             record.set_body(s.to_string().into());
+            record.add_attribute("component_id", component_id.to_string());
             logger.emit(record);
         } else {
             let mut record = logger.create_log_record();
             record.set_body(escape_non_utf8_buf(buf).into());
             record.add_attribute("app_log_non_utf8", true);
+            record.add_attribute("component_id", component_id.to_string());
             logger.emit(record);
         }
     } else {
