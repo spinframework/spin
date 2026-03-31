@@ -8,10 +8,17 @@ use wit_component::DecodedWasm;
 use wit_parser::Span;
 
 pub async fn extract_wits_into(
-    source: impl Iterator<Item = (&DependencyName, &ComponentDependency)>,
+    source: impl ExactSizeIterator<Item = (&DependencyName, &ComponentDependency)>,
     app_root: impl AsRef<Path>,
     dest_file: impl AsRef<Path>,
 ) -> anyhow::Result<()> {
+    if source.len() == 0 {
+        if dest_file.as_ref().is_file() {
+            _ = tokio::fs::remove_file(dest_file).await; // Not an error if tidying fails
+        }
+        return Ok(());
+    }
+
     let wit_text = extract_wits(source, app_root).await?;
 
     tokio::fs::create_dir_all(
