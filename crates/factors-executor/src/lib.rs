@@ -166,6 +166,27 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutorApp<T, U> {
             .with_context(|| format!("no such component {component_id:?}"))
     }
 
+    /// Pre-warms all components by instantiating and immediately dropping them.
+    ///
+    /// This forces Wasmtime to allocate component memory and run component
+    /// initialization ahead of the first real request, eliminating cold-start
+    /// latency. The `make_state` closure is called once per component to produce
+    /// the per-instance executor state; use `|| ()` when no extra state is needed.
+    pub async fn prewarm_components(
+        &self,
+        make_state: impl Fn() -> U,
+    ) -> anyhow::Result<()> {
+        for component_id in self.component_instance_pres.keys() {
+            let builder = self.prepare(component_id)?;
+            builder
+                .instantiate(make_state())
+                .await
+                .with_context(|| format!("failed to prewarm component {component_id:?}"))?;
+            tracing::debug!(component_id, "component pre-warmed");
+        }
+        Ok(())
+    }
+
     /// Returns an instance builder for the given component ID.
     pub fn prepare(&self, component_id: &str) -> anyhow::Result<FactorsInstanceBuilder<'_, T, U>> {
         let app_component = self

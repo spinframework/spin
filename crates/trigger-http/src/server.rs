@@ -248,6 +248,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
     async fn serve_http(self: Arc<Self>, listener: TcpListener) -> anyhow::Result<()> {
         self.print_startup_msgs("http", &listener)?;
+        self.trigger_app
+            .prewarm_components(|| ())
+            .await
+            .unwrap_or_else(|e| tracing::warn!("component prewarm failed (non-fatal): {e}"));
         loop {
             let (stream, client_addr) = listener.accept().await?;
             self.clone()
@@ -261,6 +265,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
         tls_config: TlsConfig,
     ) -> anyhow::Result<()> {
         self.print_startup_msgs("https", &listener)?;
+        self.trigger_app
+            .prewarm_components(|| ())
+            .await
+            .unwrap_or_else(|e| tracing::warn!("component prewarm failed (non-fatal): {e}"));
         let acceptor = tls_config.server_config()?;
         loop {
             let (stream, client_addr) = listener.accept().await?;
