@@ -26,8 +26,14 @@ impl Factor for OutboundRedisFactor {
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::v1::redis::add_to_linker::<_, FactorData<Self>>)?;
-        ctx.link_bindings(spin_world::v2::redis::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::v1::redis::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::v2::redis::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
         Ok(())
     }
 

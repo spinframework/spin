@@ -11,6 +11,7 @@ spin-factors = { path = "../factors" }
 spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 tracing = { workspace = true }
+wasmtime = { workspace = true }
 
 [dev-dependencies]
 spin-factors-test = { path = "../factors-test" }

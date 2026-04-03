@@ -141,7 +141,7 @@ impl reqwest::dns::Resolve for SpinDnsResolver {
 }
 
 impl http_types::Host for crate::InstanceState {
-    fn convert_http_error(&mut self, err: HttpError) -> anyhow::Result<HttpError> {
+    fn convert_http_error(&mut self, err: HttpError) -> wasmtime::Result<HttpError> {
         Ok(err)
     }
 }

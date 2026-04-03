@@ -30,9 +30,18 @@ impl Factor for VariablesFactor {
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::v1::config::add_to_linker::<_, FactorData<Self>>)?;
-        ctx.link_bindings(spin_world::v2::variables::add_to_linker::<_, FactorData<Self>>)?;
-        ctx.link_bindings(spin_world::wasi::config::store::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::v1::config::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::v2::variables::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::wasi::config::store::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
         Ok(())
     }
 

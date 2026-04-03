@@ -9,7 +9,7 @@ pub(super) struct Config {
 }
 
 impl config::Host for Config {
-    async fn get_config(&mut self, key: String) -> Result<Result<String, config::Error>> {
+    async fn get_config(&mut self, key: String) -> wasmtime::Result<Result<String, config::Error>> {
         Ok(self
             .map
             .remove(&key)

@@ -265,7 +265,9 @@ impl<T: RuntimeFactors, U: Send> FactorsInstanceBuilder<'_, T, U> {
 
         #[cfg(feature = "cpu-time-metrics")]
         store.as_mut().call_hook(|mut store, hook| {
-            CpuTimeCallHook.handle_call_event::<T, U>(store.data_mut(), hook)
+            CpuTimeCallHook
+                .handle_call_event::<T, U>(store.data_mut(), hook)
+                .map_err(wasmtime::Error::from_anyhow)
         });
 
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
@@ -464,7 +466,7 @@ mod tests {
             engine: &spin_core::wasmtime::Engine,
             _component: &AppComponent,
         ) -> anyhow::Result<Component> {
-            Component::new(engine, "(component)")
+            Component::new(engine, "(component)").map_err(anyhow::Error::from)
         }
     }
 }

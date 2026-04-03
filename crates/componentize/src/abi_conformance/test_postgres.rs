@@ -42,7 +42,7 @@ impl postgres::Host for Postgres {
         address: String,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<Result<u64, PgError>> {
+    ) -> wasmtime::Result<Result<u64, PgError>> {
         Ok(self
             .execute_map
             .remove(&(
@@ -68,7 +68,7 @@ impl postgres::Host for Postgres {
         address: String,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<Result<RowSet, PgError>> {
+    ) -> wasmtime::Result<Result<RowSet, PgError>> {
         Ok(self
             .query_map
             .remove(&(

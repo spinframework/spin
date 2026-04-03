@@ -38,6 +38,7 @@ impl<F: RuntimeFactors> intercept::OutboundHttpInterceptor for OutboundHttpInter
                 .server
                 .handle_trigger_route(req, route_match, Scheme::HTTP, CHAINED_CLIENT_ADDR)
                 .await
+                .map_err(wasmtime::Error::from_anyhow)
                 .map_err(HttpError::trap)?;
             Ok(InterceptOutcome::Complete(resp))
         } else {

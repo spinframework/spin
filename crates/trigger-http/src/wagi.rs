@@ -118,7 +118,9 @@ impl HttpExecutor for WagiHttpExecutor<'_> {
     }
 }
 
-fn ignore_successful_proc_exit_trap(guest_err: anyhow::Error) -> Result<Result<(), ()>> {
+fn ignore_successful_proc_exit_trap(
+    guest_err: wasmtime::Error,
+) -> wasmtime::Result<Result<(), ()>> {
     match guest_err
         .root_cause()
         .downcast_ref::<wasmtime_wasi::I32Exit>()

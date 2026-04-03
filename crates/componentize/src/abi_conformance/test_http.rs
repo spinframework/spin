@@ -13,7 +13,10 @@ pub(crate) struct Http {
 }
 
 impl http::Host for Http {
-    async fn send_request(&mut self, req: Request) -> Result<Result<Response, HttpError>> {
+    async fn send_request(
+        &mut self,
+        req: Request,
+    ) -> wasmtime::Result<Result<Response, HttpError>> {
         Ok(self
             .map
             .remove(&req.uri)

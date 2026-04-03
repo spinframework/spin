@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use spin_factor_otel::OtelFactorState;
 use spin_factors::wasmtime::component::Resource;
-use spin_factors::{anyhow, SelfInstanceBuilder};
+use spin_factors::SelfInstanceBuilder;
 use spin_world::spin::sqlite::sqlite as v3;
 use spin_world::v1::sqlite as v1;
 use spin_world::v2::sqlite as v2;
@@ -94,7 +94,7 @@ impl InstanceState {
 impl SelfInstanceBuilder for InstanceState {}
 
 impl v3::Host for InstanceState {
-    fn convert_error(&mut self, error: v3::Error) -> anyhow::Result<v3::Error> {
+    fn convert_error(&mut self, error: v3::Error) -> wasmtime::Result<v3::Error> {
         Ok(error)
     }
 }
@@ -145,14 +145,14 @@ impl v3::HostConnection for InstanceState {
         conn.last_insert_rowid().await.map_err(|e| e.into())
     }
 
-    async fn drop(&mut self, connection: Resource<v3::Connection>) -> anyhow::Result<()> {
+    async fn drop(&mut self, connection: Resource<v3::Connection>) -> wasmtime::Result<()> {
         let _ = self.connections.remove(connection.rep());
         Ok(())
     }
 }
 
 impl v2::Host for InstanceState {
-    fn convert_error(&mut self, error: v2::Error) -> anyhow::Result<v2::Error> {
+    fn convert_error(&mut self, error: v2::Error) -> wasmtime::Result<v2::Error> {
         Ok(error)
     }
 }
@@ -182,7 +182,7 @@ impl v2::HostConnection for InstanceState {
         .map_err(to_v2_error)
     }
 
-    async fn drop(&mut self, connection: Resource<v2::Connection>) -> anyhow::Result<()> {
+    async fn drop(&mut self, connection: Resource<v2::Connection>) -> wasmtime::Result<()> {
         let _ = self.connections.remove(connection.rep());
         Ok(())
     }
@@ -211,11 +211,11 @@ impl v1::Host for InstanceState {
         result.map_err(to_legacy_error).map(to_legacy_query_result)
     }
 
-    async fn close(&mut self, connection: u32) -> anyhow::Result<()> {
+    async fn close(&mut self, connection: u32) -> wasmtime::Result<()> {
         <Self as v2::HostConnection>::drop(self, Resource::new_own(connection)).await
     }
 
-    fn convert_error(&mut self, error: v1::Error) -> anyhow::Result<v1::Error> {
+    fn convert_error(&mut self, error: v1::Error) -> wasmtime::Result<v1::Error> {
         Ok(error)
     }
 }

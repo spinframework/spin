@@ -239,82 +239,190 @@ impl Factor for WasiFactor {
     fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
         use wasmtime_wasi::{p2, p3};
 
-        ctx.link_clocks_bindings(p2::bindings::clocks::wall_clock::add_to_linker::<_, WasiClocks>)?;
-        ctx.link_clocks_bindings(
-            p3::bindings::clocks::system_clock::add_to_linker::<_, WasiClocks>,
-        )?;
-        ctx.link_clocks_bindings(
-            p2::bindings::clocks::monotonic_clock::add_to_linker::<_, WasiClocks>,
-        )?;
-        ctx.link_clocks_bindings(
-            p3::bindings::clocks::monotonic_clock::add_to_linker::<_, WasiClocks>,
-        )?;
-        ctx.link_filesystem_bindings(
-            p2::bindings::filesystem::types::add_to_linker::<_, WasiFilesystem>,
-        )?;
-        ctx.link_filesystem_bindings(
-            p3::bindings::filesystem::types::add_to_linker::<_, WasiFilesystem>,
-        )?;
-        ctx.link_filesystem_bindings(
-            p2::bindings::filesystem::preopens::add_to_linker::<_, WasiFilesystem>,
-        )?;
-        ctx.link_filesystem_bindings(
-            p3::bindings::filesystem::preopens::add_to_linker::<_, WasiFilesystem>,
-        )?;
-        ctx.link_io_bindings(p2::bindings::io::error::add_to_linker::<_, HasIo>)?;
-        ctx.link_io_bindings(p2::bindings::io::poll::add_to_linker::<_, HasIo>)?;
-        ctx.link_io_bindings(p2::bindings::io::streams::add_to_linker::<_, HasIo>)?;
-        ctx.link_random_bindings(p2::bindings::random::random::add_to_linker::<_, WasiRandom>)?;
-        ctx.link_random_bindings(p3::bindings::random::random::add_to_linker::<_, WasiRandom>)?;
-        ctx.link_random_bindings(p2::bindings::random::insecure::add_to_linker::<_, WasiRandom>)?;
-        ctx.link_random_bindings(p3::bindings::random::insecure::add_to_linker::<_, WasiRandom>)?;
-        ctx.link_random_bindings(
-            p2::bindings::random::insecure_seed::add_to_linker::<_, WasiRandom>,
-        )?;
-        ctx.link_random_bindings(
-            p3::bindings::random::insecure_seed::add_to_linker::<_, WasiRandom>,
-        )?;
-        ctx.link_cli_default_bindings(p2::bindings::cli::exit::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_default_bindings(p3::bindings::cli::exit::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::environment::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::environment::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::stdin::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::stdin::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::stdout::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::stdout::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::stderr::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::stderr::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::terminal_input::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::terminal_input::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::terminal_output::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::terminal_output::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::terminal_stdin::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::terminal_stdin::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p2::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_bindings(p3::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
-        ctx.link_sockets_bindings(p2::bindings::sockets::tcp::add_to_linker::<_, WasiSockets>)?;
-        ctx.link_sockets_bindings(
-            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, WasiSockets>,
-        )?;
-        ctx.link_sockets_bindings(p2::bindings::sockets::udp::add_to_linker::<_, WasiSockets>)?;
-        ctx.link_sockets_bindings(
-            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, WasiSockets>,
-        )?;
-        ctx.link_sockets_bindings(
-            p2::bindings::sockets::instance_network::add_to_linker::<_, WasiSockets>,
-        )?;
-        ctx.link_sockets_default_bindings(
-            p2::bindings::sockets::network::add_to_linker::<_, WasiSockets>,
-        )?;
-        ctx.link_sockets_bindings(
-            p2::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>,
-        )?;
-        ctx.link_sockets_bindings(
-            p3::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>,
-        )?;
-        ctx.link_sockets_bindings(p3::bindings::sockets::types::add_to_linker::<_, WasiSockets>)?;
+        ctx.link_clocks_bindings(|linker, fun| {
+            p2::bindings::clocks::wall_clock::add_to_linker::<_, WasiClocks>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_clocks_bindings(|linker, fun| {
+            p3::bindings::clocks::system_clock::add_to_linker::<_, WasiClocks>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_clocks_bindings(|linker, fun| {
+            p2::bindings::clocks::monotonic_clock::add_to_linker::<_, WasiClocks>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_clocks_bindings(|linker, fun| {
+            p3::bindings::clocks::monotonic_clock::add_to_linker::<_, WasiClocks>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_filesystem_bindings(|linker, fun| {
+            p2::bindings::filesystem::types::add_to_linker::<_, WasiFilesystem>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_filesystem_bindings(|linker, fun| {
+            p3::bindings::filesystem::types::add_to_linker::<_, WasiFilesystem>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_filesystem_bindings(|linker, fun| {
+            p2::bindings::filesystem::preopens::add_to_linker::<_, WasiFilesystem>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_filesystem_bindings(|linker, fun| {
+            p3::bindings::filesystem::preopens::add_to_linker::<_, WasiFilesystem>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_io_bindings(|linker, fun| {
+            p2::bindings::io::error::add_to_linker::<_, HasIo>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_io_bindings(|linker, fun| {
+            p2::bindings::io::poll::add_to_linker::<_, HasIo>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_io_bindings(|linker, fun| {
+            p2::bindings::io::streams::add_to_linker::<_, HasIo>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_random_bindings(|linker, fun| {
+            p2::bindings::random::random::add_to_linker::<_, WasiRandom>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_random_bindings(|linker, fun| {
+            p3::bindings::random::random::add_to_linker::<_, WasiRandom>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_random_bindings(|linker, fun| {
+            p2::bindings::random::insecure::add_to_linker::<_, WasiRandom>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_random_bindings(|linker, fun| {
+            p3::bindings::random::insecure::add_to_linker::<_, WasiRandom>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_random_bindings(|linker, fun| {
+            p2::bindings::random::insecure_seed::add_to_linker::<_, WasiRandom>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_random_bindings(|linker, fun| {
+            p3::bindings::random::insecure_seed::add_to_linker::<_, WasiRandom>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_default_bindings(|linker, fun, features| {
+            p2::bindings::cli::exit::add_to_linker::<_, WasiCli>(linker, fun, features)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_default_bindings(|linker, fun, features| {
+            p3::bindings::cli::exit::add_to_linker::<_, WasiCli>(linker, fun, features)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::environment::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::environment::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::stdin::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::stdin::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::stdout::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::stdout::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::stderr::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::stderr::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::terminal_input::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::terminal_input::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::terminal_output::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::terminal_output::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p2::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_cli_bindings(|linker, fun| {
+            p3::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_bindings(|linker, fun| {
+            p2::bindings::sockets::tcp::add_to_linker::<_, WasiSockets>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_bindings(|linker, fun| {
+            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, WasiSockets>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_bindings(|linker, fun| {
+            p2::bindings::sockets::udp::add_to_linker::<_, WasiSockets>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_bindings(|linker, fun| {
+            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, WasiSockets>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_bindings(|linker, fun| {
+            p2::bindings::sockets::instance_network::add_to_linker::<_, WasiSockets>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_default_bindings(|linker, fun, features| {
+            p2::bindings::sockets::network::add_to_linker::<_, WasiSockets>(linker, fun, features)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_bindings(|linker, fun| {
+            p2::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_bindings(|linker, fun| {
+            p3::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_sockets_bindings(|linker, fun| {
+            p3::bindings::sockets::types::add_to_linker::<_, WasiSockets>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
 
         ctx.link_all_bindings(wasi_2023_10_18::add_to_linker)?;
         ctx.link_all_bindings(wasi_2023_11_10::add_to_linker)?;

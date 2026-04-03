@@ -55,7 +55,7 @@ impl ComponentLoader {
         assert!(self.aot_compilation_enabled);
         match wasmtime::Engine::detect_precompiled_file(path)? {
             Some(wasmtime::Precompiled::Component) => unsafe {
-                Component::deserialize_file(engine, path)
+                Component::deserialize_file(engine, path).map_err(anyhow::Error::from)
             },
             Some(wasmtime::Precompiled::Module) => {
                 anyhow::bail!("expected AOT compiled component but found module");
@@ -99,6 +99,7 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
             })?;
 
         spin_core::Component::new(engine, composed)
+            .map_err(anyhow::Error::from)
             .with_context(|| format!("failed to compile component from {}", quoted_path(&path)))
     }
 }

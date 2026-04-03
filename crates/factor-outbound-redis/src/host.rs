@@ -58,14 +58,17 @@ impl InstanceState {
 }
 
 impl v2::Host for crate::InstanceState {
-    fn convert_error(&mut self, error: Error) -> Result<Error> {
+    fn convert_error(&mut self, error: Error) -> wasmtime::Result<Error> {
         Ok(error)
     }
 }
 
 impl v2::HostConnection for crate::InstanceState {
     #[instrument(name = "spin_outbound_redis.open_connection", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", db.address = Empty, server.port = Empty, db.namespace = Empty))]
-    async fn open(&mut self, address: String) -> Result<Resource<RedisConnection>, Error> {
+    async fn open(
+        &mut self,
+        address: String,
+    ) -> wasmtime::Result<Resource<RedisConnection>, Error> {
         self.otel.reparent_tracing_span();
         if !self
             .is_address_allowed(&address)
@@ -84,7 +87,7 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         channel: String,
         payload: Vec<u8>,
-    ) -> Result<(), Error> {
+    ) -> wasmtime::Result<(), Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -102,7 +105,7 @@ impl v2::HostConnection for crate::InstanceState {
         &mut self,
         connection: Resource<RedisConnection>,
         key: String,
-    ) -> Result<Option<Vec<u8>>, Error> {
+    ) -> wasmtime::Result<Option<Vec<u8>>, Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -131,7 +134,7 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         key: String,
         value: Vec<u8>,
-    ) -> Result<(), Error> {
+    ) -> wasmtime::Result<(), Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -146,7 +149,7 @@ impl v2::HostConnection for crate::InstanceState {
         &mut self,
         connection: Resource<RedisConnection>,
         key: String,
-    ) -> Result<i64, Error> {
+    ) -> wasmtime::Result<i64, Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -159,7 +162,7 @@ impl v2::HostConnection for crate::InstanceState {
         &mut self,
         connection: Resource<RedisConnection>,
         keys: Vec<String>,
-    ) -> Result<u32, Error> {
+    ) -> wasmtime::Result<u32, Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -173,7 +176,7 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         key: String,
         values: Vec<String>,
-    ) -> Result<u32, Error> {
+    ) -> wasmtime::Result<u32, Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -192,7 +195,7 @@ impl v2::HostConnection for crate::InstanceState {
         &mut self,
         connection: Resource<RedisConnection>,
         key: String,
-    ) -> Result<Vec<String>, Error> {
+    ) -> wasmtime::Result<Vec<String>, Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -206,7 +209,7 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         key: String,
         values: Vec<String>,
-    ) -> Result<u32, Error> {
+    ) -> wasmtime::Result<u32, Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -220,7 +223,7 @@ impl v2::HostConnection for crate::InstanceState {
         connection: Resource<RedisConnection>,
         command: String,
         arguments: Vec<RedisParameter>,
-    ) -> Result<Vec<RedisResult>, Error> {
+    ) -> wasmtime::Result<Vec<RedisResult>, Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await?;
@@ -254,7 +257,7 @@ impl v2::HostConnection for crate::InstanceState {
         }
     }
 
-    async fn drop(&mut self, connection: Resource<RedisConnection>) -> anyhow::Result<()> {
+    async fn drop(&mut self, connection: Resource<RedisConnection>) -> wasmtime::Result<()> {
         self.connections.remove(connection.rep());
         Ok(())
     }
@@ -286,23 +289,32 @@ impl v1::Host for crate::InstanceState {
         address: String,
         channel: String,
         payload: Vec<u8>,
-    ) -> Result<(), v1::Error> {
+    ) -> wasmtime::Result<(), v1::Error> {
         delegate!(self.publish(address, channel, payload))
     }
 
-    async fn get(&mut self, address: String, key: String) -> Result<Vec<u8>, v1::Error> {
+    async fn get(&mut self, address: String, key: String) -> wasmtime::Result<Vec<u8>, v1::Error> {
         delegate!(self.get(address, key)).map(|v| v.unwrap_or_default())
     }
 
-    async fn set(&mut self, address: String, key: String, value: Vec<u8>) -> Result<(), v1::Error> {
+    async fn set(
+        &mut self,
+        address: String,
+        key: String,
+        value: Vec<u8>,
+    ) -> wasmtime::Result<(), v1::Error> {
         delegate!(self.set(address, key, value))
     }
 
-    async fn incr(&mut self, address: String, key: String) -> Result<i64, v1::Error> {
+    async fn incr(&mut self, address: String, key: String) -> wasmtime::Result<i64, v1::Error> {
         delegate!(self.incr(address, key))
     }
 
-    async fn del(&mut self, address: String, keys: Vec<String>) -> Result<i64, v1::Error> {
+    async fn del(
+        &mut self,
+        address: String,
+        keys: Vec<String>,
+    ) -> wasmtime::Result<i64, v1::Error> {
         delegate!(self.del(address, keys)).map(|v| v as i64)
     }
 
@@ -311,11 +323,15 @@ impl v1::Host for crate::InstanceState {
         address: String,
         key: String,
         values: Vec<String>,
-    ) -> Result<i64, v1::Error> {
+    ) -> wasmtime::Result<i64, v1::Error> {
         delegate!(self.sadd(address, key, values)).map(|v| v as i64)
     }
 
-    async fn smembers(&mut self, address: String, key: String) -> Result<Vec<String>, v1::Error> {
+    async fn smembers(
+        &mut self,
+        address: String,
+        key: String,
+    ) -> wasmtime::Result<Vec<String>, v1::Error> {
         delegate!(self.smembers(address, key))
     }
 
@@ -324,7 +340,7 @@ impl v1::Host for crate::InstanceState {
         address: String,
         key: String,
         values: Vec<String>,
-    ) -> Result<i64, v1::Error> {
+    ) -> wasmtime::Result<i64, v1::Error> {
         delegate!(self.srem(address, key, values)).map(|v| v as i64)
     }
 
@@ -333,7 +349,7 @@ impl v1::Host for crate::InstanceState {
         address: String,
         command: String,
         arguments: Vec<v1::RedisParameter>,
-    ) -> Result<Vec<v1::RedisResult>, v1::Error> {
+    ) -> wasmtime::Result<Vec<v1::RedisResult>, v1::Error> {
         delegate!(self.execute(
             address,
             command,
@@ -344,7 +360,7 @@ impl v1::Host for crate::InstanceState {
 }
 
 impl redis_types::Host for crate::InstanceState {
-    fn convert_error(&mut self, error: redis_types::Error) -> Result<redis_types::Error> {
+    fn convert_error(&mut self, error: redis_types::Error) -> wasmtime::Result<redis_types::Error> {
         Ok(error)
     }
 }

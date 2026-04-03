@@ -28,6 +28,7 @@ tokio = { workspace = true, features = ["sync"] }
 toml = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true, features = ["serde"] }
+wasmtime = { workspace = true }
 
 [dev-dependencies]
 spin-factors-test = { path = "../factors-test" }

@@ -1,4 +1,3 @@
-use spin_factors::anyhow;
 use spin_telemetry::traces::{self, Blame};
 use spin_world::{v1, v2::variables, wasi::config as wasi_config};
 use tracing::instrument;
@@ -16,7 +15,7 @@ impl variables::Host for InstanceState {
             .map_err(expressions_to_variables_err)
     }
 
-    fn convert_error(&mut self, error: variables::Error) -> anyhow::Result<variables::Error> {
+    fn convert_error(&mut self, error: variables::Error) -> wasmtime::Result<variables::Error> {
         Ok(error)
     }
 }
@@ -33,7 +32,7 @@ impl v1::config::Host for InstanceState {
             })
     }
 
-    fn convert_error(&mut self, err: v1::config::Error) -> anyhow::Result<v1::config::Error> {
+    fn convert_error(&mut self, err: v1::config::Error) -> wasmtime::Result<v1::config::Error> {
         Ok(err)
     }
 }
@@ -69,7 +68,7 @@ impl wasi_config::store::Host for InstanceState {
     fn convert_error(
         &mut self,
         err: wasi_config::store::Error,
-    ) -> anyhow::Result<wasi_config::store::Error> {
+    ) -> wasmtime::Result<wasi_config::store::Error> {
         Ok(err)
     }
 }

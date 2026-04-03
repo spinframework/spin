@@ -464,7 +464,9 @@ where
         match latest::http::types::HostFutureTrailers::get(self, self_)? {
             Some(Ok(Ok(trailers))) => Ok(Some(Ok(trailers))),
             Some(Ok(Err(e))) => Ok(Some(Err(e.into()))),
-            Some(Err(())) => Err(anyhow::anyhow!("trailers have already been retrieved")),
+            Some(Err(())) => Err(wasmtime::format_err!(
+                "trailers have already been retrieved"
+            )),
             None => Ok(None),
         }
     }

@@ -45,7 +45,7 @@ impl mysql::Host for Mysql {
         address: String,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<Result<(), MysqlError>> {
+    ) -> wasmtime::Result<Result<(), MysqlError>> {
         Ok(
             if self.execute_set.remove(&(
                 address.to_owned(),
@@ -68,7 +68,7 @@ impl mysql::Host for Mysql {
         address: String,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<Result<RowSet, MysqlError>> {
+    ) -> wasmtime::Result<Result<RowSet, MysqlError>> {
         Ok(self
             .query_map
             .remove(&(

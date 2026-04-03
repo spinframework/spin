@@ -126,7 +126,10 @@ impl key_value::Host for KeyValueDispatch {}
 
 impl key_value::HostStore for KeyValueDispatch {
     #[instrument(name = "spin_key_value.open", skip(self), err, fields(otel.kind = "client", kv.backend=self.manager.summary(&name).unwrap_or("unknown".to_string())))]
-    async fn open(&mut self, name: String) -> Result<Result<Resource<key_value::Store>, Error>> {
+    async fn open(
+        &mut self,
+        name: String,
+    ) -> wasmtime::Result<Result<Resource<key_value::Store>, Error>> {
         self.otel.reparent_tracing_span();
         Ok(async {
             if self.allowed_stores.contains(&name) {
@@ -149,9 +152,11 @@ impl key_value::HostStore for KeyValueDispatch {
         &mut self,
         store: Resource<key_value::Store>,
         key: String,
-    ) -> Result<Result<Option<Vec<u8>>, Error>> {
+    ) -> wasmtime::Result<Result<Option<Vec<u8>>, Error>> {
         self.otel.reparent_tracing_span();
-        let store = self.get_store(store)?;
+        let store = self
+            .get_store(store)
+            .map_err(wasmtime::Error::from_anyhow)?;
         Ok(store
             .get(&key, MAX_HOST_BUFFERED_BYTES)
             .await
@@ -164,9 +169,11 @@ impl key_value::HostStore for KeyValueDispatch {
         store: Resource<key_value::Store>,
         key: String,
         value: Vec<u8>,
-    ) -> Result<Result<(), Error>> {
+    ) -> wasmtime::Result<Result<(), Error>> {
         self.otel.reparent_tracing_span();
-        let store = self.get_store(store)?;
+        let store = self
+            .get_store(store)
+            .map_err(wasmtime::Error::from_anyhow)?;
         Ok(store.set(&key, &value).await.map_err(track_error_on_span))
     }
 
@@ -175,9 +182,11 @@ impl key_value::HostStore for KeyValueDispatch {
         &mut self,
         store: Resource<key_value::Store>,
         key: String,
-    ) -> Result<Result<(), Error>> {
+    ) -> wasmtime::Result<Result<(), Error>> {
         self.otel.reparent_tracing_span();
-        let store = self.get_store(store)?;
+        let store = self
+            .get_store(store)
+            .map_err(wasmtime::Error::from_anyhow)?;
         Ok(store.delete(&key).await.map_err(track_error_on_span))
     }
 
@@ -186,9 +195,11 @@ impl key_value::HostStore for KeyValueDispatch {
         &mut self,
         store: Resource<key_value::Store>,
         key: String,
-    ) -> Result<Result<bool, Error>> {
+    ) -> wasmtime::Result<Result<bool, Error>> {
         self.otel.reparent_tracing_span();
-        let store = self.get_store(store)?;
+        let store = self
+            .get_store(store)
+            .map_err(wasmtime::Error::from_anyhow)?;
         Ok(store.exists(&key).await.map_err(track_error_on_span))
     }
 
@@ -196,16 +207,18 @@ impl key_value::HostStore for KeyValueDispatch {
     async fn get_keys(
         &mut self,
         store: Resource<key_value::Store>,
-    ) -> Result<Result<Vec<String>, Error>> {
+    ) -> wasmtime::Result<Result<Vec<String>, Error>> {
         self.otel.reparent_tracing_span();
-        let store = self.get_store(store)?;
+        let store = self
+            .get_store(store)
+            .map_err(wasmtime::Error::from_anyhow)?;
         Ok(store
             .get_keys(MAX_HOST_BUFFERED_BYTES)
             .await
             .map_err(track_error_on_span))
     }
 
-    async fn drop(&mut self, store: Resource<key_value::Store>) -> Result<()> {
+    async fn drop(&mut self, store: Resource<key_value::Store>) -> wasmtime::Result<()> {
         self.stores.remove(store.rep());
         Ok(())
     }
@@ -235,7 +248,7 @@ impl wasi_keyvalue::store::Host for KeyValueDispatch {
     async fn open(
         &mut self,
         identifier: String,
-    ) -> Result<Resource<wasi_keyvalue::store::Bucket>, wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<Resource<wasi_keyvalue::store::Bucket>, wasi_keyvalue::store::Error> {
         if self.allowed_stores.contains(&identifier) {
             let store = self.manager.get(&identifier).await.map_err(to_wasi_err)?;
             store.after_open().await.map_err(to_wasi_err)?;
@@ -252,7 +265,7 @@ impl wasi_keyvalue::store::Host for KeyValueDispatch {
     fn convert_error(
         &mut self,
         error: spin_world::wasi::keyvalue::store::Error,
-    ) -> std::result::Result<spin_world::wasi::keyvalue::store::Error, anyhow::Error> {
+    ) -> wasmtime::Result<spin_world::wasi::keyvalue::store::Error> {
         Ok(error)
     }
 }
@@ -264,7 +277,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         &mut self,
         self_: Resource<Bucket>,
         key: String,
-    ) -> Result<Option<Vec<u8>>, wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<Option<Vec<u8>>, wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
         store
             .get(&key, MAX_HOST_BUFFERED_BYTES)
@@ -278,7 +291,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         self_: Resource<Bucket>,
         key: String,
         value: Vec<u8>,
-    ) -> Result<(), wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<(), wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
         store.set(&key, &value).await.map_err(to_wasi_err)
     }
@@ -288,7 +301,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         &mut self,
         self_: Resource<Bucket>,
         key: String,
-    ) -> Result<(), wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<(), wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
         store.delete(&key).await.map_err(to_wasi_err)
     }
@@ -298,7 +311,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         &mut self,
         self_: Resource<Bucket>,
         key: String,
-    ) -> Result<bool, wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<bool, wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
         store.exists(&key).await.map_err(to_wasi_err)
     }
@@ -308,7 +321,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         &mut self,
         self_: Resource<Bucket>,
         cursor: Option<String>,
-    ) -> Result<wasi_keyvalue::store::KeyResponse, wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<wasi_keyvalue::store::KeyResponse, wasi_keyvalue::store::Error> {
         match cursor {
             Some(_) => Err(wasi_keyvalue::store::Error::Other(
                 "list_keys: cursor not supported".to_owned(),
@@ -324,7 +337,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         }
     }
 
-    async fn drop(&mut self, rep: Resource<Bucket>) -> anyhow::Result<()> {
+    async fn drop(&mut self, rep: Resource<Bucket>) -> wasmtime::Result<()> {
         self.stores.remove(rep.rep());
         Ok(())
     }
@@ -381,7 +394,7 @@ impl wasi_keyvalue::atomics::HostCas for KeyValueDispatch {
         &mut self,
         bucket: Resource<wasi_keyvalue::atomics::Bucket>,
         key: String,
-    ) -> Result<Resource<wasi_keyvalue::atomics::Cas>, wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<Resource<wasi_keyvalue::atomics::Cas>, wasi_keyvalue::store::Error> {
         let bucket_rep = bucket.rep();
         let bucket: Resource<Bucket> = Resource::new_own(bucket_rep);
         let store = self.get_store_wasi(bucket)?;
@@ -403,7 +416,7 @@ impl wasi_keyvalue::atomics::HostCas for KeyValueDispatch {
     async fn current(
         &mut self,
         cas: Resource<wasi_keyvalue::atomics::Cas>,
-    ) -> Result<Option<Vec<u8>>, wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<Option<Vec<u8>>, wasi_keyvalue::store::Error> {
         let cas = self
             .get_cas(cas)
             .map_err(|e| wasi_keyvalue::store::Error::Other(e.to_string()))?;
@@ -412,7 +425,7 @@ impl wasi_keyvalue::atomics::HostCas for KeyValueDispatch {
             .map_err(to_wasi_err)
     }
 
-    async fn drop(&mut self, rep: Resource<wasi_keyvalue::atomics::Cas>) -> Result<()> {
+    async fn drop(&mut self, rep: Resource<wasi_keyvalue::atomics::Cas>) -> wasmtime::Result<()> {
         self.compare_and_swaps.remove(rep.rep());
         Ok(())
     }
@@ -422,7 +435,7 @@ impl wasi_keyvalue::atomics::Host for KeyValueDispatch {
     fn convert_cas_error(
         &mut self,
         error: spin_world::wasi::keyvalue::atomics::CasError,
-    ) -> std::result::Result<spin_world::wasi::keyvalue::atomics::CasError, anyhow::Error> {
+    ) -> wasmtime::Result<spin_world::wasi::keyvalue::atomics::CasError> {
         Ok(error)
     }
 
@@ -432,7 +445,7 @@ impl wasi_keyvalue::atomics::Host for KeyValueDispatch {
         bucket: Resource<wasi_keyvalue::atomics::Bucket>,
         key: String,
         delta: i64,
-    ) -> Result<i64, wasi_keyvalue::store::Error> {
+    ) -> wasmtime::Result<i64, wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(bucket)?;
         store.increment(key, delta).await.map_err(to_wasi_err)
     }
@@ -442,7 +455,7 @@ impl wasi_keyvalue::atomics::Host for KeyValueDispatch {
         &mut self,
         cas_res: Resource<atomics::Cas>,
         value: Vec<u8>,
-    ) -> Result<(), CasError> {
+    ) -> wasmtime::Result<(), CasError> {
         let cas_rep = cas_res.rep();
         let cas = self
             .get_cas(Resource::<Bucket>::new_own(cas_rep))
@@ -494,12 +507,16 @@ fn to_legacy_error(err: Error) -> LegacyError {
 }
 
 impl spin_world::v1::key_value::Host for KeyValueDispatch {
-    async fn open(&mut self, name: String) -> Result<Result<u32, LegacyError>> {
+    async fn open(&mut self, name: String) -> wasmtime::Result<Result<u32, LegacyError>> {
         let result = <Self as key_value::HostStore>::open(self, name).await?;
         Ok(result.map_err(to_legacy_error).map(|s| s.rep()))
     }
 
-    async fn get(&mut self, store: u32, key: String) -> Result<Result<Vec<u8>, LegacyError>> {
+    async fn get(
+        &mut self,
+        store: u32,
+        key: String,
+    ) -> wasmtime::Result<Result<Vec<u8>, LegacyError>> {
         let this = Resource::new_borrow(store);
         let result = <Self as key_value::HostStore>::get(self, this, key).await?;
         Ok(result
@@ -512,31 +529,39 @@ impl spin_world::v1::key_value::Host for KeyValueDispatch {
         store: u32,
         key: String,
         value: Vec<u8>,
-    ) -> Result<Result<(), LegacyError>> {
+    ) -> wasmtime::Result<Result<(), LegacyError>> {
         let this = Resource::new_borrow(store);
         let result = <Self as key_value::HostStore>::set(self, this, key, value).await?;
         Ok(result.map_err(to_legacy_error))
     }
 
-    async fn delete(&mut self, store: u32, key: String) -> Result<Result<(), LegacyError>> {
+    async fn delete(
+        &mut self,
+        store: u32,
+        key: String,
+    ) -> wasmtime::Result<Result<(), LegacyError>> {
         let this = Resource::new_borrow(store);
         let result = <Self as key_value::HostStore>::delete(self, this, key).await?;
         Ok(result.map_err(to_legacy_error))
     }
 
-    async fn exists(&mut self, store: u32, key: String) -> Result<Result<bool, LegacyError>> {
+    async fn exists(
+        &mut self,
+        store: u32,
+        key: String,
+    ) -> wasmtime::Result<Result<bool, LegacyError>> {
         let this = Resource::new_borrow(store);
         let result = <Self as key_value::HostStore>::exists(self, this, key).await?;
         Ok(result.map_err(to_legacy_error))
     }
 
-    async fn get_keys(&mut self, store: u32) -> Result<Result<Vec<String>, LegacyError>> {
+    async fn get_keys(&mut self, store: u32) -> wasmtime::Result<Result<Vec<String>, LegacyError>> {
         let this = Resource::new_borrow(store);
         let result = <Self as key_value::HostStore>::get_keys(self, this).await?;
         Ok(result.map_err(to_legacy_error))
     }
 
-    async fn close(&mut self, store: u32) -> Result<()> {
+    async fn close(&mut self, store: u32) -> wasmtime::Result<()> {
         let this = Resource::new_borrow(store);
         <Self as key_value::HostStore>::drop(self, this).await
     }

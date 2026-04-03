@@ -1,6 +1,4 @@
 use crate::InstanceState;
-use anyhow::anyhow;
-use anyhow::Result;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry_sdk::error::OTelSdkError;
 use opentelemetry_sdk::logs::LogProcessor;
@@ -10,7 +8,10 @@ use spin_world::wasi;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 impl wasi::otel::tracing::Host for InstanceState {
-    async fn on_start(&mut self, context: wasi::otel::tracing::SpanContext) -> Result<()> {
+    async fn on_start(
+        &mut self,
+        context: wasi::otel::tracing::SpanContext,
+    ) -> wasmtime::Result<()> {
         // If the host does not have tracing enabled we just no-op
         let Some(tracing_state) = self.tracing_state.as_ref() else {
             return Ok(());
@@ -37,7 +38,7 @@ impl wasi::otel::tracing::Host for InstanceState {
         Ok(())
     }
 
-    async fn on_end(&mut self, span_data: wasi::otel::tracing::SpanData) -> Result<()> {
+    async fn on_end(&mut self, span_data: wasi::otel::tracing::SpanData) -> wasmtime::Result<()> {
         // If the host does not have tracing enabled we just no-op
         let Some(tracing_state) = self.tracing_state.as_ref() else {
             return Ok(());
@@ -52,7 +53,7 @@ impl wasi::otel::tracing::Host for InstanceState {
             .shift_remove(&span_id)
             .is_none()
         {
-            Err(anyhow!("Trying to end a span that was not started"))?;
+            wasmtime::bail!("Trying to end a span that was not started");
         }
 
         tracing_state.span_processor.on_end(span_data.into());
@@ -60,7 +61,7 @@ impl wasi::otel::tracing::Host for InstanceState {
         Ok(())
     }
 
-    async fn outer_span_context(&mut self) -> Result<wasi::otel::tracing::SpanContext> {
+    async fn outer_span_context(&mut self) -> wasmtime::Result<wasi::otel::tracing::SpanContext> {
         Ok(tracing::Span::current()
             .context()
             .span()

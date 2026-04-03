@@ -65,7 +65,7 @@ impl InstanceState {
 }
 
 impl v2::Host for InstanceState {
-    fn convert_error(&mut self, error: Error) -> Result<Error> {
+    fn convert_error(&mut self, error: Error) -> wasmtime::Result<Error> {
         Ok(error)
     }
 }
@@ -78,7 +78,7 @@ impl v2::HostConnection for InstanceState {
         username: String,
         password: String,
         keep_alive_interval: u64,
-    ) -> Result<Resource<Connection>, Error> {
+    ) -> wasmtime::Result<Resource<Connection>, Error> {
         self.otel.reparent_tracing_span();
 
         if !self
@@ -113,7 +113,7 @@ impl v2::HostConnection for InstanceState {
         topic: String,
         payload: Vec<u8>,
         qos: Qos,
-    ) -> Result<(), Error> {
+    ) -> wasmtime::Result<(), Error> {
         self.otel.reparent_tracing_span();
 
         let conn = self.get_conn(connection).await.map_err(other_error)?;
@@ -123,7 +123,7 @@ impl v2::HostConnection for InstanceState {
         Ok(())
     }
 
-    async fn drop(&mut self, connection: Resource<Connection>) -> anyhow::Result<()> {
+    async fn drop(&mut self, connection: Resource<Connection>) -> wasmtime::Result<()> {
         self.connections.remove(connection.rep());
         Ok(())
     }
