@@ -240,23 +240,32 @@ pub enum ComponentDependency {
         /// The registry that hosts the package. If omitted, this defaults to your
         /// system default registry.
         ///
-        /// Example: `"my:dep/import" = { registry = "registry.io", version = " 0.1.0" }`
+        /// Example: `"my:dep/import" = { registry = "registry.io", version = "0.1.0" }`
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-registry
         registry: Option<String>,
         /// The name of the package to use. If omitted, this defaults to the package name of the
         /// imported interface.
         ///
-        /// Example: `"my:dep/import" = { package = "your:implementation", version = " 0.1.0" }`
+        /// Example: `"my:dep/import" = { package = "your:implementation", version = "0.1.0" }`
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-registry
         package: Option<String>,
         /// The name of the export in the package. If omitted, this defaults to the name of the import.
         ///
-        /// Example: `"my:dep/import" = { export = "your:impl/export", version = " 0.1.0" }`
+        /// Example: `"my:dep/import" = { export = "your:impl/export", version = "0.1.0" }`
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-registry
         export: Option<String>,
+        /// The set of configurations to inherit from the parent component. If omitted or set to `false`,
+        /// no configurations will be inherited. If `true`, all configurations will be inherited.
+        /// Selective inheritance can be specified by enumerating the configuration keys the dependency
+        /// would like to inherit.
+        ///
+        /// Examples:
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
+        inherit_configuration: Option<InheritConfiguration>,
     },
     /// `... = { path = "path/to/component.wasm", export = "my-export" }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -273,6 +282,15 @@ pub enum ComponentDependency {
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-local-component
         export: Option<String>,
+        /// The set of configurations to inherit from the parent component. If omitted or set to `false`,
+        /// no configurations will be inherited. If `true`, all configurations will be inherited.
+        /// Selective inheritance can be specified by enumerating the configuration keys the dependency
+        /// would like to inherit.
+        ///
+        /// Examples:
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
+        inherit_configuration: Option<InheritConfiguration>,
     },
     /// `... = { url = "https://example.com/component.wasm", sha256 = "..." }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -295,6 +313,15 @@ pub enum ComponentDependency {
         ///
         /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-url
         export: Option<String>,
+        /// The set of configurations to inherit from the parent component. If omitted or set to `false`,
+        /// no configurations will be inherited. If `true`, all configurations will be inherited.
+        /// Selective inheritance can be specified by enumerating the configuration keys the dependency
+        /// would like to inherit.
+        ///
+        /// Examples:
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
+        inherit_configuration: Option<InheritConfiguration>,
     },
     /// `... = { component = "my-dependency" }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -311,7 +338,82 @@ pub enum ComponentDependency {
         ///
         /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
         export: Option<String>,
+        /// The set of configurations to inherit from the parent component. If omitted or set to `false`,
+        /// no configurations will be inherited. If `true`, all configurations will be inherited.
+        /// Selective inheritance can be specified by enumerating the configuration keys the dependency
+        /// would like to inherit.
+        ///
+        /// Examples:
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
+        inherit_configuration: Option<InheritConfiguration>,
     },
+}
+
+/// The set of configurations to inherit from the parent component.
+///
+/// Can be specified as:
+/// - `true` — inherit all configurations
+/// - `false` — inherit no configurations (equivalent to omitting the field)
+/// - `["key1", "key2"]` — inherit only the specified configuration keys
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum InheritConfiguration {
+    /// All or no configurations will be inherited, specified as `true` or `false`.
+    All(bool),
+    /// Only the specified configuration keys will be inherited from the parent component.
+    Some(Vec<String>),
+}
+
+impl ComponentDependency {
+    /// Returns the `inherit_configuration` field if present on this dependency variant.
+    pub fn inherit_configuration(&self) -> Option<&InheritConfiguration> {
+        match self {
+            ComponentDependency::Version(_) => None,
+            ComponentDependency::Package {
+                inherit_configuration,
+                ..
+            }
+            | ComponentDependency::Local {
+                inherit_configuration,
+                ..
+            }
+            | ComponentDependency::HTTP {
+                inherit_configuration,
+                ..
+            }
+            | ComponentDependency::AppComponent {
+                inherit_configuration,
+                ..
+            } => inherit_configuration.as_ref(),
+        }
+    }
+
+    /// Sets the `inherit_configuration` field on this dependency variant.
+    /// No-op for `Version` variants.
+    pub fn set_inherit_configuration(&mut self, value: InheritConfiguration) {
+        match self {
+            ComponentDependency::Version(_) => {}
+            ComponentDependency::Package {
+                inherit_configuration,
+                ..
+            }
+            | ComponentDependency::Local {
+                inherit_configuration,
+                ..
+            }
+            | ComponentDependency::HTTP {
+                inherit_configuration,
+                ..
+            }
+            | ComponentDependency::AppComponent {
+                inherit_configuration,
+                ..
+            } => {
+                *inherit_configuration = Some(value);
+            }
+        }
+    }
 }
 
 /// A Spin component.
@@ -438,8 +540,8 @@ pub struct Component {
     /// key-value stores, SQLite databases).
     ///
     /// Learn more: https://spinframework.dev/writing-apps#dependency-permissions
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub dependencies_inherit_configuration: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dependencies_inherit_configuration: Option<bool>,
     /// Specifies how to satisfy Wasm Component Model imports of this component.
     ///
     /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
@@ -867,7 +969,7 @@ mod tests {
             targets: None,
             build: None,
             tool: Map::new(),
-            dependencies_inherit_configuration: false,
+            dependencies_inherit_configuration: None,
             dependencies: Default::default(),
             profile: Default::default(),
         }

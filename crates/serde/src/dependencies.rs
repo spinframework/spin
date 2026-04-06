@@ -9,7 +9,7 @@ use wasm_pkg_common::package::PackageRef;
 /// Name of an import package dependency.
 ///
 /// For example: `foo:bar/baz@0.1.0`, `foo:bar/baz`, `foo:bar@0.1.0`, `foo:bar`.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[serde(into = "String", try_from = "String")]
 pub struct DependencyPackageName {
     /// The package spec, `foo:bar`, `foo:bar@0.1.0`.
@@ -80,46 +80,13 @@ impl FromStr for DependencyPackageName {
 /// Name of an import dependency.
 ///
 /// For example: `foo:bar/baz@0.1.0`, `foo:bar/baz`, `foo:bar@0.1.0`, `foo:bar`, `foo-bar`.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[serde(into = "String", try_from = "String")]
 pub enum DependencyName {
     /// Plain name
     Plain(KebabId),
     /// Package spec
     Package(DependencyPackageName),
-}
-
-// TODO: replace with derive once wasm-pkg-common is released
-impl PartialOrd for DependencyName {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-// TODO: replace with derive once wasm-pkg-common is released
-impl Ord for DependencyName {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match (self, other) {
-            (DependencyName::Plain(a), DependencyName::Plain(b)) => a.cmp(b),
-            (DependencyName::Package(a), DependencyName::Package(b)) => {
-                let big_ole_tup = (
-                    a.package.namespace().as_ref(),
-                    a.package.name().as_ref(),
-                    a.interface.as_ref(),
-                    a.version.as_ref(),
-                );
-                let other_big_ole_tup = (
-                    b.package.namespace().as_ref(),
-                    b.package.name().as_ref(),
-                    b.interface.as_ref(),
-                    b.version.as_ref(),
-                );
-                big_ole_tup.cmp(&other_big_ole_tup)
-            }
-            (DependencyName::Plain(_), DependencyName::Package(_)) => std::cmp::Ordering::Less,
-            (DependencyName::Package(_), DependencyName::Plain(_)) => std::cmp::Ordering::Greater,
-        }
-    }
 }
 
 impl std::fmt::Display for DependencyName {

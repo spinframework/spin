@@ -8400,6 +8400,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "spin-capabilities"
+version = "4.0.0-pre0"
+dependencies = [
+ "anyhow",
+ "wac-graph 0.10.0-dev",
+ "wasm-encoder 0.245.1",
+ "wasmparser 0.245.1",
+]
+
+[[package]]
 name = "spin-cli"
 version = "4.0.0-pre0"
 dependencies = [
@@ -8529,12 +8539,13 @@ dependencies = [
  "indexmap 2.13.0",
  "semver",
  "spin-app",
+ "spin-capabilities",
  "spin-common",
  "spin-componentize",
  "spin-serde",
  "thiserror 2.0.17",
  "tokio",
- "wac-graph",
+ "wac-graph 0.10.0-dev",
 ]
 
 [[package]]
@@ -8618,8 +8629,8 @@ dependencies = [
  "tokio",
  "toml 0.8.19",
  "tracing",
- "wac-graph",
- "wac-types",
+ "wac-graph 0.8.1",
+ "wac-types 0.8.1",
  "wasm-pkg-client",
  "wasmparser 0.245.1",
  "wit-component 0.245.1",
@@ -10823,10 +10834,28 @@ dependencies = [
  "petgraph",
  "semver",
  "thiserror 1.0.69",
- "wac-types",
+ "wac-types 0.8.1",
  "wasm-encoder 0.239.0",
  "wasm-metadata 0.239.0",
  "wasmparser 0.239.0",
+]
+
+[[package]]
+name = "wac-graph"
+version = "0.10.0-dev"
+source = "git+https://github.com/bytecodealliance/wac#cb5f15f7f5243efb9aeaab6e54682b94a6430f9a"
+dependencies = [
+ "anyhow",
+ "id-arena",
+ "indexmap 2.13.0",
+ "log",
+ "petgraph",
+ "semver",
+ "thiserror 1.0.69",
+ "wac-types 0.10.0-dev",
+ "wasm-encoder 0.245.1",
+ "wasm-metadata 0.245.1",
+ "wasmparser 0.245.1",
 ]
 
 [[package]]
@@ -10841,6 +10870,19 @@ dependencies = [
  "semver",
  "wasm-encoder 0.239.0",
  "wasmparser 0.239.0",
+]
+
+[[package]]
+name = "wac-types"
+version = "0.10.0-dev"
+source = "git+https://github.com/bytecodealliance/wac#cb5f15f7f5243efb9aeaab6e54682b94a6430f9a"
+dependencies = [
+ "anyhow",
+ "id-arena",
+ "indexmap 2.13.0",
+ "semver",
+ "wasm-encoder 0.245.1",
+ "wasmparser 0.245.1",
 ]
 
 [[package]]

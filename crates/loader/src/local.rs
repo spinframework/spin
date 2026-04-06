@@ -184,11 +184,7 @@ impl LocalLoader {
             .with_context(|| format!("Failed to load Wasm source {}", component.source))?;
 
         let dependencies = self
-            .load_component_dependencies(
-                id,
-                component.dependencies_inherit_configuration,
-                &component.dependencies,
-            )
+            .load_component_dependencies(id, &component.dependencies)
             .await?;
 
         let env = component.environment.into_iter().collect();
@@ -256,17 +252,12 @@ impl LocalLoader {
     async fn load_component_dependencies(
         &self,
         id: &KebabId,
-        inherit_configuration: bool,
         dependencies: &v2::ComponentDependencies,
     ) -> Result<BTreeMap<DependencyName, LockedComponentDependency>> {
         Ok(try_join_all(dependencies.inner.iter().map(
             |(dependency_name, dependency)| async move {
                 let locked_dependency = self
-                    .load_component_dependency(
-                        inherit_configuration,
-                        dependency_name.clone(),
-                        dependency.clone(),
-                    )
+                    .load_component_dependency(dependency_name.clone(), dependency.clone())
                     .await
                     .with_context(|| {
                         format!(
@@ -284,27 +275,12 @@ impl LocalLoader {
 
     async fn load_component_dependency(
         &self,
-        inherit_configuration: bool,
         dependency_name: DependencyName,
         dependency: v2::ComponentDependency,
     ) -> Result<LockedComponentDependency> {
-        let (content, export) = self
-            .wasm_loader
+        self.wasm_loader
             .load_component_dependency(&dependency_name, &dependency)
-            .await?;
-
-        Ok(LockedComponentDependency {
-            source: LockedComponentSource {
-                content_type: "application/wasm".into(),
-                content: file_content_ref(content)?,
-            },
-            export,
-            inherit: if inherit_configuration {
-                locked::InheritConfiguration::All
-            } else {
-                locked::InheritConfiguration::Some(vec![])
-            },
-        })
+            .await
     }
 
     // Load a Wasm source from the given ContentRef and update the source
@@ -817,8 +793,38 @@ impl WasmLoader {
         Ok(path)
     }
 
-    /// Loads a dependency
+    /// Loads a dependency and returns a fully resolved locked component dependency.
     pub async fn load_component_dependency(
+        &self,
+        dependency_name: &DependencyName,
+        dependency: &v2::ComponentDependency,
+    ) -> Result<locked::LockedComponentDependency> {
+        let inherit = match dependency.inherit_configuration() {
+            Some(v2::InheritConfiguration::All(true)) => locked::InheritConfiguration::All,
+            Some(v2::InheritConfiguration::Some(keys)) => {
+                locked::InheritConfiguration::Some(keys.clone())
+            }
+            Some(v2::InheritConfiguration::All(false)) | None => {
+                locked::InheritConfiguration::Some(vec![])
+            }
+        };
+
+        let (content, export) = self
+            .load_dependency_content(dependency_name, dependency)
+            .await?;
+
+        Ok(locked::LockedComponentDependency {
+            source: locked::LockedComponentSource {
+                content_type: "application/wasm".into(),
+                content: file_content_ref(content)?,
+            },
+            export,
+            inherit,
+        })
+    }
+
+    /// Loads the content path and export for a dependency.
+    pub async fn load_dependency_content(
         &self,
         dependency_name: &DependencyName,
         dependency: &v2::ComponentDependency,
@@ -840,6 +846,7 @@ impl WasmLoader {
                 registry,
                 package,
                 export,
+                ..
             } => {
                 let version = semver::VersionReq::parse(&version).with_context(|| format!("Component dependency {dependency_name:?} specifies an invalid semantic version requirement ({version:?}) for its package version"))?;
 
@@ -873,7 +880,7 @@ impl WasmLoader {
                     .await?;
                 Ok((content, export))
             }
-            v2::ComponentDependency::Local { path, export } => {
+            v2::ComponentDependency::Local { path, export, .. } => {
                 let content = self.app_root.join(path);
                 Ok((content, export))
             }
@@ -881,6 +888,7 @@ impl WasmLoader {
                 url,
                 digest,
                 export,
+                ..
             } => {
                 let content = self.load_http_source(&url, &digest).await?;
                 Ok((content, export))
