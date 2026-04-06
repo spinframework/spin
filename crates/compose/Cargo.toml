@@ -14,6 +14,7 @@ async-trait = { workspace = true }
 indexmap = { workspace = true }
 semver = { workspace = true }
 spin-app = { path = "../app" }
+spin-capabilities = { path = "../capabilities" }
 spin-common = { path = "../common" }
 spin-componentize = { path = "../componentize" }
 spin-serde = { path = "../serde" }
