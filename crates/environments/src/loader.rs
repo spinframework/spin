@@ -201,7 +201,7 @@ impl<'a> spin_compose::ComponentSourceLoader for ComponentSourceLoader<'a> {
     async fn load_dependency_source(&self, source: &Self::Dependency) -> anyhow::Result<Vec<u8>> {
         let (path, _) = self
             .wasm_loader
-            .load_component_dependency(&source.name, &source.dependency)
+            .load_dependency_content(&source.name, &source.dependency)
             .await?;
         let bytes = tokio::fs::read(&path)
             .await

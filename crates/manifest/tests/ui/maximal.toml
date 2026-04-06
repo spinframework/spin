@@ -47,8 +47,8 @@ watch = ["src/**/*.rs"]
 command = "cargo clean"
 
 [component.maximal-component.dependencies]
-"a:b/c" = { registry = "my-registry.com", version = "^1.2.3", package = "a:b", export = "foo"}
-"foo:bar/baz@0.1.0" = { path = "path/to/component.wasm" }
-"fib:fub/fob" = { path = "path/to/component.wasm", export = "my-export" }
+"a:b/c" = { registry = "my-registry.com", version = "^1.2.3", package = "a:b", export = "foo", inherit_configuration = true }
+"foo:bar/baz@0.1.0" = { path = "path/to/component.wasm", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }
+"fib:fub/fob" = { path = "path/to/component.wasm", export = "my-export", inherit_configuration = false }
 "fizz:buzz" = ">=0.1.0"
 "abc:xyz@0.1.0" = { version = "=0.1.0" }

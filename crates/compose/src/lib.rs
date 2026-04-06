@@ -9,6 +9,8 @@ use thiserror::Error;
 use wac_graph::types::{Package, SubtypeChecker, WorldId};
 use wac_graph::{CompositionGraph, NodeId};
 
+pub use spin_capabilities::InheritConfiguration;
+
 /// Composes a Spin AppComponent using the dependencies specified in the
 /// component's dependencies section.
 ///
@@ -40,11 +42,6 @@ pub async fn compose<L: ComponentSourceLoader>(
 pub trait DependencyLike {
     fn inherit(&self) -> InheritConfiguration;
     fn export(&self) -> &Option<String>;
-}
-
-pub enum InheritConfiguration {
-    All,
-    Some(Vec<String>),
 }
 
 /// A Spin component. This abstracts over the list of dependencies for the component.
@@ -406,19 +403,8 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
             DependencyName::Plain(name) => name.to_string(),
         };
 
-        match dependency.inherit() {
-            InheritConfiguration::Some(configurations) => {
-                if configurations.is_empty() {
-                    // Configuration inheritance is disabled, apply deny_all adapter
-                    dependency_source = apply_deny_all_adapter(&package_name, &dependency_source)?;
-                } else {
-                    panic!("granular configuration inheritance is not yet supported");
-                }
-            }
-            InheritConfiguration::All => {
-                // Do nothing, allow configuration to be inherited
-            }
-        }
+        dependency_source =
+            spin_capabilities::apply_deny_adapter(&dependency_source, dependency.inherit())?;
 
         let (world_id, instantiation_id) =
             self.register_package(&package_name, None, dependency_source)?;
@@ -481,47 +467,6 @@ struct DependencyInfo {
     // Name of optional export to use to satisfy the dependency.
     export_name: Option<String>,
 }
-
-fn apply_deny_all_adapter(
-    dependency_name: &str,
-    dependency_source: &[u8],
-) -> anyhow::Result<Vec<u8>> {
-    const SPIN_VIRT_DENY_ALL_ADAPTER_BYTES: &[u8] = include_bytes!("../deny_all.wasm");
-    let mut graph = CompositionGraph::new();
-
-    let dependency_package =
-        Package::from_bytes(dependency_name, None, dependency_source, graph.types_mut())?;
-
-    let dependency_id = graph.register_package(dependency_package)?;
-
-    let deny_adapter_package = Package::from_bytes(
-        "spin-virt-deny-all-adapter",
-        None,
-        SPIN_VIRT_DENY_ALL_ADAPTER_BYTES,
-        graph.types_mut(),
-    )?;
-
-    let deny_adapter_id = graph.register_package(deny_adapter_package)?;
-
-    match wac_graph::plug(&mut graph, vec![deny_adapter_id], dependency_id) {
-        Err(wac_graph::PlugError::NoPlugHappened) => {
-            // Dependencies may not depend on any interfaces that the plug fills so we shouldn't error here.
-            // Just return the origin `dependency_source` as is.
-            return Ok(dependency_source.to_vec());
-        }
-        Err(other) => {
-            anyhow::bail!(
-                "failed to plug deny-all adapter into dependency: {:?}",
-                other
-            );
-        }
-        Ok(_) => {}
-    }
-
-    let bytes = graph.encode(Default::default())?;
-    Ok(bytes)
-}
-
 enum ImportName {
     Plain(KebabId),
     Package {
