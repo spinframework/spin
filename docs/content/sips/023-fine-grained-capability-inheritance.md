@@ -1,4 +1,4 @@
-title = "SIP 023 - Granular Capability Inheritance for Component Dependencies"
+title = "SIP 023 - Fine-grained Capability Inheritance for Component Dependencies"
 template = "main"
 date = "2026-04-06T12:00:00Z"
 
@@ -30,7 +30,7 @@ The field accepts three forms:
 
 ```toml
 [component."infra-dashboard".dependencies]
-"aws:client" = { version = "1.0.0", inherit_configuration = "all" }
+"aws:client" = { version = "1.0.0", inherit_configuration = true }
 ```
 
 The dependency inherits access to every configuration declared on the parent component (equivalent to the previous `dependencies_inherit_configuration = true`, but scoped to this single dependency).
@@ -39,7 +39,7 @@ The dependency inherits access to every configuration declared on the parent com
 
 ```toml
 [component."infra-dashboard".dependencies]
-"aws:client" = { version = "1.0.0", inherit_configuration = "none" }
+"aws:client" = { version = "1.0.0", inherit_configuration = false }
 ```
 
 This is the default behavior when `inherit_configuration` is omitted. The dependency is fully isolated from the parent's configurations — all capability imports are satisfied by deny adapters.
@@ -62,13 +62,13 @@ The supported configuration keys are:
 
 | Key | Capabilities Allowed |
 |---|---|
-| `ai_models` | `fermyon:spin/llm@2.0.0` |
-| `allowed_outbound_hosts` | `wasi:http/outgoing-handler@0.2.6`, `wasi:http/client@0.3.0-rc-2026-03-15`, `wasi:sockets/*`, `fermyon:spin/mqtt@2.0.0`, `fermyon:spin/redis@2.0.0`, `spin:mqtt/mqtt@3.0.0`, `spin:redis/redis@3.0.0` |
+| `ai_models` | `fermyon:spin/llm`, `fermyon:spin/llm@2.0.0` |
+| `allowed_outbound_hosts` | `fermyon:spin/http`, `fermyon:spin/mysql`, `fermyon:spin/postgres`, `fermyon:spin/redis`, `wasi:http/outgoing-handler@0.2.6`, `wasi:http/client@0.3.0-rc-2026-03-15`, `wasi:sockets/*`, `fermyon:spin/mqtt@2.0.0`, `fermyon:spin/redis@2.0.0`, `spin:mqtt/mqtt@3.0.0`, `spin:redis/redis@3.0.0`, `fermyon:spin/mysql@2.0.0`, `fermyon:spin/postgres@2.0.0`, `spin:postgres/postgres@3.0.0`, `spin:postgres/postgres@4.2.0` |
 | `environment` | `wasi:cli/environment@0.2.6`, `wasi:cli/environment@0.3.0-rc-2026-03-15` |
 | `files` | `wasi:filesystem/preopens@0.2.6`, `wasi:filesystem/preopens@0.3.0-rc-2026-03-15` |
-| `key_value_stores` | `fermyon:spin/key-value@2.0.0`, `spin:key-value/key-value@3.0.0`, `wasi:keyvalue/store@0.2.0-draft2` |
-| `sqlite_databases` | `fermyon:spin/sqlite@2.0.0`, `fermyon:spin/mysql@2.0.0`, `fermyon:spin/postgres@2.0.0`, `spin:postgres/postgres@3.0.0`, `spin:postgres/postgres@4.2.0`, `spin:sqlite/sqlite@3.1.0` |
-| `variables` | `fermyon:spin/variables@2.0.0`, `spin:variables/variables@3.0.0` |
+| `key_value_stores` | `fermyon:spin/key-value`, `fermyon:spin/key-value@2.0.0`, `spin:key-value/key-value@3.0.0`, `wasi:keyvalue/store@0.2.0-draft2` |
+| `sqlite_databases` | `fermyon:spin/sqlite`, `fermyon:spin/sqlite@2.0.0`, `spin:sqlite/sqlite@3.1.0` |
+| `variables` | `fermyon:spin/config`, `fermyon:spin/variables@2.0.0`, `spin:variables/variables@3.0.0`, `wasi:config@0.2.0-draft-2024-09-27` |
 
 ### Applicable to all dependency source types
 
@@ -80,7 +80,7 @@ The `inherit_configuration` field applies uniformly to all dependency source typ
 "aws:client" = { version = "1.0.0", inherit_configuration = ["allowed_outbound_hosts"] }
 
 # Local dependency
-"my:lib/utils" = { path = "lib/utils.wasm", inherit_configuration = "all" }
+"my:lib/utils" = { path = "lib/utils.wasm", inherit_configuration = true }
 
 # HTTP dependency
 "vendor:dep/api" = { url = "https://example.com/dep.wasm", digest = "sha256:abc123", inherit_configuration = ["variables"] }
@@ -93,7 +93,7 @@ The `inherit_configuration` field applies uniformly to all dependency source typ
 
 ## Backward compatibility with `dependencies_inherit_configuration`
 
-The existing component-level `dependencies_inherit_configuration = true` boolean continues to work as a convenience for applying `inherit_configuration = "all"` to every dependency. During manifest normalization, the component-level field is expanded into per-dependency `inherit_configuration` values.
+The existing component-level `dependencies_inherit_configuration = true` boolean continues to work as a convenience for applying `inherit_configuration = true` to every dependency. During manifest normalization, the component-level field is expanded into per-dependency `inherit_configuration` values.
 
 However, mixing both forms is **not** allowed. The following manifest is invalid:
 
@@ -104,7 +104,7 @@ dependencies_inherit_configuration = true
 
 [component."my-app".dependencies]
 # ERROR: cannot mix component-level and per-dependency inherit_configuration
-"aws:client" = { version = "1.0.0", inherit_configuration = "none" }
+"aws:client" = { version = "1.0.0", inherit_configuration = false }
 ```
 
 Spin will report an error:
