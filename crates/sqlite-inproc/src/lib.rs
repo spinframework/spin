@@ -148,7 +148,6 @@ impl Connection for InProcConnection {
                     )));
                 }
 
-                println!("it sends the row");
                 rows_tx
                     .blocking_send(row)
                     .map_err(|_| v3::Error::Io("row send error".into()))?;
