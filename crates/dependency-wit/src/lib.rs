@@ -89,8 +89,12 @@ pub async fn extract_wits(
             ImportKind::Interface(itf) => one_import(&importised, itf.as_ref())?,
             ImportKind::Function(_) => Default::default(),
         };
-        let func_import = match import_kind {
+        let func_import = match &import_kind {
             ImportKind::Function(f) => one_func_import(&importised, f.as_ref())?,
+            _ => Default::default(),
+        };
+        let type_imports = match &import_kind {
+            ImportKind::Function(_) => world_type_imports(&importised),
             _ => Default::default(),
         };
 
@@ -156,16 +160,34 @@ pub async fn extract_wits(
                 });
             }
         }
-        if let Some(func) = func_import {
-            if func.parameter_and_result_types().any(is_user_defined_type) {
-                anyhow::bail!("Spin can't generate imports for `{}` because it is a world-level function with a non-primitive parameter or result type", func.name);
+        if let Some(mut func) = func_import {
+            // Remap type IDs in the function to reference the aggregating resolve
+            for param in &mut func.params {
+                if let wit_parser::Type::Id(id) = &mut param.ty {
+                    *id = remap.map_type(*id, Span::default())?;
+                }
             }
-            let wk = wit_parser::WorldKey::Name(func.name.clone());
-            let world_item = wit_parser::WorldItem::Function(func);
+            if let Some(wit_parser::Type::Id(id)) = &mut func.result {
+                *id = remap.map_type(*id, Span::default())?;
+            }
+
+            // Add world-level type definitions that the function depends on
             let aggregating_world = aggregating_resolve
                 .worlds
                 .get_mut(aggregating_world_id)
-                .context("aggregated dependency world doesn't exist")?; // shouldn't happen
+                .context("aggregated dependency world doesn't exist")?;
+            for (name, type_id) in &type_imports {
+                let mapped_id = remap.map_type(*type_id, Span::default())?;
+                let wk = wit_parser::WorldKey::Name(name.clone());
+                let world_item = wit_parser::WorldItem::Type {
+                    id: mapped_id,
+                    span: Span::default(),
+                };
+                aggregating_world.imports.insert(wk, world_item);
+            }
+
+            let wk = wit_parser::WorldKey::Name(func.name.clone());
+            let world_item = wit_parser::WorldItem::Function(func);
             aggregating_world.imports.insert(wk, world_item);
         }
     }
@@ -365,6 +387,26 @@ fn one_import(wasm: &DecodedWasm, name: &str) -> anyhow::Result<Vec<wit_parser::
     Ok(vec![id])
 }
 
+fn world_type_imports(wasm: &DecodedWasm) -> Vec<(String, wit_parser::TypeId)> {
+    wasm.resolve()
+        .worlds
+        .iter()
+        .flat_map(|(_wid, w)| {
+            w.imports.iter().filter_map(|(wk, wi)| {
+                if let wit_parser::WorldItem::Type { id, .. } = wi {
+                    let name = match wk {
+                        wit_parser::WorldKey::Name(n) => n.clone(),
+                        wit_parser::WorldKey::Interface(_) => return None,
+                    };
+                    Some((name, *id))
+                } else {
+                    None
+                }
+            })
+        })
+        .collect()
+}
+
 fn one_func_import(wasm: &DecodedWasm, name: &str) -> anyhow::Result<Option<wit_parser::Function>> {
     let funcs = wasm
         .resolve()
@@ -419,9 +461,6 @@ fn importize(decoded: DecodedWasm, out_world_name: Option<&String>) -> anyhow::R
     Ok(DecodedWasm::Component(resolve, world_id))
 }
 
-fn is_user_defined_type(ty: wit_parser::Type) -> bool {
-    matches!(ty, wit_parser::Type::Id(_))
-}
 
 #[cfg(test)]
 mod test {
@@ -598,6 +637,189 @@ mod test {
         assert_eq!(1, func.params.len());
         assert_eq!(wit_parser::Type::String, func.params.first().unwrap().ty);
         assert_eq!(wit_parser::Type::Bool, func.result.unwrap());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn world_level_func_with_record_param() -> anyhow::Result<()> {
+        let tempdir = tempfile::TempDir::new()?;
+        let dep_file = tempdir.path().join("greeter.wasm");
+
+        let dep_wit = r#"package my:greeter@1.0.0;
+
+world greeter {
+  record person {
+    name: string,
+    age: u32,
+  }
+  export greet: func(who: person) -> string;
+}"#;
+        let dep_wasm = generate_dummy_component(dep_wit, "greeter");
+        tokio::fs::write(&dep_file, &dep_wasm).await?;
+
+        let dep_name = DependencyName::Plain("greet".to_string().try_into().unwrap());
+        let dep_src = ComponentDependency::Local {
+            path: dep_file,
+            export: None,
+        };
+        let deps = std::iter::once((&dep_name, &dep_src));
+
+        let wit = extract_wits(deps, ".").await?;
+
+        let resolve = parse_wit(&wit).expect("should have emitted valid WIT");
+
+        let (_rc_pkg_id, rc_pkg) = resolve
+            .packages
+            .iter()
+            .find(|(_, p)| p.name.to_string() == "root:component")
+            .expect("should have had `root:component`");
+
+        let root_world_id = rc_pkg
+            .worlds
+            .get("root")
+            .expect("should have had root world");
+        let root_world = resolve
+            .worlds
+            .get(*root_world_id)
+            .expect("should have had root world at that id");
+
+        let func = root_world
+            .imports
+            .iter()
+            .filter_map(|(_, wi)| as_func(wi))
+            .find(|f| f.name == "greet")
+            .expect("greet function does not appear in root imports");
+
+        assert_eq!(1, func.params.len());
+        // The param should be a user-defined type (record)
+        assert!(
+            matches!(func.params.first().unwrap().ty, wit_parser::Type::Id(_)),
+            "expected record param to be Type::Id"
+        );
+        assert_eq!(wit_parser::Type::String, func.result.unwrap());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn world_level_func_with_record_result() -> anyhow::Result<()> {
+        let tempdir = tempfile::TempDir::new()?;
+        let dep_file = tempdir.path().join("lookup.wasm");
+
+        let dep_wit = r#"package my:lookup@1.0.0;
+
+world lookup {
+  record info {
+    value: string,
+    found: bool,
+  }
+  export lookup: func(key: string) -> info;
+}"#;
+        let dep_wasm = generate_dummy_component(dep_wit, "lookup");
+        tokio::fs::write(&dep_file, &dep_wasm).await?;
+
+        let dep_name = DependencyName::Plain("lookup".to_string().try_into().unwrap());
+        let dep_src = ComponentDependency::Local {
+            path: dep_file,
+            export: None,
+        };
+        let deps = std::iter::once((&dep_name, &dep_src));
+
+        let wit = extract_wits(deps, ".").await?;
+
+        let resolve = parse_wit(&wit).expect("should have emitted valid WIT");
+
+        let (_rc_pkg_id, rc_pkg) = resolve
+            .packages
+            .iter()
+            .find(|(_, p)| p.name.to_string() == "root:component")
+            .expect("should have had `root:component`");
+
+        let root_world_id = rc_pkg
+            .worlds
+            .get("root")
+            .expect("should have had root world");
+        let root_world = resolve
+            .worlds
+            .get(*root_world_id)
+            .expect("should have had root world at that id");
+
+        let func = root_world
+            .imports
+            .iter()
+            .filter_map(|(_, wi)| as_func(wi))
+            .find(|f| f.name == "lookup")
+            .expect("lookup function does not appear in root imports");
+
+        assert_eq!(1, func.params.len());
+        assert_eq!(wit_parser::Type::String, func.params.first().unwrap().ty);
+        // The result should be a user-defined type (record)
+        assert!(
+            matches!(func.result, Some(wit_parser::Type::Id(_))),
+            "expected record result to be Type::Id"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn world_level_func_with_enum_param() -> anyhow::Result<()> {
+        let tempdir = tempfile::TempDir::new()?;
+        let dep_file = tempdir.path().join("color.wasm");
+
+        let dep_wit = r#"package my:colors@1.0.0;
+
+world colors {
+  enum color {
+    red,
+    green,
+    blue,
+  }
+  export color-name: func(c: color) -> string;
+}"#;
+        let dep_wasm = generate_dummy_component(dep_wit, "colors");
+        tokio::fs::write(&dep_file, &dep_wasm).await?;
+
+        let dep_name = DependencyName::Plain("color-name".to_string().try_into().unwrap());
+        let dep_src = ComponentDependency::Local {
+            path: dep_file,
+            export: None,
+        };
+        let deps = std::iter::once((&dep_name, &dep_src));
+
+        let wit = extract_wits(deps, ".").await?;
+
+        let resolve = parse_wit(&wit).expect("should have emitted valid WIT");
+
+        let (_rc_pkg_id, rc_pkg) = resolve
+            .packages
+            .iter()
+            .find(|(_, p)| p.name.to_string() == "root:component")
+            .expect("should have had `root:component`");
+
+        let root_world_id = rc_pkg
+            .worlds
+            .get("root")
+            .expect("should have had root world");
+        let root_world = resolve
+            .worlds
+            .get(*root_world_id)
+            .expect("should have had root world at that id");
+
+        let func = root_world
+            .imports
+            .iter()
+            .filter_map(|(_, wi)| as_func(wi))
+            .find(|f| f.name == "color-name")
+            .expect("color-name function does not appear in root imports");
+
+        assert_eq!(1, func.params.len());
+        assert!(
+            matches!(func.params.first().unwrap().ty, wit_parser::Type::Id(_)),
+            "expected enum param to be Type::Id"
+        );
+        assert_eq!(wit_parser::Type::String, func.result.unwrap());
 
         Ok(())
     }
