@@ -157,6 +157,9 @@ pub async fn extract_wits(
             }
         }
         if let Some(func) = func_import {
+            if func.parameter_and_result_types().any(is_user_defined_type) {
+                anyhow::bail!("Spin can't generate imports for `{}` because it is a world-level function with a non-primitive parameter or result type", func.name);
+            }
             let wk = wit_parser::WorldKey::Name(func.name.clone());
             let world_item = wit_parser::WorldItem::Function(func);
             let aggregating_world = aggregating_resolve
@@ -414,6 +417,10 @@ fn importize(decoded: DecodedWasm, out_world_name: Option<&String>) -> anyhow::R
         .context("failed to move world exports to imports")?;
 
     Ok(DecodedWasm::Component(resolve, world_id))
+}
+
+fn is_user_defined_type(ty: wit_parser::Type) -> bool {
+    matches!(ty, wit_parser::Type::Id(_))
 }
 
 #[cfg(test)]
