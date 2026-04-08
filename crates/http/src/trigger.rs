@@ -5,7 +5,7 @@ use wasmtime::component::InstancePre;
 use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi_http::handler::{HandlerState, ProxyHandler, ProxyPre};
 use wasmtime_wasi_http::p2::bindings::ProxyIndices;
-use wasmtime_wasi_http::p3::bindings::ServicePre as P3ProxyPre;
+use wasmtime_wasi_http::p3::bindings::{ServiceIndices, ServicePre};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -24,7 +24,7 @@ pub enum HandlerType<S: HandlerState> {
     Spin,
     Wagi(CommandIndices),
     Wasi0_2(ProxyIndices),
-    Wasi0_3(ProxyHandler<S>),
+    Wasi0_3(ServiceIndices, ProxyHandler<S>),
     Wasi2023_11_10(ProxyIndices2023_11_10),
     Wasi2023_10_18(ProxyIndices2023_10_18),
 }
@@ -47,11 +47,14 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
         if let Ok(indices) = ProxyIndices::new(pre) {
             candidates.push(HandlerType::Wasi0_2(indices));
         }
-        if let Ok(pre) = P3ProxyPre::new(pre.clone()) {
-            candidates.push(HandlerType::Wasi0_3(ProxyHandler::new(
-                handler_state,
-                ProxyPre::P3(pre),
-            )));
+        if let Ok(pre) = ServicePre::new(pre.clone()) {
+            candidates.push(HandlerType::Wasi0_3(
+                // We `.unwrap()` here because the `Ok(_)` result from
+                // `ServicePre::new` above proves that `pre` implements
+                // `wasi:http/handler@0.3.0-rc-2026-03-15`, so this can't fail.
+                ServiceIndices::new(pre.instance_pre()).unwrap(),
+                ProxyHandler::new(handler_state, ProxyPre::P3(pre)),
+            ));
         }
         if let Ok(indices) = ProxyIndices2023_10_18::new(pre) {
             candidates.push(HandlerType::Wasi2023_10_18(indices));
