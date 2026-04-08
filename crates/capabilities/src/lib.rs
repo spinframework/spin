@@ -1,6 +1,8 @@
 pub use deny::apply_deny_adapter;
 mod deny;
 
+mod collect;
+
 /// Specifies which host capabilities a component dependency is allowed to inherit
 /// from its parent component.
 ///
@@ -18,7 +20,8 @@ pub enum InheritConfiguration {
     Some(Vec<String>),
 }
 
-const CAPABILITY_SETS: &[(&str, &[&str])] = &[
+/// The union of all capabilities.
+pub const CAPABILITY_SETS: &[(&str, &[&str])] = &[
     ("ai_models", AI_MODELS),
     ("allowed_outbound_hosts", ALLOWED_OUTBOUND_HOSTS),
     ("environment", ENVIRONMENT),

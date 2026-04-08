@@ -1,5 +1,6 @@
 use crate::{
-    AI_MODELS, ALLOWED_OUTBOUND_HOSTS, CAPABILITY_SETS, ENVIRONMENT, FILES, InheritConfiguration, KEY_VALUE_STORES, SQLITE_DATABASES, VARIABLES
+    InheritConfiguration, AI_MODELS, ALLOWED_OUTBOUND_HOSTS, CAPABILITY_SETS, ENVIRONMENT, FILES,
+    KEY_VALUE_STORES, SQLITE_DATABASES, VARIABLES,
 };
 use wac_graph::types::{are_semver_compatible, SubtypeChecker};
 use wac_graph::{types::Package, CompositionGraph};

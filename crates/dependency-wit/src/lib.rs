@@ -7,6 +7,53 @@ use spin_serde::DependencyName;
 use wit_component::DecodedWasm;
 use wit_parser::Span;
 
+/// List the exports of a Wasm component as formatted dependency name strings.
+///
+/// Each export is formatted as `namespace:package/interface@version` for qualified
+/// interface exports, or as a plain kebab-case name for simple named exports.
+pub fn list_exports(wasm_bytes: &[u8]) -> anyhow::Result<Vec<String>> {
+    let decoded = read_wasm(wasm_bytes)?;
+    let (resolve, world_id) = match &decoded {
+        DecodedWasm::WitPackage(resolve, pkg_id) => {
+            let world_id = resolve.select_world(&[*pkg_id], None)?;
+            (resolve, world_id)
+        }
+        DecodedWasm::Component(resolve, world_id) => (resolve, *world_id),
+    };
+
+    let world = resolve
+        .worlds
+        .get(world_id)
+        .context("world not found in decoded Wasm")?;
+
+    let mut exports = Vec::new();
+    for (key, _item) in &world.exports {
+        match key {
+            wit_parser::WorldKey::Name(name) => {
+                exports.push(name.clone());
+            }
+            wit_parser::WorldKey::Interface(iface_id) => {
+                if let Some(iface) = resolve.interfaces.get(*iface_id) {
+                    if let Some(pkg_id) = iface.package {
+                        if let Some(pkg) = resolve.packages.get(pkg_id) {
+                            let ns = &pkg.name.namespace;
+                            let name = &pkg.name.name;
+                            let iface_name = iface.name.as_deref().unwrap_or("unknown");
+                            if let Some(version) = &pkg.name.version {
+                                exports.push(format!("{ns}:{name}/{iface_name}@{version}"));
+                            } else {
+                                exports.push(format!("{ns}:{name}/{iface_name}"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(exports)
+}
+
 pub async fn extract_wits_into(
     source: impl Iterator<Item = (&DependencyName, &ComponentDependency)>,
     app_root: impl AsRef<Path>,
