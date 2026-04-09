@@ -26,6 +26,7 @@ tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_j
 tracing = { workspace = true }
 futures = { workspace = true }
 uuid = "1"
+wasmtime = { workspace = true }
 
 [dev-dependencies]
 spin-factor-variables = { path = "../factor-variables" }

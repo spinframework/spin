@@ -24,8 +24,7 @@ impl<T: RuntimeFactors> TestEnvironment<T> {
     pub fn new(mut factors: T) -> Self {
         spin_telemetry::testing::init_test_telemetry();
 
-        let engine = Engine::new(Config::new().async_support(true))
-            .expect("wasmtime engine failed to initialize");
+        let engine = Engine::new(&Config::new()).expect("wasmtime engine failed to initialize");
         let mut linker = Linker::<T::InstanceState>::new(&engine);
         factors
             .init(&mut linker)

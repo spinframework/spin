@@ -19,6 +19,8 @@ use wasmtime_wasi_http::{
 
 use crate::{headers::prepare_request_headers, server::HttpExecutor, TriggerInstanceBuilder};
 
+const FIELD_SIZE_LIMIT: usize = 128 * 1024;
+
 pub(super) fn prepare_request(
     route_match: &RouteMatch<'_, '_>,
     req: &mut Request<Body>,
@@ -74,12 +76,14 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
         let body = wasmtime_wasi_http::body::HostIncomingBody::new(
             body,
             std::time::Duration::from_secs(600),
+            FIELD_SIZE_LIMIT,
         );
         let request = wasmtime_wasi_http::types::HostIncomingRequest::new(
             &mut wasi_http,
             parts,
             Scheme::Http,
             Some(body),
+            FIELD_SIZE_LIMIT,
         )?;
         let request = wasi_http.table().push(request)?;
 
@@ -152,13 +156,17 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
                         handle
                             .await
                             .context("guest invocation panicked")?
+                            .map_err(anyhow::Error::from)
                             .context("guest invocation failed")?;
 
                         Ok(())
                     }
                     .map_err(|e: anyhow::Error| {
                         if std::io::stderr().is_terminal() {
-                            tracing::error!("Component error after response started. The response may not be fully sent: {e:?}");
+                            tracing::error!(
+                                "Component error after response started. \
+                                 The response may not be fully sent: {e:?}"
+                            );
                         } else {
                             terminal::warn!("Component error after response started: {e:?}");
                         }
@@ -172,6 +180,7 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
                 handle
                     .await
                     .context("guest invocation panicked")?
+                    .map_err(anyhow::Error::from)
                     .context("guest invocation failed")?;
 
                 Err(anyhow!(

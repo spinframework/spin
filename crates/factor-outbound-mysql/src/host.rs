@@ -38,7 +38,7 @@ impl<C: Client> v2::Host for InstanceState<C> {}
 
 impl<C: Client> v2::HostConnection for InstanceState<C> {
     #[instrument(name = "spin_outbound_mysql.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
-    async fn open(&mut self, address: String) -> Result<Resource<Connection>, v2::Error> {
+    async fn open(&mut self, address: String) -> wasmtime::Result<Resource<Connection>, v2::Error> {
         self.otel.reparent_tracing_span();
         spin_factor_outbound_networking::record_address_fields(&address);
 
@@ -60,7 +60,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
         connection: Resource<Connection>,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<(), v2::Error> {
+    ) -> wasmtime::Result<(), v2::Error> {
         self.otel.reparent_tracing_span();
         self.get_client(connection)
             .await?
@@ -74,7 +74,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
         connection: Resource<Connection>,
         statement: String,
         params: Vec<ParameterValue>,
-    ) -> Result<v2_types::RowSet, v2::Error> {
+    ) -> wasmtime::Result<v2_types::RowSet, v2::Error> {
         self.otel.reparent_tracing_span();
         self.get_client(connection)
             .await?
@@ -82,14 +82,14 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
             .await
     }
 
-    async fn drop(&mut self, connection: Resource<Connection>) -> Result<()> {
+    async fn drop(&mut self, connection: Resource<Connection>) -> wasmtime::Result<()> {
         self.connections.remove(connection.rep());
         Ok(())
     }
 }
 
 impl<C: Send> v2_types::Host for InstanceState<C> {
-    fn convert_error(&mut self, error: v2::Error) -> Result<v2::Error> {
+    fn convert_error(&mut self, error: v2::Error) -> wasmtime::Result<v2::Error> {
         Ok(error)
     }
 }
@@ -118,7 +118,7 @@ impl<C: Client> v1::Host for InstanceState<C> {
         address: String,
         statement: String,
         params: Vec<v1::ParameterValue>,
-    ) -> Result<(), v1::MysqlError> {
+    ) -> wasmtime::Result<(), v1::MysqlError> {
         delegate!(self.execute(
             address,
             statement,
@@ -131,7 +131,7 @@ impl<C: Client> v1::Host for InstanceState<C> {
         address: String,
         statement: String,
         params: Vec<v1::ParameterValue>,
-    ) -> Result<v1::RowSet, v1::MysqlError> {
+    ) -> wasmtime::Result<v1::RowSet, v1::MysqlError> {
         delegate!(self.query(
             address,
             statement,
@@ -140,7 +140,7 @@ impl<C: Client> v1::Host for InstanceState<C> {
         .map(Into::into)
     }
 
-    fn convert_mysql_error(&mut self, error: v1::MysqlError) -> Result<v1::MysqlError> {
+    fn convert_mysql_error(&mut self, error: v1::MysqlError) -> wasmtime::Result<v1::MysqlError> {
         Ok(error)
     }
 }

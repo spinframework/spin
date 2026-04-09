@@ -321,7 +321,7 @@ async fn run_command(
                 let stderr =
                     std::mem::replace(&mut store.data_mut().stderr, MemoryOutputPipe::new(1024));
 
-                let (response,) = result.with_context(|| {
+                let (response,) = result.map_err(anyhow::Error::from).with_context(|| {
                     String::from_utf8_lossy(&stderr.try_into_inner().unwrap()).into_owned()
                 })?;
 

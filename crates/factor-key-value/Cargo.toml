@@ -18,6 +18,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }
 toml = { workspace = true }
 tracing = { workspace = true }
+wasmtime = { workspace = true }
 
 [dev-dependencies]
 spin-factors-test = { path = "../factors-test" }

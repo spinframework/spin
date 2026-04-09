@@ -108,7 +108,7 @@ impl redis::Host for Redis {
         address: String,
         channel: String,
         payload: Vec<u8>,
-    ) -> Result<Result<(), Error>> {
+    ) -> wasmtime::Result<Result<(), Error>> {
         Ok(if self.publish_set.remove(&(address, channel, payload)) {
             Ok(())
         } else {
@@ -116,7 +116,11 @@ impl redis::Host for Redis {
         })
     }
 
-    async fn get(&mut self, address: String, key: String) -> Result<Result<Vec<u8>, Error>> {
+    async fn get(
+        &mut self,
+        address: String,
+        key: String,
+    ) -> wasmtime::Result<Result<Vec<u8>, Error>> {
         Ok(self.get_map.remove(&(address, key)).ok_or(Error::Error))
     }
 
@@ -125,7 +129,7 @@ impl redis::Host for Redis {
         address: String,
         key: String,
         value: Vec<u8>,
-    ) -> Result<Result<(), Error>> {
+    ) -> wasmtime::Result<Result<(), Error>> {
         Ok(if self.set_set.remove(&(address, key, value)) {
             Ok(())
         } else {
@@ -133,7 +137,7 @@ impl redis::Host for Redis {
         })
     }
 
-    async fn incr(&mut self, address: String, key: String) -> Result<Result<i64, Error>> {
+    async fn incr(&mut self, address: String, key: String) -> wasmtime::Result<Result<i64, Error>> {
         Ok(self
             .incr_map
             .remove(&(address, key))
@@ -141,7 +145,11 @@ impl redis::Host for Redis {
             .ok_or(Error::Error))
     }
 
-    async fn del(&mut self, address: String, keys: Vec<String>) -> Result<Result<i64, Error>> {
+    async fn del(
+        &mut self,
+        address: String,
+        keys: Vec<String>,
+    ) -> wasmtime::Result<Result<i64, Error>> {
         Ok(self.del_map.remove(&(address, keys)).ok_or(Error::Error))
     }
 
@@ -150,7 +158,7 @@ impl redis::Host for Redis {
         address: String,
         key: String,
         values: Vec<String>,
-    ) -> Result<Result<i64, Error>> {
+    ) -> wasmtime::Result<Result<i64, Error>> {
         Ok(self
             .sadd_map
             .remove(&(address, key, values))
@@ -162,7 +170,7 @@ impl redis::Host for Redis {
         address: String,
         key: String,
         values: Vec<String>,
-    ) -> Result<Result<i64, Error>> {
+    ) -> wasmtime::Result<Result<i64, Error>> {
         Ok(self
             .srem_map
             .remove(&(address, key, values))
@@ -173,7 +181,7 @@ impl redis::Host for Redis {
         &mut self,
         address: String,
         key: String,
-    ) -> Result<Result<Vec<String>, Error>> {
+    ) -> wasmtime::Result<Result<Vec<String>, Error>> {
         Ok(self
             .smembers_map
             .remove(&(address, key))
@@ -185,7 +193,7 @@ impl redis::Host for Redis {
         address: String,
         command: String,
         arguments: Vec<RedisParameter>,
-    ) -> Result<Result<Vec<RedisResult>, Error>> {
+    ) -> wasmtime::Result<Result<Vec<RedisResult>, Error>> {
         Ok(self
             .execute_map
             .remove(&(

@@ -13,7 +13,7 @@ impl v2::Host for InstanceState {
         model: v2::InferencingModel,
         prompt: String,
         params: Option<v2::InferencingParams>,
-    ) -> Result<v2::InferencingResult, v2::Error> {
+    ) -> wasmtime::Result<v2::InferencingResult, v2::Error> {
         self.otel.reparent_tracing_span();
 
         if !self.allowed_models.contains(&model) {
@@ -43,7 +43,7 @@ impl v2::Host for InstanceState {
         &mut self,
         model: v1::EmbeddingModel,
         data: Vec<String>,
-    ) -> Result<v2::EmbeddingsResult, v2::Error> {
+    ) -> wasmtime::Result<v2::EmbeddingsResult, v2::Error> {
         self.otel.reparent_tracing_span();
 
         if !self.allowed_models.contains(&model) {
@@ -56,7 +56,7 @@ impl v2::Host for InstanceState {
             .await
     }
 
-    fn convert_error(&mut self, error: v2::Error) -> anyhow::Result<v2::Error> {
+    fn convert_error(&mut self, error: v2::Error) -> wasmtime::Result<v2::Error> {
         Ok(error)
     }
 }
@@ -67,7 +67,7 @@ impl v1::Host for InstanceState {
         model: v1::InferencingModel,
         prompt: String,
         params: Option<v1::InferencingParams>,
-    ) -> Result<v1::InferencingResult, v1::Error> {
+    ) -> wasmtime::Result<v1::InferencingResult, v1::Error> {
         <Self as v2::Host>::infer(self, model, prompt, params.map(Into::into))
             .await
             .map(Into::into)
@@ -78,14 +78,14 @@ impl v1::Host for InstanceState {
         &mut self,
         model: v1::EmbeddingModel,
         data: Vec<String>,
-    ) -> Result<v1::EmbeddingsResult, v1::Error> {
+    ) -> wasmtime::Result<v1::EmbeddingsResult, v1::Error> {
         <Self as v2::Host>::generate_embeddings(self, model, data)
             .await
             .map(Into::into)
             .map_err(Into::into)
     }
 
-    fn convert_error(&mut self, error: v1::Error) -> anyhow::Result<v1::Error> {
+    fn convert_error(&mut self, error: v1::Error) -> wasmtime::Result<v1::Error> {
         Ok(error)
     }
 }

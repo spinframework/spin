@@ -17,6 +17,7 @@ spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
+wasmtime = { workspace = true }
 
 [dev-dependencies]
 toml = "0.5"

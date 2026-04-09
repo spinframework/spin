@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use wasmtime::ResourceLimiterAsync;
 
@@ -18,7 +17,7 @@ impl ResourceLimiterAsync for StoreLimitsAsync {
         current: usize,
         desired: usize,
         maximum: Option<usize>,
-    ) -> Result<bool> {
+    ) -> wasmtime::Result<bool> {
         let can_grow = if let Some(limit) = self.max_memory_size {
             desired <= limit
         } else {
@@ -45,7 +44,7 @@ impl ResourceLimiterAsync for StoreLimitsAsync {
         _current: usize,
         desired: usize,
         _maximum: Option<usize>,
-    ) -> Result<bool> {
+    ) -> wasmtime::Result<bool> {
         let can_grow = if let Some(limit) = self.max_table_elements {
             desired <= limit
         } else {

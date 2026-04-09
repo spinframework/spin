@@ -1,4 +1,4 @@
-use spin_factors::anyhow::{self, Result};
+use spin_factors::anyhow::Result;
 use std::mem;
 use wasmtime::component::{Linker, Resource, ResourceTable};
 use wasmtime_wasi::cli::{WasiCli, WasiCliCtxView};
@@ -486,7 +486,7 @@ impl wasi::filesystem::types::HostDescriptor for WasiFilesystemCtxView<'_> {
         _path: String,
         _type_: AccessType,
     ) -> wasmtime::Result<Result<(), FsErrorCode>> {
-        anyhow::bail!("access-at API is no longer supported in the latest snapshot")
+        wasmtime::bail!("access-at API is no longer supported in the latest snapshot")
     }
 
     async fn unlink_file_at(
@@ -506,7 +506,7 @@ impl wasi::filesystem::types::HostDescriptor for WasiFilesystemCtxView<'_> {
         _path: String,
         _modes: Modes,
     ) -> wasmtime::Result<Result<(), FsErrorCode>> {
-        anyhow::bail!(
+        wasmtime::bail!(
             "change-file-permissions-at API is no longer supported in the latest snapshot"
         )
     }
@@ -518,7 +518,7 @@ impl wasi::filesystem::types::HostDescriptor for WasiFilesystemCtxView<'_> {
         _path: String,
         _modes: Modes,
     ) -> wasmtime::Result<Result<(), FsErrorCode>> {
-        anyhow::bail!(
+        wasmtime::bail!(
             "change-directory-permissions-at API is no longer supported in the latest snapshot"
         )
     }
@@ -527,35 +527,35 @@ impl wasi::filesystem::types::HostDescriptor for WasiFilesystemCtxView<'_> {
         &mut self,
         _self_: Resource<Descriptor>,
     ) -> wasmtime::Result<Result<(), FsErrorCode>> {
-        anyhow::bail!("lock-shared API is no longer supported in the latest snapshot")
+        wasmtime::bail!("lock-shared API is no longer supported in the latest snapshot")
     }
 
     async fn lock_exclusive(
         &mut self,
         _self_: Resource<Descriptor>,
     ) -> wasmtime::Result<Result<(), FsErrorCode>> {
-        anyhow::bail!("lock-exclusive API is no longer supported in the latest snapshot")
+        wasmtime::bail!("lock-exclusive API is no longer supported in the latest snapshot")
     }
 
     async fn try_lock_shared(
         &mut self,
         _self_: Resource<Descriptor>,
     ) -> wasmtime::Result<Result<(), FsErrorCode>> {
-        anyhow::bail!("try-lock-shared API is no longer supported in the latest snapshot")
+        wasmtime::bail!("try-lock-shared API is no longer supported in the latest snapshot")
     }
 
     async fn try_lock_exclusive(
         &mut self,
         _self_: Resource<Descriptor>,
     ) -> wasmtime::Result<Result<(), FsErrorCode>> {
-        anyhow::bail!("try-lock-exclusive API is no longer supported in the latest snapshot")
+        wasmtime::bail!("try-lock-exclusive API is no longer supported in the latest snapshot")
     }
 
     async fn unlock(
         &mut self,
         _self_: Resource<Descriptor>,
     ) -> wasmtime::Result<Result<(), FsErrorCode>> {
-        anyhow::bail!("unlock API is no longer supported in the latest snapshot")
+        wasmtime::bail!("unlock API is no longer supported in the latest snapshot")
     }
 
     async fn is_same_object(
@@ -794,7 +794,7 @@ impl wasi::io::streams::HostOutputStream for ResourceTable {
         _self_: Resource<OutputStream>,
         _src: Resource<InputStream>,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        anyhow::bail!("forward API no longer supported")
+        wasmtime::bail!("forward API no longer supported")
     }
 
     async fn drop(&mut self, rep: Resource<OutputStream>) -> wasmtime::Result<()> {
@@ -1016,7 +1016,7 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         &mut self,
         _self_: Resource<TcpSocket>,
     ) -> wasmtime::Result<Result<bool, SocketErrorCode>> {
-        anyhow::bail!("ipv6-only API no longer supported")
+        wasmtime::bail!("ipv6-only API no longer supported")
     }
 
     fn set_ipv6_only(
@@ -1024,7 +1024,7 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         _self_: Resource<TcpSocket>,
         _value: bool,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
-        anyhow::bail!("ipv6-only API no longer supported")
+        wasmtime::bail!("ipv6-only API no longer supported")
     }
 
     fn set_listen_backlog_size(
@@ -1060,7 +1060,7 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         &mut self,
         _self_: Resource<TcpSocket>,
     ) -> wasmtime::Result<Result<bool, SocketErrorCode>> {
-        anyhow::bail!("no-delay API no longer supported")
+        wasmtime::bail!("no-delay API no longer supported")
     }
 
     fn set_no_delay(
@@ -1068,7 +1068,7 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         _self_: Resource<TcpSocket>,
         _value: bool,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
-        anyhow::bail!("set-no-delay API no longer supported")
+        wasmtime::bail!("set-no-delay API no longer supported")
     }
 
     fn unicast_hop_limit(
@@ -1217,7 +1217,7 @@ impl UdpSocket {
             UdpSocket::Initial(r) => r,
             UdpSocket::Connecting(r, _) => r,
             UdpSocket::Connected { socket, .. } => socket,
-            UdpSocket::Dummy => anyhow::bail!("invalid udp socket state"),
+            UdpSocket::Dummy => wasmtime::bail!("invalid udp socket state"),
         };
         Ok(Resource::new_borrow(r.rep()))
     }
@@ -1381,7 +1381,7 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         &mut self,
         _self_: Resource<UdpSocket>,
     ) -> wasmtime::Result<Result<bool, SocketErrorCode>> {
-        anyhow::bail!("ipv6-only API no longer supported")
+        wasmtime::bail!("ipv6-only API no longer supported")
     }
 
     fn set_ipv6_only(
@@ -1389,7 +1389,7 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         _self_: Resource<UdpSocket>,
         _value: bool,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
-        anyhow::bail!("ipv6-only API no longer supported")
+        wasmtime::bail!("ipv6-only API no longer supported")
     }
 
     fn unicast_hop_limit(

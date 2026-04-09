@@ -23,14 +23,26 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
     type InstanceBuilder = InstanceState<CF>;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
-        ctx.link_bindings(spin_world::v1::postgres::add_to_linker::<_, FactorData<Self>>)?;
-        ctx.link_bindings(spin_world::v2::postgres::add_to_linker::<_, FactorData<Self>>)?;
-        ctx.link_bindings(
-            spin_world::spin::postgres3_0_0::postgres::add_to_linker::<_, FactorData<Self>>,
-        )?;
-        ctx.link_bindings(
-            spin_world::spin::postgres4_0_0::postgres::add_to_linker::<_, FactorData<Self>>,
-        )?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::v1::postgres::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::v2::postgres::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::spin::postgres3_0_0::postgres::add_to_linker::<_, FactorData<Self>>(
+                linker, fun,
+            )
+            .map_err(anyhow::Error::from)
+        })?;
+        ctx.link_bindings(|linker, fun| {
+            spin_world::spin::postgres4_0_0::postgres::add_to_linker::<_, FactorData<Self>>(
+                linker, fun,
+            )
+            .map_err(anyhow::Error::from)
+        })?;
         Ok(())
     }
 

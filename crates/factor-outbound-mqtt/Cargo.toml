@@ -15,6 +15,7 @@ spin-resource-table = { path = "../table" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
+wasmtime = { workspace = true }
 
 [dev-dependencies]
 spin-factor-variables = { path = "../factor-variables" }

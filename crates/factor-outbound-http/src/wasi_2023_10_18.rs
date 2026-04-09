@@ -265,7 +265,7 @@ where
             latest::http::types::HostOutgoingRequest::set_method(self, borrow(), method.into())?
         {
             latest::http::types::HostOutgoingRequest::drop(self, request)?;
-            anyhow::bail!("invalid method supplied");
+            wasmtime::bail!("invalid method supplied");
         }
 
         if let Err(()) = latest::http::types::HostOutgoingRequest::set_path_with_query(
@@ -274,7 +274,7 @@ where
             path_with_query,
         )? {
             latest::http::types::HostOutgoingRequest::drop(self, request)?;
-            anyhow::bail!("invalid path-with-query supplied");
+            wasmtime::bail!("invalid path-with-query supplied");
         }
 
         // Historical WASI would fill in an empty authority with a port which
@@ -290,7 +290,7 @@ where
             scheme.map(|s| s.into()),
         )? {
             latest::http::types::HostOutgoingRequest::drop(self, request)?;
-            anyhow::bail!("invalid scheme supplied");
+            wasmtime::bail!("invalid scheme supplied");
         }
 
         if let Err(()) = latest::http::types::HostOutgoingRequest::set_authority(
@@ -299,7 +299,7 @@ where
             Some(authority),
         )? {
             latest::http::types::HostOutgoingRequest::drop(self, request)?;
-            anyhow::bail!("invalid authority supplied");
+            wasmtime::bail!("invalid authority supplied");
         }
 
         Ok(request)
@@ -337,7 +337,7 @@ where
             latest::http::types::HostOutgoingResponse::set_status_code(self, borrow(), status_code)?
         {
             latest::http::types::HostOutgoingResponse::drop(self, response)?;
-            anyhow::bail!("invalid status code supplied");
+            wasmtime::bail!("invalid status code supplied");
         }
 
         Ok(response)
@@ -436,7 +436,9 @@ where
             // version of WASI couldn't represent the lack of trailers.
             Some(Ok(Ok(None))) => Ok(Some(Ok(latest::http::types::HostFields::new(self)?))),
             Some(Ok(Err(e))) => Ok(Some(Err(e.into()))),
-            Some(Err(())) => Err(anyhow::anyhow!("trailers have already been retrieved")),
+            Some(Err(())) => Err(wasmtime::format_err!(
+                "trailers have already been retrieved"
+            )),
             None => Ok(None),
         }
     }
@@ -505,7 +507,7 @@ where
                         Some(ms.into()),
                     )? {
                         latest::http::types::HostRequestOptions::drop(self, options)?;
-                        anyhow::bail!("invalid connect timeout supplied");
+                        wasmtime::bail!("invalid connect timeout supplied");
                     }
                 }
 
@@ -518,7 +520,7 @@ where
                         )?
                     {
                         latest::http::types::HostRequestOptions::drop(self, options)?;
-                        anyhow::bail!("invalid first byte timeout supplied");
+                        wasmtime::bail!("invalid first byte timeout supplied");
                     }
                 }
 
@@ -531,7 +533,7 @@ where
                         )?
                     {
                         latest::http::types::HostRequestOptions::drop(self, options)?;
-                        anyhow::bail!("invalid between bytes timeout supplied");
+                        wasmtime::bail!("invalid between bytes timeout supplied");
                     }
                 }
 

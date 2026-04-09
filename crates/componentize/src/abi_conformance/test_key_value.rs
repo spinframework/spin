@@ -2,7 +2,7 @@ use super::{
     key_value::{self, Error, Store as KvStore},
     Context, TestConfig,
 };
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{ensure, Result};
 use serde::Serialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -34,7 +34,7 @@ pub(crate) struct KeyValue {
 }
 
 impl key_value::Host for KeyValue {
-    async fn open(&mut self, name: String) -> Result<Result<KvStore, Error>> {
+    async fn open(&mut self, name: String) -> wasmtime::Result<Result<KvStore, Error>> {
         Ok(self.open_map.remove(&name).ok_or_else(|| {
             Error::Io(format!(
                 "expected {:?}, got {:?}",
@@ -44,7 +44,11 @@ impl key_value::Host for KeyValue {
         }))
     }
 
-    async fn get(&mut self, store: KvStore, name: String) -> Result<Result<Vec<u8>, Error>> {
+    async fn get(
+        &mut self,
+        store: KvStore,
+        name: String,
+    ) -> wasmtime::Result<Result<Vec<u8>, Error>> {
         Ok(self
             .get_map
             .remove(&(store, name.to_owned()))
@@ -62,7 +66,7 @@ impl key_value::Host for KeyValue {
         store: KvStore,
         name: String,
         value: Vec<u8>,
-    ) -> Result<Result<(), Error>> {
+    ) -> wasmtime::Result<Result<(), Error>> {
         Ok(
             if self
                 .set_set
@@ -79,7 +83,11 @@ impl key_value::Host for KeyValue {
         )
     }
 
-    async fn delete(&mut self, store: KvStore, name: String) -> Result<Result<(), Error>> {
+    async fn delete(
+        &mut self,
+        store: KvStore,
+        name: String,
+    ) -> wasmtime::Result<Result<(), Error>> {
         Ok(if self.delete_set.remove(&(store, name.to_owned())) {
             Ok(())
         } else {
@@ -91,7 +99,11 @@ impl key_value::Host for KeyValue {
         })
     }
 
-    async fn exists(&mut self, store: KvStore, name: String) -> Result<Result<bool, Error>> {
+    async fn exists(
+        &mut self,
+        store: KvStore,
+        name: String,
+    ) -> wasmtime::Result<Result<bool, Error>> {
         Ok(self
             .exists_map
             .remove(&(store, name.to_owned()))
@@ -104,7 +116,7 @@ impl key_value::Host for KeyValue {
             }))
     }
 
-    async fn get_keys(&mut self, store: KvStore) -> Result<Result<Vec<String>, Error>> {
+    async fn get_keys(&mut self, store: KvStore) -> wasmtime::Result<Result<Vec<String>, Error>> {
         Ok(self.get_keys_map.remove(&store).ok_or_else(|| {
             Error::Io(format!(
                 "expected {:?}, got {:?}",
@@ -114,11 +126,11 @@ impl key_value::Host for KeyValue {
         }))
     }
 
-    async fn close(&mut self, store: KvStore) -> Result<()> {
+    async fn close(&mut self, store: KvStore) -> wasmtime::Result<()> {
         if self.close_set.remove(&store) {
             Ok(())
         } else {
-            Err(anyhow!(
+            Err(wasmtime::format_err!(
                 "expected {:?}, got {:?}",
                 self.close_set.iter(),
                 iter::once(&store)

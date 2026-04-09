@@ -274,7 +274,6 @@ mod tests {
     async fn run_spin(module: &[u8]) -> Result<()> {
         let mut config = Config::new();
         config.wasm_component_model(true);
-        config.async_support(true);
 
         let engine = Engine::new(&config)?;
 
@@ -282,6 +281,7 @@ mod tests {
             &engine,
             crate::componentize(module).context("could not componentize")?,
         )
+        .map_err(anyhow::Error::from)
         .context("failed to instantiate componentized bytes")?;
 
         let report = super::abi_conformance::test(
@@ -349,7 +349,6 @@ mod tests {
     async fn run_command(module: &[u8]) -> Result<()> {
         let mut config = Config::new();
         config.wasm_component_model(true);
-        config.async_support(true);
 
         let engine = Engine::new(&config)?;
 

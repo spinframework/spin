@@ -40,13 +40,18 @@ impl Factor for OtelFactor {
         // experimental support they'll see an error like "component imports instance
         // `wasi:otel/tracing@0.2.0-draft`"
         if self.enable_interface {
-            ctx.link_bindings(
-                spin_world::wasi::otel::tracing::add_to_linker::<_, FactorData<Self>>,
-            )?;
-            ctx.link_bindings(
-                spin_world::wasi::otel::metrics::add_to_linker::<_, FactorData<Self>>,
-            )?;
-            ctx.link_bindings(spin_world::wasi::otel::logs::add_to_linker::<_, FactorData<Self>>)?;
+            ctx.link_bindings(|linker, fun| {
+                spin_world::wasi::otel::tracing::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                    .map_err(anyhow::Error::from)
+            })?;
+            ctx.link_bindings(|linker, fun| {
+                spin_world::wasi::otel::metrics::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                    .map_err(anyhow::Error::from)
+            })?;
+            ctx.link_bindings(|linker, fun| {
+                spin_world::wasi::otel::logs::add_to_linker::<_, FactorData<Self>>(linker, fun)
+                    .map_err(anyhow::Error::from)
+            })?;
         }
         Ok(())
     }
@@ -71,7 +76,9 @@ impl Factor for OtelFactor {
             && self.metric_exporter.is_none()
             && self.log_processor.is_none()
         {
-            tracing::warn!("WASI OTel experimental support is enabled but no OTEL_EXPORTER_* environment variables were found. No telemetry will be exported.");
+            tracing::warn!(
+                "WASI OTel experimental support is enabled but no OTEL_EXPORTER_* environment variables were found. No telemetry will be exported."
+            );
         }
 
         Ok(InstanceState {
@@ -275,7 +282,7 @@ impl OtelFactorState {
                     .span()
                     .span_context()
                     .span_id(),
-                    "Incorrectly attempting to reparent the original host span. Likely `reparent_tracing_span` was called in an incorrect location."
+                "Incorrectly attempting to reparent the original host span. Likely `reparent_tracing_span` was called in an incorrect location."
             );
         }
 

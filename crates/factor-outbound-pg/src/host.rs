@@ -98,7 +98,10 @@ fn v3_params_to_v4(params: Vec<v3::ParameterValue>) -> Vec<v4::ParameterValue> {
 
 impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
     #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
-    async fn open(&mut self, address: String) -> Result<Resource<v3::Connection>, v3::Error> {
+    async fn open(
+        &mut self,
+        address: String,
+    ) -> wasmtime::Result<Resource<v3::Connection>, v3::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
         self.ensure_address_allowed(&address).await?;
@@ -112,7 +115,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
         connection: Resource<v3::Connection>,
         statement: String,
         params: Vec<v3::ParameterValue>,
-    ) -> Result<u64, v3::Error> {
+    ) -> wasmtime::Result<u64, v3::Error> {
         Ok(self
             .get_client(connection)
             .await?
@@ -126,7 +129,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
         connection: Resource<v3::Connection>,
         statement: String,
         params: Vec<v3::ParameterValue>,
-    ) -> Result<v3::RowSet, v3::Error> {
+    ) -> wasmtime::Result<v3::RowSet, v3::Error> {
         Ok(self
             .get_client(connection)
             .await?
@@ -135,7 +138,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
             .into())
     }
 
-    async fn drop(&mut self, connection: Resource<v3::Connection>) -> anyhow::Result<()> {
+    async fn drop(&mut self, connection: Resource<v3::Connection>) -> wasmtime::Result<()> {
         self.connections.remove(connection.rep());
         Ok(())
     }
@@ -143,7 +146,10 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
 
 impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
-    async fn open(&mut self, address: String) -> Result<Resource<v4::Connection>, v4::Error> {
+    async fn open(
+        &mut self,
+        address: String,
+    ) -> wasmtime::Result<Resource<v4::Connection>, v4::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
         self.ensure_address_allowed(&address).await?;
@@ -157,7 +163,7 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
         connection: Resource<v4::Connection>,
         statement: String,
         params: Vec<v4::ParameterValue>,
-    ) -> Result<u64, v4::Error> {
+    ) -> wasmtime::Result<u64, v4::Error> {
         self.get_client(connection)
             .await?
             .execute(statement, params)
@@ -170,33 +176,33 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
         connection: Resource<v4::Connection>,
         statement: String,
         params: Vec<v4::ParameterValue>,
-    ) -> Result<v4::RowSet, v4::Error> {
+    ) -> wasmtime::Result<v4::RowSet, v4::Error> {
         self.get_client(connection)
             .await?
             .query(statement, params, MAX_HOST_BUFFERED_BYTES)
             .await
     }
 
-    async fn drop(&mut self, connection: Resource<v4::Connection>) -> anyhow::Result<()> {
+    async fn drop(&mut self, connection: Resource<v4::Connection>) -> wasmtime::Result<()> {
         self.connections.remove(connection.rep());
         Ok(())
     }
 }
 
 impl<CF: ClientFactory> v2_types::Host for InstanceState<CF> {
-    fn convert_error(&mut self, error: v2::Error) -> Result<v2::Error> {
+    fn convert_error(&mut self, error: v2::Error) -> wasmtime::Result<v2::Error> {
         Ok(error)
     }
 }
 
 impl<CF: ClientFactory> v3::Host for InstanceState<CF> {
-    fn convert_error(&mut self, error: v3::Error) -> Result<v3::Error> {
+    fn convert_error(&mut self, error: v3::Error) -> wasmtime::Result<v3::Error> {
         Ok(error)
     }
 }
 
 impl<CF: ClientFactory> v4::Host for InstanceState<CF> {
-    fn convert_error(&mut self, error: v4::Error) -> Result<v4::Error> {
+    fn convert_error(&mut self, error: v4::Error) -> wasmtime::Result<v4::Error> {
         Ok(error)
     }
 }
@@ -219,7 +225,10 @@ impl<CF: ClientFactory> v2::Host for InstanceState<CF> {}
 
 impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
     #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "postgresql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
-    async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
+    async fn open(
+        &mut self,
+        address: String,
+    ) -> wasmtime::Result<Resource<v2::Connection>, v2::Error> {
         self.otel.reparent_tracing_span();
         spin_factor_outbound_networking::record_address_fields(&address);
 
@@ -234,7 +243,7 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
         connection: Resource<v2::Connection>,
         statement: String,
         params: Vec<v2_types::ParameterValue>,
-    ) -> Result<u64, v2::Error> {
+    ) -> wasmtime::Result<u64, v2::Error> {
         self.otel.reparent_tracing_span();
         Ok(self
             .get_client(connection)
@@ -249,7 +258,7 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
         connection: Resource<v2::Connection>,
         statement: String,
         params: Vec<v2_types::ParameterValue>,
-    ) -> Result<v2_types::RowSet, v2::Error> {
+    ) -> wasmtime::Result<v2_types::RowSet, v2::Error> {
         self.otel.reparent_tracing_span();
         Ok(self
             .get_client(connection)
@@ -259,7 +268,7 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
             .into())
     }
 
-    async fn drop(&mut self, connection: Resource<v2::Connection>) -> anyhow::Result<()> {
+    async fn drop(&mut self, connection: Resource<v2::Connection>) -> wasmtime::Result<()> {
         self.connections.remove(connection.rep());
         Ok(())
     }
@@ -271,7 +280,7 @@ impl<CF: ClientFactory> v1::Host for InstanceState<CF> {
         address: String,
         statement: String,
         params: Vec<v1_types::ParameterValue>,
-    ) -> Result<u64, v1::PgError> {
+    ) -> wasmtime::Result<u64, v1::PgError> {
         delegate!(self.execute(
             address,
             statement,
@@ -287,7 +296,7 @@ impl<CF: ClientFactory> v1::Host for InstanceState<CF> {
         address: String,
         statement: String,
         params: Vec<v1_types::ParameterValue>,
-    ) -> Result<v1_types::RowSet, v1::PgError> {
+    ) -> wasmtime::Result<v1_types::RowSet, v1::PgError> {
         delegate!(self.query(
             address,
             statement,
@@ -299,7 +308,7 @@ impl<CF: ClientFactory> v1::Host for InstanceState<CF> {
         .map(Into::into)
     }
 
-    fn convert_pg_error(&mut self, error: v1::PgError) -> Result<v1::PgError> {
+    fn convert_pg_error(&mut self, error: v1::PgError) -> wasmtime::Result<v1::PgError> {
         Ok(error)
     }
 }
