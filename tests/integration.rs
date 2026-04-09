@@ -1523,6 +1523,38 @@ route = "/..."
     }
 
     #[test]
+    fn test_wasi_http_p3_slow() -> anyhow::Result<()> {
+        run_test(
+            "wasi-http-p3-streaming",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                let request = Request::full(Method::Get, "/slow", &[], None::<Vec<u8>>);
+                assert_spin_request(
+                    spin,
+                    request,
+                    Response::full(
+                        200,
+                        [("content-type".to_owned(), "text/plain".to_owned())]
+                            .into_iter()
+                            .collect(),
+                        vec![b"1\n".to_vec(), b"2\n".to_vec(), b"3\n".to_vec()],
+                    ),
+                )?;
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
     fn test_spin_inbound_http() -> anyhow::Result<()> {
         run_test(
             "spin-inbound-http",
@@ -2002,9 +2034,12 @@ mod otel_integration_tests {
                     "Some(AnyValue { value: Some(StringValue(\"baz\")) })"
                 );
                 assert_eq!(
-                        attr_span.attributes.get("qux").expect("'qux' attribute should exist"),
-                        "Some(AnyValue { value: Some(ArrayValue(ArrayValue { values: [AnyValue { value: Some(StringValue(\"qaz\")) }, AnyValue { value: Some(StringValue(\"thud\")) }] })) })"
-                    );
+                    attr_span
+                        .attributes
+                        .get("qux")
+                        .expect("'qux' attribute should exist"),
+                    "Some(AnyValue { value: Some(ArrayValue(ArrayValue { values: [AnyValue { value: Some(StringValue(\"qaz\")) }, AnyValue { value: Some(StringValue(\"thud\")) }] })) })"
+                );
 
                 Ok(())
             },

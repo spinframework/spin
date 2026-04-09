@@ -11,6 +11,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use futures::channel::oneshot;
 use http::{header::HOST, uri::Scheme, Uri};
 use http_body::{Body, Frame, SizeHint};
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
@@ -80,6 +81,39 @@ impl<T: Body + Unpin> Body for MutexBody<T> {
 
     fn size_hint(&self) -> SizeHint {
         self.0.lock().unwrap().size_hint()
+    }
+}
+
+/// Body which, when dropped, will notify the receiver corresponding to the
+/// specified sender.
+pub struct NotifyOnDropBody<B> {
+    body: B,
+    _tx: oneshot::Sender<()>,
+}
+
+impl<B> NotifyOnDropBody<B> {
+    pub fn new(body: B, tx: oneshot::Sender<()>) -> Self {
+        Self { body, _tx: tx }
+    }
+}
+
+impl<B: Body + Unpin> Body for NotifyOnDropBody<B> {
+    type Data = B::Data;
+    type Error = B::Error;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        Pin::new(&mut self.body).poll_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.body.size_hint()
     }
 }
 

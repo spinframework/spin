@@ -33,7 +33,7 @@ pub use wasmtime_wasi_http::p2::{
     HttpResult,
 };
 
-pub use wasi::{p2_to_p3_error_code, p3_to_p2_error_code, MutexBody};
+pub use wasi::{p2_to_p3_error_code, p3_to_p2_error_code, MutexBody, NotifyOnDropBody};
 
 #[derive(Default)]
 pub struct OutboundHttpFactor {

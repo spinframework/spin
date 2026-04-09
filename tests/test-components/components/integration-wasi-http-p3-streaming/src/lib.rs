@@ -9,9 +9,12 @@ wit_bindgen::generate!({
 use {
     crate::{
         exports::wasi::http0_3_0_rc_2026_03_15::handler::Guest,
-        wasi::http0_3_0_rc_2026_03_15::{
-            client,
-            types::{ErrorCode, Fields, Method, Request, Response, Scheme},
+        wasi::{
+            clocks0_3_0_rc_2026_03_15::monotonic_clock,
+            http0_3_0_rc_2026_03_15::{
+                client,
+                types::{ErrorCode, Fields, Method, Request, Response, Scheme},
+            },
         },
     },
     core::mem,
@@ -35,6 +38,26 @@ impl Guest for Component {
                 request.get_method(),
                 request.get_path_with_query().as_deref(),
             ) {
+                (Method::Get, Some("/slow")) => {
+                    // Send a chunked response slowly.
+                    let (mut tx, rx) = wit_stream::new();
+
+                    async_support::spawn(async move {
+                        for v in ["1", "2", "3"] {
+                            tx.write_all(format!("{v}\n").into_bytes()).await;
+                            monotonic_clock::wait_for(1_000_000_000 /*nanoseconds*/).await;
+                        }
+                    });
+
+                    Response::new(
+                        Fields::from_list(&[("content-type".to_string(), b"text/plain".to_vec())])
+                            .unwrap(),
+                        Some(rx),
+                        wit_future::new(|| Ok(None)).1,
+                    )
+                    .0
+                }
+
                 (Method::Get, Some("/hash-all")) => {
                     // Send outgoing GET requests to the specified URLs and stream
                     // the hashes of the response bodies as they arrive.
