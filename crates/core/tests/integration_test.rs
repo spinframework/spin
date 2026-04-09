@@ -72,15 +72,15 @@ async fn test_set_deadline_violated() {
     )
     .await
     .unwrap_err();
-    let trap = err.downcast::<Trap>().expect("trap");
-    assert_eq!(trap, Trap::Interrupt);
+    let trap = err.root_cause().downcast_ref::<Trap>().expect("trap");
+    assert_eq!(trap, &Trap::Interrupt);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_panic() {
     let err = run_test(["panic"], |_| {}, |_| {}).await.unwrap_err();
-    let trap = err.downcast::<Trap>().expect("trap");
-    assert_eq!(trap, Trap::UnreachableCodeReached);
+    let trap = err.root_cause().downcast_ref::<Trap>().expect("trap");
+    assert_eq!(trap, &Trap::UnreachableCodeReached);
 }
 
 #[derive(RuntimeFactors)]
