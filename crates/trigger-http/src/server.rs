@@ -404,7 +404,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                         .execute(instance_builder, &route_match, req, client_addr)
                         .await
                 }
-                HandlerType::Wasi0_3(handler) => {
+                HandlerType::Wasi0_3(_, handler) => {
                     Wasip3HttpExecutor(handler)
                         .execute(&route_match, req, client_addr)
                         .await
