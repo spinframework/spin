@@ -2,7 +2,7 @@ use crate::server::HttpHandlerState;
 use anyhow::{Context as _, Result};
 use futures::{channel::oneshot, FutureExt};
 use http_body_util::BodyExt;
-use spin_factor_outbound_http::MutexBody;
+use spin_factor_outbound_http::{p3_to_p2_error_code, NotifyOnDropBody};
 use spin_factors::RuntimeFactors;
 use spin_factors_executor::InstanceState;
 use spin_http::routes::RouteMatch;
@@ -63,7 +63,24 @@ impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
                             response.into_http_with_getter(&mut store, request_io_result, getter)
                         })?;
 
-                        _ = tx.send(response);
+                        // Wrap the response body in a `NotifyOnDropBody` so we can
+                        // be notified when Hyper has finished reading it.
+                        let (response_body_tx, response_body_rx) = oneshot::channel();
+                        let response = response.map(|body| {
+                            NotifyOnDropBody::new(
+                                body.map_err(p3_to_p2_error_code),
+                                response_body_tx,
+                            )
+                            .boxed_unsync()
+                        });
+
+                        if tx.send(response).is_ok() {
+                            // We must not exit the store's event loop until
+                            // Hyper has finished reading the response body;
+                            // otherwise, the guest will not have a chance
+                            // to finish writing it.
+                            _ = response_body_rx.await;
+                        }
 
                         anyhow::Ok(())
                     }
@@ -77,10 +94,7 @@ impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
             }),
         );
 
-        Ok(rx.await?.map(|body| {
-            MutexBody::new(body.map_err(spin_factor_outbound_http::p3_to_p2_error_code))
-                .boxed_unsync()
-        }))
+        Ok(rx.await?)
     }
 }
 
