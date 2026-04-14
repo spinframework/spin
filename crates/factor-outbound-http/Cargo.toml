@@ -26,6 +26,7 @@ tokio = { workspace = true, features = ["macros", "rt", "net"] }
 tokio-rustls = { workspace = true }
 tower-service = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }

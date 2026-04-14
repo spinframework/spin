@@ -8732,6 +8732,7 @@ dependencies = [
  "tokio-rustls 0.26.0",
  "tower-service",
  "tracing",
+ "tracing-opentelemetry",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
