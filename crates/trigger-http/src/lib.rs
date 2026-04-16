@@ -134,7 +134,7 @@ pub struct CliArgs {
     /// This may be specified either as a single time value or as a range,
     /// e.g. 1..8s.  If it's a range, a value will be selected from that range
     /// at random for each new instance.
-    #[clap(long, default_value = "1s", value_parser = parse_duration_range)]
+    #[clap(long, env = "SPIN_HTTP_IDLE_INSTANCE_TIMEOUT_SECS", default_value = "1s", value_parser = parse_duration_range)]
     pub idle_instance_timeout: Range<Duration>,
 }
 
