@@ -108,3 +108,12 @@ pub fn init(spin_version: String) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Build a reqwest::Client that explicitly uses rustls as the TLS backend.
+///
+pub(crate) fn rustls_reqwest_client() -> anyhow::Result<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .use_rustls_tls()
+        .build()
+        .context("failed to build rustls reqwest client for OTLP exporter")?)
+}

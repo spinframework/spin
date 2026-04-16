@@ -9348,6 +9348,7 @@ dependencies = [
  "opentelemetry-appender-tracing",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "reqwest 0.12.9",
  "terminal",
  "tracing",
  "tracing-opentelemetry",

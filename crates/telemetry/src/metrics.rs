@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry::global;
 use opentelemetry_sdk::{
     metrics::{periodic_reader_with_async_runtime::PeriodicReader, SdkMeterProvider},
@@ -42,6 +43,7 @@ pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
             .build()?,
         OtlpProtocol::HttpProtobuf => opentelemetry_otlp::MetricExporter::builder()
             .with_http()
+            .with_http_client(crate::rustls_reqwest_client()?)
             .build()?,
         OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
     };
