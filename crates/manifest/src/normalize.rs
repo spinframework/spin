@@ -13,6 +13,7 @@ pub fn normalize_manifest(manifest: &mut AppManifest, profile: Option<&str>) -> 
     normalize_trigger_ids(manifest);
     normalize_inline_components(manifest);
     apply_profile_overrides(manifest, profile);
+    normalize_dependency_inherit_configuration(manifest)?;
     normalize_dependency_component_refs(manifest)?;
     Ok(())
 }
@@ -146,7 +147,40 @@ fn apply_profile_overrides(manifest: &mut AppManifest, profile: Option<&str>) {
     }
 }
 
-use crate::schema::v2::{Component, ComponentDependency, ComponentSource};
+use crate::schema::v2::{Component, ComponentDependency, ComponentSource, InheritConfiguration};
+
+/// Validates that `dependencies_inherit_configuration` and per-dependency
+/// `inherit_configuration` are not used simultaneously, then normalizes the
+/// component-level field into per-dependency `inherit_configuration` values.
+fn normalize_dependency_inherit_configuration(manifest: &mut AppManifest) -> anyhow::Result<()> {
+    for (component_id, component) in &mut manifest.components {
+        let component_level = component.dependencies_inherit_configuration;
+
+        let has_per_dep = component
+            .dependencies
+            .inner
+            .values()
+            .any(|dep| dep.inherit_configuration().is_some());
+
+        if component_level.is_some() && has_per_dep {
+            anyhow::bail!(
+                "Component `{component_id}` specifies both `dependencies_inherit_configuration` \
+                 and per-dependency `inherit_configuration`. These are mutually exclusive; \
+                 use one or the other."
+            );
+        }
+
+        if component_level == Some(true) {
+            let inherit = InheritConfiguration::All(true);
+            for dep in component.dependencies.inner.values_mut() {
+                dep.set_inherit_configuration(inherit.clone());
+            }
+            component.dependencies_inherit_configuration = None;
+        }
+    }
+
+    Ok(())
+}
 
 fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Result<()> {
     // `clone` a snapshot, because we are about to mutate collection elements,
@@ -159,13 +193,18 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
             if let ComponentDependency::AppComponent {
                 component: depended_on_id,
                 export,
+                inherit_configuration,
             } = dependency
             {
                 let depended_on = components
                     .get(depended_on_id)
                     .with_context(|| format!("dependency ID {depended_on_id} does not exist"))?;
                 ensure_is_acceptable_dependency(depended_on, depended_on_id, depender_id)?;
-                *dependency = component_source_to_dependency(&depended_on.source, export.clone());
+                *dependency = component_source_to_dependency(
+                    &depended_on.source,
+                    export.clone(),
+                    inherit_configuration.clone(),
+                );
             }
         }
     }
@@ -176,16 +215,19 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
 fn component_source_to_dependency(
     source: &ComponentSource,
     export: Option<String>,
+    inherit_configuration: Option<InheritConfiguration>,
 ) -> ComponentDependency {
     match source {
         ComponentSource::Local(path) => ComponentDependency::Local {
             path: PathBuf::from(path),
             export,
+            inherit_configuration,
         },
         ComponentSource::Remote { url, digest } => ComponentDependency::HTTP {
             url: url.clone(),
             digest: digest.clone(),
             export,
+            inherit_configuration,
         },
         ComponentSource::Registry {
             registry,
@@ -196,6 +238,7 @@ fn component_source_to_dependency(
             registry: registry.as_ref().map(|r| r.to_string()),
             package: Some(package.to_string()),
             export,
+            inherit_configuration,
         },
     }
 }
@@ -273,6 +316,7 @@ fn ensure_is_acceptable_dependency(
 mod test {
     use super::*;
 
+    use crate::schema::v2::InheritConfiguration;
     use serde::Deserialize;
     use toml::toml;
 
@@ -313,12 +357,18 @@ mod test {
             .get(&package_name("b:b"))
             .unwrap();
 
-        let ComponentDependency::Local { path, export } = dep else {
+        let ComponentDependency::Local {
+            path,
+            export,
+            inherit_configuration,
+        } = dep
+        else {
             panic!("should have normalised to local dep");
         };
 
         assert_eq!(&PathBuf::from("b.wasm"), path);
         assert_eq!(&None, export);
+        assert!(inherit_configuration.is_none());
     }
 
     #[test]
@@ -357,6 +407,7 @@ mod test {
             url,
             digest,
             export,
+            inherit_configuration,
         } = dep
         else {
             panic!("should have normalised to HTTP dep");
@@ -365,6 +416,7 @@ mod test {
         assert_eq!("http://example.com/b.wasm", url);
         assert_eq!("12345", digest);
         assert_eq!("c:d/e", export.as_ref().unwrap());
+        assert!(inherit_configuration.is_none());
     }
 
     #[test]
@@ -404,14 +456,120 @@ mod test {
             registry,
             package,
             export,
+            inherit_configuration,
         } = dep
         else {
-            panic!("should have normalised to HTTP dep");
+            panic!("should have normalised to package dep");
         };
 
         assert_eq!("1.2.3", version);
         assert_eq!("reginalds-registry.reg", registry.as_ref().unwrap());
         assert_eq!("bb:bb", package.as_ref().unwrap());
         assert_eq!(&None, export);
+        assert!(inherit_configuration.is_none());
+    }
+
+    #[test]
+    fn can_resolve_dependency_with_inherit() {
+        let mut manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+
+            [application]
+            name = "dummy"
+
+            [[trigger.dummy]]
+            component = "a"
+
+            [component.a]
+            source = "a.wasm"
+            [component.a.dependencies]
+            "b:b" = { component = "b", inherit_configuration = true }
+
+            [component.b]
+            source = "b.wasm"
+        })
+        .unwrap();
+
+        normalize_manifest(&mut manifest, None).unwrap();
+
+        let dep = manifest
+            .components
+            .get("a")
+            .unwrap()
+            .dependencies
+            .inner
+            .get(&package_name("b:b"))
+            .unwrap();
+
+        let ComponentDependency::Local {
+            path,
+            export,
+            inherit_configuration,
+        } = dep
+        else {
+            panic!("should have normalised to local dep");
+        };
+
+        assert_eq!(&PathBuf::from("b.wasm"), path);
+        assert_eq!(&None, export);
+        assert!(matches!(
+            inherit_configuration,
+            Some(InheritConfiguration::All(true))
+        ));
+    }
+
+    #[test]
+    fn can_resolve_dependency_with_inherit_some() {
+        let mut manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+
+            [application]
+            name = "dummy"
+
+            [[trigger.dummy]]
+            component = "a"
+
+            [component.a]
+            source = "a.wasm"
+            [component.a.dependencies]
+            "b:b" = { component = "b", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }
+
+            [component.b]
+            source = "b.wasm"
+        })
+        .unwrap();
+
+        normalize_manifest(&mut manifest, None).unwrap();
+
+        let dep = manifest
+            .components
+            .get("a")
+            .unwrap()
+            .dependencies
+            .inner
+            .get(&package_name("b:b"))
+            .unwrap();
+
+        let ComponentDependency::Local {
+            path,
+            export,
+            inherit_configuration,
+        } = dep
+        else {
+            panic!("should have normalised to local dep");
+        };
+
+        assert_eq!(&PathBuf::from("b.wasm"), path);
+        assert_eq!(&None, export);
+        let Some(InheritConfiguration::Some(keys)) = inherit_configuration else {
+            panic!("should have inherit_configuration = Some([...])");
+        };
+        assert_eq!(
+            &vec![
+                "ai_models".to_string(),
+                "allowed_outbound_hosts".to_string()
+            ],
+            keys
+        );
     }
 }

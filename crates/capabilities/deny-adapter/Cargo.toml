@@ -1,0 +1,11 @@
+[package]
+name = "deny-adapter"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.54"
+
+[workspace]

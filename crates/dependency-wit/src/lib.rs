@@ -66,7 +66,7 @@ pub async fn extract_wits(
         };
 
         let (wasm_path, export) = loader
-            .load_component_dependency(dependency_name, dependency)
+            .load_dependency_content(dependency_name, dependency)
             .await
             .with_context(|| format!("failed to load dependency {dependency_name}"))?;
         let wasm_bytes = tokio::fs::read(&wasm_path).await?;
@@ -535,6 +535,7 @@ mod test {
         let dep_src = ComponentDependency::Local {
             path: dep_file,
             export: None,
+            inherit_configuration: None,
         };
         let deps = std::iter::once((&dep_name, &dep_src));
 
@@ -603,6 +604,7 @@ mod test {
         let dep_src = ComponentDependency::Local {
             path: dep_file,
             export: None,
+            inherit_configuration: None,
         };
         let deps = std::iter::once((&dep_name, &dep_src));
 
@@ -661,6 +663,7 @@ world greeter {
         let dep_src = ComponentDependency::Local {
             path: dep_file,
             export: None,
+            inherit_configuration: None,
         };
         let deps = std::iter::once((&dep_name, &dep_src));
 
@@ -722,6 +725,7 @@ world lookup {
         let dep_src = ComponentDependency::Local {
             path: dep_file,
             export: None,
+            inherit_configuration: None,
         };
         let deps = std::iter::once((&dep_name, &dep_src));
 
@@ -784,6 +788,7 @@ world colors {
         let dep_src = ComponentDependency::Local {
             path: dep_file,
             export: None,
+            inherit_configuration: None,
         };
         let deps = std::iter::once((&dep_name, &dep_src));
 

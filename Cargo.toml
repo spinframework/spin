@@ -192,7 +192,7 @@ tracing = { version = "0.1.41", features = ["log"] }
 url = "2.5.7"
 tracing-opentelemetry = { version = "0.29", default-features = false, features = ["metrics"] }
 walkdir = "2"
-wac-graph = "0.8.1"
+wac-graph = { git = "https://github.com/bytecodealliance/wac" }
 wasm-encoder = "0.245.1"
 wasm-metadata = "0.245.1"
 wasm-pkg-client = "0.11"

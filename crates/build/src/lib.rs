@@ -607,6 +607,7 @@ mod tests {
             let dep = v2::ComponentDependency::Local {
                 path: path.into(),
                 export: None,
+                inherit_configuration: None,
             };
             deps.push((dep_name, dep));
         }
