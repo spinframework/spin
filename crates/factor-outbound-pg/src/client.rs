@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -104,7 +106,9 @@ fn create_connection_pool(
         .parse::<tokio_postgres::Config>()
         .context("parsing Postgres connection string")?;
 
-    tracing::debug!("Build new connection: {}", address);
+    // The debug form isn't as easy to read as logging the address,
+    // but it redacts the password!
+    tracing::debug!("Build new connection: {config:?}");
 
     let mgr_config = deadpool_postgres::ManagerConfig {
         recycling_method: deadpool_postgres::RecyclingMethod::Clean,
