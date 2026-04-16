@@ -1,8 +1,54 @@
+wit_bindgen::generate!({
+    path: "../../../wit",
+    generate_all,
+    inline: r#"
+    package spin:deny;
+
+    world adapter {
+        export wasi:http/outgoing-handler@0.2.6;
+        export wasi:http/client@0.3.0-rc-2026-03-15;
+        export spin:key-value/key-value@3.0.0;
+        export spin:mqtt/mqtt@3.0.0;
+        export spin:postgres/postgres@3.0.0;
+        export spin:postgres/postgres@4.2.0;
+        export spin:redis/redis@3.0.0;
+        export spin:sqlite/sqlite@3.1.0;
+        export spin:variables/variables@3.0.0;
+        export wasi:config/store@0.2.0-draft-2024-09-27;
+        export fermyon:spin/config;
+        export fermyon:spin/http;
+        export fermyon:spin/key-value;
+        export fermyon:spin/llm;
+        export fermyon:spin/mysql;
+        export fermyon:spin/postgres;
+        export fermyon:spin/redis;
+        export fermyon:spin/sqlite;
+        export wasi:cli/environment@0.2.6;
+        export wasi:filesystem/preopens@0.2.6;
+        export wasi:sockets/udp@0.2.6;
+        export wasi:sockets/udp-create-socket@0.2.6;
+        export wasi:sockets/tcp@0.2.6;
+        export wasi:sockets/tcp-create-socket@0.2.6;
+        export wasi:sockets/ip-name-lookup@0.2.6;
+        export wasi:cli/environment@0.3.0-rc-2026-03-15;
+        export wasi:filesystem/preopens@0.3.0-rc-2026-03-15;
+        export wasi:sockets/ip-name-lookup@0.3.0-rc-2026-03-15;
+        export fermyon:spin/llm@2.0.0;
+        export fermyon:spin/redis@2.0.0;
+        export fermyon:spin/mqtt@2.0.0;
+        export fermyon:spin/postgres@2.0.0;
+        export fermyon:spin/mysql@2.0.0;
+        export fermyon:spin/sqlite@2.0.0;
+        export fermyon:spin/key-value@2.0.0;
+        export fermyon:spin/variables@2.0.0;
+        export wasi:keyvalue/store@0.2.0-draft2;
+    }
+    "#,
+});
+
 fn format_deny_error(s: &str) -> String {
     format!("{s:?} is not permitted")
 }
-
-include!("deny_adapter.rs");
 
 struct Adapter;
 export!(Adapter);
@@ -17,7 +63,11 @@ impl exports::wasi::http0_2_6::outgoing_handler::Guest for Adapter {
         exports::wasi::http0_2_6::outgoing_handler::FutureIncomingResponse,
         exports::wasi::http0_2_6::outgoing_handler::ErrorCode,
     > {
-        Err(exports::wasi::http0_2_6::outgoing_handler::ErrorCode::InternalError(Some(format_deny_error("wasi:http/outgoing-handler"))))
+        Err(
+            exports::wasi::http0_2_6::outgoing_handler::ErrorCode::InternalError(Some(
+                format_deny_error("wasi:http/outgoing-handler"),
+            )),
+        )
     }
 }
 impl exports::wasi::http0_3_0_rc_2026_03_15::client::Guest for Adapter {
@@ -29,7 +79,11 @@ impl exports::wasi::http0_3_0_rc_2026_03_15::client::Guest for Adapter {
         exports::wasi::http0_3_0_rc_2026_03_15::client::Response,
         exports::wasi::http0_3_0_rc_2026_03_15::client::ErrorCode,
     > {
-        Err(exports::wasi::http0_3_0_rc_2026_03_15::client::ErrorCode::InternalError(Some(format_deny_error("wasi:http/client"))))
+        Err(
+            exports::wasi::http0_3_0_rc_2026_03_15::client::ErrorCode::InternalError(Some(
+                format_deny_error("wasi:http/client"),
+            )),
+        )
     }
 }
 impl exports::spin::key_value::key_value::GuestStore for Adapter {
@@ -100,11 +154,10 @@ impl exports::spin::mqtt::mqtt::GuestConnection for Adapter {
         username: _rt::String,
         password: _rt::String,
         keep_alive_interval_in_secs: u64,
-    ) -> Result<
-        exports::spin::mqtt::mqtt::Connection,
-        exports::spin::mqtt::mqtt::Error,
-    > {
-        Err(exports::spin::mqtt::mqtt::Error::Other(format_deny_error("spin:mqtt/mqtt")))
+    ) -> Result<exports::spin::mqtt::mqtt::Connection, exports::spin::mqtt::mqtt::Error> {
+        Err(exports::spin::mqtt::mqtt::Error::Other(format_deny_error(
+            "spin:mqtt/mqtt",
+        )))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -129,7 +182,9 @@ impl exports::spin::postgres3_0_0::postgres::GuestConnection for Adapter {
         exports::spin::postgres3_0_0::postgres::Connection,
         exports::spin::postgres3_0_0::postgres::Error,
     > {
-        Err(exports::spin::postgres3_0_0::postgres::Error::Other(format_deny_error("spin:postgres/postgres")))
+        Err(exports::spin::postgres3_0_0::postgres::Error::Other(
+            format_deny_error("spin:postgres/postgres"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -178,7 +233,9 @@ impl exports::spin::postgres4_2_0::postgres::GuestConnectionBuilder for Adapter 
         exports::spin::postgres4_2_0::postgres::Connection,
         exports::spin::postgres4_2_0::postgres::Error,
     > {
-        Err(exports::spin::postgres4_2_0::postgres::Error::Other(format_deny_error("spin:postgres/postgres")))
+        Err(exports::spin::postgres4_2_0::postgres::Error::Other(
+            format_deny_error("spin:postgres/postgres"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -188,7 +245,9 @@ impl exports::spin::postgres4_2_0::postgres::GuestConnectionBuilder for Adapter 
         exports::spin::postgres4_2_0::postgres::Connection,
         exports::spin::postgres4_2_0::postgres::Error,
     > {
-        Err(exports::spin::postgres4_2_0::postgres::Error::Other(format_deny_error("spin:postgres/postgres")))
+        Err(exports::spin::postgres4_2_0::postgres::Error::Other(
+            format_deny_error("spin:postgres/postgres"),
+        ))
     }
 }
 impl exports::spin::postgres4_2_0::postgres::GuestConnection for Adapter {
@@ -200,7 +259,9 @@ impl exports::spin::postgres4_2_0::postgres::GuestConnection for Adapter {
         exports::spin::postgres4_2_0::postgres::Connection,
         exports::spin::postgres4_2_0::postgres::Error,
     > {
-        Err(exports::spin::postgres4_2_0::postgres::Error::Other(format_deny_error("spin:postgres/postgres")))
+        Err(exports::spin::postgres4_2_0::postgres::Error::Other(
+            format_deny_error("spin:postgres/postgres"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -210,7 +271,9 @@ impl exports::spin::postgres4_2_0::postgres::GuestConnection for Adapter {
         exports::spin::postgres4_2_0::postgres::Connection,
         exports::spin::postgres4_2_0::postgres::Error,
     > {
-        Err(exports::spin::postgres4_2_0::postgres::Error::Other(format_deny_error("spin:postgres/postgres")))
+        Err(exports::spin::postgres4_2_0::postgres::Error::Other(
+            format_deny_error("spin:postgres/postgres"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -272,11 +335,10 @@ impl exports::spin::redis::redis::GuestConnection for Adapter {
     #[allow(async_fn_in_trait)]
     async fn open(
         address: _rt::String,
-    ) -> Result<
-        exports::spin::redis::redis::Connection,
-        exports::spin::redis::redis::Error,
-    > {
-        Err(exports::spin::redis::redis::Error::Other(format_deny_error("spin:redis/redis")))
+    ) -> Result<exports::spin::redis::redis::Connection, exports::spin::redis::redis::Error> {
+        Err(exports::spin::redis::redis::Error::Other(
+            format_deny_error("spin:redis/redis"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -292,10 +354,8 @@ impl exports::spin::redis::redis::GuestConnection for Adapter {
     async fn get(
         &self,
         key: _rt::String,
-    ) -> Result<
-        Option<exports::spin::redis::redis::Payload>,
-        exports::spin::redis::redis::Error,
-    > {
+    ) -> Result<Option<exports::spin::redis::redis::Payload>, exports::spin::redis::redis::Error>
+    {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -309,10 +369,7 @@ impl exports::spin::redis::redis::GuestConnection for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    async fn incr(
-        &self,
-        key: _rt::String,
-    ) -> Result<i64, exports::spin::redis::redis::Error> {
+    async fn incr(&self, key: _rt::String) -> Result<i64, exports::spin::redis::redis::Error> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -454,27 +511,27 @@ impl exports::spin::variables::variables::Guest for Adapter {
 impl exports::wasi::config::store::Guest for Adapter {
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn get(
-        key: _rt::String,
-    ) -> Result<Option<_rt::String>, exports::wasi::config::store::Error> {
-        Err(exports::wasi::config::store::Error::Io(format_deny_error("wasi:config/store")))
+    fn get(key: _rt::String) -> Result<Option<_rt::String>, exports::wasi::config::store::Error> {
+        Err(exports::wasi::config::store::Error::Io(format_deny_error(
+            "wasi:config/store",
+        )))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn get_all() -> Result<
-        _rt::Vec<(_rt::String, _rt::String)>,
-        exports::wasi::config::store::Error,
-    > {
-        Err(exports::wasi::config::store::Error::Io(format_deny_error("wasi:config/store")))
+    fn get_all() -> Result<_rt::Vec<(_rt::String, _rt::String)>, exports::wasi::config::store::Error>
+    {
+        Err(exports::wasi::config::store::Error::Io(format_deny_error(
+            "wasi:config/store",
+        )))
     }
 }
 impl exports::fermyon::spin::config::Guest for Adapter {
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn get_config(
-        key: _rt::String,
-    ) -> Result<_rt::String, exports::fermyon::spin::config::Error> {
-        Err(exports::fermyon::spin::config::Error::Other(format_deny_error("fermyon:spin/config")))
+    fn get_config(key: _rt::String) -> Result<_rt::String, exports::fermyon::spin::config::Error> {
+        Err(exports::fermyon::spin::config::Error::Other(
+            format_deny_error("fermyon:spin/config"),
+        ))
     }
 }
 impl exports::fermyon::spin::http::Guest for Adapter {
@@ -482,10 +539,8 @@ impl exports::fermyon::spin::http::Guest for Adapter {
     #[allow(async_fn_in_trait)]
     fn send_request(
         req: exports::fermyon::spin::http::Request,
-    ) -> Result<
-        exports::fermyon::spin::http::Response,
-        exports::fermyon::spin::http::HttpError,
-    > {
+    ) -> Result<exports::fermyon::spin::http::Response, exports::fermyon::spin::http::HttpError>
+    {
         Err(exports::fermyon::spin::http::HttpError::DestinationNotAllowed)
     }
 }
@@ -494,10 +549,8 @@ impl exports::fermyon::spin::key_value::Guest for Adapter {
     #[allow(async_fn_in_trait)]
     fn open(
         name: _rt::String,
-    ) -> Result<
-        exports::fermyon::spin::key_value::Store,
-        exports::fermyon::spin::key_value::Error,
-    > {
+    ) -> Result<exports::fermyon::spin::key_value::Store, exports::fermyon::spin::key_value::Error>
+    {
         Err(exports::fermyon::spin::key_value::Error::AccessDenied)
     }
     #[allow(unused_variables)]
@@ -554,10 +607,8 @@ impl exports::fermyon::spin::llm::Guest for Adapter {
         model: exports::fermyon::spin::llm::InferencingModel,
         prompt: _rt::String,
         params: Option<exports::fermyon::spin::llm::InferencingParams>,
-    ) -> Result<
-        exports::fermyon::spin::llm::InferencingResult,
-        exports::fermyon::spin::llm::Error,
-    > {
+    ) -> Result<exports::fermyon::spin::llm::InferencingResult, exports::fermyon::spin::llm::Error>
+    {
         Err(exports::fermyon::spin::llm::Error::ModelNotSupported)
     }
     #[allow(unused_variables)]
@@ -566,10 +617,8 @@ impl exports::fermyon::spin::llm::Guest for Adapter {
     fn generate_embeddings(
         model: exports::fermyon::spin::llm::EmbeddingModel,
         text: _rt::Vec<_rt::String>,
-    ) -> Result<
-        exports::fermyon::spin::llm::EmbeddingsResult,
-        exports::fermyon::spin::llm::Error,
-    > {
+    ) -> Result<exports::fermyon::spin::llm::EmbeddingsResult, exports::fermyon::spin::llm::Error>
+    {
         Err(exports::fermyon::spin::llm::Error::ModelNotSupported)
     }
 }
@@ -581,11 +630,11 @@ impl exports::fermyon::spin::mysql::Guest for Adapter {
         address: _rt::String,
         statement: _rt::String,
         params: _rt::Vec<exports::fermyon::spin::mysql::ParameterValue>,
-    ) -> Result<
-        exports::fermyon::spin::mysql::RowSet,
-        exports::fermyon::spin::mysql::MysqlError,
-    > {
-        Err(exports::fermyon::spin::mysql::MysqlError::OtherError(format_deny_error("fermyon:spin/mysql")))
+    ) -> Result<exports::fermyon::spin::mysql::RowSet, exports::fermyon::spin::mysql::MysqlError>
+    {
+        Err(exports::fermyon::spin::mysql::MysqlError::OtherError(
+            format_deny_error("fermyon:spin/mysql"),
+        ))
     }
     #[allow(unused_variables)]
     /// execute command to the database: insert, update, delete
@@ -595,7 +644,9 @@ impl exports::fermyon::spin::mysql::Guest for Adapter {
         statement: _rt::String,
         params: _rt::Vec<exports::fermyon::spin::mysql::ParameterValue>,
     ) -> Result<(), exports::fermyon::spin::mysql::MysqlError> {
-        Err(exports::fermyon::spin::mysql::MysqlError::OtherError(format_deny_error("fermyon:spin/mysql")))
+        Err(exports::fermyon::spin::mysql::MysqlError::OtherError(
+            format_deny_error("fermyon:spin/mysql"),
+        ))
     }
 }
 impl exports::fermyon::spin::postgres::Guest for Adapter {
@@ -606,11 +657,11 @@ impl exports::fermyon::spin::postgres::Guest for Adapter {
         address: _rt::String,
         statement: _rt::String,
         params: _rt::Vec<exports::fermyon::spin::postgres::ParameterValue>,
-    ) -> Result<
-        exports::fermyon::spin::postgres::RowSet,
-        exports::fermyon::spin::postgres::PgError,
-    > {
-        Err(exports::fermyon::spin::postgres::PgError::OtherError(format_deny_error("fermyon:spin/postgres")))
+    ) -> Result<exports::fermyon::spin::postgres::RowSet, exports::fermyon::spin::postgres::PgError>
+    {
+        Err(exports::fermyon::spin::postgres::PgError::OtherError(
+            format_deny_error("fermyon:spin/postgres"),
+        ))
     }
     #[allow(unused_variables)]
     /// execute command to the database: insert, update, delete
@@ -620,7 +671,9 @@ impl exports::fermyon::spin::postgres::Guest for Adapter {
         statement: _rt::String,
         params: _rt::Vec<exports::fermyon::spin::postgres::ParameterValue>,
     ) -> Result<u64, exports::fermyon::spin::postgres::PgError> {
-        Err(exports::fermyon::spin::postgres::PgError::OtherError(format_deny_error("fermyon:spin/postgres")))
+        Err(exports::fermyon::spin::postgres::PgError::OtherError(
+            format_deny_error("fermyon:spin/postgres"),
+        ))
     }
 }
 impl exports::fermyon::spin::redis::Guest for Adapter {
@@ -638,10 +691,7 @@ impl exports::fermyon::spin::redis::Guest for Adapter {
     fn get(
         address: _rt::String,
         key: _rt::String,
-    ) -> Result<
-        exports::fermyon::spin::redis::Payload,
-        exports::fermyon::spin::redis::Error,
-    > {
+    ) -> Result<exports::fermyon::spin::redis::Payload, exports::fermyon::spin::redis::Error> {
         Err(exports::fermyon::spin::redis::Error::Error)
     }
     #[allow(unused_variables)]
@@ -713,10 +763,8 @@ impl exports::fermyon::spin::sqlite::Guest for Adapter {
     #[allow(async_fn_in_trait)]
     fn open(
         database: _rt::String,
-    ) -> Result<
-        exports::fermyon::spin::sqlite::Connection,
-        exports::fermyon::spin::sqlite::Error,
-    > {
+    ) -> Result<exports::fermyon::spin::sqlite::Connection, exports::fermyon::spin::sqlite::Error>
+    {
         Err(exports::fermyon::spin::sqlite::Error::AccessDenied)
     }
     #[allow(unused_variables)]
@@ -725,10 +773,8 @@ impl exports::fermyon::spin::sqlite::Guest for Adapter {
         conn: exports::fermyon::spin::sqlite::Connection,
         statement: _rt::String,
         parameters: _rt::Vec<exports::fermyon::spin::sqlite::Value>,
-    ) -> Result<
-        exports::fermyon::spin::sqlite::QueryResult,
-        exports::fermyon::spin::sqlite::Error,
-    > {
+    ) -> Result<exports::fermyon::spin::sqlite::QueryResult, exports::fermyon::spin::sqlite::Error>
+    {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -757,9 +803,10 @@ impl exports::wasi::cli0_2_6::environment::Guest for Adapter {
 impl exports::wasi::filesystem0_2_6::preopens::Guest for Adapter {
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn get_directories() -> _rt::Vec<
-        (exports::wasi::filesystem0_2_6::preopens::Descriptor, _rt::String),
-    > {
+    fn get_directories() -> _rt::Vec<(
+        exports::wasi::filesystem0_2_6::preopens::Descriptor,
+        _rt::String,
+    )> {
         Vec::new()
     }
 }
@@ -819,9 +866,7 @@ impl exports::wasi::sockets0_2_6::udp::GuestUdpSocket for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn unicast_hop_limit(
-        &self,
-    ) -> Result<u8, exports::wasi::sockets0_2_6::udp::ErrorCode> {
+    fn unicast_hop_limit(&self) -> Result<u8, exports::wasi::sockets0_2_6::udp::ErrorCode> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -834,9 +879,7 @@ impl exports::wasi::sockets0_2_6::udp::GuestUdpSocket for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn receive_buffer_size(
-        &self,
-    ) -> Result<u64, exports::wasi::sockets0_2_6::udp::ErrorCode> {
+    fn receive_buffer_size(&self) -> Result<u64, exports::wasi::sockets0_2_6::udp::ErrorCode> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -849,9 +892,7 @@ impl exports::wasi::sockets0_2_6::udp::GuestUdpSocket for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn send_buffer_size(
-        &self,
-    ) -> Result<u64, exports::wasi::sockets0_2_6::udp::ErrorCode> {
+    fn send_buffer_size(&self) -> Result<u64, exports::wasi::sockets0_2_6::udp::ErrorCode> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -1024,9 +1065,7 @@ impl exports::wasi::sockets0_2_6::tcp::GuestTcpSocket for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn keep_alive_enabled(
-        &self,
-    ) -> Result<bool, exports::wasi::sockets0_2_6::tcp::ErrorCode> {
+    fn keep_alive_enabled(&self) -> Result<bool, exports::wasi::sockets0_2_6::tcp::ErrorCode> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -1075,9 +1114,7 @@ impl exports::wasi::sockets0_2_6::tcp::GuestTcpSocket for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn keep_alive_count(
-        &self,
-    ) -> Result<u32, exports::wasi::sockets0_2_6::tcp::ErrorCode> {
+    fn keep_alive_count(&self) -> Result<u32, exports::wasi::sockets0_2_6::tcp::ErrorCode> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -1095,17 +1132,12 @@ impl exports::wasi::sockets0_2_6::tcp::GuestTcpSocket for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn set_hop_limit(
-        &self,
-        value: u8,
-    ) -> Result<(), exports::wasi::sockets0_2_6::tcp::ErrorCode> {
+    fn set_hop_limit(&self, value: u8) -> Result<(), exports::wasi::sockets0_2_6::tcp::ErrorCode> {
         unreachable!()
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn receive_buffer_size(
-        &self,
-    ) -> Result<u64, exports::wasi::sockets0_2_6::tcp::ErrorCode> {
+    fn receive_buffer_size(&self) -> Result<u64, exports::wasi::sockets0_2_6::tcp::ErrorCode> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -1118,9 +1150,7 @@ impl exports::wasi::sockets0_2_6::tcp::GuestTcpSocket for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn send_buffer_size(
-        &self,
-    ) -> Result<u64, exports::wasi::sockets0_2_6::tcp::ErrorCode> {
+    fn send_buffer_size(&self) -> Result<u64, exports::wasi::sockets0_2_6::tcp::ErrorCode> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -1211,9 +1241,10 @@ impl exports::wasi::cli0_3_0_rc_2026_03_15::environment::Guest for Adapter {
 impl exports::wasi::filesystem0_3_0_rc_2026_03_15::preopens::Guest for Adapter {
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn get_directories() -> _rt::Vec<
-        (exports::wasi::filesystem0_3_0_rc_2026_03_15::preopens::Descriptor, _rt::String),
-    > {
+    fn get_directories() -> _rt::Vec<(
+        exports::wasi::filesystem0_3_0_rc_2026_03_15::preopens::Descriptor,
+        _rt::String,
+    )> {
         Vec::new()
     }
 }
@@ -1263,7 +1294,9 @@ impl exports::fermyon::spin2_0_0::redis::GuestConnection for Adapter {
         exports::fermyon::spin2_0_0::redis::Connection,
         exports::fermyon::spin2_0_0::redis::Error,
     > {
-        Err(exports::fermyon::spin2_0_0::redis::Error::Other(format_deny_error("fermyon:spin/redis")))
+        Err(exports::fermyon::spin2_0_0::redis::Error::Other(
+            format_deny_error("fermyon:spin/redis"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -1296,10 +1329,7 @@ impl exports::fermyon::spin2_0_0::redis::GuestConnection for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn incr(
-        &self,
-        key: _rt::String,
-    ) -> Result<i64, exports::fermyon::spin2_0_0::redis::Error> {
+    fn incr(&self, key: _rt::String) -> Result<i64, exports::fermyon::spin2_0_0::redis::Error> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -1364,7 +1394,9 @@ impl exports::fermyon::spin2_0_0::mqtt::GuestConnection for Adapter {
         exports::fermyon::spin2_0_0::mqtt::Connection,
         exports::fermyon::spin2_0_0::mqtt::Error,
     > {
-        Err(exports::fermyon::spin2_0_0::mqtt::Error::Other(format_deny_error("fermyon:spin/mqtt")))
+        Err(exports::fermyon::spin2_0_0::mqtt::Error::Other(
+            format_deny_error("fermyon:spin/mqtt"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -1389,7 +1421,9 @@ impl exports::fermyon::spin2_0_0::postgres::GuestConnection for Adapter {
         exports::fermyon::spin2_0_0::postgres::Connection,
         exports::fermyon::spin2_0_0::postgres::Error,
     > {
-        Err(exports::fermyon::spin2_0_0::postgres::Error::Other(format_deny_error("fermyon:spin/postgres")))
+        Err(exports::fermyon::spin2_0_0::postgres::Error::Other(
+            format_deny_error("fermyon:spin/postgres"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -1425,7 +1459,9 @@ impl exports::fermyon::spin2_0_0::mysql::GuestConnection for Adapter {
         exports::fermyon::spin2_0_0::mysql::Connection,
         exports::fermyon::spin2_0_0::mysql::Error,
     > {
-        Err(exports::fermyon::spin2_0_0::mysql::Error::Other(format_deny_error("fermyon:spin/mysql")))
+        Err(exports::fermyon::spin2_0_0::mysql::Error::Other(
+            format_deny_error("fermyon:spin/mysql"),
+        ))
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
@@ -1433,10 +1469,8 @@ impl exports::fermyon::spin2_0_0::mysql::GuestConnection for Adapter {
         &self,
         statement: _rt::String,
         params: _rt::Vec<exports::fermyon::spin2_0_0::mysql::ParameterValue>,
-    ) -> Result<
-        exports::fermyon::spin2_0_0::mysql::RowSet,
-        exports::fermyon::spin2_0_0::mysql::Error,
-    > {
+    ) -> Result<exports::fermyon::spin2_0_0::mysql::RowSet, exports::fermyon::spin2_0_0::mysql::Error>
+    {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -1540,7 +1574,9 @@ impl exports::fermyon::spin2_0_0::variables::Guest for Adapter {
     fn get(
         name: _rt::String,
     ) -> Result<_rt::String, exports::fermyon::spin2_0_0::variables::Error> {
-        Err(exports::fermyon::spin2_0_0::variables::Error::Undefined(name))
+        Err(exports::fermyon::spin2_0_0::variables::Error::Undefined(
+            name,
+        ))
     }
 }
 impl exports::wasi::keyvalue::store::GuestBucket for Adapter {
@@ -1563,18 +1599,12 @@ impl exports::wasi::keyvalue::store::GuestBucket for Adapter {
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn delete(
-        &self,
-        key: _rt::String,
-    ) -> Result<(), exports::wasi::keyvalue::store::Error> {
+    fn delete(&self, key: _rt::String) -> Result<(), exports::wasi::keyvalue::store::Error> {
         unreachable!()
     }
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
-    fn exists(
-        &self,
-        key: _rt::String,
-    ) -> Result<bool, exports::wasi::keyvalue::store::Error> {
+    fn exists(&self, key: _rt::String) -> Result<bool, exports::wasi::keyvalue::store::Error> {
         unreachable!()
     }
     #[allow(unused_variables)]
@@ -1582,10 +1612,8 @@ impl exports::wasi::keyvalue::store::GuestBucket for Adapter {
     fn list_keys(
         &self,
         cursor: Option<_rt::String>,
-    ) -> Result<
-        exports::wasi::keyvalue::store::KeyResponse,
-        exports::wasi::keyvalue::store::Error,
-    > {
+    ) -> Result<exports::wasi::keyvalue::store::KeyResponse, exports::wasi::keyvalue::store::Error>
+    {
         unreachable!()
     }
 }
@@ -1595,10 +1623,7 @@ impl exports::wasi::keyvalue::store::Guest for Adapter {
     #[allow(async_fn_in_trait)]
     fn open(
         identifier: _rt::String,
-    ) -> Result<
-        exports::wasi::keyvalue::store::Bucket,
-        exports::wasi::keyvalue::store::Error,
-    > {
+    ) -> Result<exports::wasi::keyvalue::store::Bucket, exports::wasi::keyvalue::store::Error> {
         Err(exports::wasi::keyvalue::store::Error::AccessDenied)
     }
 }
