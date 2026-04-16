@@ -167,7 +167,7 @@ quote = "1"
 rand = "0.9"
 redis = "0.32.5"
 regex = "1"
-reqwest = { version = "0.12", features = ["stream", "blocking"] }
+reqwest = { version = "0.12", features = ["stream", "blocking", "rustls-tls-native-roots"] }
 rusqlite = "0.34"
 # In `rustls` turn off the `aws_lc_rs` default feature and turn on `ring`.
 # If both `aws_lc_rs` and `ring` are enabled, a panic at runtime will occur.

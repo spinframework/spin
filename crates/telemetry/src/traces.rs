@@ -1,5 +1,6 @@
 use anyhow::bail;
 use opentelemetry::{global, trace::TracerProvider};
+use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry_sdk::{
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,
@@ -39,6 +40,7 @@ pub(crate) fn otel_tracing_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
             .build()?,
         OtlpProtocol::HttpProtobuf => opentelemetry_otlp::SpanExporter::builder()
             .with_http()
+            .with_http_client(crate::rustls_reqwest_client()?)
             .build()?,
         OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
     };
