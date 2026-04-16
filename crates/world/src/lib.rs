@@ -5,7 +5,7 @@ pub use async_trait::async_trait;
 
 wasmtime::component::bindgen!({
     inline: r#"
-    package fermyon:runtime;
+    package spin:runtime;
     world host {
         include fermyon:spin/host;
         include fermyon:spin/platform@2.0.0;
