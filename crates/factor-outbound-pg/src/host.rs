@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use anyhow::Result;
 use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
 use spin_world::spin::postgres3_0_0::postgres::{self as v3};
