@@ -28,9 +28,13 @@ const CAPABILITY_SETS: &[(&str, &[&str])] = &[
     ("variables", VARIABLES),
 ];
 
-const AI_MODELS: &[&str] = &["fermyon:spin/llm@2.0.0"];
+const AI_MODELS: &[&str] = &["fermyon:spin/llm", "fermyon:spin/llm@2.0.0"];
 
 const ALLOWED_OUTBOUND_HOSTS: &[&str] = &[
+    "fermyon:spin/http",
+    "fermyon:spin/mysql",
+    "fermyon:spin/postgres",
+    "fermyon:spin/redis",
     "fermyon:spin/mqtt@2.0.0",
     "fermyon:spin/mysql@2.0.0",
     "fermyon:spin/postgres@2.0.0",
@@ -60,14 +64,21 @@ const FILES: &[&str] = &[
 ];
 
 const KEY_VALUE_STORES: &[&str] = &[
+    "fermyon:spin/key-value",
     "fermyon:spin/key-value@2.0.0",
     "spin:key-value/key-value@3.0.0",
     "wasi:keyvalue/store@0.2.0-draft2",
 ];
 
-const SQLITE_DATABASES: &[&str] = &["fermyon:spin/sqlite@2.0.0", "spin:sqlite/sqlite@3.1.0"];
+const SQLITE_DATABASES: &[&str] = &[
+    "fermyon:spin/sqlite",
+    "fermyon:spin/sqlite@2.0.0",
+    "spin:sqlite/sqlite@3.1.0",
+];
 
 const VARIABLES: &[&str] = &[
+    "fermyon:spin/config",
     "fermyon:spin/variables@2.0.0",
     "spin:variables/variables@3.0.0",
+    "wasi:config/store@0.2.0-draft-2024-09-27",
 ];

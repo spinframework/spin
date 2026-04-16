@@ -3,6 +3,545 @@
 #[rustfmt::skip]
 #[allow(dead_code, clippy::all)]
 pub mod fermyon {
+    pub mod spin {
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod http_types {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            pub type HttpStatus = u16;
+            pub type Body = _rt::Vec<u8>;
+            pub type Headers = _rt::Vec<(_rt::String, _rt::String)>;
+            pub type Params = _rt::Vec<(_rt::String, _rt::String)>;
+            pub type Uri = _rt::String;
+            #[repr(u8)]
+            #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+            pub enum Method {
+                Get,
+                Post,
+                Put,
+                Delete,
+                Patch,
+                Head,
+                Options,
+            }
+            impl ::core::fmt::Debug for Method {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        Method::Get => f.debug_tuple("Method::Get").finish(),
+                        Method::Post => f.debug_tuple("Method::Post").finish(),
+                        Method::Put => f.debug_tuple("Method::Put").finish(),
+                        Method::Delete => f.debug_tuple("Method::Delete").finish(),
+                        Method::Patch => f.debug_tuple("Method::Patch").finish(),
+                        Method::Head => f.debug_tuple("Method::Head").finish(),
+                        Method::Options => f.debug_tuple("Method::Options").finish(),
+                    }
+                }
+            }
+            impl Method {
+                #[doc(hidden)]
+                pub unsafe fn _lift(val: u8) -> Method {
+                    if !cfg!(debug_assertions) {
+                        return unsafe { ::core::mem::transmute(val) };
+                    }
+                    match val {
+                        0 => Method::Get,
+                        1 => Method::Post,
+                        2 => Method::Put,
+                        3 => Method::Delete,
+                        4 => Method::Patch,
+                        5 => Method::Head,
+                        6 => Method::Options,
+                        _ => panic!("invalid enum discriminant"),
+                    }
+                }
+            }
+            #[derive(Clone)]
+            pub struct Request {
+                pub method: Method,
+                pub uri: Uri,
+                pub headers: Headers,
+                pub params: Params,
+                pub body: Option<Body>,
+            }
+            impl ::core::fmt::Debug for Request {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("Request")
+                        .field("method", &self.method)
+                        .field("uri", &self.uri)
+                        .field("headers", &self.headers)
+                        .field("params", &self.params)
+                        .field("body", &self.body)
+                        .finish()
+                }
+            }
+            #[derive(Clone)]
+            pub struct Response {
+                pub status: HttpStatus,
+                pub headers: Option<Headers>,
+                pub body: Option<Body>,
+            }
+            impl ::core::fmt::Debug for Response {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("Response")
+                        .field("status", &self.status)
+                        .field("headers", &self.headers)
+                        .field("body", &self.body)
+                        .finish()
+                }
+            }
+            #[repr(u8)]
+            #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+            pub enum HttpError {
+                Success,
+                DestinationNotAllowed,
+                InvalidUrl,
+                RequestError,
+                RuntimeError,
+                TooManyRequests,
+            }
+            impl HttpError {
+                pub fn name(&self) -> &'static str {
+                    match self {
+                        HttpError::Success => "success",
+                        HttpError::DestinationNotAllowed => "destination-not-allowed",
+                        HttpError::InvalidUrl => "invalid-url",
+                        HttpError::RequestError => "request-error",
+                        HttpError::RuntimeError => "runtime-error",
+                        HttpError::TooManyRequests => "too-many-requests",
+                    }
+                }
+                pub fn message(&self) -> &'static str {
+                    match self {
+                        HttpError::Success => "",
+                        HttpError::DestinationNotAllowed => "",
+                        HttpError::InvalidUrl => "",
+                        HttpError::RequestError => "",
+                        HttpError::RuntimeError => "",
+                        HttpError::TooManyRequests => "",
+                    }
+                }
+            }
+            impl ::core::fmt::Debug for HttpError {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("HttpError")
+                        .field("code", &(*self as i32))
+                        .field("name", &self.name())
+                        .field("message", &self.message())
+                        .finish()
+                }
+            }
+            impl ::core::fmt::Display for HttpError {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    write!(f, "{} (error {})", self.name(), * self as i32)
+                }
+            }
+            impl ::core::error::Error for HttpError {}
+            impl HttpError {
+                #[doc(hidden)]
+                pub unsafe fn _lift(val: u8) -> HttpError {
+                    if !cfg!(debug_assertions) {
+                        return unsafe { ::core::mem::transmute(val) };
+                    }
+                    match val {
+                        0 => HttpError::Success,
+                        1 => HttpError::DestinationNotAllowed,
+                        2 => HttpError::InvalidUrl,
+                        3 => HttpError::RequestError,
+                        4 => HttpError::RuntimeError,
+                        5 => HttpError::TooManyRequests,
+                        _ => panic!("invalid enum discriminant"),
+                    }
+                }
+            }
+        }
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod rdbms_types {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            #[repr(u8)]
+            #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+            pub enum DbDataType {
+                Boolean,
+                Int8,
+                Int16,
+                Int32,
+                Int64,
+                Uint8,
+                Uint16,
+                Uint32,
+                Uint64,
+                Floating32,
+                Floating64,
+                Str,
+                Binary,
+                Other,
+            }
+            impl ::core::fmt::Debug for DbDataType {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        DbDataType::Boolean => {
+                            f.debug_tuple("DbDataType::Boolean").finish()
+                        }
+                        DbDataType::Int8 => f.debug_tuple("DbDataType::Int8").finish(),
+                        DbDataType::Int16 => f.debug_tuple("DbDataType::Int16").finish(),
+                        DbDataType::Int32 => f.debug_tuple("DbDataType::Int32").finish(),
+                        DbDataType::Int64 => f.debug_tuple("DbDataType::Int64").finish(),
+                        DbDataType::Uint8 => f.debug_tuple("DbDataType::Uint8").finish(),
+                        DbDataType::Uint16 => {
+                            f.debug_tuple("DbDataType::Uint16").finish()
+                        }
+                        DbDataType::Uint32 => {
+                            f.debug_tuple("DbDataType::Uint32").finish()
+                        }
+                        DbDataType::Uint64 => {
+                            f.debug_tuple("DbDataType::Uint64").finish()
+                        }
+                        DbDataType::Floating32 => {
+                            f.debug_tuple("DbDataType::Floating32").finish()
+                        }
+                        DbDataType::Floating64 => {
+                            f.debug_tuple("DbDataType::Floating64").finish()
+                        }
+                        DbDataType::Str => f.debug_tuple("DbDataType::Str").finish(),
+                        DbDataType::Binary => {
+                            f.debug_tuple("DbDataType::Binary").finish()
+                        }
+                        DbDataType::Other => f.debug_tuple("DbDataType::Other").finish(),
+                    }
+                }
+            }
+            impl DbDataType {
+                #[doc(hidden)]
+                pub unsafe fn _lift(val: u8) -> DbDataType {
+                    if !cfg!(debug_assertions) {
+                        return unsafe { ::core::mem::transmute(val) };
+                    }
+                    match val {
+                        0 => DbDataType::Boolean,
+                        1 => DbDataType::Int8,
+                        2 => DbDataType::Int16,
+                        3 => DbDataType::Int32,
+                        4 => DbDataType::Int64,
+                        5 => DbDataType::Uint8,
+                        6 => DbDataType::Uint16,
+                        7 => DbDataType::Uint32,
+                        8 => DbDataType::Uint64,
+                        9 => DbDataType::Floating32,
+                        10 => DbDataType::Floating64,
+                        11 => DbDataType::Str,
+                        12 => DbDataType::Binary,
+                        13 => DbDataType::Other,
+                        _ => panic!("invalid enum discriminant"),
+                    }
+                }
+            }
+            #[derive(Clone)]
+            pub enum DbValue {
+                Boolean(bool),
+                Int8(i8),
+                Int16(i16),
+                Int32(i32),
+                Int64(i64),
+                Uint8(u8),
+                Uint16(u16),
+                Uint32(u32),
+                Uint64(u64),
+                Floating32(f32),
+                Floating64(f64),
+                Str(_rt::String),
+                Binary(_rt::Vec<u8>),
+                DbNull,
+                Unsupported,
+            }
+            impl ::core::fmt::Debug for DbValue {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        DbValue::Boolean(e) => {
+                            f.debug_tuple("DbValue::Boolean").field(e).finish()
+                        }
+                        DbValue::Int8(e) => {
+                            f.debug_tuple("DbValue::Int8").field(e).finish()
+                        }
+                        DbValue::Int16(e) => {
+                            f.debug_tuple("DbValue::Int16").field(e).finish()
+                        }
+                        DbValue::Int32(e) => {
+                            f.debug_tuple("DbValue::Int32").field(e).finish()
+                        }
+                        DbValue::Int64(e) => {
+                            f.debug_tuple("DbValue::Int64").field(e).finish()
+                        }
+                        DbValue::Uint8(e) => {
+                            f.debug_tuple("DbValue::Uint8").field(e).finish()
+                        }
+                        DbValue::Uint16(e) => {
+                            f.debug_tuple("DbValue::Uint16").field(e).finish()
+                        }
+                        DbValue::Uint32(e) => {
+                            f.debug_tuple("DbValue::Uint32").field(e).finish()
+                        }
+                        DbValue::Uint64(e) => {
+                            f.debug_tuple("DbValue::Uint64").field(e).finish()
+                        }
+                        DbValue::Floating32(e) => {
+                            f.debug_tuple("DbValue::Floating32").field(e).finish()
+                        }
+                        DbValue::Floating64(e) => {
+                            f.debug_tuple("DbValue::Floating64").field(e).finish()
+                        }
+                        DbValue::Str(e) => {
+                            f.debug_tuple("DbValue::Str").field(e).finish()
+                        }
+                        DbValue::Binary(e) => {
+                            f.debug_tuple("DbValue::Binary").field(e).finish()
+                        }
+                        DbValue::DbNull => f.debug_tuple("DbValue::DbNull").finish(),
+                        DbValue::Unsupported => {
+                            f.debug_tuple("DbValue::Unsupported").finish()
+                        }
+                    }
+                }
+            }
+            #[derive(Clone)]
+            pub enum ParameterValue {
+                Boolean(bool),
+                Int8(i8),
+                Int16(i16),
+                Int32(i32),
+                Int64(i64),
+                Uint8(u8),
+                Uint16(u16),
+                Uint32(u32),
+                Uint64(u64),
+                Floating32(f32),
+                Floating64(f64),
+                Str(_rt::String),
+                Binary(_rt::Vec<u8>),
+                DbNull,
+            }
+            impl ::core::fmt::Debug for ParameterValue {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        ParameterValue::Boolean(e) => {
+                            f.debug_tuple("ParameterValue::Boolean").field(e).finish()
+                        }
+                        ParameterValue::Int8(e) => {
+                            f.debug_tuple("ParameterValue::Int8").field(e).finish()
+                        }
+                        ParameterValue::Int16(e) => {
+                            f.debug_tuple("ParameterValue::Int16").field(e).finish()
+                        }
+                        ParameterValue::Int32(e) => {
+                            f.debug_tuple("ParameterValue::Int32").field(e).finish()
+                        }
+                        ParameterValue::Int64(e) => {
+                            f.debug_tuple("ParameterValue::Int64").field(e).finish()
+                        }
+                        ParameterValue::Uint8(e) => {
+                            f.debug_tuple("ParameterValue::Uint8").field(e).finish()
+                        }
+                        ParameterValue::Uint16(e) => {
+                            f.debug_tuple("ParameterValue::Uint16").field(e).finish()
+                        }
+                        ParameterValue::Uint32(e) => {
+                            f.debug_tuple("ParameterValue::Uint32").field(e).finish()
+                        }
+                        ParameterValue::Uint64(e) => {
+                            f.debug_tuple("ParameterValue::Uint64").field(e).finish()
+                        }
+                        ParameterValue::Floating32(e) => {
+                            f.debug_tuple("ParameterValue::Floating32").field(e).finish()
+                        }
+                        ParameterValue::Floating64(e) => {
+                            f.debug_tuple("ParameterValue::Floating64").field(e).finish()
+                        }
+                        ParameterValue::Str(e) => {
+                            f.debug_tuple("ParameterValue::Str").field(e).finish()
+                        }
+                        ParameterValue::Binary(e) => {
+                            f.debug_tuple("ParameterValue::Binary").field(e).finish()
+                        }
+                        ParameterValue::DbNull => {
+                            f.debug_tuple("ParameterValue::DbNull").finish()
+                        }
+                    }
+                }
+            }
+            #[derive(Clone)]
+            pub struct Column {
+                pub name: _rt::String,
+                pub data_type: DbDataType,
+            }
+            impl ::core::fmt::Debug for Column {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("Column")
+                        .field("name", &self.name)
+                        .field("data-type", &self.data_type)
+                        .finish()
+                }
+            }
+            pub type Row = _rt::Vec<DbValue>;
+            #[derive(Clone)]
+            pub struct RowSet {
+                pub columns: _rt::Vec<Column>,
+                pub rows: _rt::Vec<Row>,
+            }
+            impl ::core::fmt::Debug for RowSet {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("RowSet")
+                        .field("columns", &self.columns)
+                        .field("rows", &self.rows)
+                        .finish()
+                }
+            }
+        }
+        #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+        pub mod redis_types {
+            #[used]
+            #[doc(hidden)]
+            static __FORCE_SECTION_REF: fn() = super::super::super::__link_custom_section_describing_imports;
+            use super::super::super::_rt;
+            /// General purpose error.
+            #[repr(u8)]
+            #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+            pub enum Error {
+                Success,
+                Error,
+            }
+            impl Error {
+                pub fn name(&self) -> &'static str {
+                    match self {
+                        Error::Success => "success",
+                        Error::Error => "error",
+                    }
+                }
+                pub fn message(&self) -> &'static str {
+                    match self {
+                        Error::Success => "",
+                        Error::Error => "",
+                    }
+                }
+            }
+            impl ::core::fmt::Debug for Error {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    f.debug_struct("Error")
+                        .field("code", &(*self as i32))
+                        .field("name", &self.name())
+                        .field("message", &self.message())
+                        .finish()
+                }
+            }
+            impl ::core::fmt::Display for Error {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    write!(f, "{} (error {})", self.name(), * self as i32)
+                }
+            }
+            impl ::core::error::Error for Error {}
+            impl Error {
+                #[doc(hidden)]
+                pub unsafe fn _lift(val: u8) -> Error {
+                    if !cfg!(debug_assertions) {
+                        return unsafe { ::core::mem::transmute(val) };
+                    }
+                    match val {
+                        0 => Error::Success,
+                        1 => Error::Error,
+                        _ => panic!("invalid enum discriminant"),
+                    }
+                }
+            }
+            /// The message payload.
+            pub type Payload = _rt::Vec<u8>;
+            /// A parameter type for the general-purpose `execute` function.
+            #[derive(Clone)]
+            pub enum RedisParameter {
+                Int64(i64),
+                Binary(Payload),
+            }
+            impl ::core::fmt::Debug for RedisParameter {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        RedisParameter::Int64(e) => {
+                            f.debug_tuple("RedisParameter::Int64").field(e).finish()
+                        }
+                        RedisParameter::Binary(e) => {
+                            f.debug_tuple("RedisParameter::Binary").field(e).finish()
+                        }
+                    }
+                }
+            }
+            /// A return type for the general-purpose `execute` function.
+            #[derive(Clone)]
+            pub enum RedisResult {
+                Nil,
+                Status(_rt::String),
+                Int64(i64),
+                Binary(Payload),
+            }
+            impl ::core::fmt::Debug for RedisResult {
+                fn fmt(
+                    &self,
+                    f: &mut ::core::fmt::Formatter<'_>,
+                ) -> ::core::fmt::Result {
+                    match self {
+                        RedisResult::Nil => f.debug_tuple("RedisResult::Nil").finish(),
+                        RedisResult::Status(e) => {
+                            f.debug_tuple("RedisResult::Status").field(e).finish()
+                        }
+                        RedisResult::Int64(e) => {
+                            f.debug_tuple("RedisResult::Int64").field(e).finish()
+                        }
+                        RedisResult::Binary(e) => {
+                            f.debug_tuple("RedisResult::Binary").field(e).finish()
+                        }
+                    }
+                }
+            }
+        }
+    }
     pub mod spin2_0_0 {
         #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
         pub mod rdbms_types {
@@ -29039,6 +29578,5571 @@ pub mod wasi {
 #[allow(dead_code, clippy::all)]
 pub mod exports {
     pub mod fermyon {
+        pub mod spin {
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod config {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                #[derive(Clone)]
+                pub enum Error {
+                    Provider(_rt::String),
+                    InvalidKey(_rt::String),
+                    InvalidSchema(_rt::String),
+                    Other(_rt::String),
+                }
+                impl ::core::fmt::Debug for Error {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        match self {
+                            Error::Provider(e) => {
+                                f.debug_tuple("Error::Provider").field(e).finish()
+                            }
+                            Error::InvalidKey(e) => {
+                                f.debug_tuple("Error::InvalidKey").field(e).finish()
+                            }
+                            Error::InvalidSchema(e) => {
+                                f.debug_tuple("Error::InvalidSchema").field(e).finish()
+                            }
+                            Error::Other(e) => {
+                                f.debug_tuple("Error::Other").field(e).finish()
+                            }
+                        }
+                    }
+                }
+                impl ::core::fmt::Display for Error {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        write!(f, "{:?}", self)
+                    }
+                }
+                impl ::core::error::Error for Error {}
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_get_config_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result1 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            T_::get_config(_rt::string_lift(bytes0))
+                        };
+                        let ptr2 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result1 {
+                            Ok(e) => {
+                                *ptr2.add(0).cast::<u8>() = (0i32) as u8;
+                                let vec3 = (e.into_bytes()).into_boxed_slice();
+                                let ptr3 = vec3.as_ptr().cast::<u8>();
+                                let len3 = vec3.len();
+                                ::core::mem::forget(vec3);
+                                *ptr2
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len3;
+                                *ptr2
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = ptr3.cast_mut();
+                            }
+                            Err(e) => {
+                                *ptr2.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::Provider(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                        let vec4 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr4 = vec4.as_ptr().cast::<u8>();
+                                        let len4 = vec4.len();
+                                        ::core::mem::forget(vec4);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len4;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr4.cast_mut();
+                                    }
+                                    Error::InvalidKey(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                        let vec5 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr5 = vec5.as_ptr().cast::<u8>();
+                                        let len5 = vec5.len();
+                                        ::core::mem::forget(vec5);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len5;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr5.cast_mut();
+                                    }
+                                    Error::InvalidSchema(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                        let vec6 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr6 = vec6.as_ptr().cast::<u8>();
+                                        let len6 = vec6.len();
+                                        ::core::mem::forget(vec6);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len6;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr6.cast_mut();
+                                    }
+                                    Error::Other(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                        let vec7 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr7 = vec7.as_ptr().cast::<u8>();
+                                        let len7 = vec7.len();
+                                        ::core::mem::forget(vec7);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len7;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr7.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr2
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_get_config<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                _rt::cabi_dealloc(l1, l2, 1);
+                            }
+                            _ => {
+                                let l3 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l3 {
+                                    0 => {
+                                        let l4 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l5 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l4, l5, 1);
+                                    }
+                                    1 => {
+                                        let l6 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l7 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l6, l7, 1);
+                                    }
+                                    2 => {
+                                        let l8 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l9 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l8, l9, 1);
+                                    }
+                                    _ => {
+                                        let l10 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l11 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l10, l11, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                pub trait Guest {
+                    /// Get a configuration value for the current component.
+                    /// The config key must match one defined in in the component manifest.
+                    #[allow(async_fn_in_trait)]
+                    fn get_config(key: _rt::String) -> Result<_rt::String, Error>;
+                }
+                #[doc(hidden)]
+                macro_rules! __export_fermyon_spin_config_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "fermyon:spin/config#get-config")] unsafe extern "C" fn
+                        export_get_config(arg0 : * mut u8, arg1 : usize,) -> * mut u8 {
+                        unsafe { $($path_to_types)*:: _export_get_config_cabi::<$ty >
+                        (arg0, arg1) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/config#get-config")] unsafe extern "C" fn
+                        _post_return_get_config(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_get_config::<$ty > (arg0) } }
+                        };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_fermyon_spin_config_cabi;
+                #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 4 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 4
+                        * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod http {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                pub type Request = super::super::super::super::fermyon::spin::http_types::Request;
+                pub type Response = super::super::super::super::fermyon::spin::http_types::Response;
+                pub type HttpError = super::super::super::super::fermyon::spin::http_types::HttpError;
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_send_request_cabi<T_: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                    arg3: *mut u8,
+                    arg4: usize,
+                    arg5: *mut u8,
+                    arg6: usize,
+                    arg7: i32,
+                    arg8: *mut u8,
+                    arg9: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result16 = {
+                            let len0 = arg2;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg1.cast(),
+                                len0,
+                                len0,
+                            );
+                            let base7 = arg3;
+                            let len7 = arg4;
+                            let mut result7 = _rt::Vec::with_capacity(len7);
+                            for i in 0..len7 {
+                                let base = base7
+                                    .add(i * (4 * ::core::mem::size_of::<*const u8>()));
+                                let e7 = {
+                                    let l1 = *base.add(0).cast::<*mut u8>();
+                                    let l2 = *base
+                                        .add(::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len3 = l2;
+                                    let bytes3 = _rt::Vec::from_raw_parts(
+                                        l1.cast(),
+                                        len3,
+                                        len3,
+                                    );
+                                    let l4 = *base
+                                        .add(2 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<*mut u8>();
+                                    let l5 = *base
+                                        .add(3 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len6 = l5;
+                                    let bytes6 = _rt::Vec::from_raw_parts(
+                                        l4.cast(),
+                                        len6,
+                                        len6,
+                                    );
+                                    (_rt::string_lift(bytes3), _rt::string_lift(bytes6))
+                                };
+                                result7.push(e7);
+                            }
+                            _rt::cabi_dealloc(
+                                base7,
+                                len7 * (4 * ::core::mem::size_of::<*const u8>()),
+                                ::core::mem::size_of::<*const u8>(),
+                            );
+                            let base14 = arg5;
+                            let len14 = arg6;
+                            let mut result14 = _rt::Vec::with_capacity(len14);
+                            for i in 0..len14 {
+                                let base = base14
+                                    .add(i * (4 * ::core::mem::size_of::<*const u8>()));
+                                let e14 = {
+                                    let l8 = *base.add(0).cast::<*mut u8>();
+                                    let l9 = *base
+                                        .add(::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len10 = l9;
+                                    let bytes10 = _rt::Vec::from_raw_parts(
+                                        l8.cast(),
+                                        len10,
+                                        len10,
+                                    );
+                                    let l11 = *base
+                                        .add(2 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<*mut u8>();
+                                    let l12 = *base
+                                        .add(3 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len13 = l12;
+                                    let bytes13 = _rt::Vec::from_raw_parts(
+                                        l11.cast(),
+                                        len13,
+                                        len13,
+                                    );
+                                    (_rt::string_lift(bytes10), _rt::string_lift(bytes13))
+                                };
+                                result14.push(e14);
+                            }
+                            _rt::cabi_dealloc(
+                                base14,
+                                len14 * (4 * ::core::mem::size_of::<*const u8>()),
+                                ::core::mem::size_of::<*const u8>(),
+                            );
+                            T_::send_request(super::super::super::super::fermyon::spin::http_types::Request {
+                                method: super::super::super::super::fermyon::spin::http_types::Method::_lift(
+                                    arg0 as u8,
+                                ),
+                                uri: _rt::string_lift(bytes0),
+                                headers: result7,
+                                params: result14,
+                                body: match arg7 {
+                                    0 => None,
+                                    1 => {
+                                        let e = {
+                                            let len15 = arg9;
+                                            <_ as From<
+                                                _rt::Vec<_>,
+                                            >>::from(
+                                                _rt::Vec::from_raw_parts(arg8.cast(), len15, len15),
+                                            )
+                                        };
+                                        Some(e)
+                                    }
+                                    _ => _rt::invalid_enum_discriminant(),
+                                },
+                            })
+                        };
+                        let ptr17 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result16 {
+                            Ok(e) => {
+                                *ptr17.add(0).cast::<u8>() = (0i32) as u8;
+                                let super::super::super::super::fermyon::spin::http_types::Response {
+                                    status: status18,
+                                    headers: headers18,
+                                    body: body18,
+                                } = e;
+                                *ptr17
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<u16>() = (_rt::as_i32(status18)) as u16;
+                                match headers18 {
+                                    Some(e) => {
+                                        *ptr17
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                        let vec22 = e;
+                                        let len22 = vec22.len();
+                                        let layout22 = _rt::alloc::Layout::from_size_align(
+                                                vec22.len() * (4 * ::core::mem::size_of::<*const u8>()),
+                                                ::core::mem::size_of::<*const u8>(),
+                                            )
+                                            .unwrap();
+                                        let (result22, _cleanup22) = wit_bindgen::rt::Cleanup::new(
+                                            layout22,
+                                        );
+                                        if let Some(cleanup) = _cleanup22 {
+                                            cleanup.forget();
+                                        }
+                                        for (i, e) in vec22.into_iter().enumerate() {
+                                            let base = result22
+                                                .add(i * (4 * ::core::mem::size_of::<*const u8>()));
+                                            {
+                                                let (t19_0, t19_1) = e;
+                                                let vec20 = (t19_0.into_bytes()).into_boxed_slice();
+                                                let ptr20 = vec20.as_ptr().cast::<u8>();
+                                                let len20 = vec20.len();
+                                                ::core::mem::forget(vec20);
+                                                *base
+                                                    .add(::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>() = len20;
+                                                *base.add(0).cast::<*mut u8>() = ptr20.cast_mut();
+                                                let vec21 = (t19_1.into_bytes()).into_boxed_slice();
+                                                let ptr21 = vec21.as_ptr().cast::<u8>();
+                                                let len21 = vec21.len();
+                                                ::core::mem::forget(vec21);
+                                                *base
+                                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>() = len21;
+                                                *base
+                                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<*mut u8>() = ptr21.cast_mut();
+                                            }
+                                        }
+                                        *ptr17
+                                            .add(4 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len22;
+                                        *ptr17
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = result22;
+                                    }
+                                    None => {
+                                        *ptr17
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                };
+                                match body18 {
+                                    Some(e) => {
+                                        *ptr17
+                                            .add(5 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                        let vec23 = <_ as Into<_rt::Vec<_>>>::into(e)
+                                            .into_boxed_slice();
+                                        let ptr23 = vec23.as_ptr().cast::<u8>();
+                                        let len23 = vec23.len();
+                                        ::core::mem::forget(vec23);
+                                        *ptr17
+                                            .add(7 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len23;
+                                        *ptr17
+                                            .add(6 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr23.cast_mut();
+                                    }
+                                    None => {
+                                        *ptr17
+                                            .add(5 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                };
+                            }
+                            Err(e) => {
+                                *ptr17.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr17
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr17
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_send_request<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = i32::from(
+                                    *arg0
+                                        .add(2 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<u8>(),
+                                );
+                                match l1 {
+                                    0 => {}
+                                    _ => {
+                                        let l2 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l3 = *arg0
+                                            .add(4 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        let base8 = l2;
+                                        let len8 = l3;
+                                        for i in 0..len8 {
+                                            let base = base8
+                                                .add(i * (4 * ::core::mem::size_of::<*const u8>()));
+                                            {
+                                                let l4 = *base.add(0).cast::<*mut u8>();
+                                                let l5 = *base
+                                                    .add(::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                _rt::cabi_dealloc(l4, l5, 1);
+                                                let l6 = *base
+                                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<*mut u8>();
+                                                let l7 = *base
+                                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                _rt::cabi_dealloc(l6, l7, 1);
+                                            }
+                                        }
+                                        _rt::cabi_dealloc(
+                                            base8,
+                                            len8 * (4 * ::core::mem::size_of::<*const u8>()),
+                                            ::core::mem::size_of::<*const u8>(),
+                                        );
+                                    }
+                                }
+                                let l9 = i32::from(
+                                    *arg0
+                                        .add(5 * ::core::mem::size_of::<*const u8>())
+                                        .cast::<u8>(),
+                                );
+                                match l9 {
+                                    0 => {}
+                                    _ => {
+                                        let l10 = *arg0
+                                            .add(6 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l11 = *arg0
+                                            .add(7 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        let base12 = l10;
+                                        let len12 = l11;
+                                        _rt::cabi_dealloc(base12, len12 * 1, 1);
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                pub trait Guest {
+                    #[allow(async_fn_in_trait)]
+                    fn send_request(req: Request) -> Result<Response, HttpError>;
+                }
+                #[doc(hidden)]
+                macro_rules! __export_fermyon_spin_http_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "fermyon:spin/http#send-request")] unsafe extern "C" fn
+                        export_send_request(arg0 : i32, arg1 : * mut u8, arg2 : usize,
+                        arg3 : * mut u8, arg4 : usize, arg5 : * mut u8, arg6 : usize,
+                        arg7 : i32, arg8 : * mut u8, arg9 : usize,) -> * mut u8 { unsafe
+                        { $($path_to_types)*:: _export_send_request_cabi::<$ty > (arg0,
+                        arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) } }
+                        #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/http#send-request")] unsafe extern "C" fn
+                        _post_return_send_request(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_send_request::<$ty > (arg0) }
+                        } };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_fermyon_spin_http_cabi;
+                #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 8 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 8
+                        * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod key_value {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                /// A handle to an open key-value store
+                pub type Store = u32;
+                /// The set of errors which may be raised by functions in this interface
+                #[derive(Clone)]
+                pub enum Error {
+                    /// Too many stores have been opened simultaneously. Closing one or more
+                    /// stores prior to retrying may address this.
+                    StoreTableFull,
+                    /// The host does not recognize the store name requested.  Defining and
+                    /// configuring a store with that name in a runtime configuration file
+                    /// may address this.
+                    NoSuchStore,
+                    /// The requesting component does not have access to the specified store
+                    /// (which may or may not exist).
+                    AccessDenied,
+                    /// The store handle provided is not recognized, i.e. it was either never
+                    /// opened or has been closed.
+                    InvalidStore,
+                    /// No key-value tuple exists for the specified key in the specified
+                    /// store.
+                    NoSuchKey,
+                    /// Some implementation-specific error has occurred (e.g. I/O)
+                    Io(_rt::String),
+                }
+                impl ::core::fmt::Debug for Error {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        match self {
+                            Error::StoreTableFull => {
+                                f.debug_tuple("Error::StoreTableFull").finish()
+                            }
+                            Error::NoSuchStore => {
+                                f.debug_tuple("Error::NoSuchStore").finish()
+                            }
+                            Error::AccessDenied => {
+                                f.debug_tuple("Error::AccessDenied").finish()
+                            }
+                            Error::InvalidStore => {
+                                f.debug_tuple("Error::InvalidStore").finish()
+                            }
+                            Error::NoSuchKey => {
+                                f.debug_tuple("Error::NoSuchKey").finish()
+                            }
+                            Error::Io(e) => f.debug_tuple("Error::Io").field(e).finish(),
+                        }
+                    }
+                }
+                impl ::core::fmt::Display for Error {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        write!(f, "{:?}", self)
+                    }
+                }
+                impl ::core::error::Error for Error {}
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_open_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result1 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            T_::open(_rt::string_lift(bytes0))
+                        };
+                        let ptr2 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result1 {
+                            Ok(e) => {
+                                *ptr2.add(0).cast::<u8>() = (0i32) as u8;
+                                *ptr2
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<i32>() = _rt::as_i32(e);
+                            }
+                            Err(e) => {
+                                *ptr2.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::StoreTableFull => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::NoSuchStore => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                    }
+                                    Error::AccessDenied => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                    }
+                                    Error::InvalidStore => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                    }
+                                    Error::NoSuchKey => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                    }
+                                    Error::Io(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec3 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr3 = vec3.as_ptr().cast::<u8>();
+                                        let len3 = vec3.len();
+                                        ::core::mem::forget(vec3);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len3;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr3.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr2
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_open<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {}
+                            _ => {
+                                let l1 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l1 {
+                                    0 => {}
+                                    1 => {}
+                                    2 => {}
+                                    3 => {}
+                                    4 => {}
+                                    _ => {
+                                        let l2 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l3 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l2, l3, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_get_cabi<T_: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result1 = {
+                            let len0 = arg2;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg1.cast(),
+                                len0,
+                                len0,
+                            );
+                            T_::get(arg0 as u32, _rt::string_lift(bytes0))
+                        };
+                        let ptr2 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result1 {
+                            Ok(e) => {
+                                *ptr2.add(0).cast::<u8>() = (0i32) as u8;
+                                let vec3 = <_ as Into<_rt::Vec<_>>>::into(e)
+                                    .into_boxed_slice();
+                                let ptr3 = vec3.as_ptr().cast::<u8>();
+                                let len3 = vec3.len();
+                                ::core::mem::forget(vec3);
+                                *ptr2
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len3;
+                                *ptr2
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = ptr3.cast_mut();
+                            }
+                            Err(e) => {
+                                *ptr2.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::StoreTableFull => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::NoSuchStore => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                    }
+                                    Error::AccessDenied => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                    }
+                                    Error::InvalidStore => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                    }
+                                    Error::NoSuchKey => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                    }
+                                    Error::Io(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec4 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr4 = vec4.as_ptr().cast::<u8>();
+                                        let len4 = vec4.len();
+                                        ::core::mem::forget(vec4);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len4;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr4.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr2
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_get<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base3 = l1;
+                                let len3 = l2;
+                                _rt::cabi_dealloc(base3, len3 * 1, 1);
+                            }
+                            _ => {
+                                let l4 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l4 {
+                                    0 => {}
+                                    1 => {}
+                                    2 => {}
+                                    3 => {}
+                                    4 => {}
+                                    _ => {
+                                        let l5 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l6 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l5, l6, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_set_cabi<T_: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                    arg3: *mut u8,
+                    arg4: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result2 = {
+                            let len0 = arg2;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg1.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg4;
+                            T_::set(
+                                arg0 as u32,
+                                _rt::string_lift(bytes0),
+                                <_ as From<
+                                    _rt::Vec<_>,
+                                >>::from(_rt::Vec::from_raw_parts(arg3.cast(), len1, len1)),
+                            )
+                        };
+                        let ptr3 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result2 {
+                            Ok(_) => {
+                                *ptr3.add(0).cast::<u8>() = (0i32) as u8;
+                            }
+                            Err(e) => {
+                                *ptr3.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::StoreTableFull => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::NoSuchStore => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                    }
+                                    Error::AccessDenied => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                    }
+                                    Error::InvalidStore => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                    }
+                                    Error::NoSuchKey => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                    }
+                                    Error::Io(e) => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec4 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr4 = vec4.as_ptr().cast::<u8>();
+                                        let len4 = vec4.len();
+                                        ::core::mem::forget(vec4);
+                                        *ptr3
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len4;
+                                        *ptr3
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr4.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr3
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_set<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {}
+                            _ => {
+                                let l1 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l1 {
+                                    0 => {}
+                                    1 => {}
+                                    2 => {}
+                                    3 => {}
+                                    4 => {}
+                                    _ => {
+                                        let l2 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l3 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l2, l3, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_delete_cabi<T_: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result1 = {
+                            let len0 = arg2;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg1.cast(),
+                                len0,
+                                len0,
+                            );
+                            T_::delete(arg0 as u32, _rt::string_lift(bytes0))
+                        };
+                        let ptr2 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result1 {
+                            Ok(_) => {
+                                *ptr2.add(0).cast::<u8>() = (0i32) as u8;
+                            }
+                            Err(e) => {
+                                *ptr2.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::StoreTableFull => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::NoSuchStore => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                    }
+                                    Error::AccessDenied => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                    }
+                                    Error::InvalidStore => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                    }
+                                    Error::NoSuchKey => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                    }
+                                    Error::Io(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec3 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr3 = vec3.as_ptr().cast::<u8>();
+                                        let len3 = vec3.len();
+                                        ::core::mem::forget(vec3);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len3;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr3.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr2
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_delete<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {}
+                            _ => {
+                                let l1 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l1 {
+                                    0 => {}
+                                    1 => {}
+                                    2 => {}
+                                    3 => {}
+                                    4 => {}
+                                    _ => {
+                                        let l2 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l3 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l2, l3, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_exists_cabi<T_: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result1 = {
+                            let len0 = arg2;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg1.cast(),
+                                len0,
+                                len0,
+                            );
+                            T_::exists(arg0 as u32, _rt::string_lift(bytes0))
+                        };
+                        let ptr2 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result1 {
+                            Ok(e) => {
+                                *ptr2.add(0).cast::<u8>() = (0i32) as u8;
+                                *ptr2
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<u8>() = (match e {
+                                    true => 1,
+                                    false => 0,
+                                }) as u8;
+                            }
+                            Err(e) => {
+                                *ptr2.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::StoreTableFull => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::NoSuchStore => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                    }
+                                    Error::AccessDenied => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                    }
+                                    Error::InvalidStore => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                    }
+                                    Error::NoSuchKey => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                    }
+                                    Error::Io(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec3 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr3 = vec3.as_ptr().cast::<u8>();
+                                        let len3 = vec3.len();
+                                        ::core::mem::forget(vec3);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len3;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr3.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr2
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_exists<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {}
+                            _ => {
+                                let l1 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l1 {
+                                    0 => {}
+                                    1 => {}
+                                    2 => {}
+                                    3 => {}
+                                    4 => {}
+                                    _ => {
+                                        let l2 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l3 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l2, l3, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_get_keys_cabi<T_: Guest>(arg0: i32) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result0 = { T_::get_keys(arg0 as u32) };
+                        let ptr1 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result0 {
+                            Ok(e) => {
+                                *ptr1.add(0).cast::<u8>() = (0i32) as u8;
+                                let vec3 = e;
+                                let len3 = vec3.len();
+                                let layout3 = _rt::alloc::Layout::from_size_align(
+                                        vec3.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result3, _cleanup3) = wit_bindgen::rt::Cleanup::new(
+                                    layout3,
+                                );
+                                if let Some(cleanup) = _cleanup3 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec3.into_iter().enumerate() {
+                                    let base = result3
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let vec2 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr2 = vec2.as_ptr().cast::<u8>();
+                                        let len2 = vec2.len();
+                                        ::core::mem::forget(vec2);
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len2;
+                                        *base.add(0).cast::<*mut u8>() = ptr2.cast_mut();
+                                    }
+                                }
+                                *ptr1
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len3;
+                                *ptr1
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result3;
+                            }
+                            Err(e) => {
+                                *ptr1.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::StoreTableFull => {
+                                        *ptr1
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::NoSuchStore => {
+                                        *ptr1
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                    }
+                                    Error::AccessDenied => {
+                                        *ptr1
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                    }
+                                    Error::InvalidStore => {
+                                        *ptr1
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                    }
+                                    Error::NoSuchKey => {
+                                        *ptr1
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                    }
+                                    Error::Io(e) => {
+                                        *ptr1
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec4 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr4 = vec4.as_ptr().cast::<u8>();
+                                        let len4 = vec4.len();
+                                        ::core::mem::forget(vec4);
+                                        *ptr1
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len4;
+                                        *ptr1
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr4.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr1
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_get_keys<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base5 = l1;
+                                let len5 = l2;
+                                for i in 0..len5 {
+                                    let base = base5
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l3 = *base.add(0).cast::<*mut u8>();
+                                        let l4 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l3, l4, 1);
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base5,
+                                    len5 * (2 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                            }
+                            _ => {
+                                let l6 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l6 {
+                                    0 => {}
+                                    1 => {}
+                                    2 => {}
+                                    3 => {}
+                                    4 => {}
+                                    _ => {
+                                        let l7 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l8 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l7, l8, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_close_cabi<T_: Guest>(arg0: i32) {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        { T_::close(arg0 as u32) };
+                    }
+                }
+                pub trait Guest {
+                    /// Open the store with the specified name.
+                    ///
+                    /// If `name` is "default", the default store is opened.  Otherwise,
+                    /// `name` must refer to a store defined and configured in a runtime
+                    /// configuration file supplied with the application.
+                    ///
+                    /// `error::no-such-store` will be raised if the `name` is not recognized.
+                    #[allow(async_fn_in_trait)]
+                    fn open(name: _rt::String) -> Result<Store, Error>;
+                    /// Get the value associated with the specified `key` from the specified
+                    /// `store`.
+                    ///
+                    /// `error::invalid-store` will be raised if `store` is not a valid handle
+                    /// to an open store, and `error::no-such-key` will be raised if there is no
+                    /// tuple for `key` in `store`.
+                    #[allow(async_fn_in_trait)]
+                    fn get(
+                        store: Store,
+                        key: _rt::String,
+                    ) -> Result<_rt::Vec<u8>, Error>;
+                    /// Set the `value` associated with the specified `key` in the specified
+                    /// `store`, overwriting any existing value.
+                    ///
+                    /// `error::invalid-store` will be raised if `store` is not a valid handle
+                    /// to an open store.
+                    #[allow(async_fn_in_trait)]
+                    fn set(
+                        store: Store,
+                        key: _rt::String,
+                        value: _rt::Vec<u8>,
+                    ) -> Result<(), Error>;
+                    /// Delete the tuple with the specified `key` from the specified `store`.
+                    ///
+                    /// `error::invalid-store` will be raised if `store` is not a valid handle
+                    /// to an open store.  No error is raised if a tuple did not previously
+                    /// exist for `key`.
+                    #[allow(async_fn_in_trait)]
+                    fn delete(store: Store, key: _rt::String) -> Result<(), Error>;
+                    /// Return whether a tuple exists for the specified `key` in the specified
+                    /// `store`.
+                    ///
+                    /// `error::invalid-store` will be raised if `store` is not a valid handle
+                    /// to an open store.
+                    #[allow(async_fn_in_trait)]
+                    fn exists(store: Store, key: _rt::String) -> Result<bool, Error>;
+                    /// Return a list of all the keys in the specified `store`.
+                    ///
+                    /// `error::invalid-store` will be raised if `store` is not a valid handle
+                    /// to an open store.
+                    #[allow(async_fn_in_trait)]
+                    fn get_keys(store: Store) -> Result<_rt::Vec<_rt::String>, Error>;
+                    /// Close the specified `store`.
+                    ///
+                    /// This has no effect if `store` is not a valid handle to an open store.
+                    #[allow(async_fn_in_trait)]
+                    fn close(store: Store) -> ();
+                }
+                #[doc(hidden)]
+                macro_rules! __export_fermyon_spin_key_value_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "fermyon:spin/key-value#open")] unsafe extern "C" fn
+                        export_open(arg0 : * mut u8, arg1 : usize,) -> * mut u8 { unsafe
+                        { $($path_to_types)*:: _export_open_cabi::<$ty > (arg0, arg1) } }
+                        #[unsafe (export_name = "cabi_post_fermyon:spin/key-value#open")]
+                        unsafe extern "C" fn _post_return_open(arg0 : * mut u8,) { unsafe
+                        { $($path_to_types)*:: __post_return_open::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/key-value#get")] unsafe
+                        extern "C" fn export_get(arg0 : i32, arg1 : * mut u8, arg2 :
+                        usize,) -> * mut u8 { unsafe { $($path_to_types)*::
+                        _export_get_cabi::<$ty > (arg0, arg1, arg2) } } #[unsafe
+                        (export_name = "cabi_post_fermyon:spin/key-value#get")] unsafe
+                        extern "C" fn _post_return_get(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_get::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/key-value#set")] unsafe
+                        extern "C" fn export_set(arg0 : i32, arg1 : * mut u8, arg2 :
+                        usize, arg3 : * mut u8, arg4 : usize,) -> * mut u8 { unsafe {
+                        $($path_to_types)*:: _export_set_cabi::<$ty > (arg0, arg1, arg2,
+                        arg3, arg4) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/key-value#set")] unsafe extern "C" fn
+                        _post_return_set(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_set::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/key-value#delete")] unsafe
+                        extern "C" fn export_delete(arg0 : i32, arg1 : * mut u8, arg2 :
+                        usize,) -> * mut u8 { unsafe { $($path_to_types)*::
+                        _export_delete_cabi::<$ty > (arg0, arg1, arg2) } } #[unsafe
+                        (export_name = "cabi_post_fermyon:spin/key-value#delete")] unsafe
+                        extern "C" fn _post_return_delete(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_delete::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/key-value#exists")] unsafe
+                        extern "C" fn export_exists(arg0 : i32, arg1 : * mut u8, arg2 :
+                        usize,) -> * mut u8 { unsafe { $($path_to_types)*::
+                        _export_exists_cabi::<$ty > (arg0, arg1, arg2) } } #[unsafe
+                        (export_name = "cabi_post_fermyon:spin/key-value#exists")] unsafe
+                        extern "C" fn _post_return_exists(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_exists::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/key-value#get-keys")]
+                        unsafe extern "C" fn export_get_keys(arg0 : i32,) -> * mut u8 {
+                        unsafe { $($path_to_types)*:: _export_get_keys_cabi::<$ty >
+                        (arg0) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/key-value#get-keys")] unsafe extern "C"
+                        fn _post_return_get_keys(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_get_keys::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/key-value#close")] unsafe
+                        extern "C" fn export_close(arg0 : i32,) { unsafe {
+                        $($path_to_types)*:: _export_close_cabi::<$ty > (arg0) } } };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_fermyon_spin_key_value_cabi;
+                #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 4 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 4
+                        * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+            /// A WASI interface dedicated to performing inferencing for Large Language Models.
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod llm {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                /// A Large Language Model.
+                pub type InferencingModel = _rt::String;
+                /// Inference request parameters
+                #[repr(C)]
+                #[derive(Clone, Copy)]
+                pub struct InferencingParams {
+                    /// The maximum tokens that should be inferred.
+                    ///
+                    /// Note: the backing implementation may return less tokens.
+                    pub max_tokens: u32,
+                    /// The amount the model should avoid repeating tokens.
+                    pub repeat_penalty: f32,
+                    /// The number of tokens the model should apply the repeat penalty to.
+                    pub repeat_penalty_last_n_token_count: u32,
+                    /// The randomness with which the next token is selected.
+                    pub temperature: f32,
+                    /// The number of possible next tokens the model will choose from.
+                    pub top_k: u32,
+                    /// The probability total of next tokens the model will choose from.
+                    pub top_p: f32,
+                }
+                impl ::core::fmt::Debug for InferencingParams {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("InferencingParams")
+                            .field("max-tokens", &self.max_tokens)
+                            .field("repeat-penalty", &self.repeat_penalty)
+                            .field(
+                                "repeat-penalty-last-n-token-count",
+                                &self.repeat_penalty_last_n_token_count,
+                            )
+                            .field("temperature", &self.temperature)
+                            .field("top-k", &self.top_k)
+                            .field("top-p", &self.top_p)
+                            .finish()
+                    }
+                }
+                /// The set of errors which may be raised by functions in this interface
+                #[derive(Clone)]
+                pub enum Error {
+                    ModelNotSupported,
+                    RuntimeError(_rt::String),
+                    InvalidInput(_rt::String),
+                }
+                impl ::core::fmt::Debug for Error {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        match self {
+                            Error::ModelNotSupported => {
+                                f.debug_tuple("Error::ModelNotSupported").finish()
+                            }
+                            Error::RuntimeError(e) => {
+                                f.debug_tuple("Error::RuntimeError").field(e).finish()
+                            }
+                            Error::InvalidInput(e) => {
+                                f.debug_tuple("Error::InvalidInput").field(e).finish()
+                            }
+                        }
+                    }
+                }
+                impl ::core::fmt::Display for Error {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        write!(f, "{:?}", self)
+                    }
+                }
+                impl ::core::error::Error for Error {}
+                /// Usage information related to the inferencing result
+                #[repr(C)]
+                #[derive(Clone, Copy)]
+                pub struct InferencingUsage {
+                    /// Number of tokens in the prompt
+                    pub prompt_token_count: u32,
+                    /// Number of tokens generated by the inferencing operation
+                    pub generated_token_count: u32,
+                }
+                impl ::core::fmt::Debug for InferencingUsage {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("InferencingUsage")
+                            .field("prompt-token-count", &self.prompt_token_count)
+                            .field("generated-token-count", &self.generated_token_count)
+                            .finish()
+                    }
+                }
+                /// An inferencing result
+                #[derive(Clone)]
+                pub struct InferencingResult {
+                    /// The text generated by the model
+                    /// TODO: this should be a stream
+                    pub text: _rt::String,
+                    /// Usage information about the inferencing request
+                    pub usage: InferencingUsage,
+                }
+                impl ::core::fmt::Debug for InferencingResult {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("InferencingResult")
+                            .field("text", &self.text)
+                            .field("usage", &self.usage)
+                            .finish()
+                    }
+                }
+                /// The model used for generating embeddings
+                pub type EmbeddingModel = _rt::String;
+                /// Usage related to an embeddings generation request
+                #[repr(C)]
+                #[derive(Clone, Copy)]
+                pub struct EmbeddingsUsage {
+                    /// Number of tokens in the prompt
+                    pub prompt_token_count: u32,
+                }
+                impl ::core::fmt::Debug for EmbeddingsUsage {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("EmbeddingsUsage")
+                            .field("prompt-token-count", &self.prompt_token_count)
+                            .finish()
+                    }
+                }
+                /// Result of generating embeddings
+                #[derive(Clone)]
+                pub struct EmbeddingsResult {
+                    /// The embeddings generated by the request
+                    pub embeddings: _rt::Vec<_rt::Vec<f32>>,
+                    /// Usage related to the embeddings generation request
+                    pub usage: EmbeddingsUsage,
+                }
+                impl ::core::fmt::Debug for EmbeddingsResult {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("EmbeddingsResult")
+                            .field("embeddings", &self.embeddings)
+                            .field("usage", &self.usage)
+                            .finish()
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_infer_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: i32,
+                    arg5: i32,
+                    arg6: f32,
+                    arg7: i32,
+                    arg8: f32,
+                    arg9: i32,
+                    arg10: f32,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result2 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            T_::infer(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                match arg4 {
+                                    0 => None,
+                                    1 => {
+                                        let e = InferencingParams {
+                                            max_tokens: arg5 as u32,
+                                            repeat_penalty: arg6,
+                                            repeat_penalty_last_n_token_count: arg7 as u32,
+                                            temperature: arg8,
+                                            top_k: arg9 as u32,
+                                            top_p: arg10,
+                                        };
+                                        Some(e)
+                                    }
+                                    _ => _rt::invalid_enum_discriminant(),
+                                },
+                            )
+                        };
+                        let ptr3 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result2 {
+                            Ok(e) => {
+                                *ptr3.add(0).cast::<u8>() = (0i32) as u8;
+                                let InferencingResult { text: text4, usage: usage4 } = e;
+                                let vec5 = (text4.into_bytes()).into_boxed_slice();
+                                let ptr5 = vec5.as_ptr().cast::<u8>();
+                                let len5 = vec5.len();
+                                ::core::mem::forget(vec5);
+                                *ptr3
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len5;
+                                *ptr3
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = ptr5.cast_mut();
+                                let InferencingUsage {
+                                    prompt_token_count: prompt_token_count6,
+                                    generated_token_count: generated_token_count6,
+                                } = usage4;
+                                *ptr3
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<i32>() = _rt::as_i32(prompt_token_count6);
+                                *ptr3
+                                    .add(4 + 3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<i32>() = _rt::as_i32(generated_token_count6);
+                            }
+                            Err(e) => {
+                                *ptr3.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::ModelNotSupported => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::RuntimeError(e) => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                        let vec7 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr7 = vec7.as_ptr().cast::<u8>();
+                                        let len7 = vec7.len();
+                                        ::core::mem::forget(vec7);
+                                        *ptr3
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len7;
+                                        *ptr3
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr7.cast_mut();
+                                    }
+                                    Error::InvalidInput(e) => {
+                                        *ptr3
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                        let vec8 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr8 = vec8.as_ptr().cast::<u8>();
+                                        let len8 = vec8.len();
+                                        ::core::mem::forget(vec8);
+                                        *ptr3
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len8;
+                                        *ptr3
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr8.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr3
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_infer<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                _rt::cabi_dealloc(l1, l2, 1);
+                            }
+                            _ => {
+                                let l3 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l3 {
+                                    0 => {}
+                                    1 => {
+                                        let l4 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l5 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l4, l5, 1);
+                                    }
+                                    _ => {
+                                        let l6 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l7 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l6, l7, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_generate_embeddings_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result5 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let base4 = arg2;
+                            let len4 = arg3;
+                            let mut result4 = _rt::Vec::with_capacity(len4);
+                            for i in 0..len4 {
+                                let base = base4
+                                    .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                let e4 = {
+                                    let l1 = *base.add(0).cast::<*mut u8>();
+                                    let l2 = *base
+                                        .add(::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len3 = l2;
+                                    let bytes3 = _rt::Vec::from_raw_parts(
+                                        l1.cast(),
+                                        len3,
+                                        len3,
+                                    );
+                                    _rt::string_lift(bytes3)
+                                };
+                                result4.push(e4);
+                            }
+                            _rt::cabi_dealloc(
+                                base4,
+                                len4 * (2 * ::core::mem::size_of::<*const u8>()),
+                                ::core::mem::size_of::<*const u8>(),
+                            );
+                            T_::generate_embeddings(_rt::string_lift(bytes0), result4)
+                        };
+                        let ptr6 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result5 {
+                            Ok(e) => {
+                                *ptr6.add(0).cast::<u8>() = (0i32) as u8;
+                                let EmbeddingsResult {
+                                    embeddings: embeddings7,
+                                    usage: usage7,
+                                } = e;
+                                let vec9 = embeddings7;
+                                let len9 = vec9.len();
+                                let layout9 = _rt::alloc::Layout::from_size_align(
+                                        vec9.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result9, _cleanup9) = wit_bindgen::rt::Cleanup::new(
+                                    layout9,
+                                );
+                                if let Some(cleanup) = _cleanup9 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec9.into_iter().enumerate() {
+                                    let base = result9
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let vec8 = <_ as Into<_rt::Vec<_>>>::into(e)
+                                            .into_boxed_slice();
+                                        let ptr8 = vec8.as_ptr().cast::<u8>();
+                                        let len8 = vec8.len();
+                                        ::core::mem::forget(vec8);
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len8;
+                                        *base.add(0).cast::<*mut u8>() = ptr8.cast_mut();
+                                    }
+                                }
+                                *ptr6
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len9;
+                                *ptr6
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result9;
+                                let EmbeddingsUsage {
+                                    prompt_token_count: prompt_token_count10,
+                                } = usage7;
+                                *ptr6
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<i32>() = _rt::as_i32(prompt_token_count10);
+                            }
+                            Err(e) => {
+                                *ptr6.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::ModelNotSupported => {
+                                        *ptr6
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::RuntimeError(e) => {
+                                        *ptr6
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                        let vec11 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr11 = vec11.as_ptr().cast::<u8>();
+                                        let len11 = vec11.len();
+                                        ::core::mem::forget(vec11);
+                                        *ptr6
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len11;
+                                        *ptr6
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr11.cast_mut();
+                                    }
+                                    Error::InvalidInput(e) => {
+                                        *ptr6
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                        let vec12 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr12 = vec12.as_ptr().cast::<u8>();
+                                        let len12 = vec12.len();
+                                        ::core::mem::forget(vec12);
+                                        *ptr6
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len12;
+                                        *ptr6
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr12.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr6
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_generate_embeddings<T_: Guest>(
+                    arg0: *mut u8,
+                ) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base6 = l1;
+                                let len6 = l2;
+                                for i in 0..len6 {
+                                    let base = base6
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l3 = *base.add(0).cast::<*mut u8>();
+                                        let l4 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        let base5 = l3;
+                                        let len5 = l4;
+                                        _rt::cabi_dealloc(base5, len5 * 4, 4);
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base6,
+                                    len6 * (2 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                            }
+                            _ => {
+                                let l7 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l7 {
+                                    0 => {}
+                                    1 => {
+                                        let l8 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l9 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l8, l9, 1);
+                                    }
+                                    _ => {
+                                        let l10 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l11 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l10, l11, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                pub trait Guest {
+                    /// Perform inferencing using the provided model and prompt with the given optional params
+                    #[allow(async_fn_in_trait)]
+                    fn infer(
+                        model: InferencingModel,
+                        prompt: _rt::String,
+                        params: Option<InferencingParams>,
+                    ) -> Result<InferencingResult, Error>;
+                    /// Generate embeddings for the supplied list of text
+                    #[allow(async_fn_in_trait)]
+                    fn generate_embeddings(
+                        model: EmbeddingModel,
+                        text: _rt::Vec<_rt::String>,
+                    ) -> Result<EmbeddingsResult, Error>;
+                }
+                #[doc(hidden)]
+                macro_rules! __export_fermyon_spin_llm_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "fermyon:spin/llm#infer")] unsafe extern "C" fn export_infer(arg0
+                        : * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize, arg4 :
+                        i32, arg5 : i32, arg6 : f32, arg7 : i32, arg8 : f32, arg9 : i32,
+                        arg10 : f32,) -> * mut u8 { unsafe { $($path_to_types)*::
+                        _export_infer_cabi::<$ty > (arg0, arg1, arg2, arg3, arg4, arg5,
+                        arg6, arg7, arg8, arg9, arg10) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/llm#infer")] unsafe extern "C" fn
+                        _post_return_infer(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_infer::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/llm#generate-embeddings")]
+                        unsafe extern "C" fn export_generate_embeddings(arg0 : * mut u8,
+                        arg1 : usize, arg2 : * mut u8, arg3 : usize,) -> * mut u8 {
+                        unsafe { $($path_to_types)*::
+                        _export_generate_embeddings_cabi::<$ty > (arg0, arg1, arg2, arg3)
+                        } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/llm#generate-embeddings")] unsafe extern
+                        "C" fn _post_return_generate_embeddings(arg0 : * mut u8,) {
+                        unsafe { $($path_to_types)*::
+                        __post_return_generate_embeddings::<$ty > (arg0) } } };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_fermyon_spin_llm_cabi;
+                #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 8 + 3 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 8
+                        + 3 * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod mysql {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                pub type ParameterValue = super::super::super::super::fermyon::spin::rdbms_types::ParameterValue;
+                pub type RowSet = super::super::super::super::fermyon::spin::rdbms_types::RowSet;
+                /// General purpose error.
+                #[derive(Clone)]
+                pub enum MysqlError {
+                    Success,
+                    ConnectionFailed(_rt::String),
+                    BadParameter(_rt::String),
+                    QueryFailed(_rt::String),
+                    ValueConversionFailed(_rt::String),
+                    OtherError(_rt::String),
+                }
+                impl ::core::fmt::Debug for MysqlError {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        match self {
+                            MysqlError::Success => {
+                                f.debug_tuple("MysqlError::Success").finish()
+                            }
+                            MysqlError::ConnectionFailed(e) => {
+                                f.debug_tuple("MysqlError::ConnectionFailed")
+                                    .field(e)
+                                    .finish()
+                            }
+                            MysqlError::BadParameter(e) => {
+                                f.debug_tuple("MysqlError::BadParameter").field(e).finish()
+                            }
+                            MysqlError::QueryFailed(e) => {
+                                f.debug_tuple("MysqlError::QueryFailed").field(e).finish()
+                            }
+                            MysqlError::ValueConversionFailed(e) => {
+                                f.debug_tuple("MysqlError::ValueConversionFailed")
+                                    .field(e)
+                                    .finish()
+                            }
+                            MysqlError::OtherError(e) => {
+                                f.debug_tuple("MysqlError::OtherError").field(e).finish()
+                            }
+                        }
+                    }
+                }
+                impl ::core::fmt::Display for MysqlError {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        write!(f, "{:?}", self)
+                    }
+                }
+                impl ::core::error::Error for MysqlError {}
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_query_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result22 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let base21 = arg4;
+                            let len21 = arg5;
+                            let mut result21 = _rt::Vec::with_capacity(len21);
+                            for i in 0..len21 {
+                                let base = base21
+                                    .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                let e21 = {
+                                    let l2 = i32::from(*base.add(0).cast::<u8>());
+                                    use super::super::super::super::fermyon::spin::rdbms_types::ParameterValue as V20;
+                                    let v20 = match l2 {
+                                        0 => {
+                                            let e20 = {
+                                                let l3 = i32::from(*base.add(8).cast::<u8>());
+                                                _rt::bool_lift(l3 as u8)
+                                            };
+                                            V20::Boolean(e20)
+                                        }
+                                        1 => {
+                                            let e20 = {
+                                                let l4 = i32::from(*base.add(8).cast::<i8>());
+                                                l4 as i8
+                                            };
+                                            V20::Int8(e20)
+                                        }
+                                        2 => {
+                                            let e20 = {
+                                                let l5 = i32::from(*base.add(8).cast::<i16>());
+                                                l5 as i16
+                                            };
+                                            V20::Int16(e20)
+                                        }
+                                        3 => {
+                                            let e20 = {
+                                                let l6 = *base.add(8).cast::<i32>();
+                                                l6
+                                            };
+                                            V20::Int32(e20)
+                                        }
+                                        4 => {
+                                            let e20 = {
+                                                let l7 = *base.add(8).cast::<i64>();
+                                                l7
+                                            };
+                                            V20::Int64(e20)
+                                        }
+                                        5 => {
+                                            let e20 = {
+                                                let l8 = i32::from(*base.add(8).cast::<u8>());
+                                                l8 as u8
+                                            };
+                                            V20::Uint8(e20)
+                                        }
+                                        6 => {
+                                            let e20 = {
+                                                let l9 = i32::from(*base.add(8).cast::<u16>());
+                                                l9 as u16
+                                            };
+                                            V20::Uint16(e20)
+                                        }
+                                        7 => {
+                                            let e20 = {
+                                                let l10 = *base.add(8).cast::<i32>();
+                                                l10 as u32
+                                            };
+                                            V20::Uint32(e20)
+                                        }
+                                        8 => {
+                                            let e20 = {
+                                                let l11 = *base.add(8).cast::<i64>();
+                                                l11 as u64
+                                            };
+                                            V20::Uint64(e20)
+                                        }
+                                        9 => {
+                                            let e20 = {
+                                                let l12 = *base.add(8).cast::<f32>();
+                                                l12
+                                            };
+                                            V20::Floating32(e20)
+                                        }
+                                        10 => {
+                                            let e20 = {
+                                                let l13 = *base.add(8).cast::<f64>();
+                                                l13
+                                            };
+                                            V20::Floating64(e20)
+                                        }
+                                        11 => {
+                                            let e20 = {
+                                                let l14 = *base.add(8).cast::<*mut u8>();
+                                                let l15 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len16 = l15;
+                                                let bytes16 = _rt::Vec::from_raw_parts(
+                                                    l14.cast(),
+                                                    len16,
+                                                    len16,
+                                                );
+                                                _rt::string_lift(bytes16)
+                                            };
+                                            V20::Str(e20)
+                                        }
+                                        12 => {
+                                            let e20 = {
+                                                let l17 = *base.add(8).cast::<*mut u8>();
+                                                let l18 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len19 = l18;
+                                                <_ as From<
+                                                    _rt::Vec<_>,
+                                                >>::from(_rt::Vec::from_raw_parts(l17.cast(), len19, len19))
+                                            };
+                                            V20::Binary(e20)
+                                        }
+                                        n => {
+                                            debug_assert_eq!(n, 13, "invalid enum discriminant");
+                                            V20::DbNull
+                                        }
+                                    };
+                                    v20
+                                };
+                                result21.push(e21);
+                            }
+                            _rt::cabi_dealloc(
+                                base21,
+                                len21 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                8,
+                            );
+                            T_::query(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                result21,
+                            )
+                        };
+                        let ptr23 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result22 {
+                            Ok(e) => {
+                                *ptr23.add(0).cast::<u8>() = (0i32) as u8;
+                                let super::super::super::super::fermyon::spin::rdbms_types::RowSet {
+                                    columns: columns24,
+                                    rows: rows24,
+                                } = e;
+                                let vec27 = columns24;
+                                let len27 = vec27.len();
+                                let layout27 = _rt::alloc::Layout::from_size_align(
+                                        vec27.len() * (3 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result27, _cleanup27) = wit_bindgen::rt::Cleanup::new(
+                                    layout27,
+                                );
+                                if let Some(cleanup) = _cleanup27 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec27.into_iter().enumerate() {
+                                    let base = result27
+                                        .add(i * (3 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let super::super::super::super::fermyon::spin::rdbms_types::Column {
+                                            name: name25,
+                                            data_type: data_type25,
+                                        } = e;
+                                        let vec26 = (name25.into_bytes()).into_boxed_slice();
+                                        let ptr26 = vec26.as_ptr().cast::<u8>();
+                                        let len26 = vec26.len();
+                                        ::core::mem::forget(vec26);
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len26;
+                                        *base.add(0).cast::<*mut u8>() = ptr26.cast_mut();
+                                        *base
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (data_type25.clone() as i32) as u8;
+                                    }
+                                }
+                                *ptr23
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len27;
+                                *ptr23
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result27;
+                                let vec32 = rows24;
+                                let len32 = vec32.len();
+                                let layout32 = _rt::alloc::Layout::from_size_align(
+                                        vec32.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result32, _cleanup32) = wit_bindgen::rt::Cleanup::new(
+                                    layout32,
+                                );
+                                if let Some(cleanup) = _cleanup32 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec32.into_iter().enumerate() {
+                                    let base = result32
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let vec31 = e;
+                                        let len31 = vec31.len();
+                                        let layout31 = _rt::alloc::Layout::from_size_align(
+                                                vec31.len() * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                                8,
+                                            )
+                                            .unwrap();
+                                        let (result31, _cleanup31) = wit_bindgen::rt::Cleanup::new(
+                                            layout31,
+                                        );
+                                        if let Some(cleanup) = _cleanup31 {
+                                            cleanup.forget();
+                                        }
+                                        for (i, e) in vec31.into_iter().enumerate() {
+                                            let base = result31
+                                                .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                            {
+                                                use super::super::super::super::fermyon::spin::rdbms_types::DbValue as V30;
+                                                match e {
+                                                    V30::Boolean(e) => {
+                                                        *base.add(0).cast::<u8>() = (0i32) as u8;
+                                                        *base.add(8).cast::<u8>() = (match e {
+                                                            true => 1,
+                                                            false => 0,
+                                                        }) as u8;
+                                                    }
+                                                    V30::Int8(e) => {
+                                                        *base.add(0).cast::<u8>() = (1i32) as u8;
+                                                        *base.add(8).cast::<u8>() = (_rt::as_i32(e)) as u8;
+                                                    }
+                                                    V30::Int16(e) => {
+                                                        *base.add(0).cast::<u8>() = (2i32) as u8;
+                                                        *base.add(8).cast::<u16>() = (_rt::as_i32(e)) as u16;
+                                                    }
+                                                    V30::Int32(e) => {
+                                                        *base.add(0).cast::<u8>() = (3i32) as u8;
+                                                        *base.add(8).cast::<i32>() = _rt::as_i32(e);
+                                                    }
+                                                    V30::Int64(e) => {
+                                                        *base.add(0).cast::<u8>() = (4i32) as u8;
+                                                        *base.add(8).cast::<i64>() = _rt::as_i64(e);
+                                                    }
+                                                    V30::Uint8(e) => {
+                                                        *base.add(0).cast::<u8>() = (5i32) as u8;
+                                                        *base.add(8).cast::<u8>() = (_rt::as_i32(e)) as u8;
+                                                    }
+                                                    V30::Uint16(e) => {
+                                                        *base.add(0).cast::<u8>() = (6i32) as u8;
+                                                        *base.add(8).cast::<u16>() = (_rt::as_i32(e)) as u16;
+                                                    }
+                                                    V30::Uint32(e) => {
+                                                        *base.add(0).cast::<u8>() = (7i32) as u8;
+                                                        *base.add(8).cast::<i32>() = _rt::as_i32(e);
+                                                    }
+                                                    V30::Uint64(e) => {
+                                                        *base.add(0).cast::<u8>() = (8i32) as u8;
+                                                        *base.add(8).cast::<i64>() = _rt::as_i64(e);
+                                                    }
+                                                    V30::Floating32(e) => {
+                                                        *base.add(0).cast::<u8>() = (9i32) as u8;
+                                                        *base.add(8).cast::<f32>() = _rt::as_f32(e);
+                                                    }
+                                                    V30::Floating64(e) => {
+                                                        *base.add(0).cast::<u8>() = (10i32) as u8;
+                                                        *base.add(8).cast::<f64>() = _rt::as_f64(e);
+                                                    }
+                                                    V30::Str(e) => {
+                                                        *base.add(0).cast::<u8>() = (11i32) as u8;
+                                                        let vec28 = (e.into_bytes()).into_boxed_slice();
+                                                        let ptr28 = vec28.as_ptr().cast::<u8>();
+                                                        let len28 = vec28.len();
+                                                        ::core::mem::forget(vec28);
+                                                        *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>() = len28;
+                                                        *base.add(8).cast::<*mut u8>() = ptr28.cast_mut();
+                                                    }
+                                                    V30::Binary(e) => {
+                                                        *base.add(0).cast::<u8>() = (12i32) as u8;
+                                                        let vec29 = <_ as Into<_rt::Vec<_>>>::into(e)
+                                                            .into_boxed_slice();
+                                                        let ptr29 = vec29.as_ptr().cast::<u8>();
+                                                        let len29 = vec29.len();
+                                                        ::core::mem::forget(vec29);
+                                                        *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>() = len29;
+                                                        *base.add(8).cast::<*mut u8>() = ptr29.cast_mut();
+                                                    }
+                                                    V30::DbNull => {
+                                                        *base.add(0).cast::<u8>() = (13i32) as u8;
+                                                    }
+                                                    V30::Unsupported => {
+                                                        *base.add(0).cast::<u8>() = (14i32) as u8;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len31;
+                                        *base.add(0).cast::<*mut u8>() = result31;
+                                    }
+                                }
+                                *ptr23
+                                    .add(4 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len32;
+                                *ptr23
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result32;
+                            }
+                            Err(e) => {
+                                *ptr23.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    MysqlError::Success => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    MysqlError::ConnectionFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                        let vec33 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr33 = vec33.as_ptr().cast::<u8>();
+                                        let len33 = vec33.len();
+                                        ::core::mem::forget(vec33);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len33;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr33.cast_mut();
+                                    }
+                                    MysqlError::BadParameter(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                        let vec34 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr34 = vec34.as_ptr().cast::<u8>();
+                                        let len34 = vec34.len();
+                                        ::core::mem::forget(vec34);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len34;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr34.cast_mut();
+                                    }
+                                    MysqlError::QueryFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                        let vec35 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr35 = vec35.as_ptr().cast::<u8>();
+                                        let len35 = vec35.len();
+                                        ::core::mem::forget(vec35);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len35;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr35.cast_mut();
+                                    }
+                                    MysqlError::ValueConversionFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                        let vec36 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr36 = vec36.as_ptr().cast::<u8>();
+                                        let len36 = vec36.len();
+                                        ::core::mem::forget(vec36);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len36;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr36.cast_mut();
+                                    }
+                                    MysqlError::OtherError(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec37 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr37 = vec37.as_ptr().cast::<u8>();
+                                        let len37 = vec37.len();
+                                        ::core::mem::forget(vec37);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len37;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr37.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr23
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_query<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base5 = l1;
+                                let len5 = l2;
+                                for i in 0..len5 {
+                                    let base = base5
+                                        .add(i * (3 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l3 = *base.add(0).cast::<*mut u8>();
+                                        let l4 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l3, l4, 1);
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base5,
+                                    len5 * (3 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                                let l6 = *arg0
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l7 = *arg0
+                                    .add(4 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base17 = l6;
+                                let len17 = l7;
+                                for i in 0..len17 {
+                                    let base = base17
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l8 = *base.add(0).cast::<*mut u8>();
+                                        let l9 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        let base16 = l8;
+                                        let len16 = l9;
+                                        for i in 0..len16 {
+                                            let base = base16
+                                                .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                            {
+                                                let l10 = i32::from(*base.add(0).cast::<u8>());
+                                                match l10 {
+                                                    0 => {}
+                                                    1 => {}
+                                                    2 => {}
+                                                    3 => {}
+                                                    4 => {}
+                                                    5 => {}
+                                                    6 => {}
+                                                    7 => {}
+                                                    8 => {}
+                                                    9 => {}
+                                                    10 => {}
+                                                    11 => {
+                                                        let l11 = *base.add(8).cast::<*mut u8>();
+                                                        let l12 = *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>();
+                                                        _rt::cabi_dealloc(l11, l12, 1);
+                                                    }
+                                                    12 => {
+                                                        let l13 = *base.add(8).cast::<*mut u8>();
+                                                        let l14 = *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>();
+                                                        let base15 = l13;
+                                                        let len15 = l14;
+                                                        _rt::cabi_dealloc(base15, len15 * 1, 1);
+                                                    }
+                                                    13 => {}
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+                                        _rt::cabi_dealloc(
+                                            base16,
+                                            len16 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                            8,
+                                        );
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base17,
+                                    len17 * (2 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                            }
+                            _ => {
+                                let l18 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l18 {
+                                    0 => {}
+                                    1 => {
+                                        let l19 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l20 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l19, l20, 1);
+                                    }
+                                    2 => {
+                                        let l21 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l22 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l21, l22, 1);
+                                    }
+                                    3 => {
+                                        let l23 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l24 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l23, l24, 1);
+                                    }
+                                    4 => {
+                                        let l25 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l26 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l25, l26, 1);
+                                    }
+                                    _ => {
+                                        let l27 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l28 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l27, l28, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_execute_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result22 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let base21 = arg4;
+                            let len21 = arg5;
+                            let mut result21 = _rt::Vec::with_capacity(len21);
+                            for i in 0..len21 {
+                                let base = base21
+                                    .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                let e21 = {
+                                    let l2 = i32::from(*base.add(0).cast::<u8>());
+                                    use super::super::super::super::fermyon::spin::rdbms_types::ParameterValue as V20;
+                                    let v20 = match l2 {
+                                        0 => {
+                                            let e20 = {
+                                                let l3 = i32::from(*base.add(8).cast::<u8>());
+                                                _rt::bool_lift(l3 as u8)
+                                            };
+                                            V20::Boolean(e20)
+                                        }
+                                        1 => {
+                                            let e20 = {
+                                                let l4 = i32::from(*base.add(8).cast::<i8>());
+                                                l4 as i8
+                                            };
+                                            V20::Int8(e20)
+                                        }
+                                        2 => {
+                                            let e20 = {
+                                                let l5 = i32::from(*base.add(8).cast::<i16>());
+                                                l5 as i16
+                                            };
+                                            V20::Int16(e20)
+                                        }
+                                        3 => {
+                                            let e20 = {
+                                                let l6 = *base.add(8).cast::<i32>();
+                                                l6
+                                            };
+                                            V20::Int32(e20)
+                                        }
+                                        4 => {
+                                            let e20 = {
+                                                let l7 = *base.add(8).cast::<i64>();
+                                                l7
+                                            };
+                                            V20::Int64(e20)
+                                        }
+                                        5 => {
+                                            let e20 = {
+                                                let l8 = i32::from(*base.add(8).cast::<u8>());
+                                                l8 as u8
+                                            };
+                                            V20::Uint8(e20)
+                                        }
+                                        6 => {
+                                            let e20 = {
+                                                let l9 = i32::from(*base.add(8).cast::<u16>());
+                                                l9 as u16
+                                            };
+                                            V20::Uint16(e20)
+                                        }
+                                        7 => {
+                                            let e20 = {
+                                                let l10 = *base.add(8).cast::<i32>();
+                                                l10 as u32
+                                            };
+                                            V20::Uint32(e20)
+                                        }
+                                        8 => {
+                                            let e20 = {
+                                                let l11 = *base.add(8).cast::<i64>();
+                                                l11 as u64
+                                            };
+                                            V20::Uint64(e20)
+                                        }
+                                        9 => {
+                                            let e20 = {
+                                                let l12 = *base.add(8).cast::<f32>();
+                                                l12
+                                            };
+                                            V20::Floating32(e20)
+                                        }
+                                        10 => {
+                                            let e20 = {
+                                                let l13 = *base.add(8).cast::<f64>();
+                                                l13
+                                            };
+                                            V20::Floating64(e20)
+                                        }
+                                        11 => {
+                                            let e20 = {
+                                                let l14 = *base.add(8).cast::<*mut u8>();
+                                                let l15 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len16 = l15;
+                                                let bytes16 = _rt::Vec::from_raw_parts(
+                                                    l14.cast(),
+                                                    len16,
+                                                    len16,
+                                                );
+                                                _rt::string_lift(bytes16)
+                                            };
+                                            V20::Str(e20)
+                                        }
+                                        12 => {
+                                            let e20 = {
+                                                let l17 = *base.add(8).cast::<*mut u8>();
+                                                let l18 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len19 = l18;
+                                                <_ as From<
+                                                    _rt::Vec<_>,
+                                                >>::from(_rt::Vec::from_raw_parts(l17.cast(), len19, len19))
+                                            };
+                                            V20::Binary(e20)
+                                        }
+                                        n => {
+                                            debug_assert_eq!(n, 13, "invalid enum discriminant");
+                                            V20::DbNull
+                                        }
+                                    };
+                                    v20
+                                };
+                                result21.push(e21);
+                            }
+                            _rt::cabi_dealloc(
+                                base21,
+                                len21 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                8,
+                            );
+                            T_::execute(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                result21,
+                            )
+                        };
+                        let ptr23 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result22 {
+                            Ok(_) => {
+                                *ptr23.add(0).cast::<u8>() = (0i32) as u8;
+                            }
+                            Err(e) => {
+                                *ptr23.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    MysqlError::Success => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    MysqlError::ConnectionFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                        let vec24 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr24 = vec24.as_ptr().cast::<u8>();
+                                        let len24 = vec24.len();
+                                        ::core::mem::forget(vec24);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len24;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr24.cast_mut();
+                                    }
+                                    MysqlError::BadParameter(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                        let vec25 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr25 = vec25.as_ptr().cast::<u8>();
+                                        let len25 = vec25.len();
+                                        ::core::mem::forget(vec25);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len25;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr25.cast_mut();
+                                    }
+                                    MysqlError::QueryFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                        let vec26 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr26 = vec26.as_ptr().cast::<u8>();
+                                        let len26 = vec26.len();
+                                        ::core::mem::forget(vec26);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len26;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr26.cast_mut();
+                                    }
+                                    MysqlError::ValueConversionFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                        let vec27 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr27 = vec27.as_ptr().cast::<u8>();
+                                        let len27 = vec27.len();
+                                        ::core::mem::forget(vec27);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len27;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr27.cast_mut();
+                                    }
+                                    MysqlError::OtherError(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec28 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr28 = vec28.as_ptr().cast::<u8>();
+                                        let len28 = vec28.len();
+                                        ::core::mem::forget(vec28);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len28;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr28.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr23
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_execute<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {}
+                            _ => {
+                                let l1 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l1 {
+                                    0 => {}
+                                    1 => {
+                                        let l2 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l3 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l2, l3, 1);
+                                    }
+                                    2 => {
+                                        let l4 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l5 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l4, l5, 1);
+                                    }
+                                    3 => {
+                                        let l6 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l7 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l6, l7, 1);
+                                    }
+                                    4 => {
+                                        let l8 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l9 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l8, l9, 1);
+                                    }
+                                    _ => {
+                                        let l10 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l11 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l10, l11, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                pub trait Guest {
+                    /// query the database: select
+                    #[allow(async_fn_in_trait)]
+                    fn query(
+                        address: _rt::String,
+                        statement: _rt::String,
+                        params: _rt::Vec<ParameterValue>,
+                    ) -> Result<RowSet, MysqlError>;
+                    /// execute command to the database: insert, update, delete
+                    #[allow(async_fn_in_trait)]
+                    fn execute(
+                        address: _rt::String,
+                        statement: _rt::String,
+                        params: _rt::Vec<ParameterValue>,
+                    ) -> Result<(), MysqlError>;
+                }
+                #[doc(hidden)]
+                macro_rules! __export_fermyon_spin_mysql_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "fermyon:spin/mysql#query")] unsafe extern "C" fn
+                        export_query(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8, arg3
+                        : usize, arg4 : * mut u8, arg5 : usize,) -> * mut u8 { unsafe {
+                        $($path_to_types)*:: _export_query_cabi::<$ty > (arg0, arg1,
+                        arg2, arg3, arg4, arg5) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/mysql#query")] unsafe extern "C" fn
+                        _post_return_query(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_query::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/mysql#execute")] unsafe
+                        extern "C" fn export_execute(arg0 : * mut u8, arg1 : usize, arg2
+                        : * mut u8, arg3 : usize, arg4 : * mut u8, arg5 : usize,) -> *
+                        mut u8 { unsafe { $($path_to_types)*:: _export_execute_cabi::<$ty
+                        > (arg0, arg1, arg2, arg3, arg4, arg5) } } #[unsafe (export_name
+                        = "cabi_post_fermyon:spin/mysql#execute")] unsafe extern "C" fn
+                        _post_return_execute(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_execute::<$ty > (arg0) } } };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_fermyon_spin_mysql_cabi;
+                #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 5 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 5
+                        * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod postgres {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                pub type ParameterValue = super::super::super::super::fermyon::spin::rdbms_types::ParameterValue;
+                pub type RowSet = super::super::super::super::fermyon::spin::rdbms_types::RowSet;
+                /// General purpose error.
+                #[derive(Clone)]
+                pub enum PgError {
+                    Success,
+                    ConnectionFailed(_rt::String),
+                    BadParameter(_rt::String),
+                    QueryFailed(_rt::String),
+                    ValueConversionFailed(_rt::String),
+                    OtherError(_rt::String),
+                }
+                impl ::core::fmt::Debug for PgError {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        match self {
+                            PgError::Success => {
+                                f.debug_tuple("PgError::Success").finish()
+                            }
+                            PgError::ConnectionFailed(e) => {
+                                f.debug_tuple("PgError::ConnectionFailed").field(e).finish()
+                            }
+                            PgError::BadParameter(e) => {
+                                f.debug_tuple("PgError::BadParameter").field(e).finish()
+                            }
+                            PgError::QueryFailed(e) => {
+                                f.debug_tuple("PgError::QueryFailed").field(e).finish()
+                            }
+                            PgError::ValueConversionFailed(e) => {
+                                f.debug_tuple("PgError::ValueConversionFailed")
+                                    .field(e)
+                                    .finish()
+                            }
+                            PgError::OtherError(e) => {
+                                f.debug_tuple("PgError::OtherError").field(e).finish()
+                            }
+                        }
+                    }
+                }
+                impl ::core::fmt::Display for PgError {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        write!(f, "{:?}", self)
+                    }
+                }
+                impl ::core::error::Error for PgError {}
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_query_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result22 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let base21 = arg4;
+                            let len21 = arg5;
+                            let mut result21 = _rt::Vec::with_capacity(len21);
+                            for i in 0..len21 {
+                                let base = base21
+                                    .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                let e21 = {
+                                    let l2 = i32::from(*base.add(0).cast::<u8>());
+                                    use super::super::super::super::fermyon::spin::rdbms_types::ParameterValue as V20;
+                                    let v20 = match l2 {
+                                        0 => {
+                                            let e20 = {
+                                                let l3 = i32::from(*base.add(8).cast::<u8>());
+                                                _rt::bool_lift(l3 as u8)
+                                            };
+                                            V20::Boolean(e20)
+                                        }
+                                        1 => {
+                                            let e20 = {
+                                                let l4 = i32::from(*base.add(8).cast::<i8>());
+                                                l4 as i8
+                                            };
+                                            V20::Int8(e20)
+                                        }
+                                        2 => {
+                                            let e20 = {
+                                                let l5 = i32::from(*base.add(8).cast::<i16>());
+                                                l5 as i16
+                                            };
+                                            V20::Int16(e20)
+                                        }
+                                        3 => {
+                                            let e20 = {
+                                                let l6 = *base.add(8).cast::<i32>();
+                                                l6
+                                            };
+                                            V20::Int32(e20)
+                                        }
+                                        4 => {
+                                            let e20 = {
+                                                let l7 = *base.add(8).cast::<i64>();
+                                                l7
+                                            };
+                                            V20::Int64(e20)
+                                        }
+                                        5 => {
+                                            let e20 = {
+                                                let l8 = i32::from(*base.add(8).cast::<u8>());
+                                                l8 as u8
+                                            };
+                                            V20::Uint8(e20)
+                                        }
+                                        6 => {
+                                            let e20 = {
+                                                let l9 = i32::from(*base.add(8).cast::<u16>());
+                                                l9 as u16
+                                            };
+                                            V20::Uint16(e20)
+                                        }
+                                        7 => {
+                                            let e20 = {
+                                                let l10 = *base.add(8).cast::<i32>();
+                                                l10 as u32
+                                            };
+                                            V20::Uint32(e20)
+                                        }
+                                        8 => {
+                                            let e20 = {
+                                                let l11 = *base.add(8).cast::<i64>();
+                                                l11 as u64
+                                            };
+                                            V20::Uint64(e20)
+                                        }
+                                        9 => {
+                                            let e20 = {
+                                                let l12 = *base.add(8).cast::<f32>();
+                                                l12
+                                            };
+                                            V20::Floating32(e20)
+                                        }
+                                        10 => {
+                                            let e20 = {
+                                                let l13 = *base.add(8).cast::<f64>();
+                                                l13
+                                            };
+                                            V20::Floating64(e20)
+                                        }
+                                        11 => {
+                                            let e20 = {
+                                                let l14 = *base.add(8).cast::<*mut u8>();
+                                                let l15 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len16 = l15;
+                                                let bytes16 = _rt::Vec::from_raw_parts(
+                                                    l14.cast(),
+                                                    len16,
+                                                    len16,
+                                                );
+                                                _rt::string_lift(bytes16)
+                                            };
+                                            V20::Str(e20)
+                                        }
+                                        12 => {
+                                            let e20 = {
+                                                let l17 = *base.add(8).cast::<*mut u8>();
+                                                let l18 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len19 = l18;
+                                                <_ as From<
+                                                    _rt::Vec<_>,
+                                                >>::from(_rt::Vec::from_raw_parts(l17.cast(), len19, len19))
+                                            };
+                                            V20::Binary(e20)
+                                        }
+                                        n => {
+                                            debug_assert_eq!(n, 13, "invalid enum discriminant");
+                                            V20::DbNull
+                                        }
+                                    };
+                                    v20
+                                };
+                                result21.push(e21);
+                            }
+                            _rt::cabi_dealloc(
+                                base21,
+                                len21 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                8,
+                            );
+                            T_::query(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                result21,
+                            )
+                        };
+                        let ptr23 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result22 {
+                            Ok(e) => {
+                                *ptr23.add(0).cast::<u8>() = (0i32) as u8;
+                                let super::super::super::super::fermyon::spin::rdbms_types::RowSet {
+                                    columns: columns24,
+                                    rows: rows24,
+                                } = e;
+                                let vec27 = columns24;
+                                let len27 = vec27.len();
+                                let layout27 = _rt::alloc::Layout::from_size_align(
+                                        vec27.len() * (3 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result27, _cleanup27) = wit_bindgen::rt::Cleanup::new(
+                                    layout27,
+                                );
+                                if let Some(cleanup) = _cleanup27 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec27.into_iter().enumerate() {
+                                    let base = result27
+                                        .add(i * (3 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let super::super::super::super::fermyon::spin::rdbms_types::Column {
+                                            name: name25,
+                                            data_type: data_type25,
+                                        } = e;
+                                        let vec26 = (name25.into_bytes()).into_boxed_slice();
+                                        let ptr26 = vec26.as_ptr().cast::<u8>();
+                                        let len26 = vec26.len();
+                                        ::core::mem::forget(vec26);
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len26;
+                                        *base.add(0).cast::<*mut u8>() = ptr26.cast_mut();
+                                        *base
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (data_type25.clone() as i32) as u8;
+                                    }
+                                }
+                                *ptr23
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len27;
+                                *ptr23
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result27;
+                                let vec32 = rows24;
+                                let len32 = vec32.len();
+                                let layout32 = _rt::alloc::Layout::from_size_align(
+                                        vec32.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result32, _cleanup32) = wit_bindgen::rt::Cleanup::new(
+                                    layout32,
+                                );
+                                if let Some(cleanup) = _cleanup32 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec32.into_iter().enumerate() {
+                                    let base = result32
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let vec31 = e;
+                                        let len31 = vec31.len();
+                                        let layout31 = _rt::alloc::Layout::from_size_align(
+                                                vec31.len() * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                                8,
+                                            )
+                                            .unwrap();
+                                        let (result31, _cleanup31) = wit_bindgen::rt::Cleanup::new(
+                                            layout31,
+                                        );
+                                        if let Some(cleanup) = _cleanup31 {
+                                            cleanup.forget();
+                                        }
+                                        for (i, e) in vec31.into_iter().enumerate() {
+                                            let base = result31
+                                                .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                            {
+                                                use super::super::super::super::fermyon::spin::rdbms_types::DbValue as V30;
+                                                match e {
+                                                    V30::Boolean(e) => {
+                                                        *base.add(0).cast::<u8>() = (0i32) as u8;
+                                                        *base.add(8).cast::<u8>() = (match e {
+                                                            true => 1,
+                                                            false => 0,
+                                                        }) as u8;
+                                                    }
+                                                    V30::Int8(e) => {
+                                                        *base.add(0).cast::<u8>() = (1i32) as u8;
+                                                        *base.add(8).cast::<u8>() = (_rt::as_i32(e)) as u8;
+                                                    }
+                                                    V30::Int16(e) => {
+                                                        *base.add(0).cast::<u8>() = (2i32) as u8;
+                                                        *base.add(8).cast::<u16>() = (_rt::as_i32(e)) as u16;
+                                                    }
+                                                    V30::Int32(e) => {
+                                                        *base.add(0).cast::<u8>() = (3i32) as u8;
+                                                        *base.add(8).cast::<i32>() = _rt::as_i32(e);
+                                                    }
+                                                    V30::Int64(e) => {
+                                                        *base.add(0).cast::<u8>() = (4i32) as u8;
+                                                        *base.add(8).cast::<i64>() = _rt::as_i64(e);
+                                                    }
+                                                    V30::Uint8(e) => {
+                                                        *base.add(0).cast::<u8>() = (5i32) as u8;
+                                                        *base.add(8).cast::<u8>() = (_rt::as_i32(e)) as u8;
+                                                    }
+                                                    V30::Uint16(e) => {
+                                                        *base.add(0).cast::<u8>() = (6i32) as u8;
+                                                        *base.add(8).cast::<u16>() = (_rt::as_i32(e)) as u16;
+                                                    }
+                                                    V30::Uint32(e) => {
+                                                        *base.add(0).cast::<u8>() = (7i32) as u8;
+                                                        *base.add(8).cast::<i32>() = _rt::as_i32(e);
+                                                    }
+                                                    V30::Uint64(e) => {
+                                                        *base.add(0).cast::<u8>() = (8i32) as u8;
+                                                        *base.add(8).cast::<i64>() = _rt::as_i64(e);
+                                                    }
+                                                    V30::Floating32(e) => {
+                                                        *base.add(0).cast::<u8>() = (9i32) as u8;
+                                                        *base.add(8).cast::<f32>() = _rt::as_f32(e);
+                                                    }
+                                                    V30::Floating64(e) => {
+                                                        *base.add(0).cast::<u8>() = (10i32) as u8;
+                                                        *base.add(8).cast::<f64>() = _rt::as_f64(e);
+                                                    }
+                                                    V30::Str(e) => {
+                                                        *base.add(0).cast::<u8>() = (11i32) as u8;
+                                                        let vec28 = (e.into_bytes()).into_boxed_slice();
+                                                        let ptr28 = vec28.as_ptr().cast::<u8>();
+                                                        let len28 = vec28.len();
+                                                        ::core::mem::forget(vec28);
+                                                        *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>() = len28;
+                                                        *base.add(8).cast::<*mut u8>() = ptr28.cast_mut();
+                                                    }
+                                                    V30::Binary(e) => {
+                                                        *base.add(0).cast::<u8>() = (12i32) as u8;
+                                                        let vec29 = <_ as Into<_rt::Vec<_>>>::into(e)
+                                                            .into_boxed_slice();
+                                                        let ptr29 = vec29.as_ptr().cast::<u8>();
+                                                        let len29 = vec29.len();
+                                                        ::core::mem::forget(vec29);
+                                                        *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>() = len29;
+                                                        *base.add(8).cast::<*mut u8>() = ptr29.cast_mut();
+                                                    }
+                                                    V30::DbNull => {
+                                                        *base.add(0).cast::<u8>() = (13i32) as u8;
+                                                    }
+                                                    V30::Unsupported => {
+                                                        *base.add(0).cast::<u8>() = (14i32) as u8;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len31;
+                                        *base.add(0).cast::<*mut u8>() = result31;
+                                    }
+                                }
+                                *ptr23
+                                    .add(4 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len32;
+                                *ptr23
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result32;
+                            }
+                            Err(e) => {
+                                *ptr23.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    PgError::Success => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    PgError::ConnectionFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                        let vec33 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr33 = vec33.as_ptr().cast::<u8>();
+                                        let len33 = vec33.len();
+                                        ::core::mem::forget(vec33);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len33;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr33.cast_mut();
+                                    }
+                                    PgError::BadParameter(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                        let vec34 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr34 = vec34.as_ptr().cast::<u8>();
+                                        let len34 = vec34.len();
+                                        ::core::mem::forget(vec34);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len34;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr34.cast_mut();
+                                    }
+                                    PgError::QueryFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                        let vec35 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr35 = vec35.as_ptr().cast::<u8>();
+                                        let len35 = vec35.len();
+                                        ::core::mem::forget(vec35);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len35;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr35.cast_mut();
+                                    }
+                                    PgError::ValueConversionFailed(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                        let vec36 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr36 = vec36.as_ptr().cast::<u8>();
+                                        let len36 = vec36.len();
+                                        ::core::mem::forget(vec36);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len36;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr36.cast_mut();
+                                    }
+                                    PgError::OtherError(e) => {
+                                        *ptr23
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (5i32) as u8;
+                                        let vec37 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr37 = vec37.as_ptr().cast::<u8>();
+                                        let len37 = vec37.len();
+                                        ::core::mem::forget(vec37);
+                                        *ptr23
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len37;
+                                        *ptr23
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr37.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr23
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_query<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base5 = l1;
+                                let len5 = l2;
+                                for i in 0..len5 {
+                                    let base = base5
+                                        .add(i * (3 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l3 = *base.add(0).cast::<*mut u8>();
+                                        let l4 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l3, l4, 1);
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base5,
+                                    len5 * (3 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                                let l6 = *arg0
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l7 = *arg0
+                                    .add(4 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base17 = l6;
+                                let len17 = l7;
+                                for i in 0..len17 {
+                                    let base = base17
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l8 = *base.add(0).cast::<*mut u8>();
+                                        let l9 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        let base16 = l8;
+                                        let len16 = l9;
+                                        for i in 0..len16 {
+                                            let base = base16
+                                                .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                            {
+                                                let l10 = i32::from(*base.add(0).cast::<u8>());
+                                                match l10 {
+                                                    0 => {}
+                                                    1 => {}
+                                                    2 => {}
+                                                    3 => {}
+                                                    4 => {}
+                                                    5 => {}
+                                                    6 => {}
+                                                    7 => {}
+                                                    8 => {}
+                                                    9 => {}
+                                                    10 => {}
+                                                    11 => {
+                                                        let l11 = *base.add(8).cast::<*mut u8>();
+                                                        let l12 = *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>();
+                                                        _rt::cabi_dealloc(l11, l12, 1);
+                                                    }
+                                                    12 => {
+                                                        let l13 = *base.add(8).cast::<*mut u8>();
+                                                        let l14 = *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>();
+                                                        let base15 = l13;
+                                                        let len15 = l14;
+                                                        _rt::cabi_dealloc(base15, len15 * 1, 1);
+                                                    }
+                                                    13 => {}
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+                                        _rt::cabi_dealloc(
+                                            base16,
+                                            len16 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                            8,
+                                        );
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base17,
+                                    len17 * (2 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                            }
+                            _ => {
+                                let l18 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l18 {
+                                    0 => {}
+                                    1 => {
+                                        let l19 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l20 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l19, l20, 1);
+                                    }
+                                    2 => {
+                                        let l21 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l22 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l21, l22, 1);
+                                    }
+                                    3 => {
+                                        let l23 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l24 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l23, l24, 1);
+                                    }
+                                    4 => {
+                                        let l25 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l26 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l25, l26, 1);
+                                    }
+                                    _ => {
+                                        let l27 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l28 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l27, l28, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_execute_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result22 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let base21 = arg4;
+                            let len21 = arg5;
+                            let mut result21 = _rt::Vec::with_capacity(len21);
+                            for i in 0..len21 {
+                                let base = base21
+                                    .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                let e21 = {
+                                    let l2 = i32::from(*base.add(0).cast::<u8>());
+                                    use super::super::super::super::fermyon::spin::rdbms_types::ParameterValue as V20;
+                                    let v20 = match l2 {
+                                        0 => {
+                                            let e20 = {
+                                                let l3 = i32::from(*base.add(8).cast::<u8>());
+                                                _rt::bool_lift(l3 as u8)
+                                            };
+                                            V20::Boolean(e20)
+                                        }
+                                        1 => {
+                                            let e20 = {
+                                                let l4 = i32::from(*base.add(8).cast::<i8>());
+                                                l4 as i8
+                                            };
+                                            V20::Int8(e20)
+                                        }
+                                        2 => {
+                                            let e20 = {
+                                                let l5 = i32::from(*base.add(8).cast::<i16>());
+                                                l5 as i16
+                                            };
+                                            V20::Int16(e20)
+                                        }
+                                        3 => {
+                                            let e20 = {
+                                                let l6 = *base.add(8).cast::<i32>();
+                                                l6
+                                            };
+                                            V20::Int32(e20)
+                                        }
+                                        4 => {
+                                            let e20 = {
+                                                let l7 = *base.add(8).cast::<i64>();
+                                                l7
+                                            };
+                                            V20::Int64(e20)
+                                        }
+                                        5 => {
+                                            let e20 = {
+                                                let l8 = i32::from(*base.add(8).cast::<u8>());
+                                                l8 as u8
+                                            };
+                                            V20::Uint8(e20)
+                                        }
+                                        6 => {
+                                            let e20 = {
+                                                let l9 = i32::from(*base.add(8).cast::<u16>());
+                                                l9 as u16
+                                            };
+                                            V20::Uint16(e20)
+                                        }
+                                        7 => {
+                                            let e20 = {
+                                                let l10 = *base.add(8).cast::<i32>();
+                                                l10 as u32
+                                            };
+                                            V20::Uint32(e20)
+                                        }
+                                        8 => {
+                                            let e20 = {
+                                                let l11 = *base.add(8).cast::<i64>();
+                                                l11 as u64
+                                            };
+                                            V20::Uint64(e20)
+                                        }
+                                        9 => {
+                                            let e20 = {
+                                                let l12 = *base.add(8).cast::<f32>();
+                                                l12
+                                            };
+                                            V20::Floating32(e20)
+                                        }
+                                        10 => {
+                                            let e20 = {
+                                                let l13 = *base.add(8).cast::<f64>();
+                                                l13
+                                            };
+                                            V20::Floating64(e20)
+                                        }
+                                        11 => {
+                                            let e20 = {
+                                                let l14 = *base.add(8).cast::<*mut u8>();
+                                                let l15 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len16 = l15;
+                                                let bytes16 = _rt::Vec::from_raw_parts(
+                                                    l14.cast(),
+                                                    len16,
+                                                    len16,
+                                                );
+                                                _rt::string_lift(bytes16)
+                                            };
+                                            V20::Str(e20)
+                                        }
+                                        12 => {
+                                            let e20 = {
+                                                let l17 = *base.add(8).cast::<*mut u8>();
+                                                let l18 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len19 = l18;
+                                                <_ as From<
+                                                    _rt::Vec<_>,
+                                                >>::from(_rt::Vec::from_raw_parts(l17.cast(), len19, len19))
+                                            };
+                                            V20::Binary(e20)
+                                        }
+                                        n => {
+                                            debug_assert_eq!(n, 13, "invalid enum discriminant");
+                                            V20::DbNull
+                                        }
+                                    };
+                                    v20
+                                };
+                                result21.push(e21);
+                            }
+                            _rt::cabi_dealloc(
+                                base21,
+                                len21 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                8,
+                            );
+                            T_::execute(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                result21,
+                            )
+                        };
+                        let ptr23 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result22 {
+                            Ok(e) => {
+                                *ptr23.add(0).cast::<u8>() = (0i32) as u8;
+                                *ptr23.add(8).cast::<i64>() = _rt::as_i64(e);
+                            }
+                            Err(e) => {
+                                *ptr23.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    PgError::Success => {
+                                        *ptr23.add(8).cast::<u8>() = (0i32) as u8;
+                                    }
+                                    PgError::ConnectionFailed(e) => {
+                                        *ptr23.add(8).cast::<u8>() = (1i32) as u8;
+                                        let vec24 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr24 = vec24.as_ptr().cast::<u8>();
+                                        let len24 = vec24.len();
+                                        ::core::mem::forget(vec24);
+                                        *ptr23
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len24;
+                                        *ptr23
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr24.cast_mut();
+                                    }
+                                    PgError::BadParameter(e) => {
+                                        *ptr23.add(8).cast::<u8>() = (2i32) as u8;
+                                        let vec25 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr25 = vec25.as_ptr().cast::<u8>();
+                                        let len25 = vec25.len();
+                                        ::core::mem::forget(vec25);
+                                        *ptr23
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len25;
+                                        *ptr23
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr25.cast_mut();
+                                    }
+                                    PgError::QueryFailed(e) => {
+                                        *ptr23.add(8).cast::<u8>() = (3i32) as u8;
+                                        let vec26 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr26 = vec26.as_ptr().cast::<u8>();
+                                        let len26 = vec26.len();
+                                        ::core::mem::forget(vec26);
+                                        *ptr23
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len26;
+                                        *ptr23
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr26.cast_mut();
+                                    }
+                                    PgError::ValueConversionFailed(e) => {
+                                        *ptr23.add(8).cast::<u8>() = (4i32) as u8;
+                                        let vec27 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr27 = vec27.as_ptr().cast::<u8>();
+                                        let len27 = vec27.len();
+                                        ::core::mem::forget(vec27);
+                                        *ptr23
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len27;
+                                        *ptr23
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr27.cast_mut();
+                                    }
+                                    PgError::OtherError(e) => {
+                                        *ptr23.add(8).cast::<u8>() = (5i32) as u8;
+                                        let vec28 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr28 = vec28.as_ptr().cast::<u8>();
+                                        let len28 = vec28.len();
+                                        ::core::mem::forget(vec28);
+                                        *ptr23
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len28;
+                                        *ptr23
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr28.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr23
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_execute<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {}
+                            _ => {
+                                let l1 = i32::from(*arg0.add(8).cast::<u8>());
+                                match l1 {
+                                    0 => {}
+                                    1 => {
+                                        let l2 = *arg0
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l3 = *arg0
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l2, l3, 1);
+                                    }
+                                    2 => {
+                                        let l4 = *arg0
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l5 = *arg0
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l4, l5, 1);
+                                    }
+                                    3 => {
+                                        let l6 = *arg0
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l7 = *arg0
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l6, l7, 1);
+                                    }
+                                    4 => {
+                                        let l8 = *arg0
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l9 = *arg0
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l8, l9, 1);
+                                    }
+                                    _ => {
+                                        let l10 = *arg0
+                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l11 = *arg0
+                                            .add(8 + 2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l10, l11, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                pub trait Guest {
+                    /// query the database: select
+                    #[allow(async_fn_in_trait)]
+                    fn query(
+                        address: _rt::String,
+                        statement: _rt::String,
+                        params: _rt::Vec<ParameterValue>,
+                    ) -> Result<RowSet, PgError>;
+                    /// execute command to the database: insert, update, delete
+                    #[allow(async_fn_in_trait)]
+                    fn execute(
+                        address: _rt::String,
+                        statement: _rt::String,
+                        params: _rt::Vec<ParameterValue>,
+                    ) -> Result<u64, PgError>;
+                }
+                #[doc(hidden)]
+                macro_rules! __export_fermyon_spin_postgres_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "fermyon:spin/postgres#query")] unsafe extern "C" fn
+                        export_query(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8, arg3
+                        : usize, arg4 : * mut u8, arg5 : usize,) -> * mut u8 { unsafe {
+                        $($path_to_types)*:: _export_query_cabi::<$ty > (arg0, arg1,
+                        arg2, arg3, arg4, arg5) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/postgres#query")] unsafe extern "C" fn
+                        _post_return_query(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_query::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/postgres#execute")] unsafe
+                        extern "C" fn export_execute(arg0 : * mut u8, arg1 : usize, arg2
+                        : * mut u8, arg3 : usize, arg4 : * mut u8, arg5 : usize,) -> *
+                        mut u8 { unsafe { $($path_to_types)*:: _export_execute_cabi::<$ty
+                        > (arg0, arg1, arg2, arg3, arg4, arg5) } } #[unsafe (export_name
+                        = "cabi_post_fermyon:spin/postgres#execute")] unsafe extern "C"
+                        fn _post_return_execute(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_execute::<$ty > (arg0) } } };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_fermyon_spin_postgres_cabi;
+                #[repr(align(8))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 8 + 4 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 8
+                        + 4 * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod redis {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                pub type Payload = super::super::super::super::fermyon::spin::redis_types::Payload;
+                pub type RedisParameter = super::super::super::super::fermyon::spin::redis_types::RedisParameter;
+                pub type RedisResult = super::super::super::super::fermyon::spin::redis_types::RedisResult;
+                pub type Error = super::super::super::super::fermyon::spin::redis_types::Error;
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_publish_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result3 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let len2 = arg5;
+                            T_::publish(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                <_ as From<
+                                    _rt::Vec<_>,
+                                >>::from(_rt::Vec::from_raw_parts(arg4.cast(), len2, len2)),
+                            )
+                        };
+                        let ptr4 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result3 {
+                            Ok(_) => {
+                                *ptr4.add(0).cast::<u8>() = (0i32) as u8;
+                            }
+                            Err(e) => {
+                                *ptr4.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr4.add(1).cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr4
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_get_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result2 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            T_::get(_rt::string_lift(bytes0), _rt::string_lift(bytes1))
+                        };
+                        let ptr3 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result2 {
+                            Ok(e) => {
+                                *ptr3.add(0).cast::<u8>() = (0i32) as u8;
+                                let vec4 = <_ as Into<_rt::Vec<_>>>::into(e)
+                                    .into_boxed_slice();
+                                let ptr4 = vec4.as_ptr().cast::<u8>();
+                                let len4 = vec4.len();
+                                ::core::mem::forget(vec4);
+                                *ptr3
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len4;
+                                *ptr3
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = ptr4.cast_mut();
+                            }
+                            Err(e) => {
+                                *ptr3.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr3
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr3
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_get<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base3 = l1;
+                                let len3 = l2;
+                                _rt::cabi_dealloc(base3, len3 * 1, 1);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_set_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result3 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let len2 = arg5;
+                            T_::set(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                <_ as From<
+                                    _rt::Vec<_>,
+                                >>::from(_rt::Vec::from_raw_parts(arg4.cast(), len2, len2)),
+                            )
+                        };
+                        let ptr4 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result3 {
+                            Ok(_) => {
+                                *ptr4.add(0).cast::<u8>() = (0i32) as u8;
+                            }
+                            Err(e) => {
+                                *ptr4.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr4.add(1).cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr4
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_incr_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result2 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            T_::incr(_rt::string_lift(bytes0), _rt::string_lift(bytes1))
+                        };
+                        let ptr3 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result2 {
+                            Ok(e) => {
+                                *ptr3.add(0).cast::<u8>() = (0i32) as u8;
+                                *ptr3.add(8).cast::<i64>() = _rt::as_i64(e);
+                            }
+                            Err(e) => {
+                                *ptr3.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr3.add(8).cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr3
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_del_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result5 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let base4 = arg2;
+                            let len4 = arg3;
+                            let mut result4 = _rt::Vec::with_capacity(len4);
+                            for i in 0..len4 {
+                                let base = base4
+                                    .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                let e4 = {
+                                    let l1 = *base.add(0).cast::<*mut u8>();
+                                    let l2 = *base
+                                        .add(::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len3 = l2;
+                                    let bytes3 = _rt::Vec::from_raw_parts(
+                                        l1.cast(),
+                                        len3,
+                                        len3,
+                                    );
+                                    _rt::string_lift(bytes3)
+                                };
+                                result4.push(e4);
+                            }
+                            _rt::cabi_dealloc(
+                                base4,
+                                len4 * (2 * ::core::mem::size_of::<*const u8>()),
+                                ::core::mem::size_of::<*const u8>(),
+                            );
+                            T_::del(_rt::string_lift(bytes0), result4)
+                        };
+                        let ptr6 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result5 {
+                            Ok(e) => {
+                                *ptr6.add(0).cast::<u8>() = (0i32) as u8;
+                                *ptr6.add(8).cast::<i64>() = _rt::as_i64(e);
+                            }
+                            Err(e) => {
+                                *ptr6.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr6.add(8).cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr6
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_sadd_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result6 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let base5 = arg4;
+                            let len5 = arg5;
+                            let mut result5 = _rt::Vec::with_capacity(len5);
+                            for i in 0..len5 {
+                                let base = base5
+                                    .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                let e5 = {
+                                    let l2 = *base.add(0).cast::<*mut u8>();
+                                    let l3 = *base
+                                        .add(::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len4 = l3;
+                                    let bytes4 = _rt::Vec::from_raw_parts(
+                                        l2.cast(),
+                                        len4,
+                                        len4,
+                                    );
+                                    _rt::string_lift(bytes4)
+                                };
+                                result5.push(e5);
+                            }
+                            _rt::cabi_dealloc(
+                                base5,
+                                len5 * (2 * ::core::mem::size_of::<*const u8>()),
+                                ::core::mem::size_of::<*const u8>(),
+                            );
+                            T_::sadd(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                result5,
+                            )
+                        };
+                        let ptr7 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result6 {
+                            Ok(e) => {
+                                *ptr7.add(0).cast::<u8>() = (0i32) as u8;
+                                *ptr7.add(8).cast::<i64>() = _rt::as_i64(e);
+                            }
+                            Err(e) => {
+                                *ptr7.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr7.add(8).cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr7
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_smembers_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result2 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            T_::smembers(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                            )
+                        };
+                        let ptr3 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result2 {
+                            Ok(e) => {
+                                *ptr3.add(0).cast::<u8>() = (0i32) as u8;
+                                let vec5 = e;
+                                let len5 = vec5.len();
+                                let layout5 = _rt::alloc::Layout::from_size_align(
+                                        vec5.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result5, _cleanup5) = wit_bindgen::rt::Cleanup::new(
+                                    layout5,
+                                );
+                                if let Some(cleanup) = _cleanup5 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec5.into_iter().enumerate() {
+                                    let base = result5
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let vec4 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr4 = vec4.as_ptr().cast::<u8>();
+                                        let len4 = vec4.len();
+                                        ::core::mem::forget(vec4);
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len4;
+                                        *base.add(0).cast::<*mut u8>() = ptr4.cast_mut();
+                                    }
+                                }
+                                *ptr3
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len5;
+                                *ptr3
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result5;
+                            }
+                            Err(e) => {
+                                *ptr3.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr3
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr3
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_smembers<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base5 = l1;
+                                let len5 = l2;
+                                for i in 0..len5 {
+                                    let base = base5
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l3 = *base.add(0).cast::<*mut u8>();
+                                        let l4 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l3, l4, 1);
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base5,
+                                    len5 * (2 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_srem_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result6 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let base5 = arg4;
+                            let len5 = arg5;
+                            let mut result5 = _rt::Vec::with_capacity(len5);
+                            for i in 0..len5 {
+                                let base = base5
+                                    .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                let e5 = {
+                                    let l2 = *base.add(0).cast::<*mut u8>();
+                                    let l3 = *base
+                                        .add(::core::mem::size_of::<*const u8>())
+                                        .cast::<usize>();
+                                    let len4 = l3;
+                                    let bytes4 = _rt::Vec::from_raw_parts(
+                                        l2.cast(),
+                                        len4,
+                                        len4,
+                                    );
+                                    _rt::string_lift(bytes4)
+                                };
+                                result5.push(e5);
+                            }
+                            _rt::cabi_dealloc(
+                                base5,
+                                len5 * (2 * ::core::mem::size_of::<*const u8>()),
+                                ::core::mem::size_of::<*const u8>(),
+                            );
+                            T_::srem(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                result5,
+                            )
+                        };
+                        let ptr7 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result6 {
+                            Ok(e) => {
+                                *ptr7.add(0).cast::<u8>() = (0i32) as u8;
+                                *ptr7.add(8).cast::<i64>() = _rt::as_i64(e);
+                            }
+                            Err(e) => {
+                                *ptr7.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr7.add(8).cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr7
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_execute_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                    arg2: *mut u8,
+                    arg3: usize,
+                    arg4: *mut u8,
+                    arg5: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result9 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            let len1 = arg3;
+                            let bytes1 = _rt::Vec::from_raw_parts(
+                                arg2.cast(),
+                                len1,
+                                len1,
+                            );
+                            let base8 = arg4;
+                            let len8 = arg5;
+                            let mut result8 = _rt::Vec::with_capacity(len8);
+                            for i in 0..len8 {
+                                let base = base8
+                                    .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                let e8 = {
+                                    let l2 = i32::from(*base.add(0).cast::<u8>());
+                                    use super::super::super::super::fermyon::spin::redis_types::RedisParameter as V7;
+                                    let v7 = match l2 {
+                                        0 => {
+                                            let e7 = {
+                                                let l3 = *base.add(8).cast::<i64>();
+                                                l3
+                                            };
+                                            V7::Int64(e7)
+                                        }
+                                        n => {
+                                            debug_assert_eq!(n, 1, "invalid enum discriminant");
+                                            let e7 = {
+                                                let l4 = *base.add(8).cast::<*mut u8>();
+                                                let l5 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len6 = l5;
+                                                <_ as From<
+                                                    _rt::Vec<_>,
+                                                >>::from(_rt::Vec::from_raw_parts(l4.cast(), len6, len6))
+                                            };
+                                            V7::Binary(e7)
+                                        }
+                                    };
+                                    v7
+                                };
+                                result8.push(e8);
+                            }
+                            _rt::cabi_dealloc(
+                                base8,
+                                len8 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                8,
+                            );
+                            T_::execute(
+                                _rt::string_lift(bytes0),
+                                _rt::string_lift(bytes1),
+                                result8,
+                            )
+                        };
+                        let ptr10 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result9 {
+                            Ok(e) => {
+                                *ptr10.add(0).cast::<u8>() = (0i32) as u8;
+                                let vec14 = e;
+                                let len14 = vec14.len();
+                                let layout14 = _rt::alloc::Layout::from_size_align(
+                                        vec14.len() * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                        8,
+                                    )
+                                    .unwrap();
+                                let (result14, _cleanup14) = wit_bindgen::rt::Cleanup::new(
+                                    layout14,
+                                );
+                                if let Some(cleanup) = _cleanup14 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec14.into_iter().enumerate() {
+                                    let base = result14
+                                        .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        use super::super::super::super::fermyon::spin::redis_types::RedisResult as V13;
+                                        match e {
+                                            V13::Nil => {
+                                                *base.add(0).cast::<u8>() = (0i32) as u8;
+                                            }
+                                            V13::Status(e) => {
+                                                *base.add(0).cast::<u8>() = (1i32) as u8;
+                                                let vec11 = (e.into_bytes()).into_boxed_slice();
+                                                let ptr11 = vec11.as_ptr().cast::<u8>();
+                                                let len11 = vec11.len();
+                                                ::core::mem::forget(vec11);
+                                                *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>() = len11;
+                                                *base.add(8).cast::<*mut u8>() = ptr11.cast_mut();
+                                            }
+                                            V13::Int64(e) => {
+                                                *base.add(0).cast::<u8>() = (2i32) as u8;
+                                                *base.add(8).cast::<i64>() = _rt::as_i64(e);
+                                            }
+                                            V13::Binary(e) => {
+                                                *base.add(0).cast::<u8>() = (3i32) as u8;
+                                                let vec12 = <_ as Into<_rt::Vec<_>>>::into(e)
+                                                    .into_boxed_slice();
+                                                let ptr12 = vec12.as_ptr().cast::<u8>();
+                                                let len12 = vec12.len();
+                                                ::core::mem::forget(vec12);
+                                                *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>() = len12;
+                                                *base.add(8).cast::<*mut u8>() = ptr12.cast_mut();
+                                            }
+                                        }
+                                    }
+                                }
+                                *ptr10
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len14;
+                                *ptr10
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result14;
+                            }
+                            Err(e) => {
+                                *ptr10.add(0).cast::<u8>() = (1i32) as u8;
+                                *ptr10
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<u8>() = (e.clone() as i32) as u8;
+                            }
+                        };
+                        ptr10
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_execute<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base9 = l1;
+                                let len9 = l2;
+                                for i in 0..len9 {
+                                    let base = base9
+                                        .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l3 = i32::from(*base.add(0).cast::<u8>());
+                                        match l3 {
+                                            0 => {}
+                                            1 => {
+                                                let l4 = *base.add(8).cast::<*mut u8>();
+                                                let l5 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                _rt::cabi_dealloc(l4, l5, 1);
+                                            }
+                                            2 => {}
+                                            _ => {
+                                                let l6 = *base.add(8).cast::<*mut u8>();
+                                                let l7 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let base8 = l6;
+                                                let len8 = l7;
+                                                _rt::cabi_dealloc(base8, len8 * 1, 1);
+                                            }
+                                        }
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base9,
+                                    len9 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                    8,
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                pub trait Guest {
+                    /// Publish a Redis message to the specificed channel and return an error, if any.
+                    #[allow(async_fn_in_trait)]
+                    fn publish(
+                        address: _rt::String,
+                        channel: _rt::String,
+                        payload: Payload,
+                    ) -> Result<(), Error>;
+                    /// Get the value of a key.
+                    #[allow(async_fn_in_trait)]
+                    fn get(
+                        address: _rt::String,
+                        key: _rt::String,
+                    ) -> Result<Payload, Error>;
+                    /// Set key to value. If key alreads holds a value, it is overwritten.
+                    #[allow(async_fn_in_trait)]
+                    fn set(
+                        address: _rt::String,
+                        key: _rt::String,
+                        value: Payload,
+                    ) -> Result<(), Error>;
+                    /// Increments the number stored at key by one. If the key does not exist, it is set to 0 before performing the operation.
+                    /// An error is returned if the key contains a value of the wrong type or contains a string that can not be represented as integer.
+                    #[allow(async_fn_in_trait)]
+                    fn incr(
+                        address: _rt::String,
+                        key: _rt::String,
+                    ) -> Result<i64, Error>;
+                    /// Removes the specified keys. A key is ignored if it does not exist.
+                    #[allow(async_fn_in_trait)]
+                    fn del(
+                        address: _rt::String,
+                        keys: _rt::Vec<_rt::String>,
+                    ) -> Result<i64, Error>;
+                    /// Add the specified `values` to the set named `key`, returning the number of newly-added values.
+                    #[allow(async_fn_in_trait)]
+                    fn sadd(
+                        address: _rt::String,
+                        key: _rt::String,
+                        values: _rt::Vec<_rt::String>,
+                    ) -> Result<i64, Error>;
+                    /// Retrieve the contents of the set named `key`.
+                    #[allow(async_fn_in_trait)]
+                    fn smembers(
+                        address: _rt::String,
+                        key: _rt::String,
+                    ) -> Result<_rt::Vec<_rt::String>, Error>;
+                    /// Remove the specified `values` from the set named `key`, returning the number of newly-removed values.
+                    #[allow(async_fn_in_trait)]
+                    fn srem(
+                        address: _rt::String,
+                        key: _rt::String,
+                        values: _rt::Vec<_rt::String>,
+                    ) -> Result<i64, Error>;
+                    /// Execute an arbitrary Redis command and receive the result.
+                    #[allow(async_fn_in_trait)]
+                    fn execute(
+                        address: _rt::String,
+                        command: _rt::String,
+                        arguments: _rt::Vec<RedisParameter>,
+                    ) -> Result<_rt::Vec<RedisResult>, Error>;
+                }
+                #[doc(hidden)]
+                macro_rules! __export_fermyon_spin_redis_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "fermyon:spin/redis#publish")] unsafe extern "C" fn
+                        export_publish(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8,
+                        arg3 : usize, arg4 : * mut u8, arg5 : usize,) -> * mut u8 {
+                        unsafe { $($path_to_types)*:: _export_publish_cabi::<$ty > (arg0,
+                        arg1, arg2, arg3, arg4, arg5) } } #[unsafe (export_name =
+                        "fermyon:spin/redis#get")] unsafe extern "C" fn export_get(arg0 :
+                        * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize,) -> * mut
+                        u8 { unsafe { $($path_to_types)*:: _export_get_cabi::<$ty >
+                        (arg0, arg1, arg2, arg3) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/redis#get")] unsafe extern "C" fn
+                        _post_return_get(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_get::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/redis#set")] unsafe extern
+                        "C" fn export_set(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8,
+                        arg3 : usize, arg4 : * mut u8, arg5 : usize,) -> * mut u8 {
+                        unsafe { $($path_to_types)*:: _export_set_cabi::<$ty > (arg0,
+                        arg1, arg2, arg3, arg4, arg5) } } #[unsafe (export_name =
+                        "fermyon:spin/redis#incr")] unsafe extern "C" fn export_incr(arg0
+                        : * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize,) -> *
+                        mut u8 { unsafe { $($path_to_types)*:: _export_incr_cabi::<$ty >
+                        (arg0, arg1, arg2, arg3) } } #[unsafe (export_name =
+                        "fermyon:spin/redis#del")] unsafe extern "C" fn export_del(arg0 :
+                        * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize,) -> * mut
+                        u8 { unsafe { $($path_to_types)*:: _export_del_cabi::<$ty >
+                        (arg0, arg1, arg2, arg3) } } #[unsafe (export_name =
+                        "fermyon:spin/redis#sadd")] unsafe extern "C" fn export_sadd(arg0
+                        : * mut u8, arg1 : usize, arg2 : * mut u8, arg3 : usize, arg4 : *
+                        mut u8, arg5 : usize,) -> * mut u8 { unsafe {
+                        $($path_to_types)*:: _export_sadd_cabi::<$ty > (arg0, arg1, arg2,
+                        arg3, arg4, arg5) } } #[unsafe (export_name =
+                        "fermyon:spin/redis#smembers")] unsafe extern "C" fn
+                        export_smembers(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8,
+                        arg3 : usize,) -> * mut u8 { unsafe { $($path_to_types)*::
+                        _export_smembers_cabi::<$ty > (arg0, arg1, arg2, arg3) } }
+                        #[unsafe (export_name = "cabi_post_fermyon:spin/redis#smembers")]
+                        unsafe extern "C" fn _post_return_smembers(arg0 : * mut u8,) {
+                        unsafe { $($path_to_types)*:: __post_return_smembers::<$ty >
+                        (arg0) } } #[unsafe (export_name = "fermyon:spin/redis#srem")]
+                        unsafe extern "C" fn export_srem(arg0 : * mut u8, arg1 : usize,
+                        arg2 : * mut u8, arg3 : usize, arg4 : * mut u8, arg5 : usize,) ->
+                        * mut u8 { unsafe { $($path_to_types)*:: _export_srem_cabi::<$ty
+                        > (arg0, arg1, arg2, arg3, arg4, arg5) } } #[unsafe (export_name
+                        = "fermyon:spin/redis#execute")] unsafe extern "C" fn
+                        export_execute(arg0 : * mut u8, arg1 : usize, arg2 : * mut u8,
+                        arg3 : usize, arg4 : * mut u8, arg5 : usize,) -> * mut u8 {
+                        unsafe { $($path_to_types)*:: _export_execute_cabi::<$ty > (arg0,
+                        arg1, arg2, arg3, arg4, arg5) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/redis#execute")] unsafe extern "C" fn
+                        _post_return_execute(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_execute::<$ty > (arg0) } } };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_fermyon_spin_redis_cabi;
+                #[repr(align(8))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 8 + 2 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 8
+                        + 2 * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+            #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
+            pub mod sqlite {
+                #[used]
+                #[doc(hidden)]
+                static __FORCE_SECTION_REF: fn() = super::super::super::super::__link_custom_section_describing_imports;
+                use super::super::super::super::_rt;
+                /// A handle to an open sqlite instance
+                pub type Connection = u32;
+                /// The set of errors which may be raised by functions in this interface
+                #[derive(Clone)]
+                pub enum Error {
+                    /// The host does not recognize the database name requested.
+                    NoSuchDatabase,
+                    /// The requesting component does not have access to the specified database (which may or may not exist).
+                    AccessDenied,
+                    /// The provided connection is not valid
+                    InvalidConnection,
+                    /// The database has reached its capacity
+                    DatabaseFull,
+                    /// Some implementation-specific error has occurred (e.g. I/O)
+                    Io(_rt::String),
+                }
+                impl ::core::fmt::Debug for Error {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        match self {
+                            Error::NoSuchDatabase => {
+                                f.debug_tuple("Error::NoSuchDatabase").finish()
+                            }
+                            Error::AccessDenied => {
+                                f.debug_tuple("Error::AccessDenied").finish()
+                            }
+                            Error::InvalidConnection => {
+                                f.debug_tuple("Error::InvalidConnection").finish()
+                            }
+                            Error::DatabaseFull => {
+                                f.debug_tuple("Error::DatabaseFull").finish()
+                            }
+                            Error::Io(e) => f.debug_tuple("Error::Io").field(e).finish(),
+                        }
+                    }
+                }
+                impl ::core::fmt::Display for Error {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        write!(f, "{:?}", self)
+                    }
+                }
+                impl ::core::error::Error for Error {}
+                #[derive(Clone)]
+                pub enum Value {
+                    Integer(i64),
+                    Real(f64),
+                    Text(_rt::String),
+                    Blob(_rt::Vec<u8>),
+                    Null,
+                }
+                impl ::core::fmt::Debug for Value {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        match self {
+                            Value::Integer(e) => {
+                                f.debug_tuple("Value::Integer").field(e).finish()
+                            }
+                            Value::Real(e) => {
+                                f.debug_tuple("Value::Real").field(e).finish()
+                            }
+                            Value::Text(e) => {
+                                f.debug_tuple("Value::Text").field(e).finish()
+                            }
+                            Value::Blob(e) => {
+                                f.debug_tuple("Value::Blob").field(e).finish()
+                            }
+                            Value::Null => f.debug_tuple("Value::Null").finish(),
+                        }
+                    }
+                }
+                /// A set of values for each of the columns in a query-result
+                #[derive(Clone)]
+                pub struct RowResult {
+                    pub values: _rt::Vec<Value>,
+                }
+                impl ::core::fmt::Debug for RowResult {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("RowResult")
+                            .field("values", &self.values)
+                            .finish()
+                    }
+                }
+                /// A result of a query
+                #[derive(Clone)]
+                pub struct QueryResult {
+                    /// The names of the columns retrieved in the query
+                    pub columns: _rt::Vec<_rt::String>,
+                    /// the row results each containing the values for all the columns for a given row
+                    pub rows: _rt::Vec<RowResult>,
+                }
+                impl ::core::fmt::Debug for QueryResult {
+                    fn fmt(
+                        &self,
+                        f: &mut ::core::fmt::Formatter<'_>,
+                    ) -> ::core::fmt::Result {
+                        f.debug_struct("QueryResult")
+                            .field("columns", &self.columns)
+                            .field("rows", &self.rows)
+                            .finish()
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_open_cabi<T_: Guest>(
+                    arg0: *mut u8,
+                    arg1: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result1 = {
+                            let len0 = arg1;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg0.cast(),
+                                len0,
+                                len0,
+                            );
+                            T_::open(_rt::string_lift(bytes0))
+                        };
+                        let ptr2 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result1 {
+                            Ok(e) => {
+                                *ptr2.add(0).cast::<u8>() = (0i32) as u8;
+                                *ptr2
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<i32>() = _rt::as_i32(e);
+                            }
+                            Err(e) => {
+                                *ptr2.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::NoSuchDatabase => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::AccessDenied => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                    }
+                                    Error::InvalidConnection => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                    }
+                                    Error::DatabaseFull => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                    }
+                                    Error::Io(e) => {
+                                        *ptr2
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                        let vec3 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr3 = vec3.as_ptr().cast::<u8>();
+                                        let len3 = vec3.len();
+                                        ::core::mem::forget(vec3);
+                                        *ptr2
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len3;
+                                        *ptr2
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr3.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr2
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_open<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {}
+                            _ => {
+                                let l1 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l1 {
+                                    0 => {}
+                                    1 => {}
+                                    2 => {}
+                                    3 => {}
+                                    _ => {
+                                        let l2 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l3 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l2, l3, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_execute_cabi<T_: Guest>(
+                    arg0: i32,
+                    arg1: *mut u8,
+                    arg2: usize,
+                    arg3: *mut u8,
+                    arg4: usize,
+                ) -> *mut u8 {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        let result12 = {
+                            let len0 = arg2;
+                            let bytes0 = _rt::Vec::from_raw_parts(
+                                arg1.cast(),
+                                len0,
+                                len0,
+                            );
+                            let base11 = arg3;
+                            let len11 = arg4;
+                            let mut result11 = _rt::Vec::with_capacity(len11);
+                            for i in 0..len11 {
+                                let base = base11
+                                    .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                let e11 = {
+                                    let l1 = i32::from(*base.add(0).cast::<u8>());
+                                    let v10 = match l1 {
+                                        0 => {
+                                            let e10 = {
+                                                let l2 = *base.add(8).cast::<i64>();
+                                                l2
+                                            };
+                                            Value::Integer(e10)
+                                        }
+                                        1 => {
+                                            let e10 = {
+                                                let l3 = *base.add(8).cast::<f64>();
+                                                l3
+                                            };
+                                            Value::Real(e10)
+                                        }
+                                        2 => {
+                                            let e10 = {
+                                                let l4 = *base.add(8).cast::<*mut u8>();
+                                                let l5 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len6 = l5;
+                                                let bytes6 = _rt::Vec::from_raw_parts(
+                                                    l4.cast(),
+                                                    len6,
+                                                    len6,
+                                                );
+                                                _rt::string_lift(bytes6)
+                                            };
+                                            Value::Text(e10)
+                                        }
+                                        3 => {
+                                            let e10 = {
+                                                let l7 = *base.add(8).cast::<*mut u8>();
+                                                let l8 = *base
+                                                    .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                    .cast::<usize>();
+                                                let len9 = l8;
+                                                <_ as From<
+                                                    _rt::Vec<_>,
+                                                >>::from(_rt::Vec::from_raw_parts(l7.cast(), len9, len9))
+                                            };
+                                            Value::Blob(e10)
+                                        }
+                                        n => {
+                                            debug_assert_eq!(n, 4, "invalid enum discriminant");
+                                            Value::Null
+                                        }
+                                    };
+                                    v10
+                                };
+                                result11.push(e11);
+                            }
+                            _rt::cabi_dealloc(
+                                base11,
+                                len11 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                8,
+                            );
+                            T_::execute(arg0 as u32, _rt::string_lift(bytes0), result11)
+                        };
+                        let ptr13 = (&raw mut _RET_AREA.0).cast::<u8>();
+                        match result12 {
+                            Ok(e) => {
+                                *ptr13.add(0).cast::<u8>() = (0i32) as u8;
+                                let QueryResult { columns: columns14, rows: rows14 } = e;
+                                let vec16 = columns14;
+                                let len16 = vec16.len();
+                                let layout16 = _rt::alloc::Layout::from_size_align(
+                                        vec16.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result16, _cleanup16) = wit_bindgen::rt::Cleanup::new(
+                                    layout16,
+                                );
+                                if let Some(cleanup) = _cleanup16 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec16.into_iter().enumerate() {
+                                    let base = result16
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let vec15 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr15 = vec15.as_ptr().cast::<u8>();
+                                        let len15 = vec15.len();
+                                        ::core::mem::forget(vec15);
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len15;
+                                        *base.add(0).cast::<*mut u8>() = ptr15.cast_mut();
+                                    }
+                                }
+                                *ptr13
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len16;
+                                *ptr13
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result16;
+                                let vec21 = rows14;
+                                let len21 = vec21.len();
+                                let layout21 = _rt::alloc::Layout::from_size_align(
+                                        vec21.len() * (2 * ::core::mem::size_of::<*const u8>()),
+                                        ::core::mem::size_of::<*const u8>(),
+                                    )
+                                    .unwrap();
+                                let (result21, _cleanup21) = wit_bindgen::rt::Cleanup::new(
+                                    layout21,
+                                );
+                                if let Some(cleanup) = _cleanup21 {
+                                    cleanup.forget();
+                                }
+                                for (i, e) in vec21.into_iter().enumerate() {
+                                    let base = result21
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let RowResult { values: values17 } = e;
+                                        let vec20 = values17;
+                                        let len20 = vec20.len();
+                                        let layout20 = _rt::alloc::Layout::from_size_align(
+                                                vec20.len() * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                                8,
+                                            )
+                                            .unwrap();
+                                        let (result20, _cleanup20) = wit_bindgen::rt::Cleanup::new(
+                                            layout20,
+                                        );
+                                        if let Some(cleanup) = _cleanup20 {
+                                            cleanup.forget();
+                                        }
+                                        for (i, e) in vec20.into_iter().enumerate() {
+                                            let base = result20
+                                                .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                            {
+                                                match e {
+                                                    Value::Integer(e) => {
+                                                        *base.add(0).cast::<u8>() = (0i32) as u8;
+                                                        *base.add(8).cast::<i64>() = _rt::as_i64(e);
+                                                    }
+                                                    Value::Real(e) => {
+                                                        *base.add(0).cast::<u8>() = (1i32) as u8;
+                                                        *base.add(8).cast::<f64>() = _rt::as_f64(e);
+                                                    }
+                                                    Value::Text(e) => {
+                                                        *base.add(0).cast::<u8>() = (2i32) as u8;
+                                                        let vec18 = (e.into_bytes()).into_boxed_slice();
+                                                        let ptr18 = vec18.as_ptr().cast::<u8>();
+                                                        let len18 = vec18.len();
+                                                        ::core::mem::forget(vec18);
+                                                        *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>() = len18;
+                                                        *base.add(8).cast::<*mut u8>() = ptr18.cast_mut();
+                                                    }
+                                                    Value::Blob(e) => {
+                                                        *base.add(0).cast::<u8>() = (3i32) as u8;
+                                                        let vec19 = <_ as Into<_rt::Vec<_>>>::into(e)
+                                                            .into_boxed_slice();
+                                                        let ptr19 = vec19.as_ptr().cast::<u8>();
+                                                        let len19 = vec19.len();
+                                                        ::core::mem::forget(vec19);
+                                                        *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>() = len19;
+                                                        *base.add(8).cast::<*mut u8>() = ptr19.cast_mut();
+                                                    }
+                                                    Value::Null => {
+                                                        *base.add(0).cast::<u8>() = (4i32) as u8;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len20;
+                                        *base.add(0).cast::<*mut u8>() = result20;
+                                    }
+                                }
+                                *ptr13
+                                    .add(4 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>() = len21;
+                                *ptr13
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>() = result21;
+                            }
+                            Err(e) => {
+                                *ptr13.add(0).cast::<u8>() = (1i32) as u8;
+                                match e {
+                                    Error::NoSuchDatabase => {
+                                        *ptr13
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (0i32) as u8;
+                                    }
+                                    Error::AccessDenied => {
+                                        *ptr13
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (1i32) as u8;
+                                    }
+                                    Error::InvalidConnection => {
+                                        *ptr13
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (2i32) as u8;
+                                    }
+                                    Error::DatabaseFull => {
+                                        *ptr13
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (3i32) as u8;
+                                    }
+                                    Error::Io(e) => {
+                                        *ptr13
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<u8>() = (4i32) as u8;
+                                        let vec22 = (e.into_bytes()).into_boxed_slice();
+                                        let ptr22 = vec22.as_ptr().cast::<u8>();
+                                        let len22 = vec22.len();
+                                        ::core::mem::forget(vec22);
+                                        *ptr13
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>() = len22;
+                                        *ptr13
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>() = ptr22.cast_mut();
+                                    }
+                                }
+                            }
+                        };
+                        ptr13
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case)]
+                pub unsafe fn __post_return_execute<T_: Guest>(arg0: *mut u8) {
+                    unsafe {
+                        let l0 = i32::from(*arg0.add(0).cast::<u8>());
+                        match l0 {
+                            0 => {
+                                let l1 = *arg0
+                                    .add(::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l2 = *arg0
+                                    .add(2 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base5 = l1;
+                                let len5 = l2;
+                                for i in 0..len5 {
+                                    let base = base5
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l3 = *base.add(0).cast::<*mut u8>();
+                                        let l4 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l3, l4, 1);
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base5,
+                                    len5 * (2 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                                let l6 = *arg0
+                                    .add(3 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<*mut u8>();
+                                let l7 = *arg0
+                                    .add(4 * ::core::mem::size_of::<*const u8>())
+                                    .cast::<usize>();
+                                let base17 = l6;
+                                let len17 = l7;
+                                for i in 0..len17 {
+                                    let base = base17
+                                        .add(i * (2 * ::core::mem::size_of::<*const u8>()));
+                                    {
+                                        let l8 = *base.add(0).cast::<*mut u8>();
+                                        let l9 = *base
+                                            .add(::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        let base16 = l8;
+                                        let len16 = l9;
+                                        for i in 0..len16 {
+                                            let base = base16
+                                                .add(i * (8 + 2 * ::core::mem::size_of::<*const u8>()));
+                                            {
+                                                let l10 = i32::from(*base.add(0).cast::<u8>());
+                                                match l10 {
+                                                    0 => {}
+                                                    1 => {}
+                                                    2 => {
+                                                        let l11 = *base.add(8).cast::<*mut u8>();
+                                                        let l12 = *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>();
+                                                        _rt::cabi_dealloc(l11, l12, 1);
+                                                    }
+                                                    3 => {
+                                                        let l13 = *base.add(8).cast::<*mut u8>();
+                                                        let l14 = *base
+                                                            .add(8 + 1 * ::core::mem::size_of::<*const u8>())
+                                                            .cast::<usize>();
+                                                        let base15 = l13;
+                                                        let len15 = l14;
+                                                        _rt::cabi_dealloc(base15, len15 * 1, 1);
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+                                        _rt::cabi_dealloc(
+                                            base16,
+                                            len16 * (8 + 2 * ::core::mem::size_of::<*const u8>()),
+                                            8,
+                                        );
+                                    }
+                                }
+                                _rt::cabi_dealloc(
+                                    base17,
+                                    len17 * (2 * ::core::mem::size_of::<*const u8>()),
+                                    ::core::mem::size_of::<*const u8>(),
+                                );
+                            }
+                            _ => {
+                                let l18 = i32::from(
+                                    *arg0.add(::core::mem::size_of::<*const u8>()).cast::<u8>(),
+                                );
+                                match l18 {
+                                    0 => {}
+                                    1 => {}
+                                    2 => {}
+                                    3 => {}
+                                    _ => {
+                                        let l19 = *arg0
+                                            .add(2 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<*mut u8>();
+                                        let l20 = *arg0
+                                            .add(3 * ::core::mem::size_of::<*const u8>())
+                                            .cast::<usize>();
+                                        _rt::cabi_dealloc(l19, l20, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                #[doc(hidden)]
+                #[allow(non_snake_case, unused_unsafe)]
+                pub unsafe fn _export_close_cabi<T_: Guest>(arg0: i32) {
+                    unsafe {
+                        #[cfg(target_arch = "wasm32")] _rt::run_ctors_once();
+                        { T_::close(arg0 as u32) };
+                    }
+                }
+                pub trait Guest {
+                    /// Open a connection to a named database instance.
+                    ///
+                    /// If `database` is "default", the default instance is opened.
+                    ///
+                    /// `error::no-such-database` will be raised if the `name` is not recognized.
+                    #[allow(async_fn_in_trait)]
+                    fn open(database: _rt::String) -> Result<Connection, Error>;
+                    /// Execute a statement returning back data if there is any
+                    #[allow(async_fn_in_trait)]
+                    fn execute(
+                        conn: Connection,
+                        statement: _rt::String,
+                        parameters: _rt::Vec<Value>,
+                    ) -> Result<QueryResult, Error>;
+                    /// Close the specified `connection`.
+                    #[allow(async_fn_in_trait)]
+                    fn close(conn: Connection) -> ();
+                }
+                #[doc(hidden)]
+                macro_rules! __export_fermyon_spin_sqlite_cabi {
+                    ($ty:ident with_types_in $($path_to_types:tt)*) => {
+                        const _ : () = { #[unsafe (export_name =
+                        "fermyon:spin/sqlite#open")] unsafe extern "C" fn
+                        export_open(arg0 : * mut u8, arg1 : usize,) -> * mut u8 { unsafe
+                        { $($path_to_types)*:: _export_open_cabi::<$ty > (arg0, arg1) } }
+                        #[unsafe (export_name = "cabi_post_fermyon:spin/sqlite#open")]
+                        unsafe extern "C" fn _post_return_open(arg0 : * mut u8,) { unsafe
+                        { $($path_to_types)*:: __post_return_open::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/sqlite#execute")] unsafe
+                        extern "C" fn export_execute(arg0 : i32, arg1 : * mut u8, arg2 :
+                        usize, arg3 : * mut u8, arg4 : usize,) -> * mut u8 { unsafe {
+                        $($path_to_types)*:: _export_execute_cabi::<$ty > (arg0, arg1,
+                        arg2, arg3, arg4) } } #[unsafe (export_name =
+                        "cabi_post_fermyon:spin/sqlite#execute")] unsafe extern "C" fn
+                        _post_return_execute(arg0 : * mut u8,) { unsafe {
+                        $($path_to_types)*:: __post_return_execute::<$ty > (arg0) } }
+                        #[unsafe (export_name = "fermyon:spin/sqlite#close")] unsafe
+                        extern "C" fn export_close(arg0 : i32,) { unsafe {
+                        $($path_to_types)*:: _export_close_cabi::<$ty > (arg0) } } };
+                    };
+                }
+                #[doc(hidden)]
+                pub(crate) use __export_fermyon_spin_sqlite_cabi;
+                #[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+                #[cfg_attr(target_pointer_width = "32", repr(align(4)))]
+                struct _RetArea(
+                    [::core::mem::MaybeUninit<
+                        u8,
+                    >; 5 * ::core::mem::size_of::<*const u8>()],
+                );
+                static mut _RET_AREA: _RetArea = _RetArea(
+                    [::core::mem::MaybeUninit::uninit(); 5
+                        * ::core::mem::size_of::<*const u8>()],
+                );
+            }
+        }
         pub mod spin2_0_0 {
             /// A WASI interface dedicated to performing inferencing for Large Language Models.
             #[allow(dead_code, async_fn_in_trait, unused_imports, clippy::all)]
@@ -65575,6 +71679,29 @@ macro_rules! __export_deny_adapter_impl {
         exports::wasi::config::store::__export_wasi_config_store_0_2_0_draft_2024_09_27_cabi!($ty
         with_types_in $($path_to_types_root)*:: exports::wasi::config::store);
         $($path_to_types_root)*::
+        exports::fermyon::spin::config::__export_fermyon_spin_config_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::fermyon::spin::config);
+        $($path_to_types_root)*::
+        exports::fermyon::spin::http::__export_fermyon_spin_http_cabi!($ty with_types_in
+        $($path_to_types_root)*:: exports::fermyon::spin::http);
+        $($path_to_types_root)*::
+        exports::fermyon::spin::key_value::__export_fermyon_spin_key_value_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::fermyon::spin::key_value);
+        $($path_to_types_root)*::
+        exports::fermyon::spin::llm::__export_fermyon_spin_llm_cabi!($ty with_types_in
+        $($path_to_types_root)*:: exports::fermyon::spin::llm); $($path_to_types_root)*::
+        exports::fermyon::spin::mysql::__export_fermyon_spin_mysql_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::fermyon::spin::mysql);
+        $($path_to_types_root)*::
+        exports::fermyon::spin::postgres::__export_fermyon_spin_postgres_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::fermyon::spin::postgres);
+        $($path_to_types_root)*::
+        exports::fermyon::spin::redis::__export_fermyon_spin_redis_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::fermyon::spin::redis);
+        $($path_to_types_root)*::
+        exports::fermyon::spin::sqlite::__export_fermyon_spin_sqlite_cabi!($ty
+        with_types_in $($path_to_types_root)*:: exports::fermyon::spin::sqlite);
+        $($path_to_types_root)*::
         exports::wasi::cli0_2_6::environment::__export_wasi_cli_environment_0_2_6_cabi!($ty
         with_types_in $($path_to_types_root)*:: exports::wasi::cli0_2_6::environment);
         $($path_to_types_root)*::
@@ -65644,9 +71771,9 @@ pub(crate) use __export_deny_adapter_impl as export;
 )]
 #[doc(hidden)]
 #[allow(clippy::octal_escapes)]
-pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 38252] = *b"\
-\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xe8\xa9\x02\x01A\x02\
-\x01A\xb6\x01\x01B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\
+pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 42061] = *b"\
+\0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07\xc9\xc7\x02\x01A\x02\
+\x01A\xd5\x01\x01B\x0a\x04\0\x08pollable\x03\x01\x01h\0\x01@\x01\x04self\x01\0\x7f\
 \x04\0\x16[method]pollable.ready\x01\x02\x01@\x01\x04self\x01\x01\0\x04\0\x16[me\
 thod]pollable.block\x01\x03\x01p\x01\x01py\x01@\x01\x02in\x04\0\x05\x04\0\x04pol\
 l\x01\x06\x03\0\x12wasi:io/poll@0.2.6\x05\0\x02\x03\0\0\x08pollable\x01B\x0f\x02\
@@ -65832,134 +71959,158 @@ contents8\x08trailers<\0\xda\0\x04\0\x14[static]response.new\x01[\x01h#\x01@\x01
 lf\xdc\0\x0bstatus-code\"\0\xc6\0\x04\0\x20[method]response.set-status-code\x01^\
 \x01@\x01\x04self\xdc\0\06\x04\0\x1c[method]response.get-headers\x01_\x01@\x02\x04\
 this\xd9\0\x03res\xc1\0\0\xd0\0\x04\0\x1d[static]response.consume-body\x01`\x03\0\
-#wasi:http/types@0.3.0-rc-2026-03-15\x05\x0c\x01B\x03\x01j\0\0\x01@\x01\x06statu\
-s\0\x01\0\x04\0\x04exit\x01\x01\x03\0\x13wasi:cli/exit@0.2.6\x05\x0d\x01B\x05\x02\
-\x03\x02\x01\x07\x04\0\x0cinput-stream\x03\0\0\x01i\x01\x01@\0\0\x02\x04\0\x09ge\
-t-stdin\x01\x03\x03\0\x14wasi:cli/stdin@0.2.6\x05\x0e\x01B\x05\x02\x03\x02\x01\x08\
-\x04\0\x0doutput-stream\x03\0\0\x01i\x01\x01@\0\0\x02\x04\0\x0aget-stdout\x01\x03\
-\x03\0\x15wasi:cli/stdout@0.2.6\x05\x0f\x01B\x05\x02\x03\x02\x01\x08\x04\0\x0dou\
-tput-stream\x03\0\0\x01i\x01\x01@\0\0\x02\x04\0\x0aget-stderr\x01\x03\x03\0\x15w\
-asi:cli/stderr@0.2.6\x05\x10\x01B\x01\x04\0\x0eterminal-input\x03\x01\x03\0\x1dw\
-asi:cli/terminal-input@0.2.6\x05\x11\x01B\x01\x04\0\x0fterminal-output\x03\x01\x03\
-\0\x1ewasi:cli/terminal-output@0.2.6\x05\x12\x02\x03\0\x0b\x0eterminal-input\x01\
-B\x06\x02\x03\x02\x01\x13\x04\0\x0eterminal-input\x03\0\0\x01i\x01\x01k\x02\x01@\
-\0\0\x03\x04\0\x12get-terminal-stdin\x01\x04\x03\0\x1dwasi:cli/terminal-stdin@0.\
-2.6\x05\x14\x02\x03\0\x0c\x0fterminal-output\x01B\x06\x02\x03\x02\x01\x15\x04\0\x0f\
-terminal-output\x03\0\0\x01i\x01\x01k\x02\x01@\0\0\x03\x04\0\x13get-terminal-std\
-out\x01\x04\x03\0\x1ewasi:cli/terminal-stdout@0.2.6\x05\x16\x01B\x06\x02\x03\x02\
-\x01\x15\x04\0\x0fterminal-output\x03\0\0\x01i\x01\x01k\x02\x01@\0\0\x03\x04\0\x13\
-get-terminal-stderr\x01\x04\x03\0\x1ewasi:cli/terminal-stderr@0.2.6\x05\x17\x01B\
-\x05\x01r\x02\x07secondsw\x0bnanosecondsy\x04\0\x08datetime\x03\0\0\x01@\0\0\x01\
-\x04\0\x03now\x01\x02\x04\0\x0aresolution\x01\x02\x03\0\x1cwasi:clocks/wall-cloc\
-k@0.2.6\x05\x18\x02\x03\0\x03\x05error\x02\x03\0\x10\x08datetime\x01Br\x02\x03\x02\
-\x01\x07\x04\0\x0cinput-stream\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0doutput-strea\
-m\x03\0\x02\x02\x03\x02\x01\x19\x04\0\x05error\x03\0\x04\x02\x03\x02\x01\x1a\x04\
-\0\x08datetime\x03\0\x06\x01w\x04\0\x08filesize\x03\0\x08\x01m\x08\x07unknown\x0c\
-block-device\x10character-device\x09directory\x04fifo\x0dsymbolic-link\x0cregula\
-r-file\x06socket\x04\0\x0fdescriptor-type\x03\0\x0a\x01n\x06\x04read\x05write\x13\
-file-integrity-sync\x13data-integrity-sync\x14requested-write-sync\x10mutate-dir\
-ectory\x04\0\x10descriptor-flags\x03\0\x0c\x01n\x01\x0esymlink-follow\x04\0\x0ap\
-ath-flags\x03\0\x0e\x01n\x04\x06create\x09directory\x09exclusive\x08truncate\x04\
-\0\x0aopen-flags\x03\0\x10\x01w\x04\0\x0alink-count\x03\0\x12\x01k\x07\x01r\x06\x04\
-type\x0b\x0alink-count\x13\x04size\x09\x15data-access-timestamp\x14\x1bdata-modi\
-fication-timestamp\x14\x17status-change-timestamp\x14\x04\0\x0fdescriptor-stat\x03\
-\0\x15\x01q\x03\x09no-change\0\0\x03now\0\0\x09timestamp\x01\x07\0\x04\0\x0dnew-\
-timestamp\x03\0\x17\x01r\x02\x04type\x0b\x04names\x04\0\x0fdirectory-entry\x03\0\
-\x19\x01m%\x06access\x0bwould-block\x07already\x0ebad-descriptor\x04busy\x08dead\
-lock\x05quota\x05exist\x0efile-too-large\x15illegal-byte-sequence\x0bin-progress\
-\x0binterrupted\x07invalid\x02io\x0cis-directory\x04loop\x0etoo-many-links\x0cme\
-ssage-size\x0dname-too-long\x09no-device\x08no-entry\x07no-lock\x13insufficient-\
-memory\x12insufficient-space\x0dnot-directory\x09not-empty\x0fnot-recoverable\x0b\
-unsupported\x06no-tty\x0eno-such-device\x08overflow\x0dnot-permitted\x04pipe\x09\
-read-only\x0cinvalid-seek\x0etext-file-busy\x0ccross-device\x04\0\x0aerror-code\x03\
-\0\x1b\x01m\x06\x06normal\x0asequential\x06random\x09will-need\x09dont-need\x08n\
-o-reuse\x04\0\x06advice\x03\0\x1d\x01r\x02\x05lowerw\x05upperw\x04\0\x13metadata\
--hash-value\x03\0\x1f\x04\0\x0adescriptor\x03\x01\x04\0\x16directory-entry-strea\
-m\x03\x01\x01h!\x01i\x01\x01j\x01$\x01\x1c\x01@\x02\x04self#\x06offset\x09\0%\x04\
-\0\"[method]descriptor.read-via-stream\x01&\x01i\x03\x01j\x01'\x01\x1c\x01@\x02\x04\
-self#\x06offset\x09\0(\x04\0#[method]descriptor.write-via-stream\x01)\x01@\x01\x04\
-self#\0(\x04\0$[method]descriptor.append-via-stream\x01*\x01j\0\x01\x1c\x01@\x04\
-\x04self#\x06offset\x09\x06length\x09\x06advice\x1e\0+\x04\0\x19[method]descript\
-or.advise\x01,\x01@\x01\x04self#\0+\x04\0\x1c[method]descriptor.sync-data\x01-\x01\
-j\x01\x0d\x01\x1c\x01@\x01\x04self#\0.\x04\0\x1c[method]descriptor.get-flags\x01\
-/\x01j\x01\x0b\x01\x1c\x01@\x01\x04self#\00\x04\0\x1b[method]descriptor.get-type\
-\x011\x01@\x02\x04self#\x04size\x09\0+\x04\0\x1b[method]descriptor.set-size\x012\
-\x01@\x03\x04self#\x15data-access-timestamp\x18\x1bdata-modification-timestamp\x18\
-\0+\x04\0\x1c[method]descriptor.set-times\x013\x01p}\x01o\x024\x7f\x01j\x015\x01\
-\x1c\x01@\x03\x04self#\x06length\x09\x06offset\x09\06\x04\0\x17[method]descripto\
-r.read\x017\x01j\x01\x09\x01\x1c\x01@\x03\x04self#\x06buffer4\x06offset\x09\08\x04\
-\0\x18[method]descriptor.write\x019\x01i\"\x01j\x01:\x01\x1c\x01@\x01\x04self#\0\
-;\x04\0![method]descriptor.read-directory\x01<\x04\0\x17[method]descriptor.sync\x01\
--\x01@\x02\x04self#\x04paths\0+\x04\0&[method]descriptor.create-directory-at\x01\
-=\x01j\x01\x16\x01\x1c\x01@\x01\x04self#\0>\x04\0\x17[method]descriptor.stat\x01\
-?\x01@\x03\x04self#\x0apath-flags\x0f\x04paths\0>\x04\0\x1a[method]descriptor.st\
-at-at\x01@\x01@\x05\x04self#\x0apath-flags\x0f\x04paths\x15data-access-timestamp\
-\x18\x1bdata-modification-timestamp\x18\0+\x04\0\x1f[method]descriptor.set-times\
--at\x01A\x01@\x05\x04self#\x0eold-path-flags\x0f\x08old-paths\x0enew-descriptor#\
-\x08new-paths\0+\x04\0\x1a[method]descriptor.link-at\x01B\x01i!\x01j\x01\xc3\0\x01\
-\x1c\x01@\x05\x04self#\x0apath-flags\x0f\x04paths\x0aopen-flags\x11\x05flags\x0d\
-\0\xc4\0\x04\0\x1a[method]descriptor.open-at\x01E\x01j\x01s\x01\x1c\x01@\x02\x04\
-self#\x04paths\0\xc6\0\x04\0\x1e[method]descriptor.readlink-at\x01G\x04\0&[metho\
-d]descriptor.remove-directory-at\x01=\x01@\x04\x04self#\x08old-paths\x0enew-desc\
-riptor#\x08new-paths\0+\x04\0\x1c[method]descriptor.rename-at\x01H\x01@\x03\x04s\
-elf#\x08old-paths\x08new-paths\0+\x04\0\x1d[method]descriptor.symlink-at\x01I\x04\
-\0![method]descriptor.unlink-file-at\x01=\x01@\x02\x04self#\x05other#\0\x7f\x04\0\
-![method]descriptor.is-same-object\x01J\x01j\x01\x20\x01\x1c\x01@\x01\x04self#\0\
-\xcb\0\x04\0\x20[method]descriptor.metadata-hash\x01L\x01@\x03\x04self#\x0apath-\
-flags\x0f\x04paths\0\xcb\0\x04\0#[method]descriptor.metadata-hash-at\x01M\x01h\"\
-\x01k\x1a\x01j\x01\xcf\0\x01\x1c\x01@\x01\x04self\xce\0\0\xd0\0\x04\03[method]di\
-rectory-entry-stream.read-directory-entry\x01Q\x01h\x05\x01k\x1c\x01@\x01\x03err\
-\xd2\0\0\xd3\0\x04\0\x15filesystem-error-code\x01T\x03\0\x1bwasi:filesystem/type\
-s@0.2.6\x05\x1b\x01B\x11\x04\0\x07network\x03\x01\x01m\x15\x07unknown\x0daccess-\
-denied\x0dnot-supported\x10invalid-argument\x0dout-of-memory\x07timeout\x14concu\
-rrency-conflict\x0fnot-in-progress\x0bwould-block\x0dinvalid-state\x10new-socket\
--limit\x14address-not-bindable\x0eaddress-in-use\x12remote-unreachable\x12connec\
-tion-refused\x10connection-reset\x12connection-aborted\x12datagram-too-large\x11\
-name-unresolvable\x1atemporary-resolver-failure\x1apermanent-resolver-failure\x04\
-\0\x0aerror-code\x03\0\x01\x01m\x02\x04ipv4\x04ipv6\x04\0\x11ip-address-family\x03\
-\0\x03\x01o\x04}}}}\x04\0\x0cipv4-address\x03\0\x05\x01o\x08{{{{{{{{\x04\0\x0cip\
-v6-address\x03\0\x07\x01q\x02\x04ipv4\x01\x06\0\x04ipv6\x01\x08\0\x04\0\x0aip-ad\
-dress\x03\0\x09\x01r\x02\x04port{\x07address\x06\x04\0\x13ipv4-socket-address\x03\
-\0\x0b\x01r\x04\x04port{\x09flow-infoy\x07address\x08\x08scope-idy\x04\0\x13ipv6\
--socket-address\x03\0\x0d\x01q\x02\x04ipv4\x01\x0c\0\x04ipv6\x01\x0e\0\x04\0\x11\
-ip-socket-address\x03\0\x0f\x03\0\x1awasi:sockets/network@0.2.6\x05\x1c\x02\x03\0\
-\x12\x07network\x01B\x05\x02\x03\x02\x01\x1d\x04\0\x07network\x03\0\0\x01i\x01\x01\
-@\0\0\x02\x04\0\x10instance-network\x01\x03\x03\0#wasi:sockets/instance-network@\
-0.2.6\x05\x1e\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x10get-random-bytes\x01\x01\
-\x01@\0\0w\x04\0\x0eget-random-u64\x01\x02\x03\0\x18wasi:random/random@0.2.6\x05\
-\x1f\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x19get-insecure-random-bytes\x01\x01\
-\x01@\0\0w\x04\0\x17get-insecure-random-u64\x01\x02\x03\0\x1awasi:random/insecur\
-e@0.2.6\x05\x20\x01B\x03\x01o\x02ww\x01@\0\0\0\x04\0\x0dinsecure-seed\x01\x01\x03\
-\0\x1fwasi:random/insecure-seed@0.2.6\x05!\x01B\x03\x01j\0\0\x01@\x01\x06status\0\
-\x01\0\x04\0\x04exit\x01\x01\x03\0!wasi:cli/exit@0.3.0-rc-2026-03-15\x05\"\x01B\x02\
+#wasi:http/types@0.3.0-rc-2026-03-15\x05\x0c\x01B\x15\x01{\x04\0\x0bhttp-status\x03\
+\0\0\x01p}\x04\0\x04body\x03\0\x02\x01o\x02ss\x01p\x04\x04\0\x07headers\x03\0\x05\
+\x01p\x04\x04\0\x06params\x03\0\x07\x01s\x04\0\x03uri\x03\0\x09\x01m\x07\x03get\x04\
+post\x03put\x06delete\x05patch\x04head\x07options\x04\0\x06method\x03\0\x0b\x01k\
+\x03\x01r\x05\x06method\x0c\x03uri\x0a\x07headers\x06\x06params\x08\x04body\x0d\x04\
+\0\x07request\x03\0\x0e\x01k\x06\x01r\x03\x06status\x01\x07headers\x10\x04body\x0d\
+\x04\0\x08response\x03\0\x11\x01m\x06\x07success\x17destination-not-allowed\x0bi\
+nvalid-url\x0drequest-error\x0druntime-error\x11too-many-requests\x04\0\x0ahttp-\
+error\x03\0\x13\x03\0\x17fermyon:spin/http-types\x05\x0d\x01B\x0f\x01m\x0e\x07bo\
+olean\x04int8\x05int16\x05int32\x05int64\x05uint8\x06uint16\x06uint32\x06uint64\x0a\
+floating32\x0afloating64\x03str\x06binary\x05other\x04\0\x0cdb-data-type\x03\0\0\
+\x01p}\x01q\x0f\x07boolean\x01\x7f\0\x04int8\x01~\0\x05int16\x01|\0\x05int32\x01\
+z\0\x05int64\x01x\0\x05uint8\x01}\0\x06uint16\x01{\0\x06uint32\x01y\0\x06uint64\x01\
+w\0\x0afloating32\x01v\0\x0afloating64\x01u\0\x03str\x01s\0\x06binary\x01\x02\0\x07\
+db-null\0\0\x0bunsupported\0\0\x04\0\x08db-value\x03\0\x03\x01q\x0e\x07boolean\x01\
+\x7f\0\x04int8\x01~\0\x05int16\x01|\0\x05int32\x01z\0\x05int64\x01x\0\x05uint8\x01\
+}\0\x06uint16\x01{\0\x06uint32\x01y\0\x06uint64\x01w\0\x0afloating32\x01v\0\x0af\
+loating64\x01u\0\x03str\x01s\0\x06binary\x01\x02\0\x07db-null\0\0\x04\0\x0fparam\
+eter-value\x03\0\x05\x01r\x02\x04names\x09data-type\x01\x04\0\x06column\x03\0\x07\
+\x01p\x04\x04\0\x03row\x03\0\x09\x01p\x08\x01p\x0a\x01r\x02\x07columns\x0b\x04ro\
+ws\x0c\x04\0\x07row-set\x03\0\x0d\x03\0\x18fermyon:spin/rdbms-types\x05\x0e\x01B\
+\x08\x01m\x02\x07success\x05error\x04\0\x05error\x03\0\0\x01p}\x04\0\x07payload\x03\
+\0\x02\x01q\x02\x05int64\x01x\0\x06binary\x01\x03\0\x04\0\x0fredis-parameter\x03\
+\0\x04\x01q\x04\x03nil\0\0\x06status\x01s\0\x05int64\x01x\0\x06binary\x01\x03\0\x04\
+\0\x0credis-result\x03\0\x06\x03\0\x18fermyon:spin/redis-types\x05\x0f\x01B\x03\x01\
+j\0\0\x01@\x01\x06status\0\x01\0\x04\0\x04exit\x01\x01\x03\0\x13wasi:cli/exit@0.\
+2.6\x05\x10\x01B\x05\x02\x03\x02\x01\x07\x04\0\x0cinput-stream\x03\0\0\x01i\x01\x01\
+@\0\0\x02\x04\0\x09get-stdin\x01\x03\x03\0\x14wasi:cli/stdin@0.2.6\x05\x11\x01B\x05\
+\x02\x03\x02\x01\x08\x04\0\x0doutput-stream\x03\0\0\x01i\x01\x01@\0\0\x02\x04\0\x0a\
+get-stdout\x01\x03\x03\0\x15wasi:cli/stdout@0.2.6\x05\x12\x01B\x05\x02\x03\x02\x01\
+\x08\x04\0\x0doutput-stream\x03\0\0\x01i\x01\x01@\0\0\x02\x04\0\x0aget-stderr\x01\
+\x03\x03\0\x15wasi:cli/stderr@0.2.6\x05\x13\x01B\x01\x04\0\x0eterminal-input\x03\
+\x01\x03\0\x1dwasi:cli/terminal-input@0.2.6\x05\x14\x01B\x01\x04\0\x0fterminal-o\
+utput\x03\x01\x03\0\x1ewasi:cli/terminal-output@0.2.6\x05\x15\x02\x03\0\x0e\x0et\
+erminal-input\x01B\x06\x02\x03\x02\x01\x16\x04\0\x0eterminal-input\x03\0\0\x01i\x01\
+\x01k\x02\x01@\0\0\x03\x04\0\x12get-terminal-stdin\x01\x04\x03\0\x1dwasi:cli/ter\
+minal-stdin@0.2.6\x05\x17\x02\x03\0\x0f\x0fterminal-output\x01B\x06\x02\x03\x02\x01\
+\x18\x04\0\x0fterminal-output\x03\0\0\x01i\x01\x01k\x02\x01@\0\0\x03\x04\0\x13ge\
+t-terminal-stdout\x01\x04\x03\0\x1ewasi:cli/terminal-stdout@0.2.6\x05\x19\x01B\x06\
+\x02\x03\x02\x01\x18\x04\0\x0fterminal-output\x03\0\0\x01i\x01\x01k\x02\x01@\0\0\
+\x03\x04\0\x13get-terminal-stderr\x01\x04\x03\0\x1ewasi:cli/terminal-stderr@0.2.\
+6\x05\x1a\x01B\x05\x01r\x02\x07secondsw\x0bnanosecondsy\x04\0\x08datetime\x03\0\0\
+\x01@\0\0\x01\x04\0\x03now\x01\x02\x04\0\x0aresolution\x01\x02\x03\0\x1cwasi:clo\
+cks/wall-clock@0.2.6\x05\x1b\x02\x03\0\x03\x05error\x02\x03\0\x13\x08datetime\x01\
+Br\x02\x03\x02\x01\x07\x04\0\x0cinput-stream\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0d\
+output-stream\x03\0\x02\x02\x03\x02\x01\x1c\x04\0\x05error\x03\0\x04\x02\x03\x02\
+\x01\x1d\x04\0\x08datetime\x03\0\x06\x01w\x04\0\x08filesize\x03\0\x08\x01m\x08\x07\
+unknown\x0cblock-device\x10character-device\x09directory\x04fifo\x0dsymbolic-lin\
+k\x0cregular-file\x06socket\x04\0\x0fdescriptor-type\x03\0\x0a\x01n\x06\x04read\x05\
+write\x13file-integrity-sync\x13data-integrity-sync\x14requested-write-sync\x10m\
+utate-directory\x04\0\x10descriptor-flags\x03\0\x0c\x01n\x01\x0esymlink-follow\x04\
+\0\x0apath-flags\x03\0\x0e\x01n\x04\x06create\x09directory\x09exclusive\x08trunc\
+ate\x04\0\x0aopen-flags\x03\0\x10\x01w\x04\0\x0alink-count\x03\0\x12\x01k\x07\x01\
+r\x06\x04type\x0b\x0alink-count\x13\x04size\x09\x15data-access-timestamp\x14\x1b\
+data-modification-timestamp\x14\x17status-change-timestamp\x14\x04\0\x0fdescript\
+or-stat\x03\0\x15\x01q\x03\x09no-change\0\0\x03now\0\0\x09timestamp\x01\x07\0\x04\
+\0\x0dnew-timestamp\x03\0\x17\x01r\x02\x04type\x0b\x04names\x04\0\x0fdirectory-e\
+ntry\x03\0\x19\x01m%\x06access\x0bwould-block\x07already\x0ebad-descriptor\x04bu\
+sy\x08deadlock\x05quota\x05exist\x0efile-too-large\x15illegal-byte-sequence\x0bi\
+n-progress\x0binterrupted\x07invalid\x02io\x0cis-directory\x04loop\x0etoo-many-l\
+inks\x0cmessage-size\x0dname-too-long\x09no-device\x08no-entry\x07no-lock\x13ins\
+ufficient-memory\x12insufficient-space\x0dnot-directory\x09not-empty\x0fnot-reco\
+verable\x0bunsupported\x06no-tty\x0eno-such-device\x08overflow\x0dnot-permitted\x04\
+pipe\x09read-only\x0cinvalid-seek\x0etext-file-busy\x0ccross-device\x04\0\x0aerr\
+or-code\x03\0\x1b\x01m\x06\x06normal\x0asequential\x06random\x09will-need\x09don\
+t-need\x08no-reuse\x04\0\x06advice\x03\0\x1d\x01r\x02\x05lowerw\x05upperw\x04\0\x13\
+metadata-hash-value\x03\0\x1f\x04\0\x0adescriptor\x03\x01\x04\0\x16directory-ent\
+ry-stream\x03\x01\x01h!\x01i\x01\x01j\x01$\x01\x1c\x01@\x02\x04self#\x06offset\x09\
+\0%\x04\0\"[method]descriptor.read-via-stream\x01&\x01i\x03\x01j\x01'\x01\x1c\x01\
+@\x02\x04self#\x06offset\x09\0(\x04\0#[method]descriptor.write-via-stream\x01)\x01\
+@\x01\x04self#\0(\x04\0$[method]descriptor.append-via-stream\x01*\x01j\0\x01\x1c\
+\x01@\x04\x04self#\x06offset\x09\x06length\x09\x06advice\x1e\0+\x04\0\x19[method\
+]descriptor.advise\x01,\x01@\x01\x04self#\0+\x04\0\x1c[method]descriptor.sync-da\
+ta\x01-\x01j\x01\x0d\x01\x1c\x01@\x01\x04self#\0.\x04\0\x1c[method]descriptor.ge\
+t-flags\x01/\x01j\x01\x0b\x01\x1c\x01@\x01\x04self#\00\x04\0\x1b[method]descript\
+or.get-type\x011\x01@\x02\x04self#\x04size\x09\0+\x04\0\x1b[method]descriptor.se\
+t-size\x012\x01@\x03\x04self#\x15data-access-timestamp\x18\x1bdata-modification-\
+timestamp\x18\0+\x04\0\x1c[method]descriptor.set-times\x013\x01p}\x01o\x024\x7f\x01\
+j\x015\x01\x1c\x01@\x03\x04self#\x06length\x09\x06offset\x09\06\x04\0\x17[method\
+]descriptor.read\x017\x01j\x01\x09\x01\x1c\x01@\x03\x04self#\x06buffer4\x06offse\
+t\x09\08\x04\0\x18[method]descriptor.write\x019\x01i\"\x01j\x01:\x01\x1c\x01@\x01\
+\x04self#\0;\x04\0![method]descriptor.read-directory\x01<\x04\0\x17[method]descr\
+iptor.sync\x01-\x01@\x02\x04self#\x04paths\0+\x04\0&[method]descriptor.create-di\
+rectory-at\x01=\x01j\x01\x16\x01\x1c\x01@\x01\x04self#\0>\x04\0\x17[method]descr\
+iptor.stat\x01?\x01@\x03\x04self#\x0apath-flags\x0f\x04paths\0>\x04\0\x1a[method\
+]descriptor.stat-at\x01@\x01@\x05\x04self#\x0apath-flags\x0f\x04paths\x15data-ac\
+cess-timestamp\x18\x1bdata-modification-timestamp\x18\0+\x04\0\x1f[method]descri\
+ptor.set-times-at\x01A\x01@\x05\x04self#\x0eold-path-flags\x0f\x08old-paths\x0en\
+ew-descriptor#\x08new-paths\0+\x04\0\x1a[method]descriptor.link-at\x01B\x01i!\x01\
+j\x01\xc3\0\x01\x1c\x01@\x05\x04self#\x0apath-flags\x0f\x04paths\x0aopen-flags\x11\
+\x05flags\x0d\0\xc4\0\x04\0\x1a[method]descriptor.open-at\x01E\x01j\x01s\x01\x1c\
+\x01@\x02\x04self#\x04paths\0\xc6\0\x04\0\x1e[method]descriptor.readlink-at\x01G\
+\x04\0&[method]descriptor.remove-directory-at\x01=\x01@\x04\x04self#\x08old-path\
+s\x0enew-descriptor#\x08new-paths\0+\x04\0\x1c[method]descriptor.rename-at\x01H\x01\
+@\x03\x04self#\x08old-paths\x08new-paths\0+\x04\0\x1d[method]descriptor.symlink-\
+at\x01I\x04\0![method]descriptor.unlink-file-at\x01=\x01@\x02\x04self#\x05other#\
+\0\x7f\x04\0![method]descriptor.is-same-object\x01J\x01j\x01\x20\x01\x1c\x01@\x01\
+\x04self#\0\xcb\0\x04\0\x20[method]descriptor.metadata-hash\x01L\x01@\x03\x04sel\
+f#\x0apath-flags\x0f\x04paths\0\xcb\0\x04\0#[method]descriptor.metadata-hash-at\x01\
+M\x01h\"\x01k\x1a\x01j\x01\xcf\0\x01\x1c\x01@\x01\x04self\xce\0\0\xd0\0\x04\03[m\
+ethod]directory-entry-stream.read-directory-entry\x01Q\x01h\x05\x01k\x1c\x01@\x01\
+\x03err\xd2\0\0\xd3\0\x04\0\x15filesystem-error-code\x01T\x03\0\x1bwasi:filesyst\
+em/types@0.2.6\x05\x1e\x01B\x11\x04\0\x07network\x03\x01\x01m\x15\x07unknown\x0d\
+access-denied\x0dnot-supported\x10invalid-argument\x0dout-of-memory\x07timeout\x14\
+concurrency-conflict\x0fnot-in-progress\x0bwould-block\x0dinvalid-state\x10new-s\
+ocket-limit\x14address-not-bindable\x0eaddress-in-use\x12remote-unreachable\x12c\
+onnection-refused\x10connection-reset\x12connection-aborted\x12datagram-too-larg\
+e\x11name-unresolvable\x1atemporary-resolver-failure\x1apermanent-resolver-failu\
+re\x04\0\x0aerror-code\x03\0\x01\x01m\x02\x04ipv4\x04ipv6\x04\0\x11ip-address-fa\
+mily\x03\0\x03\x01o\x04}}}}\x04\0\x0cipv4-address\x03\0\x05\x01o\x08{{{{{{{{\x04\
+\0\x0cipv6-address\x03\0\x07\x01q\x02\x04ipv4\x01\x06\0\x04ipv6\x01\x08\0\x04\0\x0a\
+ip-address\x03\0\x09\x01r\x02\x04port{\x07address\x06\x04\0\x13ipv4-socket-addre\
+ss\x03\0\x0b\x01r\x04\x04port{\x09flow-infoy\x07address\x08\x08scope-idy\x04\0\x13\
+ipv6-socket-address\x03\0\x0d\x01q\x02\x04ipv4\x01\x0c\0\x04ipv6\x01\x0e\0\x04\0\
+\x11ip-socket-address\x03\0\x0f\x03\0\x1awasi:sockets/network@0.2.6\x05\x1f\x02\x03\
+\0\x15\x07network\x01B\x05\x02\x03\x02\x01\x20\x04\0\x07network\x03\0\0\x01i\x01\
+\x01@\0\0\x02\x04\0\x10instance-network\x01\x03\x03\0#wasi:sockets/instance-netw\
+ork@0.2.6\x05!\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x10get-random-bytes\x01\
+\x01\x01@\0\0w\x04\0\x0eget-random-u64\x01\x02\x03\0\x18wasi:random/random@0.2.6\
+\x05\"\x01B\x05\x01p}\x01@\x01\x03lenw\0\0\x04\0\x19get-insecure-random-bytes\x01\
+\x01\x01@\0\0w\x04\0\x17get-insecure-random-u64\x01\x02\x03\0\x1awasi:random/ins\
+ecure@0.2.6\x05#\x01B\x03\x01o\x02ww\x01@\0\0\0\x04\0\x0dinsecure-seed\x01\x01\x03\
+\0\x1fwasi:random/insecure-seed@0.2.6\x05$\x01B\x03\x01j\0\0\x01@\x01\x06status\0\
+\x01\0\x04\0\x04exit\x01\x01\x03\0!wasi:cli/exit@0.3.0-rc-2026-03-15\x05%\x01B\x02\
 \x01m\x03\x02io\x15illegal-byte-sequence\x04pipe\x04\0\x0aerror-code\x03\0\0\x03\
-\0\"wasi:cli/types@0.3.0-rc-2026-03-15\x05#\x02\x03\0\x18\x0aerror-code\x01B\x08\
-\x02\x03\x02\x01$\x04\0\x0aerror-code\x03\0\0\x01f\x01}\x01j\0\x01\x01\x01e\x01\x03\
+\0\"wasi:cli/types@0.3.0-rc-2026-03-15\x05&\x02\x03\0\x1b\x0aerror-code\x01B\x08\
+\x02\x03\x02\x01'\x04\0\x0aerror-code\x03\0\0\x01f\x01}\x01j\0\x01\x01\x01e\x01\x03\
 \x01o\x02\x02\x04\x01@\0\0\x05\x04\0\x0fread-via-stream\x01\x06\x03\0\"wasi:cli/\
-stdin@0.3.0-rc-2026-03-15\x05%\x01B\x07\x02\x03\x02\x01$\x04\0\x0aerror-code\x03\
+stdin@0.3.0-rc-2026-03-15\x05(\x01B\x07\x02\x03\x02\x01'\x04\0\x0aerror-code\x03\
 \0\0\x01f\x01}\x01j\0\x01\x01\x01e\x01\x03\x01@\x01\x04data\x02\0\x04\x04\0\x10w\
-rite-via-stream\x01\x05\x03\0#wasi:cli/stdout@0.3.0-rc-2026-03-15\x05&\x01B\x07\x02\
-\x03\x02\x01$\x04\0\x0aerror-code\x03\0\0\x01f\x01}\x01j\0\x01\x01\x01e\x01\x03\x01\
+rite-via-stream\x01\x05\x03\0#wasi:cli/stdout@0.3.0-rc-2026-03-15\x05)\x01B\x07\x02\
+\x03\x02\x01'\x04\0\x0aerror-code\x03\0\0\x01f\x01}\x01j\0\x01\x01\x01e\x01\x03\x01\
 @\x01\x04data\x02\0\x04\x04\0\x10write-via-stream\x01\x05\x03\0#wasi:cli/stderr@\
-0.3.0-rc-2026-03-15\x05'\x01B\x01\x04\0\x0eterminal-input\x03\x01\x03\0+wasi:cli\
-/terminal-input@0.3.0-rc-2026-03-15\x05(\x01B\x01\x04\0\x0fterminal-output\x03\x01\
-\x03\0,wasi:cli/terminal-output@0.3.0-rc-2026-03-15\x05)\x02\x03\0\x1c\x0etermin\
-al-input\x01B\x06\x02\x03\x02\x01*\x04\0\x0eterminal-input\x03\0\0\x01i\x01\x01k\
+0.3.0-rc-2026-03-15\x05*\x01B\x01\x04\0\x0eterminal-input\x03\x01\x03\0+wasi:cli\
+/terminal-input@0.3.0-rc-2026-03-15\x05+\x01B\x01\x04\0\x0fterminal-output\x03\x01\
+\x03\0,wasi:cli/terminal-output@0.3.0-rc-2026-03-15\x05,\x02\x03\0\x1f\x0etermin\
+al-input\x01B\x06\x02\x03\x02\x01-\x04\0\x0eterminal-input\x03\0\0\x01i\x01\x01k\
 \x02\x01@\0\0\x03\x04\0\x12get-terminal-stdin\x01\x04\x03\0+wasi:cli/terminal-st\
-din@0.3.0-rc-2026-03-15\x05+\x02\x03\0\x1d\x0fterminal-output\x01B\x06\x02\x03\x02\
-\x01,\x04\0\x0fterminal-output\x03\0\0\x01i\x01\x01k\x02\x01@\0\0\x03\x04\0\x13g\
+din@0.3.0-rc-2026-03-15\x05.\x02\x03\0\x20\x0fterminal-output\x01B\x06\x02\x03\x02\
+\x01/\x04\0\x0fterminal-output\x03\0\0\x01i\x01\x01k\x02\x01@\0\0\x03\x04\0\x13g\
 et-terminal-stdout\x01\x04\x03\0,wasi:cli/terminal-stdout@0.3.0-rc-2026-03-15\x05\
--\x01B\x06\x02\x03\x02\x01,\x04\0\x0fterminal-output\x03\0\0\x01i\x01\x01k\x02\x01\
+0\x01B\x06\x02\x03\x02\x01/\x04\0\x0fterminal-output\x03\0\0\x01i\x01\x01k\x02\x01\
 @\0\0\x03\x04\0\x13get-terminal-stderr\x01\x04\x03\0,wasi:cli/terminal-stderr@0.\
-3.0-rc-2026-03-15\x05.\x01B\x0c\x02\x03\x02\x01\x0b\x04\0\x08duration\x03\0\0\x01\
+3.0-rc-2026-03-15\x051\x01B\x0c\x02\x03\x02\x01\x0b\x04\0\x08duration\x03\0\0\x01\
 w\x04\0\x04mark\x03\0\x02\x01@\0\0\x03\x04\0\x03now\x01\x04\x01@\0\0\x01\x04\0\x0e\
 get-resolution\x01\x05\x01C\x01\x04when\x03\x01\0\x04\0\x0await-until\x01\x06\x01\
 C\x01\x08how-long\x01\x01\0\x04\0\x08wait-for\x01\x07\x03\0/wasi:clocks/monotoni\
-c-clock@0.3.0-rc-2026-03-15\x05/\x01B\x08\x02\x03\x02\x01\x0b\x04\0\x08duration\x03\
+c-clock@0.3.0-rc-2026-03-15\x052\x01B\x08\x02\x03\x02\x01\x0b\x04\0\x08duration\x03\
 \0\0\x01r\x02\x07secondsx\x0bnanosecondsy\x04\0\x07instant\x03\0\x02\x01@\0\0\x03\
 \x04\0\x03now\x01\x04\x01@\0\0\x01\x04\0\x0eget-resolution\x01\x05\x03\0,wasi:cl\
-ocks/system-clock@0.3.0-rc-2026-03-15\x050\x02\x03\0\"\x07instant\x01BZ\x02\x03\x02\
-\x011\x04\0\x07instant\x03\0\0\x01w\x04\0\x08filesize\x03\0\x02\x01ks\x01q\x08\x0c\
+ocks/system-clock@0.3.0-rc-2026-03-15\x053\x02\x03\0%\x07instant\x01BZ\x02\x03\x02\
+\x014\x04\0\x07instant\x03\0\0\x01w\x04\0\x08filesize\x03\0\x02\x01ks\x01q\x08\x0c\
 block-device\0\0\x10character-device\0\0\x09directory\0\0\x04fifo\0\0\x0dsymboli\
 c-link\0\0\x0cregular-file\0\0\x06socket\0\0\x05other\x01\x04\0\x04\0\x0fdescrip\
 tor-type\x03\0\x05\x01n\x06\x04read\x05write\x13file-integrity-sync\x13data-inte\
@@ -66012,7 +72163,7 @@ or.remove-directory-at\x010\x01C\x04\x04self\x1d\x08old-paths\x0enew-descriptor\
 \x04\0![method]descriptor.is-same-object\x01=\x01j\x01\x1b\x01\x17\x01C\x01\x04s\
 elf\x1d\0>\x04\0\x20[method]descriptor.metadata-hash\x01?\x01C\x03\x04self\x1d\x0a\
 path-flags\x0a\x04paths\0>\x04\0#[method]descriptor.metadata-hash-at\x01@\x03\0)\
-wasi:filesystem/types@0.3.0-rc-2026-03-15\x052\x01Br\x02\x03\x02\x01\x0b\x04\0\x08\
+wasi:filesystem/types@0.3.0-rc-2026-03-15\x055\x01Br\x02\x03\x02\x01\x0b\x04\0\x08\
 duration\x03\0\0\x01ks\x01q\x0f\x0daccess-denied\0\0\x0dnot-supported\0\0\x10inv\
 alid-argument\0\0\x0dout-of-memory\0\0\x07timeout\0\0\x0dinvalid-state\0\0\x14ad\
 dress-not-bindable\0\0\x0eaddress-in-use\0\0\x12remote-unreachable\0\0\x12connec\
@@ -66065,13 +72216,13 @@ E\x01@\x01\x04self:\02\x04\0([method]udp-socket.get-unicast-hop-limit\x01F\x01@\
 @\x01\x04self:\05\x04\0*[method]udp-socket.get-receive-buffer-size\x01H\x01@\x02\
 \x04self:\x05valuew\0\x19\x04\0*[method]udp-socket.set-receive-buffer-size\x01I\x04\
 \0'[method]udp-socket.get-send-buffer-size\x01H\x04\0'[method]udp-socket.set-sen\
-d-buffer-size\x01I\x03\0&wasi:sockets/types@0.3.0-rc-2026-03-15\x053\x01B\x05\x01\
+d-buffer-size\x01I\x03\0&wasi:sockets/types@0.3.0-rc-2026-03-15\x056\x01B\x05\x01\
 p}\x01@\x01\x07max-lenw\0\0\x04\0\x10get-random-bytes\x01\x01\x01@\0\0w\x04\0\x0e\
-get-random-u64\x01\x02\x03\0&wasi:random/random@0.3.0-rc-2026-03-15\x054\x01B\x05\
+get-random-u64\x01\x02\x03\0&wasi:random/random@0.3.0-rc-2026-03-15\x057\x01B\x05\
 \x01p}\x01@\x01\x07max-lenw\0\0\x04\0\x19get-insecure-random-bytes\x01\x01\x01@\0\
 \0w\x04\0\x17get-insecure-random-u64\x01\x02\x03\0(wasi:random/insecure@0.3.0-rc\
--2026-03-15\x055\x01B\x03\x01o\x02ww\x01@\0\0\0\x04\0\x11get-insecure-seed\x01\x01\
-\x03\0-wasi:random/insecure-seed@0.3.0-rc-2026-03-15\x056\x01B\x11\x01q\x05\x11c\
+-2026-03-15\x058\x01B\x03\x01o\x02ww\x01@\0\0\0\x04\0\x11get-insecure-seed\x01\x01\
+\x03\0-wasi:random/insecure-seed@0.3.0-rc-2026-03-15\x059\x01B\x11\x01q\x05\x11c\
 onnection-failed\x01s\0\x0dbad-parameter\x01s\0\x0cquery-failed\x01s\0\x17value-\
 conversion-failed\x01s\0\x05other\x01s\0\x04\0\x05error\x03\0\0\x01m\x0e\x07bool\
 ean\x04int8\x05int16\x05int32\x05int64\x05uint8\x06uint16\x06uint32\x06uint64\x0a\
@@ -66085,7 +72236,7 @@ db-null\0\0\x0bunsupported\0\0\x04\0\x08db-value\x03\0\x05\x01q\x0e\x07boolean\x
 loating64\x01u\0\x03str\x01s\0\x06binary\x01\x04\0\x07db-null\0\0\x04\0\x0fparam\
 eter-value\x03\0\x07\x01r\x02\x04names\x09data-type\x03\x04\0\x06column\x03\0\x09\
 \x01p\x06\x04\0\x03row\x03\0\x0b\x01p\x0a\x01p\x0c\x01r\x02\x07columns\x0d\x04ro\
-ws\x0e\x04\0\x07row-set\x03\0\x0f\x03\0\x1efermyon:spin/rdbms-types@2.0.0\x057\x01\
+ws\x0e\x04\0\x07row-set\x03\0\x0f\x03\0\x1efermyon:spin/rdbms-types@2.0.0\x05:\x01\
 B\x1c\x01q\x03\x0dno-such-store\0\0\x0daccess-denied\0\0\x05other\x01s\0\x04\0\x05\
 error\x03\0\0\x01ps\x01ks\x01r\x02\x04keys\x02\x06cursor\x03\x04\0\x0ckey-respon\
 se\x03\0\x04\x04\0\x06bucket\x03\x01\x01h\x06\x01p}\x01k\x08\x01j\x01\x09\x01\x01\
@@ -66096,31 +72247,31 @@ se\x03\0\x04\x04\0\x06bucket\x03\x01\x01h\x06\x01p}\x01k\x08\x01j\x01\x09\x01\x0
 .exists\x01\x10\x01j\x01\x05\x01\x01\x01@\x02\x04self\x07\x06cursor\x03\0\x11\x04\
 \0\x18[method]bucket.list-keys\x01\x12\x01i\x06\x01j\x01\x13\x01\x01\x01@\x01\x0a\
 identifiers\0\x14\x04\0\x04open\x01\x15\x03\0\x20wasi:keyvalue/store@0.2.0-draft\
-2\x058\x02\x03\0)\x06bucket\x02\x03\0)\x05error\x01B\x18\x02\x03\x02\x019\x04\0\x06\
-bucket\x03\0\0\x02\x03\x02\x01:\x04\0\x05error\x03\0\x02\x04\0\x03cas\x03\x01\x01\
+2\x05;\x02\x03\0,\x06bucket\x02\x03\0,\x05error\x01B\x18\x02\x03\x02\x01<\x04\0\x06\
+bucket\x03\0\0\x02\x03\x02\x01=\x04\0\x05error\x03\0\x02\x04\0\x03cas\x03\x01\x01\
 i\x04\x01q\x02\x0bstore-error\x01\x03\0\x0acas-failed\x01\x05\0\x04\0\x09cas-err\
 or\x03\0\x06\x01h\x01\x01j\x01\x05\x01\x03\x01@\x02\x06bucket\x08\x03keys\0\x09\x04\
 \0\x0f[static]cas.new\x01\x0a\x01h\x04\x01p}\x01k\x0c\x01j\x01\x0d\x01\x03\x01@\x01\
 \x04self\x0b\0\x0e\x04\0\x13[method]cas.current\x01\x0f\x01j\x01x\x01\x03\x01@\x03\
 \x06bucket\x08\x03keys\x05deltax\0\x10\x04\0\x09increment\x01\x11\x01j\0\x01\x07\
 \x01@\x02\x03cas\x05\x05value\x0c\0\x12\x04\0\x04swap\x01\x13\x03\0\"wasi:keyval\
-ue/atomics@0.2.0-draft2\x05;\x01B\x14\x02\x03\x02\x019\x04\0\x06bucket\x03\0\0\x02\
-\x03\x02\x01:\x04\0\x05error\x03\0\x02\x01h\x01\x01ps\x01p}\x01k\x06\x01o\x02s\x07\
+ue/atomics@0.2.0-draft2\x05>\x01B\x14\x02\x03\x02\x01<\x04\0\x06bucket\x03\0\0\x02\
+\x03\x02\x01=\x04\0\x05error\x03\0\x02\x01h\x01\x01ps\x01p}\x01k\x06\x01o\x02s\x07\
 \x01p\x08\x01j\x01\x09\x01\x03\x01@\x02\x06bucket\x04\x04keys\x05\0\x0a\x04\0\x08\
 get-many\x01\x0b\x01o\x02s\x06\x01p\x0c\x01j\0\x01\x03\x01@\x02\x06bucket\x04\x0a\
 key-values\x0d\0\x0e\x04\0\x08set-many\x01\x0f\x01@\x02\x06bucket\x04\x04keys\x05\
 \0\x0e\x04\0\x0bdelete-many\x01\x10\x03\0\x20wasi:keyvalue/batch@0.2.0-draft2\x05\
-<\x02\x03\0\x04\x10outgoing-request\x02\x03\0\x04\x0frequest-options\x02\x03\0\x04\
+?\x02\x03\0\x04\x10outgoing-request\x02\x03\0\x04\x0frequest-options\x02\x03\0\x04\
 \x18future-incoming-response\x02\x03\0\x04\x0aerror-code\x01B\x0f\x02\x03\x02\x01\
-=\x04\0\x10outgoing-request\x03\0\0\x02\x03\x02\x01>\x04\0\x0frequest-options\x03\
-\0\x02\x02\x03\x02\x01?\x04\0\x18future-incoming-response\x03\0\x04\x02\x03\x02\x01\
-@\x04\0\x0aerror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\
+@\x04\0\x10outgoing-request\x03\0\0\x02\x03\x02\x01A\x04\0\x0frequest-options\x03\
+\0\x02\x02\x03\x02\x01B\x04\0\x18future-incoming-response\x03\0\x04\x02\x03\x02\x01\
+C\x04\0\x0aerror-code\x03\0\x06\x01i\x01\x01i\x03\x01k\x09\x01i\x05\x01j\x01\x0b\
 \x01\x07\x01@\x02\x07request\x08\x07options\x0a\0\x0c\x04\0\x06handle\x01\x0d\x04\
-\0\x20wasi:http/outgoing-handler@0.2.6\x05A\x02\x03\0\x06\x07request\x02\x03\0\x06\
-\x08response\x02\x03\0\x06\x0aerror-code\x01B\x0b\x02\x03\x02\x01B\x04\0\x07requ\
-est\x03\0\0\x02\x03\x02\x01C\x04\0\x08response\x03\0\x02\x02\x03\x02\x01D\x04\0\x0a\
+\0\x20wasi:http/outgoing-handler@0.2.6\x05D\x02\x03\0\x06\x07request\x02\x03\0\x06\
+\x08response\x02\x03\0\x06\x0aerror-code\x01B\x0b\x02\x03\x02\x01E\x04\0\x07requ\
+est\x03\0\0\x02\x03\x02\x01F\x04\0\x08response\x03\0\x02\x02\x03\x02\x01G\x04\0\x0a\
 error-code\x03\0\x04\x01i\x01\x01i\x03\x01j\x01\x07\x01\x05\x01C\x01\x07request\x06\
-\0\x08\x04\0\x04send\x01\x09\x04\0$wasi:http/client@0.3.0-rc-2026-03-15\x05E\x01\
+\0\x08\x04\0\x04send\x01\x09\x04\0$wasi:http/client@0.3.0-rc-2026-03-15\x05H\x01\
 B\x1a\x04\0\x05store\x03\x01\x01q\x04\x10store-table-full\0\0\x0dno-such-store\0\
 \0\x0daccess-denied\0\0\x05other\x01s\0\x04\0\x05error\x03\0\x01\x01i\0\x01j\x01\
 \x03\x01\x02\x01C\x01\x05labels\0\x04\x04\0\x12[static]store.open\x01\x05\x01h\0\
@@ -66130,14 +72281,14 @@ B\x1a\x04\0\x05store\x03\x01\x01q\x04\x10store-table-full\0\0\x0dno-such-store\0
 \0\x14[method]store.delete\x01\x0d\x01j\x01\x7f\x01\x02\x01C\x02\x04self\x06\x03\
 keys\0\x0e\x04\0\x14[method]store.exists\x01\x0f\x01f\x01s\x01e\x01\x0b\x01o\x02\
 \x10\x11\x01C\x01\x04self\x06\0\x12\x04\0\x16[method]store.get-keys\x01\x13\x04\0\
-\x1espin:key-value/key-value@3.0.0\x05F\x01B\x0f\x01q\x04\x0finvalid-address\0\0\
+\x1espin:key-value/key-value@3.0.0\x05I\x01B\x0f\x01q\x04\x0finvalid-address\0\0\
 \x14too-many-connections\0\0\x11connection-failed\x01s\0\x05other\x01s\0\x04\0\x05\
 error\x03\0\0\x01m\x03\x0cat-most-once\x0dat-least-once\x0cexactly-once\x04\0\x03\
 qos\x03\0\x02\x04\0\x0aconnection\x03\x01\x01p}\x04\0\x07payload\x03\0\x05\x01i\x04\
 \x01j\x01\x07\x01\x01\x01C\x04\x07addresss\x08usernames\x08passwords\x1bkeep-ali\
 ve-interval-in-secsw\0\x08\x04\0\x17[static]connection.open\x01\x09\x01h\x04\x01\
 j\0\x01\x01\x01C\x04\x04self\x0a\x05topics\x07payload\x06\x03qos\x03\0\x0b\x04\0\
-\x1a[method]connection.publish\x01\x0c\x04\0\x14spin:mqtt/mqtt@3.0.0\x05G\x01B!\x01\
+\x1a[method]connection.publish\x01\x0c\x04\0\x14spin:mqtt/mqtt@3.0.0\x05J\x01B!\x01\
 q\x05\x11connection-failed\x01s\0\x0dbad-parameter\x01s\0\x0cquery-failed\x01s\0\
 \x17value-conversion-failed\x01s\0\x05other\x01s\0\x04\0\x05error\x03\0\0\x01m\x0e\
 \x07boolean\x04int8\x05int16\x05int32\x05int64\x0afloating32\x0afloating64\x03st\
@@ -66157,7 +72308,7 @@ rows\x11\x04\0\x07row-set\x03\0\x12\x04\0\x0aconnection\x03\x01\x01i\x14\x01j\x0
 \x01h\x14\x01p\x0b\x01j\x01\x13\x01\x01\x01@\x03\x04self\x18\x09statements\x06pa\
 rams\x19\0\x1a\x04\0\x18[method]connection.query\x01\x1b\x01j\x01w\x01\x01\x01@\x03\
 \x04self\x18\x09statements\x06params\x19\0\x1c\x04\0\x1a[method]connection.execu\
-te\x01\x1d\x04\0\x1cspin:postgres/postgres@3.0.0\x05H\x01BP\x01ks\x01o\x02ss\x01\
+te\x01\x1d\x04\0\x1cspin:postgres/postgres@3.0.0\x05K\x01BP\x01ks\x01o\x02ss\x01\
 p\x01\x01r\x06\x07as-texts\x08severitys\x04codes\x07messages\x06detail\0\x06extr\
 as\x02\x04\0\x08db-error\x03\0\x03\x01q\x02\x04text\x01s\0\x08db-error\x01\x04\0\
 \x04\0\x0bquery-error\x03\0\x05\x01q\x05\x11connection-failed\x01s\0\x0dbad-para\
@@ -66200,7 +72351,7 @@ params;\0<\x04\0\x18[method]connection.query\x01=\x01f\x01(\x01e\x012\x01o\x03)>
 \x1e[method]connection.query-async\x01B\x01j\x01w\x01\x08\x01@\x03\x04self:\x09s\
 tatements\x06params;\0\xc3\0\x04\0\x1a[method]connection.execute\x01D\x01C\x03\x04\
 self:\x09statements\x06params;\0\xc3\0\x04\0\x20[method]connection.execute-async\
-\x01E\x04\0\x1cspin:postgres/postgres@4.2.0\x05I\x01B)\x01q\x04\x0finvalid-addre\
+\x01E\x04\0\x1cspin:postgres/postgres@4.2.0\x05L\x01B)\x01q\x04\x0finvalid-addre\
 ss\0\0\x14too-many-connections\0\0\x0atype-error\0\0\x05other\x01s\0\x04\0\x05er\
 ror\x03\0\0\x04\0\x0aconnection\x03\x01\x01p}\x04\0\x07payload\x03\0\x03\x01q\x02\
 \x05int64\x01x\0\x06binary\x01\x04\0\x04\0\x0fredis-parameter\x03\0\x05\x01q\x04\
@@ -66217,7 +72368,7 @@ keys\x06values\x15\0\x16\x04\0\x17[method]connection.sadd\x01\x18\x01j\x01\x15\x
 \x01\x01C\x02\x04self\x0c\x03keys\0\x19\x04\0\x1b[method]connection.smembers\x01\
 \x1a\x04\0\x17[method]connection.srem\x01\x18\x01p\x06\x01p\x08\x01j\x01\x1c\x01\
 \x01\x01C\x03\x04self\x0c\x07commands\x09arguments\x1b\0\x1d\x04\0\x1a[method]co\
-nnection.execute\x01\x1e\x04\0\x16spin:redis/redis@3.0.0\x05J\x01B&\x04\0\x0acon\
+nnection.execute\x01\x1e\x04\0\x16spin:redis/redis@3.0.0\x05M\x01B&\x04\0\x0acon\
 nection\x03\x01\x01q\x05\x10no-such-database\0\0\x0daccess-denied\0\0\x12invalid\
 -connection\0\0\x0ddatabase-full\0\0\x02io\x01s\0\x04\0\x05error\x03\0\x01\x01p}\
 \x01q\x05\x07integer\x01x\0\x04real\x01u\0\x04text\x01s\0\x04blob\x01\x03\0\x04n\
@@ -66233,194 +72384,256 @@ ion.execute-async\x01\x19\x01@\x01\x04self\x11\0x\x04\0$[method]connection.last-
 insert-rowid\x01\x1a\x01C\x01\x04self\x11\0x\x04\0*[method]connection.last-inser\
 t-rowid-async\x01\x1b\x01@\x01\x04self\x11\0w\x04\0\x1a[method]connection.change\
 s\x01\x1c\x01C\x01\x04self\x11\0w\x04\0\x20[method]connection.changes-async\x01\x1d\
-\x04\0\x18spin:sqlite/sqlite@3.1.0\x05K\x01B\x05\x01q\x04\x0cinvalid-name\x01s\0\
+\x04\0\x18spin:sqlite/sqlite@3.1.0\x05N\x01B\x05\x01q\x04\x0cinvalid-name\x01s\0\
 \x09undefined\x01s\0\x08provider\x01s\0\x05other\x01s\0\x04\0\x05error\x03\0\0\x01\
 j\x01s\x01\x01\x01C\x01\x04names\0\x02\x04\0\x03get\x01\x03\x04\0\x1espin:variab\
-les/variables@3.0.0\x05L\x01B\x0b\x01q\x02\x08upstream\x01s\0\x02io\x01s\0\x04\0\
+les/variables@3.0.0\x05O\x01B\x0b\x01q\x02\x08upstream\x01s\0\x02io\x01s\0\x04\0\
 \x05error\x03\0\0\x01ks\x01j\x01\x02\x01\x01\x01@\x01\x03keys\0\x03\x04\0\x03get\
 \x01\x04\x01o\x02ss\x01p\x05\x01j\x01\x06\x01\x01\x01@\0\0\x07\x04\0\x07get-all\x01\
-\x08\x04\0(wasi:config/store@0.2.0-draft-2024-09-27\x05M\x01B\x0a\x01o\x02ss\x01\
-p\0\x01@\0\0\x01\x04\0\x0fget-environment\x01\x02\x01ps\x01@\0\0\x03\x04\0\x0dge\
-t-arguments\x01\x04\x01ks\x01@\0\0\x05\x04\0\x0binitial-cwd\x01\x06\x04\0\x1awas\
-i:cli/environment@0.2.6\x05N\x02\x03\0\x11\x0adescriptor\x01B\x07\x02\x03\x02\x01\
-O\x04\0\x0adescriptor\x03\0\0\x01i\x01\x01o\x02\x02s\x01p\x03\x01@\0\0\x04\x04\0\
-\x0fget-directories\x01\x05\x04\0\x1ewasi:filesystem/preopens@0.2.6\x05P\x02\x03\
-\0\x12\x0aerror-code\x02\x03\0\x12\x11ip-socket-address\x02\x03\0\x12\x11ip-addr\
-ess-family\x01BD\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\0\x02\x03\x02\x01\x1d\
-\x04\0\x07network\x03\0\x02\x02\x03\x02\x01Q\x04\0\x0aerror-code\x03\0\x04\x02\x03\
-\x02\x01R\x04\0\x11ip-socket-address\x03\0\x06\x02\x03\x02\x01S\x04\0\x11ip-addr\
-ess-family\x03\0\x08\x01p}\x01r\x02\x04data\x0a\x0eremote-address\x07\x04\0\x11i\
-ncoming-datagram\x03\0\x0b\x01k\x07\x01r\x02\x04data\x0a\x0eremote-address\x0d\x04\
-\0\x11outgoing-datagram\x03\0\x0e\x04\0\x0audp-socket\x03\x01\x04\0\x18incoming-\
-datagram-stream\x03\x01\x04\0\x18outgoing-datagram-stream\x03\x01\x01h\x10\x01h\x03\
-\x01j\0\x01\x05\x01@\x03\x04self\x13\x07network\x14\x0dlocal-address\x07\0\x15\x04\
-\0\x1d[method]udp-socket.start-bind\x01\x16\x01@\x01\x04self\x13\0\x15\x04\0\x1e\
-[method]udp-socket.finish-bind\x01\x17\x01i\x11\x01i\x12\x01o\x02\x18\x19\x01j\x01\
-\x1a\x01\x05\x01@\x02\x04self\x13\x0eremote-address\x0d\0\x1b\x04\0\x19[method]u\
-dp-socket.stream\x01\x1c\x01j\x01\x07\x01\x05\x01@\x01\x04self\x13\0\x1d\x04\0\x20\
-[method]udp-socket.local-address\x01\x1e\x04\0![method]udp-socket.remote-address\
-\x01\x1e\x01@\x01\x04self\x13\0\x09\x04\0![method]udp-socket.address-family\x01\x1f\
-\x01j\x01}\x01\x05\x01@\x01\x04self\x13\0\x20\x04\0$[method]udp-socket.unicast-h\
-op-limit\x01!\x01@\x02\x04self\x13\x05value}\0\x15\x04\0([method]udp-socket.set-\
-unicast-hop-limit\x01\"\x01j\x01w\x01\x05\x01@\x01\x04self\x13\0#\x04\0&[method]\
-udp-socket.receive-buffer-size\x01$\x01@\x02\x04self\x13\x05valuew\0\x15\x04\0*[\
-method]udp-socket.set-receive-buffer-size\x01%\x04\0#[method]udp-socket.send-buf\
-fer-size\x01$\x04\0'[method]udp-socket.set-send-buffer-size\x01%\x01i\x01\x01@\x01\
-\x04self\x13\0&\x04\0\x1c[method]udp-socket.subscribe\x01'\x01h\x11\x01p\x0c\x01\
-j\x01)\x01\x05\x01@\x02\x04self(\x0bmax-resultsw\0*\x04\0([method]incoming-datag\
-ram-stream.receive\x01+\x01@\x01\x04self(\0&\x04\0*[method]incoming-datagram-str\
-eam.subscribe\x01,\x01h\x12\x01@\x01\x04self-\0#\x04\0+[method]outgoing-datagram\
--stream.check-send\x01.\x01p\x0f\x01@\x02\x04self-\x09datagrams/\0#\x04\0%[metho\
-d]outgoing-datagram-stream.send\x010\x01@\x01\x04self-\0&\x04\0*[method]outgoing\
--datagram-stream.subscribe\x011\x04\0\x16wasi:sockets/udp@0.2.6\x05T\x02\x03\08\x0a\
-udp-socket\x01B\x0c\x02\x03\x02\x01\x1d\x04\0\x07network\x03\0\0\x02\x03\x02\x01\
-Q\x04\0\x0aerror-code\x03\0\x02\x02\x03\x02\x01S\x04\0\x11ip-address-family\x03\0\
-\x04\x02\x03\x02\x01U\x04\0\x0audp-socket\x03\0\x06\x01i\x07\x01j\x01\x08\x01\x03\
-\x01@\x01\x0eaddress-family\x05\0\x09\x04\0\x11create-udp-socket\x01\x0a\x04\0$w\
-asi:sockets/udp-create-socket@0.2.6\x05V\x01BT\x02\x03\x02\x01\x07\x04\0\x0cinpu\
-t-stream\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0doutput-stream\x03\0\x02\x02\x03\x02\
-\x01\x01\x04\0\x08pollable\x03\0\x04\x02\x03\x02\x01\x06\x04\0\x08duration\x03\0\
-\x06\x02\x03\x02\x01\x1d\x04\0\x07network\x03\0\x08\x02\x03\x02\x01Q\x04\0\x0aer\
-ror-code\x03\0\x0a\x02\x03\x02\x01R\x04\0\x11ip-socket-address\x03\0\x0c\x02\x03\
-\x02\x01S\x04\0\x11ip-address-family\x03\0\x0e\x01m\x03\x07receive\x04send\x04bo\
-th\x04\0\x0dshutdown-type\x03\0\x10\x04\0\x0atcp-socket\x03\x01\x01h\x12\x01h\x09\
-\x01j\0\x01\x0b\x01@\x03\x04self\x13\x07network\x14\x0dlocal-address\x0d\0\x15\x04\
-\0\x1d[method]tcp-socket.start-bind\x01\x16\x01@\x01\x04self\x13\0\x15\x04\0\x1e\
-[method]tcp-socket.finish-bind\x01\x17\x01@\x03\x04self\x13\x07network\x14\x0ere\
-mote-address\x0d\0\x15\x04\0\x20[method]tcp-socket.start-connect\x01\x18\x01i\x01\
-\x01i\x03\x01o\x02\x19\x1a\x01j\x01\x1b\x01\x0b\x01@\x01\x04self\x13\0\x1c\x04\0\
-![method]tcp-socket.finish-connect\x01\x1d\x04\0\x1f[method]tcp-socket.start-lis\
-ten\x01\x17\x04\0\x20[method]tcp-socket.finish-listen\x01\x17\x01i\x12\x01o\x03\x1e\
-\x19\x1a\x01j\x01\x1f\x01\x0b\x01@\x01\x04self\x13\0\x20\x04\0\x19[method]tcp-so\
-cket.accept\x01!\x01j\x01\x0d\x01\x0b\x01@\x01\x04self\x13\0\"\x04\0\x20[method]\
-tcp-socket.local-address\x01#\x04\0![method]tcp-socket.remote-address\x01#\x01@\x01\
-\x04self\x13\0\x7f\x04\0\x1f[method]tcp-socket.is-listening\x01$\x01@\x01\x04sel\
-f\x13\0\x0f\x04\0![method]tcp-socket.address-family\x01%\x01@\x02\x04self\x13\x05\
-valuew\0\x15\x04\0*[method]tcp-socket.set-listen-backlog-size\x01&\x01j\x01\x7f\x01\
-\x0b\x01@\x01\x04self\x13\0'\x04\0%[method]tcp-socket.keep-alive-enabled\x01(\x01\
-@\x02\x04self\x13\x05value\x7f\0\x15\x04\0)[method]tcp-socket.set-keep-alive-ena\
-bled\x01)\x01j\x01\x07\x01\x0b\x01@\x01\x04self\x13\0*\x04\0'[method]tcp-socket.\
-keep-alive-idle-time\x01+\x01@\x02\x04self\x13\x05value\x07\0\x15\x04\0+[method]\
-tcp-socket.set-keep-alive-idle-time\x01,\x04\0&[method]tcp-socket.keep-alive-int\
-erval\x01+\x04\0*[method]tcp-socket.set-keep-alive-interval\x01,\x01j\x01y\x01\x0b\
-\x01@\x01\x04self\x13\0-\x04\0#[method]tcp-socket.keep-alive-count\x01.\x01@\x02\
-\x04self\x13\x05valuey\0\x15\x04\0'[method]tcp-socket.set-keep-alive-count\x01/\x01\
-j\x01}\x01\x0b\x01@\x01\x04self\x13\00\x04\0\x1c[method]tcp-socket.hop-limit\x01\
-1\x01@\x02\x04self\x13\x05value}\0\x15\x04\0\x20[method]tcp-socket.set-hop-limit\
-\x012\x01j\x01w\x01\x0b\x01@\x01\x04self\x13\03\x04\0&[method]tcp-socket.receive\
--buffer-size\x014\x04\0*[method]tcp-socket.set-receive-buffer-size\x01&\x04\0#[m\
-ethod]tcp-socket.send-buffer-size\x014\x04\0'[method]tcp-socket.set-send-buffer-\
-size\x01&\x01i\x05\x01@\x01\x04self\x13\05\x04\0\x1c[method]tcp-socket.subscribe\
-\x016\x01@\x02\x04self\x13\x0dshutdown-type\x11\0\x15\x04\0\x1b[method]tcp-socke\
-t.shutdown\x017\x04\0\x16wasi:sockets/tcp@0.2.6\x05W\x02\x03\0:\x0atcp-socket\x01\
-B\x0c\x02\x03\x02\x01\x1d\x04\0\x07network\x03\0\0\x02\x03\x02\x01Q\x04\0\x0aerr\
-or-code\x03\0\x02\x02\x03\x02\x01S\x04\0\x11ip-address-family\x03\0\x04\x02\x03\x02\
-\x01X\x04\0\x0atcp-socket\x03\0\x06\x01i\x07\x01j\x01\x08\x01\x03\x01@\x01\x0ead\
-dress-family\x05\0\x09\x04\0\x11create-tcp-socket\x01\x0a\x04\0$wasi:sockets/tcp\
--create-socket@0.2.6\x05Y\x02\x03\0\x12\x0aip-address\x01B\x16\x02\x03\x02\x01\x01\
-\x04\0\x08pollable\x03\0\0\x02\x03\x02\x01\x1d\x04\0\x07network\x03\0\x02\x02\x03\
-\x02\x01Q\x04\0\x0aerror-code\x03\0\x04\x02\x03\x02\x01Z\x04\0\x0aip-address\x03\
-\0\x06\x04\0\x16resolve-address-stream\x03\x01\x01h\x08\x01k\x07\x01j\x01\x0a\x01\
-\x05\x01@\x01\x04self\x09\0\x0b\x04\03[method]resolve-address-stream.resolve-nex\
-t-address\x01\x0c\x01i\x01\x01@\x01\x04self\x09\0\x0d\x04\0([method]resolve-addr\
-ess-stream.subscribe\x01\x0e\x01h\x03\x01i\x08\x01j\x01\x10\x01\x05\x01@\x02\x07\
-network\x0f\x04names\0\x11\x04\0\x11resolve-addresses\x01\x12\x04\0!wasi:sockets\
-/ip-name-lookup@0.2.6\x05[\x01B\x0a\x01o\x02ss\x01p\0\x01@\0\0\x01\x04\0\x0fget-\
-environment\x01\x02\x01ps\x01@\0\0\x03\x04\0\x0dget-arguments\x01\x04\x01ks\x01@\
-\0\0\x05\x04\0\x0fget-initial-cwd\x01\x06\x04\0(wasi:cli/environment@0.3.0-rc-20\
-26-03-15\x05\\\x02\x03\0#\x0adescriptor\x01B\x07\x02\x03\x02\x01]\x04\0\x0adescr\
-iptor\x03\0\0\x01i\x01\x01o\x02\x02s\x01p\x03\x01@\0\0\x04\x04\0\x0fget-director\
-ies\x01\x05\x04\0,wasi:filesystem/preopens@0.3.0-rc-2026-03-15\x05^\x02\x03\0$\x0a\
-ip-address\x01B\x09\x02\x03\x02\x01_\x04\0\x0aip-address\x03\0\0\x01ks\x01q\x06\x0d\
-access-denied\0\0\x10invalid-argument\0\0\x11name-unresolvable\0\0\x1atemporary-\
-resolver-failure\0\0\x1apermanent-resolver-failure\0\0\x05other\x01\x02\0\x04\0\x0a\
-error-code\x03\0\x03\x01p\x01\x01j\x01\x05\x01\x04\x01C\x01\x04names\0\x06\x04\0\
-\x11resolve-addresses\x01\x07\x04\0/wasi:sockets/ip-name-lookup@0.3.0-rc-2026-03\
--15\x05`\x01B\x1a\x01s\x04\0\x11inferencing-model\x03\0\0\x01r\x06\x0amax-tokens\
-y\x0erepeat-penaltyv!repeat-penalty-last-n-token-county\x0btemperaturev\x05top-k\
-y\x05top-pv\x04\0\x12inferencing-params\x03\0\x02\x01q\x03\x13model-not-supporte\
-d\0\0\x0druntime-error\x01s\0\x0dinvalid-input\x01s\0\x04\0\x05error\x03\0\x04\x01\
-r\x02\x12prompt-token-county\x15generated-token-county\x04\0\x11inferencing-usag\
-e\x03\0\x06\x01r\x02\x04texts\x05usage\x07\x04\0\x12inferencing-result\x03\0\x08\
-\x01s\x04\0\x0fembedding-model\x03\0\x0a\x01r\x01\x12prompt-token-county\x04\0\x10\
-embeddings-usage\x03\0\x0c\x01pv\x01p\x0e\x01r\x02\x0aembeddings\x0f\x05usage\x0d\
-\x04\0\x11embeddings-result\x03\0\x10\x01k\x03\x01j\x01\x09\x01\x05\x01@\x03\x05\
-model\x01\x06prompts\x06params\x12\0\x13\x04\0\x05infer\x01\x14\x01ps\x01j\x01\x11\
-\x01\x05\x01@\x02\x05model\x0b\x04text\x15\0\x16\x04\0\x13generate-embeddings\x01\
-\x17\x04\0\x16fermyon:spin/llm@2.0.0\x05a\x01B)\x01q\x04\x0finvalid-address\0\0\x14\
-too-many-connections\0\0\x0atype-error\0\0\x05other\x01s\0\x04\0\x05error\x03\0\0\
-\x04\0\x0aconnection\x03\x01\x01p}\x04\0\x07payload\x03\0\x03\x01q\x02\x05int64\x01\
-x\0\x06binary\x01\x04\0\x04\0\x0fredis-parameter\x03\0\x05\x01q\x04\x03nil\0\0\x06\
-status\x01s\0\x05int64\x01x\0\x06binary\x01\x04\0\x04\0\x0credis-result\x03\0\x07\
-\x01i\x02\x01j\x01\x09\x01\x01\x01@\x01\x07addresss\0\x0a\x04\0\x17[static]conne\
-ction.open\x01\x0b\x01h\x02\x01j\0\x01\x01\x01@\x03\x04self\x0c\x07channels\x07p\
-ayload\x04\0\x0d\x04\0\x1a[method]connection.publish\x01\x0e\x01k\x04\x01j\x01\x0f\
-\x01\x01\x01@\x02\x04self\x0c\x03keys\0\x10\x04\0\x16[method]connection.get\x01\x11\
-\x01@\x03\x04self\x0c\x03keys\x05value\x04\0\x0d\x04\0\x16[method]connection.set\
-\x01\x12\x01j\x01x\x01\x01\x01@\x02\x04self\x0c\x03keys\0\x13\x04\0\x17[method]c\
-onnection.incr\x01\x14\x01ps\x01j\x01y\x01\x01\x01@\x02\x04self\x0c\x04keys\x15\0\
-\x16\x04\0\x16[method]connection.del\x01\x17\x01@\x03\x04self\x0c\x03keys\x06val\
-ues\x15\0\x16\x04\0\x17[method]connection.sadd\x01\x18\x01j\x01\x15\x01\x01\x01@\
-\x02\x04self\x0c\x03keys\0\x19\x04\0\x1b[method]connection.smembers\x01\x1a\x04\0\
-\x17[method]connection.srem\x01\x18\x01p\x06\x01p\x08\x01j\x01\x1c\x01\x01\x01@\x03\
-\x04self\x0c\x07commands\x09arguments\x1b\0\x1d\x04\0\x1a[method]connection.exec\
-ute\x01\x1e\x04\0\x18fermyon:spin/redis@2.0.0\x05b\x01B\x0f\x01q\x04\x0finvalid-\
-address\0\0\x14too-many-connections\0\0\x11connection-failed\x01s\0\x05other\x01\
-s\0\x04\0\x05error\x03\0\0\x01m\x03\x0cat-most-once\x0dat-least-once\x0cexactly-\
-once\x04\0\x03qos\x03\0\x02\x04\0\x0aconnection\x03\x01\x01p}\x04\0\x07payload\x03\
-\0\x05\x01i\x04\x01j\x01\x07\x01\x01\x01@\x04\x07addresss\x08usernames\x08passwo\
-rds\x1bkeep-alive-interval-in-secsw\0\x08\x04\0\x17[static]connection.open\x01\x09\
-\x01h\x04\x01j\0\x01\x01\x01@\x04\x04self\x0a\x05topics\x07payload\x06\x03qos\x03\
-\0\x0b\x04\0\x1a[method]connection.publish\x01\x0c\x04\0\x17fermyon:spin/mqtt@2.\
-0.0\x05c\x02\x03\0(\x0fparameter-value\x02\x03\0(\x07row-set\x02\x03\0(\x05error\
-\x01B\x13\x02\x03\x02\x01d\x04\0\x0fparameter-value\x03\0\0\x02\x03\x02\x01e\x04\
-\0\x07row-set\x03\0\x02\x02\x03\x02\x01f\x04\0\x05error\x03\0\x04\x04\0\x0aconne\
-ction\x03\x01\x01i\x06\x01j\x01\x07\x01\x05\x01@\x01\x07addresss\0\x08\x04\0\x17\
-[static]connection.open\x01\x09\x01h\x06\x01p\x01\x01j\x01\x03\x01\x05\x01@\x03\x04\
-self\x0a\x09statements\x06params\x0b\0\x0c\x04\0\x18[method]connection.query\x01\
-\x0d\x01j\x01w\x01\x05\x01@\x03\x04self\x0a\x09statements\x06params\x0b\0\x0e\x04\
-\0\x1a[method]connection.execute\x01\x0f\x04\0\x1bfermyon:spin/postgres@2.0.0\x05\
-g\x01B\x13\x02\x03\x02\x01d\x04\0\x0fparameter-value\x03\0\0\x02\x03\x02\x01e\x04\
-\0\x07row-set\x03\0\x02\x02\x03\x02\x01f\x04\0\x05error\x03\0\x04\x04\0\x0aconne\
-ction\x03\x01\x01i\x06\x01j\x01\x07\x01\x05\x01@\x01\x07addresss\0\x08\x04\0\x17\
-[static]connection.open\x01\x09\x01h\x06\x01p\x01\x01j\x01\x03\x01\x05\x01@\x03\x04\
-self\x0a\x09statements\x06params\x0b\0\x0c\x04\0\x18[method]connection.query\x01\
-\x0d\x01j\0\x01\x05\x01@\x03\x04self\x0a\x09statements\x06params\x0b\0\x0e\x04\0\
-\x1a[method]connection.execute\x01\x0f\x04\0\x18fermyon:spin/mysql@2.0.0\x05h\x01\
-B\x15\x04\0\x0aconnection\x03\x01\x01q\x05\x10no-such-database\0\0\x0daccess-den\
-ied\0\0\x12invalid-connection\0\0\x0ddatabase-full\0\0\x02io\x01s\0\x04\0\x05err\
-or\x03\0\x01\x01p}\x01q\x05\x07integer\x01x\0\x04real\x01u\0\x04text\x01s\0\x04b\
-lob\x01\x03\0\x04null\0\0\x04\0\x05value\x03\0\x04\x01p\x05\x01r\x01\x06values\x06\
-\x04\0\x0arow-result\x03\0\x07\x01ps\x01p\x08\x01r\x02\x07columns\x09\x04rows\x0a\
-\x04\0\x0cquery-result\x03\0\x0b\x01i\0\x01j\x01\x0d\x01\x02\x01@\x01\x08databas\
-es\0\x0e\x04\0\x17[static]connection.open\x01\x0f\x01h\0\x01j\x01\x0c\x01\x02\x01\
-@\x03\x04self\x10\x09statements\x0aparameters\x06\0\x11\x04\0\x1a[method]connect\
-ion.execute\x01\x12\x04\0\x19fermyon:spin/sqlite@2.0.0\x05i\x01B\x19\x04\0\x05st\
-ore\x03\x01\x01q\x04\x10store-table-full\0\0\x0dno-such-store\0\0\x0daccess-deni\
-ed\0\0\x05other\x01s\0\x04\0\x05error\x03\0\x01\x01i\0\x01j\x01\x03\x01\x02\x01@\
-\x01\x05labels\0\x04\x04\0\x12[static]store.open\x01\x05\x01h\0\x01p}\x01k\x07\x01\
-j\x01\x08\x01\x02\x01@\x02\x04self\x06\x03keys\0\x09\x04\0\x11[method]store.get\x01\
-\x0a\x01j\0\x01\x02\x01@\x03\x04self\x06\x03keys\x05value\x07\0\x0b\x04\0\x11[me\
-thod]store.set\x01\x0c\x01@\x02\x04self\x06\x03keys\0\x0b\x04\0\x14[method]store\
-.delete\x01\x0d\x01j\x01\x7f\x01\x02\x01@\x02\x04self\x06\x03keys\0\x0e\x04\0\x14\
-[method]store.exists\x01\x0f\x01ps\x01j\x01\x10\x01\x02\x01@\x01\x04self\x06\0\x11\
-\x04\0\x16[method]store.get-keys\x01\x12\x04\0\x1cfermyon:spin/key-value@2.0.0\x05\
-j\x01B\x05\x01q\x04\x0cinvalid-name\x01s\0\x09undefined\x01s\0\x08provider\x01s\0\
-\x05other\x01s\0\x04\0\x05error\x03\0\0\x01j\x01s\x01\x01\x01@\x01\x04names\0\x02\
-\x04\0\x03get\x01\x03\x04\0\x1cfermyon:spin/variables@2.0.0\x05k\x01B\x1c\x01q\x03\
-\x0dno-such-store\0\0\x0daccess-denied\0\0\x05other\x01s\0\x04\0\x05error\x03\0\0\
-\x01ps\x01ks\x01r\x02\x04keys\x02\x06cursor\x03\x04\0\x0ckey-response\x03\0\x04\x04\
-\0\x06bucket\x03\x01\x01h\x06\x01p}\x01k\x08\x01j\x01\x09\x01\x01\x01@\x02\x04se\
-lf\x07\x03keys\0\x0a\x04\0\x12[method]bucket.get\x01\x0b\x01j\0\x01\x01\x01@\x03\
-\x04self\x07\x03keys\x05value\x08\0\x0c\x04\0\x12[method]bucket.set\x01\x0d\x01@\
-\x02\x04self\x07\x03keys\0\x0c\x04\0\x15[method]bucket.delete\x01\x0e\x01j\x01\x7f\
-\x01\x01\x01@\x02\x04self\x07\x03keys\0\x0f\x04\0\x15[method]bucket.exists\x01\x10\
-\x01j\x01\x05\x01\x01\x01@\x02\x04self\x07\x06cursor\x03\0\x11\x04\0\x18[method]\
-bucket.list-keys\x01\x12\x01i\x06\x01j\x01\x13\x01\x01\x01@\x01\x0aidentifiers\0\
-\x14\x04\0\x04open\x01\x15\x04\0\x20wasi:keyvalue/store@0.2.0-draft2\x05l\x04\0\x1a\
-spin:up/deny-adapter@4.0.0\x04\0\x0b\x12\x01\0\x0cdeny-adapter\x03\0\0\0G\x09pro\
-ducers\x01\x0cprocessed-by\x02\x0dwit-component\x070.246.1\x10wit-bindgen-rust\x06\
-0.54.0";
+\x08\x04\0(wasi:config/store@0.2.0-draft-2024-09-27\x05P\x01B\x05\x01q\x04\x08pr\
+ovider\x01s\0\x0binvalid-key\x01s\0\x0einvalid-schema\x01s\0\x05other\x01s\0\x04\
+\0\x05error\x03\0\0\x01j\x01s\x01\x01\x01@\x01\x03keys\0\x02\x04\0\x0aget-config\
+\x01\x03\x04\0\x13fermyon:spin/config\x05Q\x02\x03\0\x07\x07request\x02\x03\0\x07\
+\x08response\x02\x03\0\x07\x0ahttp-error\x01B\x09\x02\x03\x02\x01R\x04\0\x07requ\
+est\x03\0\0\x02\x03\x02\x01S\x04\0\x08response\x03\0\x02\x02\x03\x02\x01T\x04\0\x0a\
+http-error\x03\0\x04\x01j\x01\x03\x01\x05\x01@\x01\x03req\x01\0\x06\x04\0\x0csen\
+d-request\x01\x07\x04\0\x11fermyon:spin/http\x05U\x01B\x19\x01y\x04\0\x05store\x03\
+\0\0\x01q\x06\x10store-table-full\0\0\x0dno-such-store\0\0\x0daccess-denied\0\0\x0d\
+invalid-store\0\0\x0bno-such-key\0\0\x02io\x01s\0\x04\0\x05error\x03\0\x02\x01j\x01\
+\x01\x01\x03\x01@\x01\x04names\0\x04\x04\0\x04open\x01\x05\x01p}\x01j\x01\x06\x01\
+\x03\x01@\x02\x05store\x01\x03keys\0\x07\x04\0\x03get\x01\x08\x01j\0\x01\x03\x01\
+@\x03\x05store\x01\x03keys\x05value\x06\0\x09\x04\0\x03set\x01\x0a\x01@\x02\x05s\
+tore\x01\x03keys\0\x09\x04\0\x06delete\x01\x0b\x01j\x01\x7f\x01\x03\x01@\x02\x05\
+store\x01\x03keys\0\x0c\x04\0\x06exists\x01\x0d\x01ps\x01j\x01\x0e\x01\x03\x01@\x01\
+\x05store\x01\0\x0f\x04\0\x08get-keys\x01\x10\x01@\x01\x05store\x01\x01\0\x04\0\x05\
+close\x01\x11\x04\0\x16fermyon:spin/key-value\x05V\x01B\x1a\x01s\x04\0\x11infere\
+ncing-model\x03\0\0\x01r\x06\x0amax-tokensy\x0erepeat-penaltyv!repeat-penalty-la\
+st-n-token-county\x0btemperaturev\x05top-ky\x05top-pv\x04\0\x12inferencing-param\
+s\x03\0\x02\x01q\x03\x13model-not-supported\0\0\x0druntime-error\x01s\0\x0dinval\
+id-input\x01s\0\x04\0\x05error\x03\0\x04\x01r\x02\x12prompt-token-county\x15gene\
+rated-token-county\x04\0\x11inferencing-usage\x03\0\x06\x01r\x02\x04texts\x05usa\
+ge\x07\x04\0\x12inferencing-result\x03\0\x08\x01s\x04\0\x0fembedding-model\x03\0\
+\x0a\x01r\x01\x12prompt-token-county\x04\0\x10embeddings-usage\x03\0\x0c\x01pv\x01\
+p\x0e\x01r\x02\x0aembeddings\x0f\x05usage\x0d\x04\0\x11embeddings-result\x03\0\x10\
+\x01k\x03\x01j\x01\x09\x01\x05\x01@\x03\x05model\x01\x06prompts\x06params\x12\0\x13\
+\x04\0\x05infer\x01\x14\x01ps\x01j\x01\x11\x01\x05\x01@\x02\x05model\x0b\x04text\
+\x15\0\x16\x04\0\x13generate-embeddings\x01\x17\x04\0\x10fermyon:spin/llm\x05W\x02\
+\x03\0\x08\x0fparameter-value\x02\x03\0\x08\x07row-set\x01B\x0d\x02\x03\x02\x01X\
+\x04\0\x0fparameter-value\x03\0\0\x02\x03\x02\x01Y\x04\0\x07row-set\x03\0\x02\x01\
+q\x06\x07success\0\0\x11connection-failed\x01s\0\x0dbad-parameter\x01s\0\x0cquer\
+y-failed\x01s\0\x17value-conversion-failed\x01s\0\x0bother-error\x01s\0\x04\0\x0b\
+mysql-error\x03\0\x04\x01p\x01\x01j\x01\x03\x01\x05\x01@\x03\x07addresss\x09stat\
+ements\x06params\x06\0\x07\x04\0\x05query\x01\x08\x01j\0\x01\x05\x01@\x03\x07add\
+resss\x09statements\x06params\x06\0\x09\x04\0\x07execute\x01\x0a\x04\0\x12fermyo\
+n:spin/mysql\x05Z\x01B\x0d\x02\x03\x02\x01X\x04\0\x0fparameter-value\x03\0\0\x02\
+\x03\x02\x01Y\x04\0\x07row-set\x03\0\x02\x01q\x06\x07success\0\0\x11connection-f\
+ailed\x01s\0\x0dbad-parameter\x01s\0\x0cquery-failed\x01s\0\x17value-conversion-\
+failed\x01s\0\x0bother-error\x01s\0\x04\0\x08pg-error\x03\0\x04\x01p\x01\x01j\x01\
+\x03\x01\x05\x01@\x03\x07addresss\x09statements\x06params\x06\0\x07\x04\0\x05que\
+ry\x01\x08\x01j\x01w\x01\x05\x01@\x03\x07addresss\x09statements\x06params\x06\0\x09\
+\x04\0\x07execute\x01\x0a\x04\0\x15fermyon:spin/postgres\x05[\x02\x03\0\x09\x07p\
+ayload\x02\x03\0\x09\x0fredis-parameter\x02\x03\0\x09\x0credis-result\x02\x03\0\x09\
+\x05error\x01B!\x02\x03\x02\x01\\\x04\0\x07payload\x03\0\0\x02\x03\x02\x01]\x04\0\
+\x0fredis-parameter\x03\0\x02\x02\x03\x02\x01^\x04\0\x0credis-result\x03\0\x04\x02\
+\x03\x02\x01_\x04\0\x05error\x03\0\x06\x01j\0\x01\x07\x01@\x03\x07addresss\x07ch\
+annels\x07payload\x01\0\x08\x04\0\x07publish\x01\x09\x01j\x01\x01\x01\x07\x01@\x02\
+\x07addresss\x03keys\0\x0a\x04\0\x03get\x01\x0b\x01@\x03\x07addresss\x03keys\x05\
+value\x01\0\x08\x04\0\x03set\x01\x0c\x01j\x01x\x01\x07\x01@\x02\x07addresss\x03k\
+eys\0\x0d\x04\0\x04incr\x01\x0e\x01ps\x01@\x02\x07addresss\x04keys\x0f\0\x0d\x04\
+\0\x03del\x01\x10\x01@\x03\x07addresss\x03keys\x06values\x0f\0\x0d\x04\0\x04sadd\
+\x01\x11\x01j\x01\x0f\x01\x07\x01@\x02\x07addresss\x03keys\0\x12\x04\0\x08smembe\
+rs\x01\x13\x04\0\x04srem\x01\x11\x01p\x03\x01p\x05\x01j\x01\x15\x01\x07\x01@\x03\
+\x07addresss\x07commands\x09arguments\x14\0\x16\x04\0\x07execute\x01\x17\x04\0\x12\
+fermyon:spin/redis\x05`\x01B\x16\x01y\x04\0\x0aconnection\x03\0\0\x01q\x05\x10no\
+-such-database\0\0\x0daccess-denied\0\0\x12invalid-connection\0\0\x0ddatabase-fu\
+ll\0\0\x02io\x01s\0\x04\0\x05error\x03\0\x02\x01p}\x01q\x05\x07integer\x01x\0\x04\
+real\x01u\0\x04text\x01s\0\x04blob\x01\x04\0\x04null\0\0\x04\0\x05value\x03\0\x05\
+\x01p\x06\x01r\x01\x06values\x07\x04\0\x0arow-result\x03\0\x08\x01ps\x01p\x09\x01\
+r\x02\x07columns\x0a\x04rows\x0b\x04\0\x0cquery-result\x03\0\x0c\x01j\x01\x01\x01\
+\x03\x01@\x01\x08databases\0\x0e\x04\0\x04open\x01\x0f\x01j\x01\x0d\x01\x03\x01@\
+\x03\x04conn\x01\x09statements\x0aparameters\x07\0\x10\x04\0\x07execute\x01\x11\x01\
+@\x01\x04conn\x01\x01\0\x04\0\x05close\x01\x12\x04\0\x13fermyon:spin/sqlite\x05a\
+\x01B\x0a\x01o\x02ss\x01p\0\x01@\0\0\x01\x04\0\x0fget-environment\x01\x02\x01ps\x01\
+@\0\0\x03\x04\0\x0dget-arguments\x01\x04\x01ks\x01@\0\0\x05\x04\0\x0binitial-cwd\
+\x01\x06\x04\0\x1awasi:cli/environment@0.2.6\x05b\x02\x03\0\x14\x0adescriptor\x01\
+B\x07\x02\x03\x02\x01c\x04\0\x0adescriptor\x03\0\0\x01i\x01\x01o\x02\x02s\x01p\x03\
+\x01@\0\0\x04\x04\0\x0fget-directories\x01\x05\x04\0\x1ewasi:filesystem/preopens\
+@0.2.6\x05d\x02\x03\0\x15\x0aerror-code\x02\x03\0\x15\x11ip-socket-address\x02\x03\
+\0\x15\x11ip-address-family\x01BD\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\0\x02\
+\x03\x02\x01\x20\x04\0\x07network\x03\0\x02\x02\x03\x02\x01e\x04\0\x0aerror-code\
+\x03\0\x04\x02\x03\x02\x01f\x04\0\x11ip-socket-address\x03\0\x06\x02\x03\x02\x01\
+g\x04\0\x11ip-address-family\x03\0\x08\x01p}\x01r\x02\x04data\x0a\x0eremote-addr\
+ess\x07\x04\0\x11incoming-datagram\x03\0\x0b\x01k\x07\x01r\x02\x04data\x0a\x0ere\
+mote-address\x0d\x04\0\x11outgoing-datagram\x03\0\x0e\x04\0\x0audp-socket\x03\x01\
+\x04\0\x18incoming-datagram-stream\x03\x01\x04\0\x18outgoing-datagram-stream\x03\
+\x01\x01h\x10\x01h\x03\x01j\0\x01\x05\x01@\x03\x04self\x13\x07network\x14\x0dloc\
+al-address\x07\0\x15\x04\0\x1d[method]udp-socket.start-bind\x01\x16\x01@\x01\x04\
+self\x13\0\x15\x04\0\x1e[method]udp-socket.finish-bind\x01\x17\x01i\x11\x01i\x12\
+\x01o\x02\x18\x19\x01j\x01\x1a\x01\x05\x01@\x02\x04self\x13\x0eremote-address\x0d\
+\0\x1b\x04\0\x19[method]udp-socket.stream\x01\x1c\x01j\x01\x07\x01\x05\x01@\x01\x04\
+self\x13\0\x1d\x04\0\x20[method]udp-socket.local-address\x01\x1e\x04\0![method]u\
+dp-socket.remote-address\x01\x1e\x01@\x01\x04self\x13\0\x09\x04\0![method]udp-so\
+cket.address-family\x01\x1f\x01j\x01}\x01\x05\x01@\x01\x04self\x13\0\x20\x04\0$[\
+method]udp-socket.unicast-hop-limit\x01!\x01@\x02\x04self\x13\x05value}\0\x15\x04\
+\0([method]udp-socket.set-unicast-hop-limit\x01\"\x01j\x01w\x01\x05\x01@\x01\x04\
+self\x13\0#\x04\0&[method]udp-socket.receive-buffer-size\x01$\x01@\x02\x04self\x13\
+\x05valuew\0\x15\x04\0*[method]udp-socket.set-receive-buffer-size\x01%\x04\0#[me\
+thod]udp-socket.send-buffer-size\x01$\x04\0'[method]udp-socket.set-send-buffer-s\
+ize\x01%\x01i\x01\x01@\x01\x04self\x13\0&\x04\0\x1c[method]udp-socket.subscribe\x01\
+'\x01h\x11\x01p\x0c\x01j\x01)\x01\x05\x01@\x02\x04self(\x0bmax-resultsw\0*\x04\0\
+([method]incoming-datagram-stream.receive\x01+\x01@\x01\x04self(\0&\x04\0*[metho\
+d]incoming-datagram-stream.subscribe\x01,\x01h\x12\x01@\x01\x04self-\0#\x04\0+[m\
+ethod]outgoing-datagram-stream.check-send\x01.\x01p\x0f\x01@\x02\x04self-\x09dat\
+agrams/\0#\x04\0%[method]outgoing-datagram-stream.send\x010\x01@\x01\x04self-\0&\
+\x04\0*[method]outgoing-datagram-stream.subscribe\x011\x04\0\x16wasi:sockets/udp\
+@0.2.6\x05h\x02\x03\0C\x0audp-socket\x01B\x0c\x02\x03\x02\x01\x20\x04\0\x07netwo\
+rk\x03\0\0\x02\x03\x02\x01e\x04\0\x0aerror-code\x03\0\x02\x02\x03\x02\x01g\x04\0\
+\x11ip-address-family\x03\0\x04\x02\x03\x02\x01i\x04\0\x0audp-socket\x03\0\x06\x01\
+i\x07\x01j\x01\x08\x01\x03\x01@\x01\x0eaddress-family\x05\0\x09\x04\0\x11create-\
+udp-socket\x01\x0a\x04\0$wasi:sockets/udp-create-socket@0.2.6\x05j\x01BT\x02\x03\
+\x02\x01\x07\x04\0\x0cinput-stream\x03\0\0\x02\x03\x02\x01\x08\x04\0\x0doutput-s\
+tream\x03\0\x02\x02\x03\x02\x01\x01\x04\0\x08pollable\x03\0\x04\x02\x03\x02\x01\x06\
+\x04\0\x08duration\x03\0\x06\x02\x03\x02\x01\x20\x04\0\x07network\x03\0\x08\x02\x03\
+\x02\x01e\x04\0\x0aerror-code\x03\0\x0a\x02\x03\x02\x01f\x04\0\x11ip-socket-addr\
+ess\x03\0\x0c\x02\x03\x02\x01g\x04\0\x11ip-address-family\x03\0\x0e\x01m\x03\x07\
+receive\x04send\x04both\x04\0\x0dshutdown-type\x03\0\x10\x04\0\x0atcp-socket\x03\
+\x01\x01h\x12\x01h\x09\x01j\0\x01\x0b\x01@\x03\x04self\x13\x07network\x14\x0dloc\
+al-address\x0d\0\x15\x04\0\x1d[method]tcp-socket.start-bind\x01\x16\x01@\x01\x04\
+self\x13\0\x15\x04\0\x1e[method]tcp-socket.finish-bind\x01\x17\x01@\x03\x04self\x13\
+\x07network\x14\x0eremote-address\x0d\0\x15\x04\0\x20[method]tcp-socket.start-co\
+nnect\x01\x18\x01i\x01\x01i\x03\x01o\x02\x19\x1a\x01j\x01\x1b\x01\x0b\x01@\x01\x04\
+self\x13\0\x1c\x04\0![method]tcp-socket.finish-connect\x01\x1d\x04\0\x1f[method]\
+tcp-socket.start-listen\x01\x17\x04\0\x20[method]tcp-socket.finish-listen\x01\x17\
+\x01i\x12\x01o\x03\x1e\x19\x1a\x01j\x01\x1f\x01\x0b\x01@\x01\x04self\x13\0\x20\x04\
+\0\x19[method]tcp-socket.accept\x01!\x01j\x01\x0d\x01\x0b\x01@\x01\x04self\x13\0\
+\"\x04\0\x20[method]tcp-socket.local-address\x01#\x04\0![method]tcp-socket.remot\
+e-address\x01#\x01@\x01\x04self\x13\0\x7f\x04\0\x1f[method]tcp-socket.is-listeni\
+ng\x01$\x01@\x01\x04self\x13\0\x0f\x04\0![method]tcp-socket.address-family\x01%\x01\
+@\x02\x04self\x13\x05valuew\0\x15\x04\0*[method]tcp-socket.set-listen-backlog-si\
+ze\x01&\x01j\x01\x7f\x01\x0b\x01@\x01\x04self\x13\0'\x04\0%[method]tcp-socket.ke\
+ep-alive-enabled\x01(\x01@\x02\x04self\x13\x05value\x7f\0\x15\x04\0)[method]tcp-\
+socket.set-keep-alive-enabled\x01)\x01j\x01\x07\x01\x0b\x01@\x01\x04self\x13\0*\x04\
+\0'[method]tcp-socket.keep-alive-idle-time\x01+\x01@\x02\x04self\x13\x05value\x07\
+\0\x15\x04\0+[method]tcp-socket.set-keep-alive-idle-time\x01,\x04\0&[method]tcp-\
+socket.keep-alive-interval\x01+\x04\0*[method]tcp-socket.set-keep-alive-interval\
+\x01,\x01j\x01y\x01\x0b\x01@\x01\x04self\x13\0-\x04\0#[method]tcp-socket.keep-al\
+ive-count\x01.\x01@\x02\x04self\x13\x05valuey\0\x15\x04\0'[method]tcp-socket.set\
+-keep-alive-count\x01/\x01j\x01}\x01\x0b\x01@\x01\x04self\x13\00\x04\0\x1c[metho\
+d]tcp-socket.hop-limit\x011\x01@\x02\x04self\x13\x05value}\0\x15\x04\0\x20[metho\
+d]tcp-socket.set-hop-limit\x012\x01j\x01w\x01\x0b\x01@\x01\x04self\x13\03\x04\0&\
+[method]tcp-socket.receive-buffer-size\x014\x04\0*[method]tcp-socket.set-receive\
+-buffer-size\x01&\x04\0#[method]tcp-socket.send-buffer-size\x014\x04\0'[method]t\
+cp-socket.set-send-buffer-size\x01&\x01i\x05\x01@\x01\x04self\x13\05\x04\0\x1c[m\
+ethod]tcp-socket.subscribe\x016\x01@\x02\x04self\x13\x0dshutdown-type\x11\0\x15\x04\
+\0\x1b[method]tcp-socket.shutdown\x017\x04\0\x16wasi:sockets/tcp@0.2.6\x05k\x02\x03\
+\0E\x0atcp-socket\x01B\x0c\x02\x03\x02\x01\x20\x04\0\x07network\x03\0\0\x02\x03\x02\
+\x01e\x04\0\x0aerror-code\x03\0\x02\x02\x03\x02\x01g\x04\0\x11ip-address-family\x03\
+\0\x04\x02\x03\x02\x01l\x04\0\x0atcp-socket\x03\0\x06\x01i\x07\x01j\x01\x08\x01\x03\
+\x01@\x01\x0eaddress-family\x05\0\x09\x04\0\x11create-tcp-socket\x01\x0a\x04\0$w\
+asi:sockets/tcp-create-socket@0.2.6\x05m\x02\x03\0\x15\x0aip-address\x01B\x16\x02\
+\x03\x02\x01\x01\x04\0\x08pollable\x03\0\0\x02\x03\x02\x01\x20\x04\0\x07network\x03\
+\0\x02\x02\x03\x02\x01e\x04\0\x0aerror-code\x03\0\x04\x02\x03\x02\x01n\x04\0\x0a\
+ip-address\x03\0\x06\x04\0\x16resolve-address-stream\x03\x01\x01h\x08\x01k\x07\x01\
+j\x01\x0a\x01\x05\x01@\x01\x04self\x09\0\x0b\x04\03[method]resolve-address-strea\
+m.resolve-next-address\x01\x0c\x01i\x01\x01@\x01\x04self\x09\0\x0d\x04\0([method\
+]resolve-address-stream.subscribe\x01\x0e\x01h\x03\x01i\x08\x01j\x01\x10\x01\x05\
+\x01@\x02\x07network\x0f\x04names\0\x11\x04\0\x11resolve-addresses\x01\x12\x04\0\
+!wasi:sockets/ip-name-lookup@0.2.6\x05o\x01B\x0a\x01o\x02ss\x01p\0\x01@\0\0\x01\x04\
+\0\x0fget-environment\x01\x02\x01ps\x01@\0\0\x03\x04\0\x0dget-arguments\x01\x04\x01\
+ks\x01@\0\0\x05\x04\0\x0fget-initial-cwd\x01\x06\x04\0(wasi:cli/environment@0.3.\
+0-rc-2026-03-15\x05p\x02\x03\0&\x0adescriptor\x01B\x07\x02\x03\x02\x01q\x04\0\x0a\
+descriptor\x03\0\0\x01i\x01\x01o\x02\x02s\x01p\x03\x01@\0\0\x04\x04\0\x0fget-dir\
+ectories\x01\x05\x04\0,wasi:filesystem/preopens@0.3.0-rc-2026-03-15\x05r\x02\x03\
+\0'\x0aip-address\x01B\x09\x02\x03\x02\x01s\x04\0\x0aip-address\x03\0\0\x01ks\x01\
+q\x06\x0daccess-denied\0\0\x10invalid-argument\0\0\x11name-unresolvable\0\0\x1at\
+emporary-resolver-failure\0\0\x1apermanent-resolver-failure\0\0\x05other\x01\x02\
+\0\x04\0\x0aerror-code\x03\0\x03\x01p\x01\x01j\x01\x05\x01\x04\x01C\x01\x04names\
+\0\x06\x04\0\x11resolve-addresses\x01\x07\x04\0/wasi:sockets/ip-name-lookup@0.3.\
+0-rc-2026-03-15\x05t\x01B\x1a\x01s\x04\0\x11inferencing-model\x03\0\0\x01r\x06\x0a\
+max-tokensy\x0erepeat-penaltyv!repeat-penalty-last-n-token-county\x0btemperature\
+v\x05top-ky\x05top-pv\x04\0\x12inferencing-params\x03\0\x02\x01q\x03\x13model-no\
+t-supported\0\0\x0druntime-error\x01s\0\x0dinvalid-input\x01s\0\x04\0\x05error\x03\
+\0\x04\x01r\x02\x12prompt-token-county\x15generated-token-county\x04\0\x11infere\
+ncing-usage\x03\0\x06\x01r\x02\x04texts\x05usage\x07\x04\0\x12inferencing-result\
+\x03\0\x08\x01s\x04\0\x0fembedding-model\x03\0\x0a\x01r\x01\x12prompt-token-coun\
+ty\x04\0\x10embeddings-usage\x03\0\x0c\x01pv\x01p\x0e\x01r\x02\x0aembeddings\x0f\
+\x05usage\x0d\x04\0\x11embeddings-result\x03\0\x10\x01k\x03\x01j\x01\x09\x01\x05\
+\x01@\x03\x05model\x01\x06prompts\x06params\x12\0\x13\x04\0\x05infer\x01\x14\x01\
+ps\x01j\x01\x11\x01\x05\x01@\x02\x05model\x0b\x04text\x15\0\x16\x04\0\x13generat\
+e-embeddings\x01\x17\x04\0\x16fermyon:spin/llm@2.0.0\x05u\x01B)\x01q\x04\x0finva\
+lid-address\0\0\x14too-many-connections\0\0\x0atype-error\0\0\x05other\x01s\0\x04\
+\0\x05error\x03\0\0\x04\0\x0aconnection\x03\x01\x01p}\x04\0\x07payload\x03\0\x03\
+\x01q\x02\x05int64\x01x\0\x06binary\x01\x04\0\x04\0\x0fredis-parameter\x03\0\x05\
+\x01q\x04\x03nil\0\0\x06status\x01s\0\x05int64\x01x\0\x06binary\x01\x04\0\x04\0\x0c\
+redis-result\x03\0\x07\x01i\x02\x01j\x01\x09\x01\x01\x01@\x01\x07addresss\0\x0a\x04\
+\0\x17[static]connection.open\x01\x0b\x01h\x02\x01j\0\x01\x01\x01@\x03\x04self\x0c\
+\x07channels\x07payload\x04\0\x0d\x04\0\x1a[method]connection.publish\x01\x0e\x01\
+k\x04\x01j\x01\x0f\x01\x01\x01@\x02\x04self\x0c\x03keys\0\x10\x04\0\x16[method]c\
+onnection.get\x01\x11\x01@\x03\x04self\x0c\x03keys\x05value\x04\0\x0d\x04\0\x16[\
+method]connection.set\x01\x12\x01j\x01x\x01\x01\x01@\x02\x04self\x0c\x03keys\0\x13\
+\x04\0\x17[method]connection.incr\x01\x14\x01ps\x01j\x01y\x01\x01\x01@\x02\x04se\
+lf\x0c\x04keys\x15\0\x16\x04\0\x16[method]connection.del\x01\x17\x01@\x03\x04sel\
+f\x0c\x03keys\x06values\x15\0\x16\x04\0\x17[method]connection.sadd\x01\x18\x01j\x01\
+\x15\x01\x01\x01@\x02\x04self\x0c\x03keys\0\x19\x04\0\x1b[method]connection.smem\
+bers\x01\x1a\x04\0\x17[method]connection.srem\x01\x18\x01p\x06\x01p\x08\x01j\x01\
+\x1c\x01\x01\x01@\x03\x04self\x0c\x07commands\x09arguments\x1b\0\x1d\x04\0\x1a[m\
+ethod]connection.execute\x01\x1e\x04\0\x18fermyon:spin/redis@2.0.0\x05v\x01B\x0f\
+\x01q\x04\x0finvalid-address\0\0\x14too-many-connections\0\0\x11connection-faile\
+d\x01s\0\x05other\x01s\0\x04\0\x05error\x03\0\0\x01m\x03\x0cat-most-once\x0dat-l\
+east-once\x0cexactly-once\x04\0\x03qos\x03\0\x02\x04\0\x0aconnection\x03\x01\x01\
+p}\x04\0\x07payload\x03\0\x05\x01i\x04\x01j\x01\x07\x01\x01\x01@\x04\x07addresss\
+\x08usernames\x08passwords\x1bkeep-alive-interval-in-secsw\0\x08\x04\0\x17[stati\
+c]connection.open\x01\x09\x01h\x04\x01j\0\x01\x01\x01@\x04\x04self\x0a\x05topics\
+\x07payload\x06\x03qos\x03\0\x0b\x04\0\x1a[method]connection.publish\x01\x0c\x04\
+\0\x17fermyon:spin/mqtt@2.0.0\x05w\x02\x03\0+\x0fparameter-value\x02\x03\0+\x07r\
+ow-set\x02\x03\0+\x05error\x01B\x13\x02\x03\x02\x01x\x04\0\x0fparameter-value\x03\
+\0\0\x02\x03\x02\x01y\x04\0\x07row-set\x03\0\x02\x02\x03\x02\x01z\x04\0\x05error\
+\x03\0\x04\x04\0\x0aconnection\x03\x01\x01i\x06\x01j\x01\x07\x01\x05\x01@\x01\x07\
+addresss\0\x08\x04\0\x17[static]connection.open\x01\x09\x01h\x06\x01p\x01\x01j\x01\
+\x03\x01\x05\x01@\x03\x04self\x0a\x09statements\x06params\x0b\0\x0c\x04\0\x18[me\
+thod]connection.query\x01\x0d\x01j\x01w\x01\x05\x01@\x03\x04self\x0a\x09statemen\
+ts\x06params\x0b\0\x0e\x04\0\x1a[method]connection.execute\x01\x0f\x04\0\x1bferm\
+yon:spin/postgres@2.0.0\x05{\x01B\x13\x02\x03\x02\x01x\x04\0\x0fparameter-value\x03\
+\0\0\x02\x03\x02\x01y\x04\0\x07row-set\x03\0\x02\x02\x03\x02\x01z\x04\0\x05error\
+\x03\0\x04\x04\0\x0aconnection\x03\x01\x01i\x06\x01j\x01\x07\x01\x05\x01@\x01\x07\
+addresss\0\x08\x04\0\x17[static]connection.open\x01\x09\x01h\x06\x01p\x01\x01j\x01\
+\x03\x01\x05\x01@\x03\x04self\x0a\x09statements\x06params\x0b\0\x0c\x04\0\x18[me\
+thod]connection.query\x01\x0d\x01j\0\x01\x05\x01@\x03\x04self\x0a\x09statements\x06\
+params\x0b\0\x0e\x04\0\x1a[method]connection.execute\x01\x0f\x04\0\x18fermyon:sp\
+in/mysql@2.0.0\x05|\x01B\x15\x04\0\x0aconnection\x03\x01\x01q\x05\x10no-such-dat\
+abase\0\0\x0daccess-denied\0\0\x12invalid-connection\0\0\x0ddatabase-full\0\0\x02\
+io\x01s\0\x04\0\x05error\x03\0\x01\x01p}\x01q\x05\x07integer\x01x\0\x04real\x01u\
+\0\x04text\x01s\0\x04blob\x01\x03\0\x04null\0\0\x04\0\x05value\x03\0\x04\x01p\x05\
+\x01r\x01\x06values\x06\x04\0\x0arow-result\x03\0\x07\x01ps\x01p\x08\x01r\x02\x07\
+columns\x09\x04rows\x0a\x04\0\x0cquery-result\x03\0\x0b\x01i\0\x01j\x01\x0d\x01\x02\
+\x01@\x01\x08databases\0\x0e\x04\0\x17[static]connection.open\x01\x0f\x01h\0\x01\
+j\x01\x0c\x01\x02\x01@\x03\x04self\x10\x09statements\x0aparameters\x06\0\x11\x04\
+\0\x1a[method]connection.execute\x01\x12\x04\0\x19fermyon:spin/sqlite@2.0.0\x05}\
+\x01B\x19\x04\0\x05store\x03\x01\x01q\x04\x10store-table-full\0\0\x0dno-such-sto\
+re\0\0\x0daccess-denied\0\0\x05other\x01s\0\x04\0\x05error\x03\0\x01\x01i\0\x01j\
+\x01\x03\x01\x02\x01@\x01\x05labels\0\x04\x04\0\x12[static]store.open\x01\x05\x01\
+h\0\x01p}\x01k\x07\x01j\x01\x08\x01\x02\x01@\x02\x04self\x06\x03keys\0\x09\x04\0\
+\x11[method]store.get\x01\x0a\x01j\0\x01\x02\x01@\x03\x04self\x06\x03keys\x05val\
+ue\x07\0\x0b\x04\0\x11[method]store.set\x01\x0c\x01@\x02\x04self\x06\x03keys\0\x0b\
+\x04\0\x14[method]store.delete\x01\x0d\x01j\x01\x7f\x01\x02\x01@\x02\x04self\x06\
+\x03keys\0\x0e\x04\0\x14[method]store.exists\x01\x0f\x01ps\x01j\x01\x10\x01\x02\x01\
+@\x01\x04self\x06\0\x11\x04\0\x16[method]store.get-keys\x01\x12\x04\0\x1cfermyon\
+:spin/key-value@2.0.0\x05~\x01B\x05\x01q\x04\x0cinvalid-name\x01s\0\x09undefined\
+\x01s\0\x08provider\x01s\0\x05other\x01s\0\x04\0\x05error\x03\0\0\x01j\x01s\x01\x01\
+\x01@\x01\x04names\0\x02\x04\0\x03get\x01\x03\x04\0\x1cfermyon:spin/variables@2.\
+0.0\x05\x7f\x01B\x1c\x01q\x03\x0dno-such-store\0\0\x0daccess-denied\0\0\x05other\
+\x01s\0\x04\0\x05error\x03\0\0\x01ps\x01ks\x01r\x02\x04keys\x02\x06cursor\x03\x04\
+\0\x0ckey-response\x03\0\x04\x04\0\x06bucket\x03\x01\x01h\x06\x01p}\x01k\x08\x01\
+j\x01\x09\x01\x01\x01@\x02\x04self\x07\x03keys\0\x0a\x04\0\x12[method]bucket.get\
+\x01\x0b\x01j\0\x01\x01\x01@\x03\x04self\x07\x03keys\x05value\x08\0\x0c\x04\0\x12\
+[method]bucket.set\x01\x0d\x01@\x02\x04self\x07\x03keys\0\x0c\x04\0\x15[method]b\
+ucket.delete\x01\x0e\x01j\x01\x7f\x01\x01\x01@\x02\x04self\x07\x03keys\0\x0f\x04\
+\0\x15[method]bucket.exists\x01\x10\x01j\x01\x05\x01\x01\x01@\x02\x04self\x07\x06\
+cursor\x03\0\x11\x04\0\x18[method]bucket.list-keys\x01\x12\x01i\x06\x01j\x01\x13\
+\x01\x01\x01@\x01\x0aidentifiers\0\x14\x04\0\x04open\x01\x15\x04\0\x20wasi:keyva\
+lue/store@0.2.0-draft2\x05\x80\x01\x04\0\x1aspin:up/deny-adapter@4.0.0\x04\0\x0b\
+\x12\x01\0\x0cdeny-adapter\x03\0\0\0G\x09producers\x01\x0cprocessed-by\x02\x0dwi\
+t-component\x070.246.1\x10wit-bindgen-rust\x060.54.0";
 #[inline(never)]
 #[doc(hidden)]
 pub fn __link_custom_section_describing_imports() {

@@ -468,6 +468,275 @@ impl exports::wasi::config::store::Guest for Adapter {
         Err(exports::wasi::config::store::Error::Io(format_deny_error("wasi:config/store")))
     }
 }
+impl exports::fermyon::spin::config::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get_config(
+        key: _rt::String,
+    ) -> Result<_rt::String, exports::fermyon::spin::config::Error> {
+        Err(exports::fermyon::spin::config::Error::Other(format_deny_error("fermyon:spin/config")))
+    }
+}
+impl exports::fermyon::spin::http::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn send_request(
+        req: exports::fermyon::spin::http::Request,
+    ) -> Result<
+        exports::fermyon::spin::http::Response,
+        exports::fermyon::spin::http::HttpError,
+    > {
+        Err(exports::fermyon::spin::http::HttpError::DestinationNotAllowed)
+    }
+}
+impl exports::fermyon::spin::key_value::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn open(
+        name: _rt::String,
+    ) -> Result<
+        exports::fermyon::spin::key_value::Store,
+        exports::fermyon::spin::key_value::Error,
+    > {
+        Err(exports::fermyon::spin::key_value::Error::AccessDenied)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get(
+        store: exports::fermyon::spin::key_value::Store,
+        key: _rt::String,
+    ) -> Result<_rt::Vec<u8>, exports::fermyon::spin::key_value::Error> {
+        unreachable!()
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn set(
+        store: exports::fermyon::spin::key_value::Store,
+        key: _rt::String,
+        value: _rt::Vec<u8>,
+    ) -> Result<(), exports::fermyon::spin::key_value::Error> {
+        unreachable!()
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn delete(
+        store: exports::fermyon::spin::key_value::Store,
+        key: _rt::String,
+    ) -> Result<(), exports::fermyon::spin::key_value::Error> {
+        unreachable!()
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn exists(
+        store: exports::fermyon::spin::key_value::Store,
+        key: _rt::String,
+    ) -> Result<bool, exports::fermyon::spin::key_value::Error> {
+        unreachable!()
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get_keys(
+        store: exports::fermyon::spin::key_value::Store,
+    ) -> Result<_rt::Vec<_rt::String>, exports::fermyon::spin::key_value::Error> {
+        unreachable!()
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn close(store: exports::fermyon::spin::key_value::Store) -> () {
+        unreachable!()
+    }
+}
+impl exports::fermyon::spin::llm::Guest for Adapter {
+    #[allow(unused_variables)]
+    /// Perform inferencing using the provided model and prompt with the given optional params
+    #[allow(async_fn_in_trait)]
+    fn infer(
+        model: exports::fermyon::spin::llm::InferencingModel,
+        prompt: _rt::String,
+        params: Option<exports::fermyon::spin::llm::InferencingParams>,
+    ) -> Result<
+        exports::fermyon::spin::llm::InferencingResult,
+        exports::fermyon::spin::llm::Error,
+    > {
+        Err(exports::fermyon::spin::llm::Error::ModelNotSupported)
+    }
+    #[allow(unused_variables)]
+    /// Generate embeddings for the supplied list of text
+    #[allow(async_fn_in_trait)]
+    fn generate_embeddings(
+        model: exports::fermyon::spin::llm::EmbeddingModel,
+        text: _rt::Vec<_rt::String>,
+    ) -> Result<
+        exports::fermyon::spin::llm::EmbeddingsResult,
+        exports::fermyon::spin::llm::Error,
+    > {
+        Err(exports::fermyon::spin::llm::Error::ModelNotSupported)
+    }
+}
+impl exports::fermyon::spin::mysql::Guest for Adapter {
+    #[allow(unused_variables)]
+    /// query the database: select
+    #[allow(async_fn_in_trait)]
+    fn query(
+        address: _rt::String,
+        statement: _rt::String,
+        params: _rt::Vec<exports::fermyon::spin::mysql::ParameterValue>,
+    ) -> Result<
+        exports::fermyon::spin::mysql::RowSet,
+        exports::fermyon::spin::mysql::MysqlError,
+    > {
+        Err(exports::fermyon::spin::mysql::MysqlError::OtherError(format_deny_error("fermyon:spin/mysql")))
+    }
+    #[allow(unused_variables)]
+    /// execute command to the database: insert, update, delete
+    #[allow(async_fn_in_trait)]
+    fn execute(
+        address: _rt::String,
+        statement: _rt::String,
+        params: _rt::Vec<exports::fermyon::spin::mysql::ParameterValue>,
+    ) -> Result<(), exports::fermyon::spin::mysql::MysqlError> {
+        Err(exports::fermyon::spin::mysql::MysqlError::OtherError(format_deny_error("fermyon:spin/mysql")))
+    }
+}
+impl exports::fermyon::spin::postgres::Guest for Adapter {
+    #[allow(unused_variables)]
+    /// query the database: select
+    #[allow(async_fn_in_trait)]
+    fn query(
+        address: _rt::String,
+        statement: _rt::String,
+        params: _rt::Vec<exports::fermyon::spin::postgres::ParameterValue>,
+    ) -> Result<
+        exports::fermyon::spin::postgres::RowSet,
+        exports::fermyon::spin::postgres::PgError,
+    > {
+        Err(exports::fermyon::spin::postgres::PgError::OtherError(format_deny_error("fermyon:spin/postgres")))
+    }
+    #[allow(unused_variables)]
+    /// execute command to the database: insert, update, delete
+    #[allow(async_fn_in_trait)]
+    fn execute(
+        address: _rt::String,
+        statement: _rt::String,
+        params: _rt::Vec<exports::fermyon::spin::postgres::ParameterValue>,
+    ) -> Result<u64, exports::fermyon::spin::postgres::PgError> {
+        Err(exports::fermyon::spin::postgres::PgError::OtherError(format_deny_error("fermyon:spin/postgres")))
+    }
+}
+impl exports::fermyon::spin::redis::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn publish(
+        address: _rt::String,
+        channel: _rt::String,
+        payload: exports::fermyon::spin::redis::Payload,
+    ) -> Result<(), exports::fermyon::spin::redis::Error> {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get(
+        address: _rt::String,
+        key: _rt::String,
+    ) -> Result<
+        exports::fermyon::spin::redis::Payload,
+        exports::fermyon::spin::redis::Error,
+    > {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn set(
+        address: _rt::String,
+        key: _rt::String,
+        value: exports::fermyon::spin::redis::Payload,
+    ) -> Result<(), exports::fermyon::spin::redis::Error> {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn incr(
+        address: _rt::String,
+        key: _rt::String,
+    ) -> Result<i64, exports::fermyon::spin::redis::Error> {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn del(
+        address: _rt::String,
+        keys: _rt::Vec<_rt::String>,
+    ) -> Result<i64, exports::fermyon::spin::redis::Error> {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn sadd(
+        address: _rt::String,
+        key: _rt::String,
+        values: _rt::Vec<_rt::String>,
+    ) -> Result<i64, exports::fermyon::spin::redis::Error> {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn smembers(
+        address: _rt::String,
+        key: _rt::String,
+    ) -> Result<_rt::Vec<_rt::String>, exports::fermyon::spin::redis::Error> {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn srem(
+        address: _rt::String,
+        key: _rt::String,
+        values: _rt::Vec<_rt::String>,
+    ) -> Result<i64, exports::fermyon::spin::redis::Error> {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn execute(
+        address: _rt::String,
+        command: _rt::String,
+        arguments: _rt::Vec<exports::fermyon::spin::redis::RedisParameter>,
+    ) -> Result<
+        _rt::Vec<exports::fermyon::spin::redis::RedisResult>,
+        exports::fermyon::spin::redis::Error,
+    > {
+        Err(exports::fermyon::spin::redis::Error::Error)
+    }
+}
+impl exports::fermyon::spin::sqlite::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn open(
+        database: _rt::String,
+    ) -> Result<
+        exports::fermyon::spin::sqlite::Connection,
+        exports::fermyon::spin::sqlite::Error,
+    > {
+        Err(exports::fermyon::spin::sqlite::Error::AccessDenied)
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn execute(
+        conn: exports::fermyon::spin::sqlite::Connection,
+        statement: _rt::String,
+        parameters: _rt::Vec<exports::fermyon::spin::sqlite::Value>,
+    ) -> Result<
+        exports::fermyon::spin::sqlite::QueryResult,
+        exports::fermyon::spin::sqlite::Error,
+    > {
+        unreachable!()
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn close(conn: exports::fermyon::spin::sqlite::Connection) -> () {
+        unreachable!()
+    }
+}
 impl exports::wasi::cli0_2_6::environment::Guest for Adapter {
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
