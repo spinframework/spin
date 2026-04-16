@@ -243,57 +243,54 @@ pub fn compose_response(stdout: &[u8]) -> Result<Response<Body>, Error> {
     let mut res = Response::new(body::full(buffer.into()));
     let mut sufficient_response = false;
     let mut explicit_status_code = false;
-    parse_cgi_headers(String::from_utf8(out_headers)?)
-        .iter()
-        .for_each(|h| {
-            use hyper::header::{CONTENT_TYPE, LOCATION};
-            match h.0.to_lowercase().as_str() {
-                "content-type" => {
-                    sufficient_response = true;
-                    res.headers_mut().insert(CONTENT_TYPE, h.1.parse().unwrap());
-                }
-                "status" => {
-                    // The spec does not say that status is a sufficient response.
-                    // (It says that it may be added along with Content-Type, because
-                    // a status has a content type). However, CGI libraries in the wild
-                    // do not set content type correctly if a status is an error.
-                    // See https://datatracker.ietf.org/doc/html/rfc3875#section-6.2
-                    sufficient_response = true;
-                    explicit_status_code = true;
-                    // Status can be `Status CODE [STRING]`, and we just want the CODE.
-                    let status_code = h.1.split_once(' ').map(|(code, _)| code).unwrap_or(h.1);
-                    tracing::debug!(status_code, "Raw status code");
-                    match status_code.parse::<StatusCode>() {
-                        Ok(code) => *res.status_mut() = code,
-                        Err(e) => {
-                            tracing::warn!("Failed to parse code: {}", e);
-                            *res.status_mut() = StatusCode::BAD_GATEWAY;
-                        }
-                    }
-                }
-                "location" => {
-                    sufficient_response = true;
-                    res.headers_mut()
-                        .insert(LOCATION, HeaderValue::from_str(h.1).unwrap());
-                    if !explicit_status_code {
-                        *res.status_mut() = StatusCode::from_u16(302).unwrap();
-                    }
-                }
-                _ => {
-                    // If the header can be parsed into a valid HTTP header, it is
-                    // added to the headers. Otherwise it is ignored.
-                    match HeaderName::from_lowercase(h.0.as_str().to_lowercase().as_bytes()) {
-                        Ok(hdr) => {
-                            res.headers_mut()
-                                .insert(hdr, HeaderValue::from_str(h.1).unwrap());
-                        }
-                        Err(e) => {
-                            tracing::error!(error = %e, header_name = %h.0, "Invalid header name")
-                        }
+    for h in parse_cgi_headers(String::from_utf8(out_headers)?).iter() {
+        use hyper::header::{CONTENT_TYPE, LOCATION};
+        match h.0.to_lowercase().as_str() {
+            "content-type" => {
+                sufficient_response = true;
+                res.headers_mut().insert(CONTENT_TYPE, h.1.parse()?);
+            }
+            "status" => {
+                // The spec does not say that status is a sufficient response.
+                // (It says that it may be added along with Content-Type, because
+                // a status has a content type). However, CGI libraries in the wild
+                // do not set content type correctly if a status is an error.
+                // See https://datatracker.ietf.org/doc/html/rfc3875#section-6.2
+                sufficient_response = true;
+                explicit_status_code = true;
+                // Status can be `Status CODE [STRING]`, and we just want the CODE.
+                let status_code = h.1.split_once(' ').map(|(code, _)| code).unwrap_or(h.1);
+                tracing::debug!(status_code, "Raw status code");
+                match status_code.parse::<StatusCode>() {
+                    Ok(code) => *res.status_mut() = code,
+                    Err(e) => {
+                        tracing::warn!("Failed to parse code: {}", e);
+                        *res.status_mut() = StatusCode::BAD_GATEWAY;
                     }
                 }
             }
-        });
+            "location" => {
+                sufficient_response = true;
+                res.headers_mut()
+                    .insert(LOCATION, HeaderValue::from_str(h.1)?);
+                if !explicit_status_code {
+                    *res.status_mut() = StatusCode::FOUND;
+                }
+            }
+            _ => {
+                // If the header can be parsed into a valid HTTP header, it is
+                // added to the headers. Otherwise it is ignored.
+                match HeaderName::from_lowercase(h.0.as_str().to_lowercase().as_bytes()) {
+                    Ok(hdr) => {
+                        res.headers_mut().insert(hdr, HeaderValue::from_str(h.1)?);
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, header_name = %h.0, "Invalid header name")
+                    }
+                }
+            }
+        }
+    }
     if !sufficient_response {
         tracing::debug!("{:?}", res.body());
         return Ok(internal_error(
