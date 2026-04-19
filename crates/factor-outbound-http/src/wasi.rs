@@ -12,7 +12,11 @@ use std::{
 
 use bytes::Bytes;
 use futures::channel::oneshot;
-use http::{header::HOST, uri::Scheme, Uri};
+use http::{
+    header::{CONTENT_LENGTH, HOST},
+    uri::Scheme,
+    HeaderMap, Uri,
+};
 use http_body::{Body, Frame, SizeHint};
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
 use hyper_util::{
@@ -35,7 +39,7 @@ use tokio::{
 };
 use tokio_rustls::client::TlsStream;
 use tower_service::Service;
-use tracing::{field::Empty, instrument, Instrument};
+use tracing::{field::Empty, instrument, Instrument, Span};
 use wasmtime::component::HasData;
 use wasmtime_wasi::TrappableError;
 use wasmtime_wasi_http::{
@@ -53,6 +57,8 @@ use crate::{
     intercept::{InterceptOutcome, OutboundHttpInterceptor},
     wasi_2023_10_18, wasi_2023_11_10, InstanceHttpHooks, OutboundHttpFactor, SelfRequestOrigin,
 };
+
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(600);
 
@@ -453,6 +459,12 @@ impl RequestSender {
             }
         }
 
+        record_content_length_header(
+            &span,
+            request.headers(),
+            "http.request.header.content-length",
+        );
+
         Ok(self
             .send_request(request, config, override_connect_addr)
             .await?)
@@ -583,7 +595,10 @@ impl RequestSender {
             .map_err(hyper_legacy_request_error)?
             .map(|body| body.map_err(hyper_request_error).boxed_unsync());
 
-        tracing::Span::current().record("http.response.status_code", resp.status().as_u16());
+        let span = tracing::Span::current();
+        span.record("http.response.status_code", resp.status().as_u16());
+
+        record_content_length_header(&span, resp.headers(), "http.response.header.content-length");
 
         Ok(IncomingResponse {
             resp,
@@ -1121,5 +1136,13 @@ pub fn p3_to_p2_error_code(code: p3_types::ErrorCode) -> p2_types::ErrorCode {
         p3_types::ErrorCode::LoopDetected => p2_types::ErrorCode::LoopDetected,
         p3_types::ErrorCode::ConfigurationError => p2_types::ErrorCode::ConfigurationError,
         p3_types::ErrorCode::InternalError(payload) => p2_types::ErrorCode::InternalError(payload),
+    }
+}
+
+fn record_content_length_header(span: &Span, headers: &HeaderMap, attr_name: &'static str) {
+    if let Some(content_length) = headers.get(CONTENT_LENGTH) {
+        if let Ok(size_str) = content_length.to_str() {
+            span.set_attribute(attr_name, size_str.to_string());
+        }
     }
 }
