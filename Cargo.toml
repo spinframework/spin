@@ -192,17 +192,17 @@ tracing = { version = "0.1.41", features = ["log"] }
 url = "2.5.7"
 tracing-opentelemetry = { version = "0.29", default-features = false, features = ["metrics"] }
 walkdir = "2"
-wac-graph = { git = "https://github.com/bytecodealliance/wac" }
-wasm-encoder = "0.245.1"
-wasm-metadata = "0.245.1"
+wac-graph = "0.10.0"
+wasm-encoder = "0.247.0"
+wasm-metadata = "0.247.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
-wasmparser = "0.245.1"
+wasmparser = "0.247.0"
 wasmtime = { version = "43.0.1", features = ["component-model-async"] }
 wasmtime-wasi = { version = "43.0.1", features = ["p3"] }
 wasmtime-wasi-http = { version = "43.0.1", features = ["p3", "component-model-async"] }
-wit-component = "0.245.1"
-wit-parser = "0.245.1"
+wit-component = "0.247.0"
+wit-parser = "0.247.0"
 
 spin-componentize = { path = "crates/componentize" }
 
