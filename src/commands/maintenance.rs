@@ -42,7 +42,24 @@ impl GenerateReference {
 /// Rebuild a `clap::Command` with subcommands and options sorted alphabetically.
 /// This preserves the sorted output from the previously vendored clap-markdown fork.
 fn sorted_command(cmd: &clap::Command) -> clap::Command {
+    if cmd.get_name() == "up" {
+        let inner = crate::commands::up::UpCommand::inner()
+            // We have to munge the name to stop it recursing.
+            .name("up-inner");
+        return sorted_command(&inner);
+    }
+
     let mut new_cmd = clap::Command::new(cmd.get_name().to_owned());
+
+    // Because of the `up` shenanigans, we have to remove the help and
+    // version flags or Clap asserts on a duplicate flag in `watch`.
+    // (But this is no loss because clap-markdown skips them anyway.)
+    new_cmd = new_cmd.disable_help_flag(true).disable_version_flag(true);
+
+    // Unmunge the name munging
+    if cmd.get_name() == "up-inner" {
+        new_cmd = new_cmd.name("up");
+    }
 
     if let Some(v) = cmd.get_display_name() {
         new_cmd = new_cmd.display_name(v);

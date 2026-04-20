@@ -172,9 +172,11 @@ fn classify_short_flags(
 
 impl Args for UpCommand {
     fn augment_args(cmd: clap::Command) -> clap::Command {
+        let inner = UpCommandInner::command();
+
         // The FromArgMatches impl below depends on some restrictions on
         // UpCommandInner, which we assert here to prevent bugs
-        for arg in UpCommandInner::command().get_arguments() {
+        for arg in inner.get_arguments() {
             assert!(
                 !arg.is_positional(),
                 "UpCommandInner cannot use positional arg {arg}"
@@ -188,11 +190,20 @@ impl Args for UpCommand {
         }
 
         // Grab all arguments for later parsing
-        cmd.disable_help_flag(true).arg(
+        let mut cmd = cmd.disable_help_flag(true).arg(
             clap::Arg::new("args")
                 .action(clap::ArgAction::Append)
                 .allow_hyphen_values(true),
-        )
+        );
+
+        if let Some(about) = inner.get_about() {
+            cmd = cmd.about(about.clone());
+        }
+        if let Some(long_about) = inner.get_long_about() {
+            cmd = cmd.long_about(long_about.clone());
+        }
+
+        cmd
     }
 
     fn augment_args_for_update(_: clap::Command) -> clap::Command {

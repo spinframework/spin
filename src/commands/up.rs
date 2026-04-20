@@ -41,6 +41,7 @@ const MULTI_TRIGGER_LET_ALL_START: tokio::time::Duration = tokio::time::Duration
 // NOTE: Most of the messy clap parsing details are in the child parsing module.
 pub struct UpCommand(UpCommandInner);
 
+/// Start the Spin application
 impl UpCommand {
     pub async fn run(self) -> Result<()> {
         // For displaying help, first print `spin up`'s own usage text, then
@@ -73,6 +74,10 @@ impl UpCommand {
         let mut cmd = UpCommand::parse_from(args);
         cmd.0.file_source = Some(manifest_file);
         cmd.0.run().await
+    }
+
+    pub(crate) fn inner() -> clap::Command {
+        UpCommandInner::command()
     }
 }
 
