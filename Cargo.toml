@@ -198,9 +198,9 @@ wasm-metadata = "0.247.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 wasmparser = "0.247.0"
-wasmtime = { version = "43.0.1", features = ["component-model-async"] }
-wasmtime-wasi = { version = "43.0.1", features = ["p3"] }
-wasmtime-wasi-http = { version = "43.0.1", features = ["p3", "component-model-async"] }
+wasmtime = { version = "44.0.0", features = ["component-model-async"] }
+wasmtime-wasi = { version = "44.0.0", features = ["p3"] }
+wasmtime-wasi-http = { version = "44.0.0", features = ["p3", "component-model-async"] }
 wit-component = "0.247.0"
 wit-parser = "0.247.0"
 
