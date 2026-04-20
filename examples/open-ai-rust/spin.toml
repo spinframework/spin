@@ -13,10 +13,10 @@ route = "/..."
 component = "open-ai-rust"
 
 [component.open-ai-rust]
-source = "target/wasm32-wasip1/release/open_ai_rust.wasm"
+source = "target/wasm32-wasip2/release/open_ai_rust.wasm"
 allowed_outbound_hosts = []
 ai_models = ["gpt-oss:20b"]
 
 [component.open-ai-rust.build]
-command = "cargo build --target wasm32-wasip1 --release"
+command = "cargo build --target wasm32-wasip2 --release"
 watch = ["src/**/*.rs", "Cargo.toml"]
