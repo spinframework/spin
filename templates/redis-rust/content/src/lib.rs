@@ -1,11 +1,10 @@
 use anyhow::Result;
-use bytes::Bytes;
-use spin_sdk::redis_component;
+use spin_sdk::redis_subscriber;
 use std::str::from_utf8;
 
 /// A simple Spin Redis component.
-#[redis_component]
-fn on_message(message: Bytes) -> Result<()> {
+#[redis_subscriber]
+async fn on_message(message: Vec<u8>) -> Result<()> {
     println!("{}", from_utf8(&message)?);
     // Implement me ...
     Ok(())
