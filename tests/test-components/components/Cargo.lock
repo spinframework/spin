@@ -823,7 +823,7 @@ dependencies = [
 [[package]]
 name = "opentelemetry-wasi"
 version = "0.27.0"
-source = "git+https://github.com/calebschoepp/opentelemetry-wasi?rev=82eb583e3301860a976924de0fa305977f5ad1b0#82eb583e3301860a976924de0fa305977f5ad1b0"
+source = "git+https://github.com/calebschoepp/opentelemetry-wasi?rev=700ac3c1fcf67e277b2b03440b79ada47780c2ee#700ac3c1fcf67e277b2b03440b79ada47780c2ee"
 dependencies = [
  "anyhow",
  "base64",
