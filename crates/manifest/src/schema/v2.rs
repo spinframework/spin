@@ -151,7 +151,8 @@ pub struct Trigger {
     /// Learn more: https://spinframework.dev/triggers#triggers-and-components
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub component: Option<ComponentSpec>,
-    /// Reserved for future use.
+    /// Additional components used when the trigger occurs.
+    /// The meaning of entries in this table is trigger-specific.
     ///
     /// `components = { ... }`
     #[serde(default, skip_serializing_if = "Map::is_empty")]
@@ -838,10 +839,18 @@ mod one_or_many {
         D: Deserializer<'de>,
     {
         let value = toml::Value::deserialize(deserializer)?;
-        if let Ok(val) = T::deserialize(value.clone()) {
-            Ok(vec![val])
+        // NOTE: We explicitly check for array first rather than trying T::deserialize
+        // first, because toml's serde impl will treat an array as a sequence of fields
+        // to be assigned to struct members (e.g. Component), producing nonsensical results.
+        if let Some(arr) = value.as_array() {
+            arr.iter()
+                .map(|v| T::deserialize(v.clone()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(serde::de::Error::custom)
         } else {
-            Vec::deserialize(value).map_err(serde::de::Error::custom)
+            T::deserialize(value)
+                .map(|v| vec![v])
+                .map_err(serde::de::Error::custom)
         }
     }
 }

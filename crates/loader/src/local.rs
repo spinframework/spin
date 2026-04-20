@@ -20,6 +20,8 @@ use tokio::{io::AsyncWriteExt, sync::Semaphore};
 
 use crate::{cache::Cache, FilesMountStrategy};
 
+mod trigger_components;
+
 #[derive(Debug)]
 pub struct LocalLoader {
     app_root: PathBuf,
@@ -143,7 +145,7 @@ impl LocalLoader {
 
         drop(sloth_guard);
 
-        Ok(LockedApp {
+        let locked = LockedApp {
             spin_lock_version: Default::default(),
             metadata,
             must_understand,
@@ -151,7 +153,11 @@ impl LocalLoader {
             variables,
             triggers,
             components,
-        })
+        };
+
+        let locked = trigger_components::reassign_extras(locked);
+
+        Ok(locked)
     }
 
     // Load the given component into a LockedComponent, ready for execution.
@@ -944,11 +950,13 @@ fn warn_if_component_load_slothful() -> sloth::SlothGuard {
 mod test {
     use super::*;
 
-    #[tokio::test]
-    async fn bad_destination_filename_is_explained() -> anyhow::Result<()> {
+    async fn load_test_case(
+        testcase_dir: &str,
+        manifest_file: &str,
+    ) -> anyhow::Result<(tempfile::TempDir, LockedApp)> {
         let app_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
-            .join("file-errors");
+            .join(testcase_dir);
         let wd = tempfile::tempdir()?;
         let loader = LocalLoader::new(
             &app_root,
@@ -957,8 +965,13 @@ mod test {
             None,
         )
         .await?;
-        let err = loader
-            .load_file(app_root.join("bad.toml"))
+        let locked_app = loader.load_file(app_root.join(manifest_file)).await;
+        locked_app.map(|locked| (wd, locked))
+    }
+
+    #[tokio::test]
+    async fn bad_destination_filename_is_explained() -> anyhow::Result<()> {
+        let err = load_test_case("file-errors", "bad.toml")
             .await
             .expect_err("loader should not have succeeded");
         let err_ctx = format!("{err:#}");
@@ -967,5 +980,180 @@ mod test {
             "expected error to show destination file name but got {err_ctx}",
         );
         Ok(())
+    }
+
+    fn trigger_by_route<'a>(locked: &'a LockedApp, route: &str) -> &'a LockedTrigger {
+        fn route_of(trigger: &LockedTrigger) -> &str {
+            trigger
+                .trigger_config
+                .get("route")
+                .and_then(|v| v.as_str())
+                .unwrap()
+        }
+        locked
+            .triggers
+            .iter()
+            .find(|t| route_of(t) == route)
+            .unwrap()
+    }
+
+    fn component_for_route<'a>(locked: &'a LockedApp, route: &str) -> &'a LockedComponent {
+        let component_id = component_id(trigger_by_route(locked, route));
+        locked
+            .components
+            .iter()
+            .find(|c| c.id == component_id)
+            .unwrap()
+    }
+
+    fn component_id(trigger: &LockedTrigger) -> &str {
+        trigger
+            .trigger_config
+            .get("component")
+            .and_then(|v| v.as_str())
+            .unwrap()
+    }
+
+    fn component_trigger_extras_for_route<'a>(
+        locked: &'a LockedApp,
+        route: &str,
+        key: &str,
+    ) -> &'a Vec<serde_json::Value> {
+        let component = component_for_route(locked, route);
+        let extras = component
+            .metadata
+            .get("trigger-extras")
+            .expect("should have had trigger-extras");
+        extras
+            .get(key)
+            .expect("should have had extras for key")
+            .as_array()
+            .expect("extras for key should have been an array")
+    }
+
+    #[tokio::test]
+    async fn unenriched_lockfile_is_unchanged() {
+        let (_wd, locked_app) = load_test_case("extra-components", "vanilla.toml")
+            .await
+            .unwrap();
+        assert_eq!(3, locked_app.triggers.len());
+        assert_eq!(2, locked_app.components.len());
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_only_one_trigger_per_component_no_changes() {
+        let (_wd, locked_app) = load_test_case("extra-components", "inoffensive.toml")
+            .await
+            .unwrap();
+        assert_eq!(2, locked_app.triggers.len());
+        assert_eq!("a", component_id(trigger_by_route(&locked_app, "/a")));
+        assert_eq!("b", component_id(trigger_by_route(&locked_app, "/b")));
+        assert_eq!(5, locked_app.components.len());
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_multiple_enriched_triggers_per_component_get_split() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+        // Splitting should result in triggers pointing to different IDs, but the same primary source
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a1")));
+        assert!(component_for_route(&locked_app, "/a1")
+            .source
+            .content
+            .source
+            .as_ref()
+            .unwrap()
+            .ends_with("/a.dummy.wasm.txt"));
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a2")));
+        assert!(component_for_route(&locked_app, "/a3")
+            .source
+            .content
+            .source
+            .as_ref()
+            .unwrap()
+            .ends_with("/a.dummy.wasm.txt"));
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a3")));
+        assert!(component_for_route(&locked_app, "/a3")
+            .source
+            .content
+            .source
+            .as_ref()
+            .unwrap()
+            .ends_with("/a.dummy.wasm.txt"));
+        // Triggers that don't need splitting should be unaffected
+        assert_eq!("b", component_id(trigger_by_route(&locked_app, "/b")));
+        // There should be new components inserted for the split
+        assert_eq!(8, locked_app.components.len());
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_captures_composition_graph_in_split_component() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+
+        let a1_mw = component_trigger_extras_for_route(&locked_app, "/a1", "middleware");
+        assert_eq!(2, a1_mw.len());
+        assert_eq!(
+            "m1",
+            a1_mw[0].as_str().expect("a1 mw should have been strings")
+        );
+        assert_eq!(
+            "m2",
+            a1_mw[1].as_str().expect("a1 mw should have been strings")
+        );
+
+        let a2_mw = component_trigger_extras_for_route(&locked_app, "/a2", "middleware");
+        assert_eq!(2, a2_mw.len());
+        assert_eq!(
+            "m2",
+            a2_mw[0].as_str().expect("a2 mw should have been strings")
+        );
+        assert_eq!(
+            "m3",
+            a2_mw[1].as_str().expect("a2 mw should have been strings")
+        );
+
+        let a3_mw = component_trigger_extras_for_route(&locked_app, "/a3", "middleware");
+        assert_eq!(3, a3_mw.len());
+        assert_eq!(
+            "m3",
+            a3_mw[0].as_str().expect("a3 mw should have been strings")
+        );
+        assert_eq!(
+            "m2",
+            a3_mw[1].as_str().expect("a3 mw should have been strings")
+        );
+        assert_eq!(
+            "m1",
+            a3_mw[2].as_str().expect("a3 mw should have been strings")
+        );
+
+        // Unsplit things should still get the shunt
+        let b_mw = component_trigger_extras_for_route(&locked_app, "/b", "middleware");
+        assert_eq!(2, b_mw.len());
+        assert_eq!(
+            "m1",
+            b_mw[0].as_str().expect("b mw should have been strings")
+        );
+        assert_eq!(
+            "m3",
+            b_mw[1].as_str().expect("b mw should have been strings")
+        );
+    }
+
+    #[tokio::test]
+    async fn extras_moved_off_trigger() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+
+        for t in &locked_app.triggers {
+            assert!(t.trigger_config.get("components").is_none());
+        }
     }
 }
