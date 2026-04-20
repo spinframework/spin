@@ -62,7 +62,7 @@ pub struct Push {
     #[clap(long, default_value_t = true)]
     pub compose: bool,
 
-    /// Specifies to perform `spin build` before pushing the application.
+    /// Specifies to perform `spin build` (with the default options) before pushing the application.
     #[clap(long, env = ALWAYS_BUILD_ENV)]
     pub build: bool,
 
