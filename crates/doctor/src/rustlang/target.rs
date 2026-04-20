@@ -37,8 +37,8 @@ async fn diagnose_rust_wasi_target() -> Result<Vec<TargetDiagnosis>> {
     // - if rustup is not present, check if cargo is present
     //   - if not, return RustNotInstalled
     //   - if so, warn but return empty list (Rust is installed but not via rustup, so we can't perform a diagnosis - bit of an edge case this one, and the user probably knows what they're doing...?)
-    // - if rustup is present but the list does not contain wasm32-wasip1, return WasmTargetNotInstalled
-    // - if the list does contain wasm32-wasip1, return an empty list
+    // - if rustup is present but the list does not contain wasm32-wasip2, return WasmTargetNotInstalled
+    // - if the list does contain wasm32-wasip2, return an empty list
     // NOTE: this does not currently check against the Rust SDK MSRV - that could
     // be a future enhancement or separate diagnosis, but at least the Rust compiler
     // should give a clear error for that!
@@ -49,7 +49,7 @@ async fn diagnose_rust_wasi_target() -> Result<Vec<TargetDiagnosis>> {
         RustupStatus::RustupNotInstalled => match get_cargo_status().await? {
             CargoStatus::Installed => {
                 terminal::warn!(
-                    "Spin Doctor can't determine if the Rust wasm32-wasip1 target is installed."
+                    "Spin Doctor can't determine if the Rust wasm32-wasip2 target is installed."
                 );
                 vec![]
             }
@@ -81,7 +81,7 @@ async fn get_rustup_target_status() -> Result<RustupStatus> {
         }
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            if stdout.lines().any(|line| line == "wasm32-wasip1") {
+            if stdout.lines().any(|line| line == "wasm32-wasip2") {
                 RustupStatus::AllInstalled
             } else {
                 RustupStatus::WasiNotInstalled
@@ -119,7 +119,7 @@ async fn get_cargo_status() -> Result<CargoStatus> {
 pub enum TargetDiagnosis {
     /// Rust is not installed: neither cargo nor rustup is present
     RustNotInstalled,
-    /// The Rust wasm32-wasip1 target is not installed: rustup is present but the target isn't
+    /// The Rust wasm32-wasip2 target is not installed: rustup is present but the target isn't
     WasmTargetNotInstalled,
 }
 
@@ -128,7 +128,7 @@ impl Diagnosis for TargetDiagnosis {
         match self {
             Self::RustNotInstalled => "The Rust compiler isn't installed".into(),
             Self::WasmTargetNotInstalled => {
-                "The required Rust target 'wasm32-wasip1' isn't installed".into()
+                "The required Rust target 'wasm32-wasip2' isn't installed".into()
             }
         }
     }
@@ -142,16 +142,16 @@ impl Diagnosis for TargetDiagnosis {
 impl Treatment for TargetDiagnosis {
     fn summary(&self) -> String {
         match self {
-            Self::RustNotInstalled => "Install the Rust compiler and the wasm32-wasip1 target",
-            Self::WasmTargetNotInstalled => "Install the Rust wasm32-wasip1 target",
+            Self::RustNotInstalled => "Install the Rust compiler and the wasm32-wasip2 target",
+            Self::WasmTargetNotInstalled => "Install the Rust wasm32-wasip2 target",
         }
         .into()
     }
 
     async fn dry_run(&self, _patient: &PatientApp) -> Result<String> {
         let message = match self {
-            Self::RustNotInstalled => "Download and run the Rust installer from https://rustup.rs, with the `--target wasm32-wasip1` option",
-            Self::WasmTargetNotInstalled => "Run the following command:\n    `rustup target add wasm32-wasip1`",
+            Self::RustNotInstalled => "Download and run the Rust installer from https://rustup.rs, with the `--target wasm32-wasip2` option",
+            Self::WasmTargetNotInstalled => "Run the following command:\n    `rustup target add wasm32-wasip2`",
         };
         Ok(message.into())
     }
@@ -184,7 +184,7 @@ async fn run_rust_installer() -> Result<std::process::ExitStatus> {
     let script = resp.bytes().await?;
 
     let mut cmd = std::process::Command::new("sh");
-    cmd.args(["-s", "--", "--target", "wasm32-wasip1"]);
+    cmd.args(["-s", "--", "--target", "wasm32-wasip2"]);
     cmd.stdin(std::process::Stdio::piped());
     let mut shell = cmd.spawn()?;
     let mut stdin = shell.stdin.take().unwrap();
@@ -213,14 +213,14 @@ async fn run_rust_installer() -> Result<std::process::ExitStatus> {
     std::fs::write(&installer_path, &installer_bin)?;
 
     let mut cmd = std::process::Command::new(installer_path);
-    cmd.args(["--target", "wasm32-wasip1"]);
+    cmd.args(["--target", "wasm32-wasip2"]);
     let status = cmd.status()?;
     Ok(status)
 }
 
 fn install_wasi_target() -> Result<()> {
     let mut cmd = std::process::Command::new("rustup");
-    cmd.args(["target", "add", "wasm32-wasip1"]);
+    cmd.args(["target", "add", "wasm32-wasip2"]);
     let status = cmd.status()?;
     anyhow::ensure!(
         status.success(),
