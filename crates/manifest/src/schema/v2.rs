@@ -15,7 +15,7 @@ pub(crate) type Map<K, V> = indexmap::IndexMap<K, V>;
 #[serde(deny_unknown_fields)]
 pub struct AppManifest {
     /// `spin_manifest_version = 2`
-    #[schemars(with = "usize", range = (min = 2, max = 2))]
+    #[schemars(with = "usize", range(min = 2, max = 2))]
     pub spin_manifest_version: FixedVersion<2>,
     /// `[application]`
     pub application: AppDetails,
@@ -173,6 +173,7 @@ pub struct OneOrManyComponentSpecs(
 /// Component reference or inline definition
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, untagged, try_from = "toml::Value")]
+#[schemars(schema_with = "json_schema::id_or_component")]
 pub enum ComponentSpec {
     /// `"component-id"`
     Reference(KebabId),
