@@ -1,6 +1,6 @@
 use anyhow::bail;
-use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry::{global, trace::TracerProvider};
+use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry_sdk::{
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,

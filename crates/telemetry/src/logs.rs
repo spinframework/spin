@@ -1,8 +1,8 @@
 use std::{ascii::escape_default, sync::OnceLock};
 
 use anyhow::bail;
-use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
+use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry_sdk::{
     logs::{log_processor_with_async_runtime::BatchLogProcessor, BatchConfigBuilder, SdkLogger},
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},

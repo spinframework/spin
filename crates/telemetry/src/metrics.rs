@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
-use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry::global;
+use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry_sdk::{
     metrics::{periodic_reader_with_async_runtime::PeriodicReader, SdkMeterProvider},
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
