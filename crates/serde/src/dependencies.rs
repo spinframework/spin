@@ -2,6 +2,7 @@
 
 use crate::KebabId;
 use anyhow::anyhow;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use wasm_pkg_common::package::PackageRef;
@@ -80,8 +81,11 @@ impl FromStr for DependencyPackageName {
 /// Name of an import dependency.
 ///
 /// For example: `foo:bar/baz@0.1.0`, `foo:bar/baz`, `foo:bar@0.1.0`, `foo:bar`, `foo-bar`.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(
+    Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash, JsonSchema,
+)]
 #[serde(into = "String", try_from = "String")]
+#[schemars(with = "String")]
 pub enum DependencyName {
     /// Plain name
     Plain(KebabId),
