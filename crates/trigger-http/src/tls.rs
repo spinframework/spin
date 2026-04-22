@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tokio_rustls::{rustls, TlsAcceptor};
+use tokio_rustls::{TlsAcceptor, rustls};
 
 // TODO: dedupe with spin-factor-outbound-networking (spin-tls crate?)
 

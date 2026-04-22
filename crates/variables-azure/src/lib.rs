@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use azure_core::{auth::TokenCredential, Url};
+use azure_core::{Url, auth::TokenCredential};
 use azure_security_keyvault::SecretClient;
 use serde::Deserialize;
 use spin_expressions::{Key, Provider};
 use spin_factors::anyhow;
 use spin_world::async_trait;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
 /// Azure KeyVault runtime config literal options for authentication
 ///
@@ -37,16 +37,18 @@ impl TryFrom<AzureKeyVaultVariablesConfig> for AzureKeyVaultAuthOptions {
 
     fn try_from(value: AzureKeyVaultVariablesConfig) -> Result<Self, Self::Error> {
         match (value.client_id, value.tenant_id, value.client_secret) {
-            (Some(client_id), Some(tenant_id), Some(client_secret)) => Ok(
-                AzureKeyVaultAuthOptions::RuntimeConfigValues{
+            (Some(client_id), Some(tenant_id), Some(client_secret)) => {
+                Ok(AzureKeyVaultAuthOptions::RuntimeConfigValues {
                     client_id,
                     client_secret,
                     tenant_id,
                     authority_host: value.authority_host.unwrap_or_default(),
-                }
-            ),
+                })
+            }
             (None, None, None) => Ok(AzureKeyVaultAuthOptions::Environmental),
-            _ => anyhow::bail!("The current runtime config specifies some but not all of the Azure KeyVault 'client_id', 'client_secret', and 'tenant_id' values. Provide the missing values to authenticate to Azure KeyVault with the given service principal, or remove all these values to authenticate using ambient authentication (e.g. env vars, Azure CLI, Managed Identity, Workload Identity).")
+            _ => anyhow::bail!(
+                "The current runtime config specifies some but not all of the Azure KeyVault 'client_id', 'client_secret', and 'tenant_id' values. Provide the missing values to authenticate to Azure KeyVault with the given service principal, or remove all these values to authenticate using ambient authentication (e.g. env vars, Azure CLI, Managed Identity, Workload Identity)."
+            ),
         }
     }
 }

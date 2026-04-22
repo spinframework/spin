@@ -6,7 +6,7 @@ use crate::{
     error::Error,
     schema::{v1, v2},
 };
-use allowed_http_hosts::{parse_allowed_http_hosts, AllowedHttpHosts};
+use allowed_http_hosts::{AllowedHttpHosts, parse_allowed_http_hosts};
 
 /// Converts a V1 app manifest to V2.
 pub fn v1_to_v2_app(manifest: v1::AppManifestV1) -> Result<v2::AppManifest, Error> {

@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use http::{Request, Response};
 use http_body_util::{BodyExt, Full};
 use spin_world::async_trait;
-use wasmtime_wasi_http::p2::{body::HyperOutgoingBody, HttpResult};
+use wasmtime_wasi_http::p2::{HttpResult, body::HyperOutgoingBody};
 
 pub type HyperBody = HyperOutgoingBody;
 

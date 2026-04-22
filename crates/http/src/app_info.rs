@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "runtime")]
-use spin_app::{App, APP_NAME_KEY, APP_VERSION_KEY, OCI_IMAGE_DIGEST_KEY};
+use spin_app::{APP_NAME_KEY, APP_VERSION_KEY, App, OCI_IMAGE_DIGEST_KEY};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AppInfo {

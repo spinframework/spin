@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use regex::Regex;
@@ -464,7 +464,9 @@ impl Template {
                 if app_trigger == t {
                     Ok(())
                 } else {
-                    Err(anyhow!("Component trigger type '{t}' does not match application trigger type '{app_trigger}'"))
+                    Err(anyhow!(
+                        "Component trigger type '{t}' does not match application trigger type '{app_trigger}'"
+                    ))
                 }
             }
         }
@@ -636,7 +638,7 @@ fn parse_string_constraints(raw: &RawParameter) -> anyhow::Result<StringConstrai
 }
 
 fn read_install_record(layout: &TemplateLayout) -> InstalledFrom {
-    use crate::reader::{parse_installed_from, RawInstalledFrom};
+    use crate::reader::{RawInstalledFrom, parse_installed_from};
 
     let installed_from_text = std::fs::read_to_string(layout.installation_record_file()).ok();
     match installed_from_text.and_then(parse_installed_from) {
@@ -655,7 +657,9 @@ fn validate_manifest(raw: &RawTemplateManifest) -> anyhow::Result<()> {
 
 fn validate_v1_manifest(raw: &RawTemplateManifestV1) -> anyhow::Result<()> {
     if raw.custom_filters.is_some() {
-        anyhow::bail!("Custom filters are not supported in this version of Spin. Please update your template.");
+        anyhow::bail!(
+            "Custom filters are not supported in this version of Spin. Please update your template."
+        );
     }
     Ok(())
 }

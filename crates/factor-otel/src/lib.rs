@@ -3,21 +3,21 @@ mod host;
 use anyhow::bail;
 use indexmap::IndexMap;
 use opentelemetry::{
-    trace::{SpanContext, SpanId, TraceContextExt},
     Context,
+    trace::{SpanContext, SpanId, TraceContextExt},
 };
 use opentelemetry_otlp::MetricExporter;
 use opentelemetry_sdk::{
-    logs::{log_processor_with_async_runtime::BatchLogProcessor, LogProcessor},
+    Resource,
+    logs::{LogProcessor, log_processor_with_async_runtime::BatchLogProcessor},
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,
-    trace::{span_processor_with_async_runtime::BatchSpanProcessor, SpanProcessor},
-    Resource,
+    trace::{SpanProcessor, span_processor_with_async_runtime::BatchSpanProcessor},
 };
 use spin_factors::{Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder};
 use spin_telemetry::{
     detector::SpinResourceDetector,
-    env::{otel_logs_enabled, otel_metrics_enabled, otel_tracing_enabled, OtlpProtocol},
+    env::{OtlpProtocol, otel_logs_enabled, otel_metrics_enabled, otel_tracing_enabled},
 };
 use std::sync::{Arc, RwLock};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -71,7 +71,9 @@ impl Factor for OtelFactor {
             && self.metric_exporter.is_none()
             && self.log_processor.is_none()
         {
-            tracing::warn!("WASI OTel experimental support is enabled but no OTEL_EXPORTER_* environment variables were found. No telemetry will be exported.");
+            tracing::warn!(
+                "WASI OTel experimental support is enabled but no OTEL_EXPORTER_* environment variables were found. No telemetry will be exported."
+            );
         }
 
         Ok(InstanceState {
@@ -275,7 +277,7 @@ impl OtelFactorState {
                     .span()
                     .span_context()
                     .span_id(),
-                    "Incorrectly attempting to reparent the original host span. Likely `reparent_tracing_span` was called in an incorrect location."
+                "Incorrectly attempting to reparent the original host span. Likely `reparent_tracing_span` was called in an incorrect location."
             );
         }
 

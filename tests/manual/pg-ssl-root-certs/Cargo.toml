@@ -4,7 +4,7 @@ authors = ["Kate Goldenring <kate.goldenring@fermyon.com>"]
 description = ""
 version = "0.1.0"
 rust-version = "1.78"
-edition = "2021"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib"]

@@ -3,7 +3,7 @@
 
 use std::{collections::VecDeque, fmt::Debug, fs, path::PathBuf};
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use spin_common::ui::quoted_path;
 use toml_edit::DocumentMut;

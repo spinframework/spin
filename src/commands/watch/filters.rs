@@ -32,7 +32,7 @@ impl Filterer for AnyFilterer {
 /// of events every few milliseconds, which would kick off a rebuild
 /// every few milliseconds. ASK ME HOW I KNOW.
 fn is_mutating(tag: &watchexec_events::Tag) -> bool {
-    use watchexec_events::{filekind::FileEventKind, Tag};
+    use watchexec_events::{Tag, filekind::FileEventKind};
     matches!(
         tag,
         Tag::FileEventKind(

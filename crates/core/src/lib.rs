@@ -20,9 +20,8 @@ use wasmtime::{InstanceAllocationStrategy, PoolingAllocationConfig};
 pub use async_trait::async_trait;
 pub use wasmtime::Engine as WasmtimeEngine;
 pub use wasmtime::{
-    self,
+    self, Instance as ModuleInstance, Module, Trap,
     component::{Component, Instance, InstancePre, Linker},
-    Instance as ModuleInstance, Module, Trap,
 };
 
 pub use store::{AsState, Store, StoreBuilder};
@@ -326,12 +325,14 @@ impl<T: 'static> EngineBuilder<T> {
         }
         let engine_weak = self.engine.weak();
         let interval = self.epoch_tick_interval;
-        std::thread::spawn(move || loop {
-            std::thread::sleep(interval);
-            let Some(engine) = engine_weak.upgrade() else {
-                break;
-            };
-            engine.increment_epoch();
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(interval);
+                let Some(engine) = engine_weak.upgrade() else {
+                    break;
+                };
+                engine.increment_epoch();
+            }
         });
     }
 

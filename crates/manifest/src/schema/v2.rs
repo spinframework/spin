@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use spin_serde::{DependencyName, DependencyPackageName, FixedVersion, LowerSnakeId};
@@ -645,19 +645,19 @@ impl ComponentDependencies {
     /// interfaces, e.g. `"foo:bar = { ..., export = "my-export" }"` is invalid.
     fn ensure_package_names_no_export(&self) -> anyhow::Result<()> {
         for (dependency_name, dependency) in self.inner.iter() {
-            if let DependencyName::Package(name) = dependency_name {
-                if name.interface.is_none() {
-                    let export = match dependency {
-                        ComponentDependency::Package { export, .. } => export,
-                        ComponentDependency::Local { export, .. } => export,
-                        _ => continue,
-                    };
+            if let DependencyName::Package(name) = dependency_name
+                && name.interface.is_none()
+            {
+                let export = match dependency {
+                    ComponentDependency::Package { export, .. } => export,
+                    ComponentDependency::Local { export, .. } => export,
+                    _ => continue,
+                };
 
-                    anyhow::ensure!(
-                        export.is_none(),
-                        "using an export to satisfy the package dependency {dependency_name:?} is not currently permitted",
-                    );
-                }
+                anyhow::ensure!(
+                    export.is_none(),
+                    "using an export to satisfy the package dependency {dependency_name:?} is not currently permitted",
+                );
             }
         }
         Ok(())
@@ -689,20 +689,18 @@ impl ComponentDependencies {
     ) -> anyhow::Result<()> {
         assert_eq!(this.package, other.package);
 
-        if let (Some(this_ver), Some(other_ver)) = (this.version.clone(), other.version.clone()) {
-            if Self::normalize_compatible_version(this_ver)
+        if let (Some(this_ver), Some(other_ver)) = (this.version.clone(), other.version.clone())
+            && Self::normalize_compatible_version(this_ver)
                 != Self::normalize_compatible_version(other_ver)
-            {
-                return Ok(());
-            }
+        {
+            return Ok(());
         }
 
         if let (Some(this_itf), Some(other_itf)) =
             (this.interface.as_ref(), other.interface.as_ref())
+            && this_itf != other_itf
         {
-            if this_itf != other_itf {
-                return Ok(());
-            }
+            return Ok(());
         }
 
         Err(anyhow!("{this:?} dependency conflicts with {other:?}"))
@@ -940,17 +938,19 @@ mod tests {
 
     #[test]
     fn deserializing_labels_fails_for_non_kebab_or_snake() {
-        assert!(AppManifest::deserialize(toml! {
-            spin_manifest_version = 2
-            [application]
-            name = "trigger-configs"
-            [[trigger.fake]]
-            something = "something else"
-            [component.fake]
-            source = "dummy"
-            key_value_stores = ["b@dlabel"]
-        })
-        .is_err());
+        assert!(
+            AppManifest::deserialize(toml! {
+                spin_manifest_version = 2
+                [application]
+                name = "trigger-configs"
+                [[trigger.fake]]
+                something = "something else"
+                [component.fake]
+                source = "dummy"
+                key_value_stores = ["b@dlabel"]
+            })
+            .is_err()
+        );
     }
 
     fn get_test_component_with_labels(labels: Vec<String>) -> Component {
@@ -1059,111 +1059,135 @@ mod tests {
     #[test]
     fn test_validate_dependencies() {
         // Specifying a dependency name as a plain-name without a package is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "plain-name" = "0.1.0"
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "plain-name" = "0.1.0"
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
 
         // Specifying a dependency name as a plain-name without a package is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "plain-name" = { version = "0.1.0" }
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "plain-name" = { version = "0.1.0" }
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
 
         // Specifying an export to satisfy a package dependency name is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:baz@0.1.0" = { path = "foo.wasm", export = "foo"}
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:baz@0.1.0" = { path = "foo.wasm", export = "foo"}
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
 
         // Two compatible versions of the same package is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:baz@0.1.0" = "0.1.0"
-            "foo:bar@0.2.1" = "0.2.1"
-            "foo:bar@0.2.2" = "0.2.2"
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:baz@0.1.0" = "0.1.0"
+                "foo:bar@0.2.1" = "0.2.1"
+                "foo:bar@0.2.2" = "0.2.2"
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
 
         // Two disjoint versions of the same package is ok
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:bar@0.1.0" = "0.1.0"
-            "foo:bar@0.2.0" = "0.2.0"
-            "foo:baz@0.2.0" = "0.1.0"
-        })
-        .unwrap()
-        .validate()
-        .is_ok());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:bar@0.1.0" = "0.1.0"
+                "foo:bar@0.2.0" = "0.2.0"
+                "foo:baz@0.2.0" = "0.1.0"
+            })
+            .unwrap()
+            .validate()
+            .is_ok()
+        );
 
         // Unversioned and versioned dependencies of the same package is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:bar@0.1.0" = "0.1.0"
-            "foo:bar" = ">= 0.2.0"
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:bar@0.1.0" = "0.1.0"
+                "foo:bar" = ">= 0.2.0"
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
 
         // Two interfaces of two disjoint versions of a package is ok
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:bar/baz@0.1.0" = "0.1.0"
-            "foo:bar/baz@0.2.0" = "0.2.0"
-        })
-        .unwrap()
-        .validate()
-        .is_ok());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:bar/baz@0.1.0" = "0.1.0"
+                "foo:bar/baz@0.2.0" = "0.2.0"
+            })
+            .unwrap()
+            .validate()
+            .is_ok()
+        );
 
         // A versioned interface and a different versioned package is ok
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:bar/baz@0.1.0" = "0.1.0"
-            "foo:bar@0.2.0" = "0.2.0"
-        })
-        .unwrap()
-        .validate()
-        .is_ok());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:bar/baz@0.1.0" = "0.1.0"
+                "foo:bar@0.2.0" = "0.2.0"
+            })
+            .unwrap()
+            .validate()
+            .is_ok()
+        );
 
         // A versioned interface and package of the same version is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:bar/baz@0.1.0" = "0.1.0"
-            "foo:bar@0.1.0" = "0.1.0"
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:bar/baz@0.1.0" = "0.1.0"
+                "foo:bar@0.1.0" = "0.1.0"
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
 
         // A versioned interface and unversioned package is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:bar/baz@0.1.0" = "0.1.0"
-            "foo:bar" = "0.1.0"
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:bar/baz@0.1.0" = "0.1.0"
+                "foo:bar" = "0.1.0"
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
 
         // An unversioned interface and versioned package is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:bar/baz" = "0.1.0"
-            "foo:bar@0.1.0" = "0.1.0"
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:bar/baz" = "0.1.0"
+                "foo:bar@0.1.0" = "0.1.0"
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
 
         // An unversioned interface and unversioned package is an error
-        assert!(ComponentDependencies::deserialize(toml! {
-            "foo:bar/baz" = "0.1.0"
-            "foo:bar" = "0.1.0"
-        })
-        .unwrap()
-        .validate()
-        .is_err());
+        assert!(
+            ComponentDependencies::deserialize(toml! {
+                "foo:bar/baz" = "0.1.0"
+                "foo:bar" = "0.1.0"
+            })
+            .unwrap()
+            .validate()
+            .is_err()
+        );
     }
 
     fn normalized_component(

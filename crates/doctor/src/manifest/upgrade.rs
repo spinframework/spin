@@ -1,8 +1,8 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use spin_common::ui::quoted_path;
-use spin_manifest::{compat::v1_to_v2_app, schema::v1::AppManifestV1, ManifestVersion};
-use toml_edit::{de::from_document, ser::to_document, Item, Table};
+use spin_manifest::{ManifestVersion, compat::v1_to_v2_app, schema::v1::AppManifestV1};
+use toml_edit::{Item, Table, de::from_document, ser::to_document};
 
 use crate::{Diagnosis, Diagnostic, PatientApp, Treatment};
 

@@ -21,8 +21,8 @@ use commands::{
     watch::WatchCommand,
 };
 use spin_runtime_factors::FactorsBuilder;
-use spin_trigger::cli::help::HelpArgsOnlyTrigger;
 use spin_trigger::cli::FactorsTriggerCommand;
+use spin_trigger::cli::help::HelpArgsOnlyTrigger;
 use spin_trigger_http::HttpTrigger;
 use spin_trigger_redis::RedisTrigger;
 
@@ -54,11 +54,11 @@ pub async fn run() -> anyhow::Result<()> {
 
     let matches = cmd.clone().get_matches();
 
-    if let Some((subcmd, _)) = matches.subcommand() {
-        if plugin_help_entries.iter().any(|e| e.name == subcmd) {
-            let args = std::env::args().skip(1).collect();
-            return execute_external_subcommand(args, cmd).await;
-        }
+    if let Some((subcmd, _)) = matches.subcommand()
+        && plugin_help_entries.iter().any(|e| e.name == subcmd)
+    {
+        let args = std::env::args().skip(1).collect();
+        return execute_external_subcommand(args, cmd).await;
     }
 
     SpinApp::from_arg_matches(&matches)?

@@ -1,15 +1,15 @@
 use anyhow::Result;
 use spin_core::wasmtime::component::Resource;
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql::{self as v2, Connection};
 use spin_world::v2::rdbms_types as v2_types;
 use spin_world::v2::rdbms_types::ParameterValue;
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
-use crate::client::Client;
 use crate::InstanceState;
+use crate::client::Client;
 
 impl<C: Client> InstanceState<C> {
     async fn open_connection(&mut self, address: &str) -> Result<Resource<Connection>, v2::Error> {

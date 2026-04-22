@@ -5,14 +5,14 @@
 use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use futures::future::try_join_all;
 use spin_common::ui::quoted_path;
 use spin_manifest::schema::v2::TargetEnvironmentRef;
 
 use super::definition::{EnvironmentDefinition, WorldName, WorldRef};
 use super::lockfile::TargetEnvironmentLockfile;
-use super::{is_versioned, CandidateWorld, CandidateWorlds, TargetEnvironment, UnknownTrigger};
+use super::{CandidateWorld, CandidateWorlds, TargetEnvironment, UnknownTrigger, is_versioned};
 
 const DEFAULT_ENV_DEF_REGISTRY_PREFIX: &str = "ghcr.io/spinframework/environments";
 const DEFAULT_PACKAGE_REGISTRY: &str = "spinframework.dev";
@@ -54,11 +54,11 @@ pub async fn load_environments<'a>(
     .collect();
 
     let final_lockfile = &*lockfile.read().await;
-    if *final_lockfile != orig_lockfile {
-        if let Ok(lockfile_json) = serde_json::to_string_pretty(&final_lockfile) {
-            _ = tokio::fs::create_dir_all(lockfile_dir).await;
-            _ = tokio::fs::write(&lockfile_path, lockfile_json).await; // failure to update lockfile is not an error
-        }
+    if *final_lockfile != orig_lockfile
+        && let Ok(lockfile_json) = serde_json::to_string_pretty(&final_lockfile)
+    {
+        _ = tokio::fs::create_dir_all(lockfile_dir).await;
+        _ = tokio::fs::write(&lockfile_path, lockfile_json).await; // failure to update lockfile is not an error
     }
 
     Ok(envs)
@@ -178,12 +178,11 @@ async fn load_env_def_toml_from_registry(
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<String> {
-    if let Some(digest) = lockfile.read().await.env_digest(registry, env_id) {
-        if let Ok(cache_file) = cache.data_file(digest) {
-            if let Ok(bytes) = tokio::fs::read(&cache_file).await {
-                return Ok(String::from_utf8_lossy(&bytes).to_string());
-            }
-        }
+    if let Some(digest) = lockfile.read().await.env_digest(registry, env_id)
+        && let Ok(cache_file) = cache.data_file(digest)
+        && let Ok(bytes) = tokio::fs::read(&cache_file).await
+    {
+        return Ok(String::from_utf8_lossy(&bytes).to_string());
     }
 
     let (bytes, digest) = download_env_def_file(registry, env_id)
@@ -311,12 +310,10 @@ async fn load_world_from_registry(
         .read()
         .await
         .package_digest(registry, world_name.package())
+        && let Ok(cache_file) = cache.wasm_file(digest)
+        && let Ok(bytes) = tokio::fs::read(&cache_file).await
     {
-        if let Ok(cache_file) = cache.wasm_file(digest) {
-            if let Ok(bytes) = tokio::fs::read(&cache_file).await {
-                return CandidateWorld::from_package_bytes(world_name, bytes);
-            }
-        }
+        return CandidateWorld::from_package_bytes(world_name, bytes);
     }
 
     let pkg_name = world_name.package_namespaced_name();

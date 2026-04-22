@@ -1,4 +1,4 @@
-use miniserde::{json, Serialize};
+use miniserde::{Serialize, json};
 use std::collections::BTreeMap;
 
 #[derive(Serialize)]

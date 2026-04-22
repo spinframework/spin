@@ -3,22 +3,22 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use docker_credential::DockerCredential;
 use futures_util::future;
 use futures_util::stream::{self, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use oci_distribution::{
-    client::ImageLayer, config::ConfigFile, manifest::OciImageManifest, secrets::RegistryAuth,
-    token_cache::RegistryTokenType, Reference, RegistryOperation,
+    Reference, RegistryOperation, client::ImageLayer, config::ConfigFile,
+    manifest::OciImageManifest, secrets::RegistryAuth, token_cache::RegistryTokenType,
 };
 use reqwest::Url;
 use spin_common::sha256;
 use spin_common::ui::quoted_path;
 use spin_common::url::parse_file_url;
 use spin_compose::ComponentSourceLoaderFs;
-use spin_loader::cache::Cache;
 use spin_loader::FilesMountStrategy;
+use spin_loader::cache::Cache;
 use spin_locked_app::locked::{ContentPath, ContentRef, LockedApp, LockedComponent};
 use tokio::fs;
 use walkdir::WalkDir;
@@ -844,7 +844,7 @@ fn all_annotations(
     explicit: Option<BTreeMap<String, String>>,
     predefined: InferPredefinedAnnotations,
 ) -> Option<BTreeMap<String, String>> {
-    use spin_locked_app::{MetadataKey, APP_DESCRIPTION_KEY, APP_NAME_KEY, APP_VERSION_KEY};
+    use spin_locked_app::{APP_DESCRIPTION_KEY, APP_NAME_KEY, APP_VERSION_KEY, MetadataKey};
     const APP_AUTHORS_KEY: MetadataKey<Vec<String>> = MetadataKey::new("authors");
 
     if predefined == InferPredefinedAnnotations::None {
@@ -902,10 +902,10 @@ fn all_annotations(
 }
 
 fn add_inferred(map: &mut BTreeMap<String, String>, key: &str, value: Option<String>) {
-    if let Some(value) = value {
-        if let std::collections::btree_map::Entry::Vacant(e) = map.entry(key.to_string()) {
-            e.insert(value);
-        }
+    if let Some(value) = value
+        && let std::collections::btree_map::Entry::Vacant(e) = map.entry(key.to_string())
+    {
+        e.insert(value);
     }
 }
 

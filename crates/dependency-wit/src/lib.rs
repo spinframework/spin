@@ -217,7 +217,9 @@ fn munge_aliased_export(
 ) -> anyhow::Result<DecodedWasm> {
     let export_qname = spin_serde::DependencyPackageName::try_from(export.to_string())?;
     let Some(export_itf_name) = export_qname.interface.as_ref() else {
-        anyhow::bail!("the export name should be a qualified interface name - {export_qname} doesn't specify interface");
+        anyhow::bail!(
+            "the export name should be a qualified interface name - {export_qname} doesn't specify interface"
+        );
     };
     let export_pkg_name = wit_parser::PackageName {
         namespace: export_qname.package.namespace().to_string(),

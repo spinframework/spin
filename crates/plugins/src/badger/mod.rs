@@ -128,7 +128,9 @@ impl BadgerEvaluator {
 
     fn fire_and_forget_update() {
         if let Err(e) = Self::fire_and_forget_update_impl() {
-            tracing::info!("Failed to launch plugins update process; checking using latest local repo anyway. Error: {e:#}");
+            tracing::info!(
+                "Failed to launch plugins update process; checking using latest local repo anyway. Error: {e:#}"
+            );
         }
     }
 

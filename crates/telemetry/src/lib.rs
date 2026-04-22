@@ -5,7 +5,7 @@ use env::otel_logs_enabled;
 use env::otel_metrics_enabled;
 use env::otel_tracing_enabled;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
-use tracing_subscriber::{fmt, prelude::*, registry, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, fmt, prelude::*, registry};
 
 mod alert_in_dev;
 pub mod detector;

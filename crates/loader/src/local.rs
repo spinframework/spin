@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
-use futures::{future::try_join_all, StreamExt};
+use anyhow::{Context, Result, anyhow, bail, ensure};
+use futures::{StreamExt, future::try_join_all};
 use reqwest::Url;
 use spin_common::{paths::parent_dir, sloth, ui::quoted_path};
 use spin_expressions::Resolver;
@@ -18,7 +18,7 @@ use spin_serde::DependencyName;
 use std::collections::BTreeMap;
 use tokio::{io::AsyncWriteExt, sync::Semaphore};
 
-use crate::{cache::Cache, FilesMountStrategy};
+use crate::{FilesMountStrategy, cache::Cache};
 
 #[derive(Debug)]
 pub struct LocalLoader {
@@ -332,17 +332,27 @@ impl LocalLoader {
         exclude_files: &[String],
     ) -> Result<()> {
         if glob_or_path == ".." || glob_or_path.ends_with("/..") {
-            bail!("A file pattern can't end in a parent directory path (..)\nIf you want to include a directory, use source-destination form, or a glob pattern ending in **/*.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components");
+            bail!(
+                "A file pattern can't end in a parent directory path (..)\nIf you want to include a directory, use source-destination form, or a glob pattern ending in **/*.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components"
+            );
         }
         if glob_or_path == "." || glob_or_path.ends_with("/.") {
-            bail!("A file pattern can't end in a current directory path (.)\nIf you want to include a directory, use source-destination form, or a glob pattern ending in **/*.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components");
+            bail!(
+                "A file pattern can't end in a current directory path (.)\nIf you want to include a directory, use source-destination form, or a glob pattern ending in **/*.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components"
+            );
         }
 
         if glob_or_path == "*" {
-            tracing::warn!(alert_in_dev = true, "A component is including the entire application directory as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n");
+            tracing::warn!(
+                alert_in_dev = true,
+                "A component is including the entire application directory as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n"
+            );
         }
         if glob_or_path == "**/*" {
-            tracing::warn!(alert_in_dev = true, "A component is including the entire application directory tree as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./**/*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n");
+            tracing::warn!(
+                alert_in_dev = true,
+                "A component is including the entire application directory tree as asset files. This is unlikely to be what you want.\nIf this is what you want, use the pattern \"./**/*\" to avoid this warning.\nLearn more: https://spinframework.dev/writing-apps#including-files-with-components\n"
+            );
         }
 
         let path = self.app_root.join(glob_or_path);
@@ -430,7 +440,9 @@ impl LocalLoader {
             }
 
             let Ok(app_root_path) = src.strip_prefix(&self.app_root) else {
-                bail!("{pattern} cannot be mapped because it is outside the application directory. Files must be within the application directory.");
+                bail!(
+                    "{pattern} cannot be mapped because it is outside the application directory. Files must be within the application directory."
+                );
             };
 
             if exclude_patterns
@@ -489,15 +501,14 @@ impl LocalLoader {
         let dest_text = quoted_path(dest);
         let base_msg = format!("Failed to copy {src_text} to working path {dest_text}");
 
-        if let Some(io_error) = e.downcast_ref::<std::io::Error>() {
-            if Self::is_directory_like(guest_dest)
-                || io_error.kind() == std::io::ErrorKind::NotFound
-            {
-                return Err(anyhow::anyhow!(
-                    r#""{guest_dest}" is not a valid destination file name"#
-                ))
-                .context(base_msg);
-            }
+        if let Some(io_error) = e.downcast_ref::<std::io::Error>()
+            && (Self::is_directory_like(guest_dest)
+                || io_error.kind() == std::io::ErrorKind::NotFound)
+        {
+            return Err(anyhow::anyhow!(
+                r#""{guest_dest}" is not a valid destination file name"#
+            ))
+            .context(base_msg);
         }
 
         Err(e).with_context(|| format!("{base_msg} (for destination path \"{guest_dest}\")"))
@@ -521,7 +532,9 @@ impl LocalLoader {
         };
         let path = self.app_root.join(src);
         if !path.is_dir() {
-            bail!("Only directory mounts are supported with `--direct-mounts`; {src:?} is not a directory.");
+            bail!(
+                "Only directory mounts are supported with `--direct-mounts`; {src:?} is not a directory."
+            );
         }
         Ok(ContentPath {
             content: file_content_ref(src)?,
@@ -535,10 +548,10 @@ impl LocalLoader {
 }
 
 fn explain_file_mount_source_error(e: anyhow::Error, src: &Path) -> anyhow::Error {
-    if let Some(io_error) = e.downcast_ref::<std::io::Error>() {
-        if io_error.kind() == std::io::ErrorKind::NotFound {
-            return anyhow::anyhow!("File or directory {} does not exist", quoted_path(src));
-        }
+    if let Some(io_error) = e.downcast_ref::<std::io::Error>()
+        && io_error.kind() == std::io::ErrorKind::NotFound
+    {
+        return anyhow::anyhow!("File or directory {} does not exist", quoted_path(src));
     }
     e.context(format!("invalid file mount source {}", quoted_path(src)))
 }

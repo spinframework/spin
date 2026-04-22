@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context;
 use spin_app::{App, AppComponent};
-use spin_core::{async_trait, wasmtime::CallHook, Component};
+use spin_core::{Component, async_trait, wasmtime::CallHook};
 use spin_factors::{
     AsInstanceState, ConfiguredApp, Factor, HasInstanceBuilder, RuntimeFactors,
     RuntimeFactorsInstanceState,

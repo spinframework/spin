@@ -3,12 +3,12 @@ use std::sync::Arc;
 use futures::stream::TryStreamExt as _;
 use http_body_util::BodyExt;
 use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::v1::{
     http as spin_http,
     http_types::{self, HttpError, Method, Request, Response},
 };
-use spin_world::MAX_HOST_BUFFERED_BYTES;
-use tracing::{field::Empty, instrument, Span};
+use tracing::{Span, field::Empty, instrument};
 
 use crate::intercept::InterceptOutcome;
 
@@ -164,12 +164,12 @@ fn record_request_fields(span: &Span, req: &Request) {
     span.record("otel.name", method)
         .record("http.request.method", method)
         .record("url.full", req.uri.clone());
-    if let Ok(uri) = req.uri.parse::<http::Uri>() {
-        if let Some(authority) = uri.authority() {
-            span.record("server.address", authority.host());
-            if let Some(port) = authority.port() {
-                span.record("server.port", port.as_u16());
-            }
+    if let Ok(uri) = req.uri.parse::<http::Uri>()
+        && let Some(authority) = uri.authority()
+    {
+        span.record("server.address", authority.host());
+        if let Some(port) = authority.port() {
+            span.record("server.port", port.as_u16());
         }
     }
 }

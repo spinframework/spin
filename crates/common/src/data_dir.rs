@@ -1,6 +1,6 @@
 //! Resolves Spin's default data directory paths
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::path::{Path, PathBuf};
 
 /// Return the default data directory for Spin
@@ -20,16 +20,15 @@ pub fn data_dir() -> Result<PathBuf> {
 
 /// Get the package manager specific data directory
 fn package_manager_data_dir() -> Option<PathBuf> {
-    if let Ok(brew_prefix) = std::env::var("HOMEBREW_PREFIX") {
-        if std::env::current_exe()
+    if let Ok(brew_prefix) = std::env::var("HOMEBREW_PREFIX")
+        && std::env::current_exe()
             .map(|p| p.starts_with(&brew_prefix))
             .unwrap_or(false)
-        {
-            let data_dir = Path::new(&brew_prefix)
-                .join("etc")
-                .join("spinframework-spin");
-            return Some(data_dir);
-        }
+    {
+        let data_dir = Path::new(&brew_prefix)
+            .join("etc")
+            .join("spinframework-spin");
+        return Some(data_dir);
     }
     None
 }

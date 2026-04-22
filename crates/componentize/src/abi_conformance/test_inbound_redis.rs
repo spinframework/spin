@@ -1,9 +1,9 @@
 use super::{
-    redis_types::{Error, Payload},
     Context, TestConfig,
+    redis_types::{Error, Payload},
 };
 use anyhow::anyhow;
-use wasmtime::{component::InstancePre, Engine};
+use wasmtime::{Engine, component::InstancePre};
 
 pub(crate) async fn test(
     engine: &Engine,

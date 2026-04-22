@@ -169,9 +169,11 @@ mod test {
             .as_object()
             .expect("saved digest should have been an object");
         assert_eq!(TEST_DIGEST, saved_digest.get("digest").unwrap());
-        assert!(saved_digest
-            .get("correct_at")
-            .is_some_and(|v| v.is_string()));
+        assert!(
+            saved_digest
+                .get("correct_at")
+                .is_some_and(|v| v.is_string())
+        );
     }
 
     #[test]

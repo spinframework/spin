@@ -31,17 +31,17 @@ impl Injector for HeaderInjector<'_> {
     fn set(&mut self, key: &str, value: String) {
         match self {
             HeaderInjector::Http0(headers) => {
-                if let Ok(name) = http0::header::HeaderName::from_bytes(key.as_bytes()) {
-                    if let Ok(val) = http0::header::HeaderValue::from_str(&value) {
-                        headers.insert(name, val);
-                    }
+                if let Ok(name) = http0::header::HeaderName::from_bytes(key.as_bytes())
+                    && let Ok(val) = http0::header::HeaderValue::from_str(&value)
+                {
+                    headers.insert(name, val);
                 }
             }
             HeaderInjector::Http1(headers) => {
-                if let Ok(name) = http1::header::HeaderName::from_bytes(key.as_bytes()) {
-                    if let Ok(val) = http1::header::HeaderValue::from_str(&value) {
-                        headers.insert(name, val);
-                    }
+                if let Ok(name) = http1::header::HeaderName::from_bytes(key.as_bytes())
+                    && let Ok(val) = http1::header::HeaderValue::from_str(&value)
+                {
+                    headers.insert(name, val);
                 }
             }
         }

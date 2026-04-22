@@ -1,7 +1,7 @@
 use std::io::IsTerminal;
 use std::net::SocketAddr;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use futures::TryFutureExt;
 use http::{HeaderName, HeaderValue};
 use hyper::{Request, Response};
@@ -11,12 +11,12 @@ use spin_factors::RuntimeFactors;
 use spin_http::routes::RouteMatch;
 use spin_http::trigger::HandlerType;
 use tokio::{sync::oneshot, task};
-use tracing::{instrument, Instrument, Level};
+use tracing::{Instrument, Level, instrument};
 use wasmtime_wasi_http::handler::HandlerState;
 use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
 use wasmtime_wasi_http::p2::{bindings::Proxy, body::HyperIncomingBody as Body};
 
-use crate::{headers::prepare_request_headers, server::HttpExecutor, TriggerInstanceBuilder};
+use crate::{TriggerInstanceBuilder, headers::prepare_request_headers, server::HttpExecutor};
 
 pub(super) fn prepare_request(
     route_match: &RouteMatch<'_, '_>,

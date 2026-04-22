@@ -4,7 +4,7 @@ use base64::Engine;
 use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use serde::de::{SeqAccess, Visitor};
-use serde::{de, Deserialize};
+use serde::{Deserialize, de};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
@@ -48,15 +48,15 @@ pub fn parse_wasi_log_record(
     if let Some(timestamp) = wasi_log_record.timestamp {
         otel_log_record.set_timestamp(timestamp.into());
     }
-    if let Some(trace_id) = wasi_log_record.trace_id {
-        if let Some(span_id) = wasi_log_record.span_id {
-            // Both the span ID and trace ID are required values to set trace context.
-            otel_log_record.set_trace_context(
-                opentelemetry::TraceId::from_hex(&trace_id).expect("Failed to parse trace ID"),
-                opentelemetry::SpanId::from_hex(&span_id).expect("Failed to parse span ID"),
-                wasi_log_record.trace_flags.map(Into::into),
-            );
-        }
+    if let Some(trace_id) = wasi_log_record.trace_id
+        && let Some(span_id) = wasi_log_record.span_id
+    {
+        // Both the span ID and trace ID are required values to set trace context.
+        otel_log_record.set_trace_context(
+            opentelemetry::TraceId::from_hex(&trace_id).expect("Failed to parse trace ID"),
+            opentelemetry::SpanId::from_hex(&span_id).expect("Failed to parse span ID"),
+            wasi_log_record.trace_flags.map(Into::into),
+        );
     }
 
     // Parse InstrumentationScope

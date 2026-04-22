@@ -25,7 +25,9 @@ impl AppSource {
         } else if spin_oci::is_probably_oci_reference(source) {
             Self::OciRegistry(source.to_owned())
         } else {
-            Self::Unresolvable(format!("File or directory '{source}' not found. If you meant to load from a registry, use the `--from-registry` option."))
+            Self::Unresolvable(format!(
+                "File or directory '{source}' not found. If you meant to load from a registry, use the `--from-registry` option."
+            ))
         }
     }
 

@@ -1,11 +1,10 @@
 use super::{
-    http,
+    Context, TestConfig, http,
     http_types::{HttpError, Request, Response},
-    Context, TestConfig,
 };
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::collections::HashMap;
-use wasmtime::{component::InstancePre, Engine};
+use wasmtime::{Engine, component::InstancePre};
 
 #[derive(Default)]
 pub(crate) struct Http {

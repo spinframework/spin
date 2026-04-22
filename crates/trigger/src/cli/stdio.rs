@@ -88,7 +88,9 @@ impl StdioLoggingExecutorHooks {
                 } else {
                     let unknown_list = bullet_list(&unknown_names);
                     let actual_list = bullet_list(&component_ids);
-                    let message = anyhow::anyhow!("The following component(s) specified in --follow do not exist in the application:\n{unknown_list}\nThe following components exist:\n{actual_list}");
+                    let message = anyhow::anyhow!(
+                        "The following component(s) specified in --follow do not exist in the application:\n{unknown_list}\nThe following components exist:\n{actual_list}"
+                    );
                     Err(message)
                 }
             }
@@ -254,8 +256,10 @@ impl AsyncWrite for ComponentStdioWriter {
                         }
                     }
                     ComponentStdioWriterState::Follow(range) => {
-                        let written = futures::ready!(std::pin::Pin::new(&mut tokio::io::stderr())
-                            .poll_write(cx, &buf[range.clone()]));
+                        let written = futures::ready!(
+                            std::pin::Pin::new(&mut tokio::io::stderr())
+                                .poll_write(cx, &buf[range.clone()])
+                        );
                         let written = match written {
                             Ok(w) => w,
                             Err(e) => return Poll::Ready(Err(e)),

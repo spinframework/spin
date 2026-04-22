@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use anyhow::{bail, ensure, Context as _};
+use anyhow::{Context as _, bail, ensure};
 use futures_util::future::{BoxFuture, Shared};
 use spin_expressions::Resolver;
 use url::Host;
@@ -118,8 +118,12 @@ impl AllowedHostConfig {
         let url = original.trim();
         let Some((scheme, rest)) = url.split_once("://") else {
             match url {
-                "*" | ":" | "" | "?" => bail!("{url:?} is not an allowed outbound host format.\nHosts must be in the form <scheme>://<host>[:<port>], with '*' wildcards allowed for each.\nIf you intended to allow all outbound networking, you can use '*://*:*' - this will obviate all network sandboxing.\nLearn more: https://spinframework.dev/v3/http-outbound#granting-http-permissions-to-components"),
-                _ => bail!("{url:?} does not contain a scheme (e.g., 'http://' or '*://')\nLearn more: https://spinframework.dev/v3/http-outbound#granting-http-permissions-to-components"),
+                "*" | ":" | "" | "?" => bail!(
+                    "{url:?} is not an allowed outbound host format.\nHosts must be in the form <scheme>://<host>[:<port>], with '*' wildcards allowed for each.\nIf you intended to allow all outbound networking, you can use '*://*:*' - this will obviate all network sandboxing.\nLearn more: https://spinframework.dev/v3/http-outbound#granting-http-permissions-to-components"
+                ),
+                _ => bail!(
+                    "{url:?} does not contain a scheme (e.g., 'http://' or '*://')\nLearn more: https://spinframework.dev/v3/http-outbound#granting-http-permissions-to-components"
+                ),
             }
         };
         let (host, rest) = rest.rsplit_once(':').unwrap_or((rest, ""));
@@ -488,7 +492,9 @@ impl AllowedHostsConfig {
     /// templated values.
     fn parse_partial<S: AsRef<str>>(hosts: &[S]) -> anyhow::Result<Vec<PartialAllowedHostConfig>> {
         if hosts.len() == 1 && hosts[0].as_ref() == "insecure:allow-all" {
-            bail!("'insecure:allow-all' is not allowed - use '*://*:*' instead if you really want to allow all outbound traffic'")
+            bail!(
+                "'insecure:allow-all' is not allowed - use '*://*:*' instead if you really want to allow all outbound traffic'"
+            )
         }
         let mut allowed = Vec::with_capacity(hosts.len());
         for host in hosts {
@@ -928,12 +934,14 @@ mod test {
         assert!(
             AllowedHostsConfig::parse(&["insecure:allow-all"], &dummy_resolver(), &[]).is_err()
         );
-        assert!(AllowedHostsConfig::parse(
-            &["spin.fermyon.dev", "insecure:allow-all"],
-            &dummy_resolver(),
-            &[]
-        )
-        .is_err());
+        assert!(
+            AllowedHostsConfig::parse(
+                &["spin.fermyon.dev", "insecure:allow-all"],
+                &dummy_resolver(),
+                &[]
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -991,13 +999,22 @@ mod test {
         assert!(
             allowed.allows(&OutboundUrl::parse("http://a.b.example.com/foo/bar", "http").unwrap())
         );
-        assert!(allowed
-            .allows(&OutboundUrl::parse("http://a.b.example2.com:8383/foo/bar", "http").unwrap()));
-        assert!(!allowed
-            .allows(&OutboundUrl::parse("http://a.b.example2.com/foo/bar", "http").unwrap()));
-        assert!(!allowed.allows(&OutboundUrl::parse("http://example.com/foo/bar", "http").unwrap()));
-        assert!(!allowed
-            .allows(&OutboundUrl::parse("http://example.com:8383/foo/bar", "http").unwrap()));
+        assert!(
+            allowed.allows(
+                &OutboundUrl::parse("http://a.b.example2.com:8383/foo/bar", "http").unwrap()
+            )
+        );
+        assert!(
+            !allowed
+                .allows(&OutboundUrl::parse("http://a.b.example2.com/foo/bar", "http").unwrap())
+        );
+        assert!(
+            !allowed.allows(&OutboundUrl::parse("http://example.com/foo/bar", "http").unwrap())
+        );
+        assert!(
+            !allowed
+                .allows(&OutboundUrl::parse("http://example.com:8383/foo/bar", "http").unwrap())
+        );
         assert!(
             !allowed.allows(&OutboundUrl::parse("http://myexample.com/foo/bar", "http").unwrap())
         );
@@ -1010,9 +1027,14 @@ mod test {
         assert!(
             allowed.allows(&OutboundUrl::parse("mysql://user:pass#word@xyz.com", "mysql").unwrap())
         );
-        assert!(allowed
-            .allows(&OutboundUrl::parse("mysql://user%3Apass%23word@xyz.com", "mysql").unwrap()));
-        assert!(allowed.allows(&OutboundUrl::parse("user%3Apass%23word@xyz.com", "mysql").unwrap()));
+        assert!(
+            allowed.allows(
+                &OutboundUrl::parse("mysql://user%3Apass%23word@xyz.com", "mysql").unwrap()
+            )
+        );
+        assert!(
+            allowed.allows(&OutboundUrl::parse("user%3Apass%23word@xyz.com", "mysql").unwrap())
+        );
     }
 
     #[test]

@@ -8,6 +8,7 @@ use anyhow::Result;
 use aws_config::{BehaviorVersion, Region, SdkConfig};
 use aws_credential_types::Credentials;
 use aws_sdk_dynamodb::{
+    Client,
     config::{ProvideCredentials, SharedCredentialsProvider},
     operation::{
         batch_get_item::BatchGetItemOutput, batch_write_item::BatchWriteItemOutput,
@@ -18,11 +19,10 @@ use aws_sdk_dynamodb::{
         AttributeValue, DeleteRequest, KeysAndAttributes, PutRequest, TransactWriteItem, Update,
         WriteRequest,
     },
-    Client,
 };
 use spin_core::async_trait;
 use spin_factor_key_value::{
-    log_error, log_error_v3, v3, Cas, Error, Store, StoreManager, SwapError,
+    Cas, Error, Store, StoreManager, SwapError, log_error, log_error_v3, v3,
 };
 
 pub struct KeyValueAwsDynamo {

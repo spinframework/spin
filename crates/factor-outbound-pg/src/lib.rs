@@ -10,7 +10,7 @@ use client::ClientFactory;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
-    anyhow, ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
+    ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder, anyhow,
 };
 
 pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {

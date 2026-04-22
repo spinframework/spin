@@ -1,8 +1,8 @@
 use anyhow::bail;
 use spin_core::async_trait;
-use spin_factor_key_value::{v3, Cas, KeyValueFactor, RuntimeConfig, Store, StoreManager};
+use spin_factor_key_value::{Cas, KeyValueFactor, RuntimeConfig, Store, StoreManager, v3};
 use spin_factors::RuntimeFactors;
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::v2::key_value::{Error, HostStore};
 use std::{collections::HashSet, sync::Arc};
 
@@ -64,9 +64,10 @@ async fn errors_when_store_is_not_defined() -> anyhow::Result<()> {
         bail!("expected instance build to fail but it didn't");
     };
 
-    assert!(err
-        .to_string()
-        .contains(r#"unknown key_value_stores label "default""#));
+    assert!(
+        err.to_string()
+            .contains(r#"unknown key_value_stores label "default""#)
+    );
 
     Ok(())
 }

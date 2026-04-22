@@ -19,7 +19,7 @@ use spin_factor_outbound_pg::OutboundPgFactor;
 use spin_factor_outbound_redis::OutboundRedisFactor;
 use spin_factor_sqlite::SqliteFactor;
 use spin_factor_variables::VariablesFactor;
-use spin_factor_wasi::{spin::SpinFilesMounter, WasiFactor};
+use spin_factor_wasi::{WasiFactor, spin::SpinFilesMounter};
 use spin_factors::RuntimeFactors;
 use spin_runtime_config::{ResolvedRuntimeConfig, TomlRuntimeConfigSource};
 use spin_variables_static::VariableSource;
@@ -77,13 +77,17 @@ fn outbound_networking_factor() -> OutboundNetworkingFactor {
         let host_pattern = format!("{scheme}://{authority}");
         tracing::error!("Outbound network destination not allowed: {host_pattern}");
         if scheme.starts_with("http") && authority == "self" {
-            terminal::warn!("A component tried to make an HTTP request to its own app but it does not have permission.");
+            terminal::warn!(
+                "A component tried to make an HTTP request to its own app but it does not have permission."
+            );
         } else {
             terminal::warn!(
                 "A component tried to make an outbound network connection to disallowed destination '{host_pattern}'."
             );
         };
-        eprintln!("To allow this request, add 'allowed_outbound_hosts = [\"{host_pattern}\"]' to the manifest component section.");
+        eprintln!(
+            "To allow this request, add 'allowed_outbound_hosts = [\"{host_pattern}\"]' to the manifest component section."
+        );
     }
 
     let mut factor = OutboundNetworkingFactor::new();

@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use spin_common::arg_parser::parse_kv;
-use spin_oci::{client::InferPredefinedAnnotations, Client, ComposeMode};
+use spin_oci::{Client, ComposeMode, client::InferPredefinedAnnotations};
 use std::{io::Read, path::PathBuf, time::Duration};
 
 /// Commands for working with OCI registries to distribute applications.

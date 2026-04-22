@@ -6,10 +6,10 @@ use redis::{Client, Msg};
 use serde::Deserialize;
 use spin_factor_variables::VariablesFactor;
 use spin_factors::RuntimeFactors;
-use spin_trigger::{cli::NoCliArgs, App, Trigger, TriggerApp};
+use spin_trigger::{App, Trigger, TriggerApp, cli::NoCliArgs};
 use spin_world::exports::fermyon::spin::inbound_redis as v1;
 use spin_world::exports::spin::redis::inbound_redis as v3;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
 pub struct RedisTrigger;
 

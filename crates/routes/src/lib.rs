@@ -2,7 +2,7 @@
 
 #![deny(missing_docs)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashMap, fmt};
@@ -247,11 +247,7 @@ impl RouteInfo for ParsedRoute {
             ParsedRoute::Exact(path) => path,
             ParsedRoute::TrailingWildcard(pattern) => pattern,
         };
-        if p.is_empty() {
-            "/"
-        } else {
-            p
-        }
+        if p.is_empty() { "/" } else { p }
     }
 
     fn is_wildcard(&self) -> bool {
@@ -750,9 +746,11 @@ mod route_tests {
         .unwrap();
 
         assert_eq!(3, routes.routes().count());
-        assert!(!routes
-            .routes()
-            .any(|(_r, tcr)| tcr.component_id() == "comp-private"));
+        assert!(
+            !routes
+                .routes()
+                .any(|(_r, tcr)| tcr.component_id() == "comp-private")
+        );
     }
 
     #[test]

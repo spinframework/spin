@@ -1,9 +1,9 @@
-use spin_factor_outbound_networking::runtime_config::spin::SpinRuntimeConfig;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
+use spin_factor_outbound_networking::runtime_config::spin::SpinRuntimeConfig;
 use spin_factor_variables::VariablesFactor;
 use spin_factor_wasi::{DummyFilesMounter, WasiFactor};
-use spin_factors::{anyhow, RuntimeFactors};
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors::{RuntimeFactors, anyhow};
+use spin_factors_test::{TestEnvironment, toml};
 use wasmtime_wasi::p2::bindings::sockets::instance_network::Host;
 use wasmtime_wasi::sockets::SocketAddrUse;
 

@@ -1,11 +1,11 @@
 use super::{
-    redis::{self, Error, RedisParameter, RedisResult},
     Context, TestConfig,
+    redis::{self, Error, RedisParameter, RedisResult},
 };
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use wasmtime::{component::InstancePre, Engine};
+use wasmtime::{Engine, component::InstancePre};
 
 /// Report of which Redis tests succeeded or failed
 #[derive(Serialize, PartialEq, Eq, Debug)]

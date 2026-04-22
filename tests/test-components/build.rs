@@ -29,8 +29,9 @@ fn main() {
             eprintln!("No Cargo.toml in {crate_path:?}; skipping");
             continue;
         }
-        let manifest = cargo_toml::Manifest::from_path(&manifest_path)
-            .expect("failed to read and parse Cargo manifest");
+        let manifest = cargo_toml::Manifest::from_path(&manifest_path).unwrap_or_else(|_| {
+            panic!("failed to read and parse Cargo manifest {manifest_path:?}")
+        });
 
         eprintln!("Building test component {:?}", manifest.package().name());
 

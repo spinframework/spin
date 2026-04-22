@@ -1,4 +1,4 @@
-use anyhow::{bail, ensure, Context};
+use anyhow::{Context, bail, ensure};
 use ip_network::IpNetwork;
 use rustls_pki_types::pem::PemObject;
 use serde::{Deserialize, Deserializer};

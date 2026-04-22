@@ -1,12 +1,12 @@
 // Needed for clap derive: https://github.com/clap-rs/clap/issues/4857
 #![allow(clippy::almost_swapped)]
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use clap::{Parser, Subcommand, ValueEnum};
 use semver::Version;
 use spin_plugins::{
     error::Error,
-    lookup::{fetch_plugins_repo, plugins_repo_url, PluginLookup},
+    lookup::{PluginLookup, fetch_plugins_repo, plugins_repo_url},
     manager::{self, InstallAction, ManifestLocation, PluginManager},
     manifest::{PluginManifest, PluginPackage},
 };
@@ -118,11 +118,21 @@ pub struct Install {
 
 impl Install {
     pub async fn run(&self) -> Result<()> {
-        let manifest_location = match (&self.local_manifest_src, &self.remote_manifest_src, &self.name) {
+        let manifest_location = match (
+            &self.local_manifest_src,
+            &self.remote_manifest_src,
+            &self.name,
+        ) {
             (Some(path), None, None) => ManifestLocation::Local(path.to_path_buf()),
             (None, Some(url), None) => ManifestLocation::Remote(url.clone()),
-            (None, None, Some(name)) => ManifestLocation::PluginsRepository(PluginLookup::new(name, self.version.clone())),
-            _ => return Err(anyhow::anyhow!("For plugin lookup, must provide exactly one of: plugin name, url to manifest, local path to manifest")),
+            (None, None, Some(name)) => {
+                ManifestLocation::PluginsRepository(PluginLookup::new(name, self.version.clone()))
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "For plugin lookup, must provide exactly one of: plugin name, url to manifest, local path to manifest"
+                ));
+            }
         };
         let manager = PluginManager::try_default()?;
         // Downgrades are only allowed via the `upgrade` subcommand

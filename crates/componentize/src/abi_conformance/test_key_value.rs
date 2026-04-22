@@ -1,14 +1,14 @@
 use super::{
-    key_value::{self, Error, Store as KvStore},
     Context, TestConfig,
+    key_value::{self, Error, Store as KvStore},
 };
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{Result, anyhow, ensure};
 use serde::Serialize;
 use std::{
     collections::{HashMap, HashSet},
     iter,
 };
-use wasmtime::{component::InstancePre, Engine};
+use wasmtime::{Engine, component::InstancePre};
 
 /// Report of which key-value functions a module successfully used, if any
 #[derive(Serialize, PartialEq, Eq, Debug)]

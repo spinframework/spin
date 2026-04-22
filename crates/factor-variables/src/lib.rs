@@ -7,8 +7,8 @@ use runtime_config::RuntimeConfig;
 use spin_expressions::{ProviderResolver as ExpressionResolver, Template};
 use spin_factor_otel::OtelFactorState;
 use spin_factors::{
-    anyhow, ConfigureAppContext, Factor, FactorData, InitContext, PrepareContext, RuntimeFactors,
-    SelfInstanceBuilder,
+    ConfigureAppContext, Factor, FactorData, InitContext, PrepareContext, RuntimeFactors,
+    SelfInstanceBuilder, anyhow,
 };
 use spin_world::spin::variables::variables as v3;
 

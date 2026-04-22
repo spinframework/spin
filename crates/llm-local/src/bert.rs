@@ -3,7 +3,7 @@
 /// https://github.com/huggingface/candle/blob/ee8bb1bde1a44738c314dfaacba743f4eabf917c/candle-examples/examples/bert/model.rs
 ///
 /// TODO: Remove this file when a new release of Candle makes it obsolete.
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use candle::{DType, Module, Tensor};
 use candle_nn::{Embedding, VarBuilder};
 use serde::Deserialize;
