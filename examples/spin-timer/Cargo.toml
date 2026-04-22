@@ -13,6 +13,6 @@ spin-runtime-factors = { path = "../../crates/runtime-factors" }
 spin-trigger = { path = "../../crates/trigger" }
 tokio = { version = "1", features = ["full"] }
 tokio-scoped = "0.2.0"
-wasmtime = { version = "43.0.1", features = ["component-model-async"] }
+wasmtime = { version = "44.0.0", features = ["component-model-async"] }
 
 [workspace]
