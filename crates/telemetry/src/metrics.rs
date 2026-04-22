@@ -1,14 +1,14 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use opentelemetry::global;
 use opentelemetry_sdk::{
-    metrics::{periodic_reader_with_async_runtime::PeriodicReader, SdkMeterProvider},
+    Resource,
+    metrics::{SdkMeterProvider, periodic_reader_with_async_runtime::PeriodicReader},
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,
-    Resource,
 };
 use tracing::Subscriber;
 use tracing_opentelemetry::MetricsLayer;
-use tracing_subscriber::{registry::LookupSpan, Layer};
+use tracing_subscriber::{Layer, registry::LookupSpan};
 
 use crate::{detector::SpinResourceDetector, env::OtlpProtocol};
 

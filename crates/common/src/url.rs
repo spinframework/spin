@@ -1,6 +1,6 @@
 //! Operations on URLs
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 
 use std::path::PathBuf;
 

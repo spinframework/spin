@@ -330,7 +330,7 @@ impl PooledTokioClient {
     ) -> Result<
         (
             impl std::future::Future<Output = Vec<v4::Column>>,
-            impl futures::Stream<Item = Result<Vec<DbValue>, v4::Error>>,
+            impl futures::Stream<Item = Result<Vec<DbValue>, v4::Error>> + 'static,
         ),
         v4::Error,
     > {
@@ -351,11 +351,11 @@ impl PooledTokioClient {
         let row_stm = results.enumerate().map(move |(index, row_res)| {
             let row_res = row_res.map_err(query_failed);
             row_res.and_then(|r| {
-                if index == 0 {
-                    if let Some(cols_tx) = cols_tx_opt.take() {
-                        let cols = infer_columns(&r);
-                        _ = cols_tx.send(cols);
-                    }
+                if index == 0
+                    && let Some(cols_tx) = cols_tx_opt.take()
+                {
+                    let cols = infer_columns(&r);
+                    _ = cols_tx.send(cols);
                 }
                 convert_row(&r).map_err(query_failed_anyhow)
             })

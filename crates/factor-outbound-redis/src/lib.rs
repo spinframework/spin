@@ -5,8 +5,8 @@ use host::InstanceState;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
-    anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
-    SelfInstanceBuilder,
+    ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
+    anyhow,
 };
 use spin_world::spin::redis::redis as v3;
 

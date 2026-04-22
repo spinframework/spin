@@ -2,7 +2,7 @@ use clap::CommandFactory;
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 
-use crate::{cli::FactorsTriggerCommand, Trigger};
+use crate::{Trigger, cli::FactorsTriggerCommand};
 
 use super::RuntimeFactorsBuilder;
 

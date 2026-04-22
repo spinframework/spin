@@ -1,7 +1,7 @@
-use super::{config, Context, TestConfig};
-use anyhow::{ensure, Result};
+use super::{Context, TestConfig, config};
+use anyhow::{Result, ensure};
 use std::collections::HashMap;
-use wasmtime::{component::InstancePre, Engine};
+use wasmtime::{Engine, component::InstancePre};
 
 #[derive(Default)]
 pub(super) struct Config {

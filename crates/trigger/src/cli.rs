@@ -20,7 +20,7 @@ use spin_common::url::parse_file_url;
 use spin_factors::RuntimeFactors;
 use spin_factors_executor::{ComponentLoader, FactorsExecutor};
 
-use crate::{loader::ComponentLoader as ComponentLoaderImpl, Trigger, TriggerApp};
+use crate::{Trigger, TriggerApp, loader::ComponentLoader as ComponentLoaderImpl};
 pub use initial_kv_setter::InitialKvSetterHook;
 pub use launch_metadata::LaunchMetadata;
 pub use max_instance_memory::MaxInstanceMemoryHook;
@@ -216,7 +216,10 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
 
         // Validate required host features
         if let Err(unmet) = app.ensure_needs_only(T::TYPE, &T::supported_host_requirements()) {
-            anyhow::bail!("This application requires the following features that are not available in this version of the '{}' trigger: {unmet}", T::TYPE);
+            anyhow::bail!(
+                "This application requires the following features that are not available in this version of the '{}' trigger: {unmet}",
+                T::TYPE
+            );
         }
 
         let trigger = T::new(self.trigger_args, &app)?;
@@ -275,13 +278,9 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
             truncate_logs: self.truncate_logs,
         };
 
+        let loader = ComponentLoaderImpl::new();
         let run_fut = builder
-            .run(
-                app,
-                common_options,
-                self.builder_args,
-                &ComponentLoaderImpl::new(),
-            )
+            .run(app, common_options, self.builder_args, &loader)
             .await?;
 
         let (abortable, abort_handle) = futures::future::abortable(run_fut);

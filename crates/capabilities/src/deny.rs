@@ -1,9 +1,9 @@
 use crate::{
-    InheritConfiguration, AI_MODELS, ALLOWED_OUTBOUND_HOSTS, CAPABILITY_SETS, ENVIRONMENT, FILES,
+    AI_MODELS, ALLOWED_OUTBOUND_HOSTS, CAPABILITY_SETS, ENVIRONMENT, FILES, InheritConfiguration,
     KEY_VALUE_STORES, SQLITE_DATABASES, VARIABLES,
 };
-use wac_graph::types::{are_semver_compatible, SubtypeChecker};
-use wac_graph::{types::Package, CompositionGraph};
+use wac_graph::types::{SubtypeChecker, are_semver_compatible};
+use wac_graph::{CompositionGraph, types::Package};
 
 /// Composes a deny adapter into a Wasm component to block host capabilities that
 /// are not explicitly inherited.

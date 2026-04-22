@@ -37,12 +37,12 @@ impl<const DELIM: char, const LOWER: bool> TryFrom<String> for Id<DELIM, LOWER> 
             return Err("empty".into());
         }
         // Special-case common "wrong separator" errors
-        if let Some(wrong) = wrong_delim::<DELIM>() {
-            if id.contains(wrong) {
-                return Err(format!(
-                    "words must be separated with {DELIM:?}, not {wrong:?}"
-                ));
-            }
+        if let Some(wrong) = wrong_delim::<DELIM>()
+            && id.contains(wrong)
+        {
+            return Err(format!(
+                "words must be separated with {DELIM:?}, not {wrong:?}"
+            ));
         }
         for word in id.split(DELIM) {
             if word.is_empty() {
@@ -63,7 +63,9 @@ impl<const DELIM: char, const LOWER: bool> TryFrom<String> for Id<DELIM, LOWER> 
                         "{DELIM:?}-separated words may only contain alphanumeric ASCII; got {ch:?}"
                     ));
                 } else if ch.is_ascii_uppercase() != word_is_uppercase {
-                    return Err(format!("{DELIM:?}-separated words must be all lowercase or all UPPERCASE; got {word:?}"));
+                    return Err(format!(
+                        "{DELIM:?}-separated words must be all lowercase or all UPPERCASE; got {word:?}"
+                    ));
                 }
             }
             if LOWER && word_is_uppercase {

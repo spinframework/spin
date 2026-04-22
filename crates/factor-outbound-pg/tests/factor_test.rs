@@ -1,13 +1,13 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
+use spin_factor_outbound_pg::OutboundPgFactor;
 use spin_factor_outbound_pg::client::Client;
 use spin_factor_outbound_pg::client::ClientFactory;
 use spin_factor_outbound_pg::client::HashableCertificate;
 use spin_factor_outbound_pg::client::QueryAsyncResult;
-use spin_factor_outbound_pg::OutboundPgFactor;
 use spin_factor_variables::VariablesFactor;
-use spin_factors::{anyhow, RuntimeFactors};
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors::{RuntimeFactors, anyhow};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::async_trait;
 use spin_world::spin::postgres4_2_0::postgres::Error as PgError;
 use spin_world::spin::postgres4_2_0::postgres::HostConnection;

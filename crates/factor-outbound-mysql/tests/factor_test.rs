@@ -1,10 +1,10 @@
-use anyhow::{bail, Result};
-use spin_factor_outbound_mysql::client::Client;
+use anyhow::{Result, bail};
 use spin_factor_outbound_mysql::OutboundMysqlFactor;
+use spin_factor_outbound_mysql::client::Client;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_variables::VariablesFactor;
-use spin_factors::{anyhow, RuntimeFactors};
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors::{RuntimeFactors, anyhow};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::async_trait;
 use spin_world::v2::mysql::HostConnection;
 use spin_world::v2::mysql::{self as v2};

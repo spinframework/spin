@@ -1,6 +1,6 @@
 //! Resolves a file path to a manifest file
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
 
 use crate::ui::quoted_path;

@@ -1,12 +1,12 @@
 use super::{
+    Context, TestConfig,
     postgres::{self, PgError},
     rdbms_types::{Column, DbDataType, DbValue, ParameterValue, RowSet},
-    Context, TestConfig,
 };
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use serde::Serialize;
 use std::{collections::HashMap, iter};
-use wasmtime::{component::InstancePre, Engine};
+use wasmtime::{Engine, component::InstancePre};
 
 /// Report of which PostgreSQL functions a module successfully used, if any
 #[derive(Serialize, PartialEq, Eq, Debug)]

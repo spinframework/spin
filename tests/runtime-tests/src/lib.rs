@@ -1,17 +1,17 @@
 use anyhow::Context;
 use std::path::{Path, PathBuf};
 use test_environment::{
+    TestEnvironment,
     http::{Method, Request},
     manifest_template::EnvTemplate,
     services::ServicesConfig,
-    TestEnvironment,
 };
 use testing_framework::{
+    OnTestError, TestError, TestResult,
     runtimes::{
         in_process_spin::InProcessSpin,
         spin_cli::{SpinCli, SpinConfig},
     },
-    OnTestError, TestError, TestResult,
 };
 
 /// Configuration for a runtime test
@@ -237,12 +237,12 @@ impl<R> RuntimeTest<R> {
                     log::info!("Test passed!");
                 } else {
                     error!(
-                    on_error,
-                    "Test errored but not in the expected way.\n\texpected: {expected}\n\tgot: {error}{}",
-                    stderr
-                        .map(|e| format!("\n\nstderr:\n{e}"))
-                        .unwrap_or_default()
-                )
+                        on_error,
+                        "Test errored but not in the expected way.\n\texpected: {expected}\n\tgot: {error}{}",
+                        stderr
+                            .map(|e| format!("\n\nstderr:\n{e}"))
+                            .unwrap_or_default()
+                    )
                 }
             }
             Err(TestError::Failure(RuntimeTestFailure { error, stderr })) => {

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use rustls::client::danger::ServerCertVerifier;
 
 use crate::runtime_config::{ClientCertRuntimeConfig, ClientTlsRuntimeConfig};
@@ -195,7 +195,7 @@ mod tests {
     use std::path::Path;
 
     use anyhow::Context;
-    use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
+    use rustls_pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 
     use super::*;
 

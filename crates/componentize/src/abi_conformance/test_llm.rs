@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use serde::Serialize;
 
 use super::llm;

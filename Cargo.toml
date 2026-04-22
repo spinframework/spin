@@ -8,7 +8,7 @@ license = { workspace = true }
 [workspace.package]
 version = "4.1.0-pre0"
 authors = ["Spin Framework Contributors"]
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0 WITH LLVM-exception"
 homepage = "https://spinframework.dev"
 repository = "https://github.com/spinframework/spin"

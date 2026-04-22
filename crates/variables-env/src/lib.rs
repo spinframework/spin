@@ -9,7 +9,7 @@ use serde::Deserialize;
 use spin_expressions::{Key, Provider};
 use spin_factors::anyhow::{self, Context as _};
 use spin_world::async_trait;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
 /// Configuration for the environment variables provider.
 #[derive(Debug, Default, Deserialize)]

@@ -109,7 +109,10 @@ where
     if unsupported.is_empty() {
         Ok(m)
     } else {
-        let msg = format!("This version of Spin does not support the following features required by this application: {}", unsupported.join(", "));
+        let msg = format!(
+            "This version of Spin does not support the following features required by this application: {}",
+            unsupported.join(", ")
+        );
         Err(serde::de::Error::custom(msg))
     }
 }
@@ -435,9 +438,10 @@ mod test {
         let err = LockedApp::from_json(&j).expect_err(
             "Should have refused to deserialise due to non-understood must-understand field",
         );
-        assert!(err
-            .to_string()
-            .contains("never_create_field_with_this_name"));
+        assert!(
+            err.to_string()
+                .contains("never_create_field_with_this_name")
+        );
     }
 
     #[test]

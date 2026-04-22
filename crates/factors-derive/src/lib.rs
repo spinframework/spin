@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Error};
+use syn::{Data, DeriveInput, Error, parse_macro_input};
 
 #[proc_macro_derive(RuntimeFactors)]
 pub fn derive_factors(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -43,7 +43,7 @@ fn expand_factors(input: &DeriveInput) -> syn::Result<TokenStream> {
             return Err(Error::new_spanned(
                 input,
                 "can only derive Factors for structs",
-            ))
+            ));
         }
     };
     let mut factor_names = Vec::with_capacity(fields.len());

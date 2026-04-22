@@ -20,11 +20,11 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use clap::Args;
 use rand::{
-    distr::uniform::{SampleRange, SampleUniform},
     RngCore,
+    distr::uniform::{SampleRange, SampleUniform},
 };
 use serde::Deserialize;
 use spin_app::App;
@@ -413,10 +413,10 @@ enum NotFoundRouteKind {
 /// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
 pub fn hyper_request_error(err: hyper::Error) -> ErrorCode {
     // If there's a source, we might be able to extract a wasi-http error from it.
-    if let Some(cause) = err.source() {
-        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
-            return err.clone();
-        }
+    if let Some(cause) = err.source()
+        && let Some(err) = cause.downcast_ref::<ErrorCode>()
+    {
+        return err.clone();
     }
 
     tracing::warn!("hyper request error: {err:?}");

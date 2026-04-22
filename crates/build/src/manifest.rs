@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::Deserialize;
 use std::{collections::BTreeMap, path::Path};
 
-use spin_manifest::{schema::v2, ManifestVersion};
+use spin_manifest::{ManifestVersion, schema::v2};
 
 #[allow(clippy::large_enum_variant)] // only ever constructed once
 pub enum ManifestBuildInfo {

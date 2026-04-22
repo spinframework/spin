@@ -1,13 +1,13 @@
 #![deny(warnings)]
 
 use {
-    anyhow::{anyhow, Context, Result},
+    anyhow::{Context, Result, anyhow},
     module_info::ModuleInfo,
     std::{borrow::Cow, collections::HashSet},
     wasm_encoder::reencode::{Reencode, RoundtripReencoder},
     wasm_encoder::{CustomSection, ExportSection, ImportSection, Module, RawSection},
     wasmparser::{Encoding, Parser, Payload},
-    wit_component::{metadata, ComponentEncoder},
+    wit_component::{ComponentEncoder, metadata},
 };
 
 pub mod bugs;
@@ -262,11 +262,11 @@ mod tests {
             InvocationStyle, KeyValueReport, LlmReport, MysqlReport, PostgresReport, RedisReport,
             Report, TestConfig, WasiReport,
         },
-        anyhow::{anyhow, Result},
+        anyhow::{Result, anyhow},
         tokio::fs,
         wasmtime::{
-            component::{Component, Linker},
             Config, Engine, Store,
+            component::{Component, Linker},
         },
         wasmtime_wasi::p2::{bindings::Command, pipe::MemoryInputPipe},
         wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView},

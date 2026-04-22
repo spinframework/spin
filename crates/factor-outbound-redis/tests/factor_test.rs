@@ -2,8 +2,8 @@ use anyhow::bail;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_outbound_redis::OutboundRedisFactor;
 use spin_factor_variables::VariablesFactor;
-use spin_factors::{anyhow, RuntimeFactors};
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors::{RuntimeFactors, anyhow};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::v2::redis::{Error, HostConnection};
 
 #[derive(RuntimeFactors)]

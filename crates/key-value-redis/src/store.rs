@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
-use redis::{aio::ConnectionManager, parse_redis_url, AsyncCommands, Client, RedisError};
+use redis::{AsyncCommands, Client, RedisError, aio::ConnectionManager, parse_redis_url};
 use spin_core::async_trait;
 use spin_factor_key_value::{
-    log_error, log_error_v3, v3, Cas, Error, Store, StoreManager, SwapError,
+    Cas, Error, Store, StoreManager, SwapError, log_error, log_error_v3, v3,
 };
 use std::sync::Arc;
 use tokio::sync::OnceCell;

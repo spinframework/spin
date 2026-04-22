@@ -1,6 +1,6 @@
 use wasmtime::component::{Linker, ResourceTable};
 
-use crate::{factor::FactorInstanceState, App, ConfiguredApp, Factor};
+use crate::{App, ConfiguredApp, Factor, factor::FactorInstanceState};
 
 /// A collection of `Factor`s that are initialized and configured together.
 ///

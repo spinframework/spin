@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 
 mod environment;
 mod loader;
@@ -193,7 +193,7 @@ async fn validate_wasm_against_world(
     target_world: &CandidateWorld,
     component: &ComponentToValidate<'_>,
 ) -> anyhow::Result<()> {
-    use wac_types::{validate_target, ItemKind, Package as WacPackage, Types as WacTypes, WorldId};
+    use wac_types::{ItemKind, Package as WacPackage, Types as WacTypes, WorldId, validate_target};
 
     // Gets the selected world from the component encoded WIT package
     // TODO: make this an export on `wac_types::Types`.
@@ -265,7 +265,12 @@ fn validate_host_reqs(
     if unsatisfied.is_empty() {
         Ok(())
     } else {
-        Err(anyhow!("Component {} can't run in environment {} because it requires the feature(s) '{}' which the environment does not support", component.id(), env.name(), unsatisfied.join(", ")))
+        Err(anyhow!(
+            "Component {} can't run in environment {} because it requires the feature(s) '{}' which the environment does not support",
+            component.id(),
+            env.name(),
+            unsatisfied.join(", ")
+        ))
     }
 }
 

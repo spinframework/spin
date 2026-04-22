@@ -1,18 +1,18 @@
 use crate::server::HttpHandlerState;
 use anyhow::{Context as _, Result};
-use futures::{channel::oneshot, FutureExt};
+use futures::{FutureExt, channel::oneshot};
 use http_body_util::BodyExt;
-use spin_factor_outbound_http::{p3_to_p2_error_code, NotifyOnDropBody};
+use spin_factor_outbound_http::{NotifyOnDropBody, p3_to_p2_error_code};
 use spin_factors::RuntimeFactors;
 use spin_factors_executor::InstanceState;
 use spin_http::routes::RouteMatch;
 use std::net::SocketAddr;
-use tracing::{instrument, Instrument, Level};
+use tracing::{Instrument, Level, instrument};
 use wasmtime::component::Accessor;
 use wasmtime_wasi_http::{
     handler::{Proxy, ProxyHandler},
     p2::body::HyperIncomingBody as Body,
-    p3::{bindings::http::types, WasiHttpCtxView},
+    p3::{WasiHttpCtxView, bindings::http::types},
 };
 
 /// An [`HttpExecutor`] that uses the `wasi:http@0.3.*/handler` interface.

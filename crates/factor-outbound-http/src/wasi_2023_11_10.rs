@@ -3,8 +3,8 @@
 use super::wasi_2023_10_18::convert;
 use anyhow::Result;
 use wasmtime::component::{Linker, Resource};
-use wasmtime_wasi_http::p2::bindings as latest;
 use wasmtime_wasi_http::p2::WasiHttpCtxView;
+use wasmtime_wasi_http::p2::bindings as latest;
 
 mod bindings {
     use super::latest;

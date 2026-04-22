@@ -66,10 +66,10 @@ fn ignores(input: syn::FieldValue) -> Vec<String> {
     a.elems
         .iter()
         .map(|e| {
-            if let syn::Expr::Lit(l) = e {
-                if let syn::Lit::Str(s) = &l.lit {
-                    return s.value();
-                }
+            if let syn::Expr::Lit(l) = e
+                && let syn::Lit::Str(s) = &l.lit
+            {
+                return s.value();
             }
             panic!("codegen_runtime_tests!() requires an array of strings");
         })

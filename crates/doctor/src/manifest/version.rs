@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::Deserialize;
 use toml::Value;
-use toml_edit::{de::from_document, DocumentMut, Item};
+use toml_edit::{DocumentMut, Item, de::from_document};
 
 use crate::{Diagnosis, Diagnostic, PatientApp, Treatment};
 

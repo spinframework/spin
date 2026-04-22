@@ -74,8 +74,8 @@ fn if_single_static_provider_has_data_for_variable_key_to_resolve_it_succeeds() 
 }
 
 #[test]
-fn if_there_is_a_single_static_provider_and_it_does_not_contain_a_required_variable_then_validation_fails(
-) -> anyhow::Result<()> {
+fn if_there_is_a_single_static_provider_and_it_does_not_contain_a_required_variable_then_validation_fails()
+-> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(StaticProvider::with_variable(
             "database_host",
@@ -90,8 +90,8 @@ fn if_there_is_a_single_static_provider_and_it_does_not_contain_a_required_varia
 }
 
 #[test]
-fn if_there_is_a_dynamic_provider_then_validation_succeeds_even_without_default_value_in_play(
-) -> anyhow::Result<()> {
+fn if_there_is_a_dynamic_provider_then_validation_succeeds_even_without_default_value_in_play()
+-> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(DynamicProvider)
         .with_variable("api_key", None)
@@ -103,8 +103,8 @@ fn if_there_is_a_dynamic_provider_then_validation_succeeds_even_without_default_
 }
 
 #[test]
-fn if_there_is_a_dynamic_provider_and_static_provider_but_the_variable_to_be_resolved_is_not_in_play(
-) -> anyhow::Result<()> {
+fn if_there_is_a_dynamic_provider_and_static_provider_but_the_variable_to_be_resolved_is_not_in_play()
+-> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(DynamicProvider)
         .with_provider(StaticProvider::with_variable(
@@ -120,8 +120,8 @@ fn if_there_is_a_dynamic_provider_and_static_provider_but_the_variable_to_be_res
 }
 
 #[test]
-fn if_there_is_a_dynamic_provider_and_a_static_provider_then_validation_succeeds_even_if_there_is_a_variable_in_play(
-) -> anyhow::Result<()> {
+fn if_there_is_a_dynamic_provider_and_a_static_provider_then_validation_succeeds_even_if_there_is_a_variable_in_play()
+-> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(DynamicProvider)
         .with_provider(StaticProvider::with_variable(
@@ -157,8 +157,8 @@ fn if_there_are_two_static_providers_where_one_has_data_is_valid() -> anyhow::Re
 // Ensure that if there are two or more static providers and the first one does not have data for the variable to be resolved,
 // but the second or subsequent one does, then validation still succeeds.
 #[test]
-fn if_there_are_two_static_providers_where_first_provider_does_not_have_data_while_second_provider_does(
-) -> anyhow::Result<()> {
+fn if_there_are_two_static_providers_where_first_provider_does_not_have_data_while_second_provider_does()
+-> anyhow::Result<()> {
     let resolver = ResolverTester::new()
         .with_provider(StaticProvider::with_variable(
             "database_host",

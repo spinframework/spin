@@ -199,8 +199,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn if_no_version_given_and_latest_is_not_compatible_then_highest_compatible(
-    ) -> PluginLookupResult<()> {
+    async fn if_no_version_given_and_latest_is_not_compatible_then_highest_compatible()
+    -> PluginLookupResult<()> {
         // NOTE: The setup assumes you are NOT running Windows on aarch64, so as to check 98.1.0 is not
         // offered. If that assumption fails then this test will fail with actual version being 98.1.0.
         // (We use this combination because the OS and architecture enums don't allow for fake operating systems!)

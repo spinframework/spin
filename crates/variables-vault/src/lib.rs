@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use spin_expressions::async_trait::async_trait;
 use spin_factors::anyhow::{self, Context as _};
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 use vaultrs::{
     client::{VaultClient, VaultClientSettingsBuilder},
     error::ClientError,

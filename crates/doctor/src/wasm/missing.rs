@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use spin_common::ui::quoted_path;
 
@@ -21,10 +21,10 @@ impl WasmDiagnostic for WasmMissingDiagnostic {
         _app: &PatientApp,
         wasm: PatientWasm,
     ) -> anyhow::Result<Vec<Self::Diagnosis>> {
-        if let Some(abs_path) = wasm.abs_source_path() {
-            if !abs_path.exists() {
-                return Ok(vec![WasmMissing(wasm)]);
-            }
+        if let Some(abs_path) = wasm.abs_source_path()
+            && !abs_path.exists()
+        {
+            return Ok(vec![WasmMissing(wasm)]);
         }
         Ok(vec![])
     }
@@ -90,7 +90,7 @@ impl Treatment for WasmMissing {
 
 #[cfg(test)]
 mod tests {
-    use crate::test::{assert_single_diagnosis, TestPatient};
+    use crate::test::{TestPatient, assert_single_diagnosis};
 
     use super::*;
 
@@ -118,10 +118,11 @@ mod tests {
         let patient = TestPatient::from_toml_str(manifest);
         let diag = assert_single_diagnosis::<WasmMissingDiagnostic>(&patient).await;
         assert!(diag.treatment().is_some());
-        assert!(diag
-            .build_cmd(&patient)
-            .unwrap()
-            .get_args()
-            .any(|arg| arg == "missing-source"));
+        assert!(
+            diag.build_cmd(&patient)
+                .unwrap()
+                .get_args()
+                .any(|arg| arg == "missing-source")
+        );
     }
 }

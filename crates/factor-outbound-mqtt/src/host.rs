@@ -9,9 +9,9 @@ use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
 use spin_world::spin::mqtt::mqtt as v3;
 use spin_world::v2::mqtt as v2;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
-use crate::{allowed_hosts::AllowedHostChecker, ClientCreator};
+use crate::{ClientCreator, allowed_hosts::AllowedHostChecker};
 
 pub struct InstanceState {
     allowed_hosts: AllowedHostChecker,
@@ -132,15 +132,13 @@ impl v3::HostConnectionWithStore for crate::MqttFactorData {
             )
             .unwrap();
 
-        let rsrc = accessor.with(|mut access| {
+        accessor.with(|mut access| {
             let host = access.get();
             host.connections
                 .push(client)
                 .map(Resource::new_own)
                 .map_err(|_| v3::Error::TooManyConnections)
-        });
-
-        rsrc
+        })
     }
 
     #[instrument(name = "spin_outbound_mqtt.publish", skip(accessor, connection, payload), err(level = Level::INFO),
