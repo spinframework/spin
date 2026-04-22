@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 /// FixedVersion represents a version integer field with a const value.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(into = "usize", try_from = "usize")]
-#[schemars(with = "usize", range = (min = V, max = V))]
+#[schemars(with = "usize")]
 pub struct FixedVersion<const V: usize>;
 
 impl<const V: usize> From<FixedVersion<V>> for usize {
@@ -28,7 +28,7 @@ impl<const V: usize> TryFrom<usize> for FixedVersion<V> {
 /// but accepts lower versions during deserialisation.
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(into = "usize", try_from = "usize")]
-#[schemars(with = "usize", range = (min = 1, max = V))]
+#[schemars(with = "usize")]
 pub struct FixedVersionBackwardCompatible<const V: usize>;
 
 impl<const V: usize> From<FixedVersionBackwardCompatible<V>> for usize {
