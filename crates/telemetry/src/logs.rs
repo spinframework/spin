@@ -3,15 +3,15 @@ use std::{ascii::escape_default, sync::OnceLock};
 use anyhow::bail;
 use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
 use opentelemetry_sdk::{
-    logs::{log_processor_with_async_runtime::BatchLogProcessor, BatchConfigBuilder, SdkLogger},
+    Resource,
+    logs::{BatchConfigBuilder, SdkLogger, log_processor_with_async_runtime::BatchLogProcessor},
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,
-    Resource,
 };
 
 use crate::{
     detector::SpinResourceDetector,
-    env::{self, otel_logs_enabled, OtlpProtocol},
+    env::{self, OtlpProtocol, otel_logs_enabled},
 };
 
 static LOGGER: OnceLock<SdkLogger> = OnceLock::new();

@@ -9,7 +9,7 @@ use std::{
     process::Stdio,
 };
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use clap::{CommandFactory, Parser};
 use reqwest::Url;
 use spin_app::locked::LockedApp;
@@ -180,7 +180,9 @@ impl UpCommandInner {
                 let _ = child.wait().await?;
                 return Ok(());
             } else {
-                bail!("Default file '{DEFAULT_MANIFEST_FILE}' not found. Run `spin up --from <APPLICATION>`, or `spin up --help` for usage.");
+                bail!(
+                    "Default file '{DEFAULT_MANIFEST_FILE}' not found. Run `spin up --from <APPLICATION>`, or `spin up --help` for usage."
+                );
             }
         }
 
@@ -569,10 +571,10 @@ impl UpCommandInner {
 
         for arg in &self.trigger_args {
             if is_flag_arg(arg) {
-                if let Some(prev_group) = pending_group.take() {
-                    if !prev_group.is_empty() {
-                        groups.push(prev_group);
-                    }
+                if let Some(prev_group) = pending_group.take()
+                    && !prev_group.is_empty()
+                {
+                    groups.push(prev_group);
                 }
                 pending_group = Some(vec![arg]);
             } else if let Some(mut pending) = pending_group.take() {
@@ -701,11 +703,17 @@ fn resolve_trigger_plugin(trigger_type: &str) -> Result<String> {
         .find(|m| m.name() == subcommand)
     {
         match PluginCompatibility::for_current(known) {
-            PluginCompatibility::Compatible => Err(anyhow!("No built-in trigger named '{trigger_type}', but plugin '{subcommand}' is available to install")),
-            _ => Err(anyhow!("No built-in trigger named '{trigger_type}', and plugin '{subcommand}' is not compatible"))
+            PluginCompatibility::Compatible => Err(anyhow!(
+                "No built-in trigger named '{trigger_type}', but plugin '{subcommand}' is available to install"
+            )),
+            _ => Err(anyhow!(
+                "No built-in trigger named '{trigger_type}', and plugin '{subcommand}' is not compatible"
+            )),
         }
     } else {
-        Err(anyhow!("No built-in trigger named '{trigger_type}', and no plugin named '{subcommand}' was found"))
+        Err(anyhow!(
+            "No built-in trigger named '{trigger_type}', and no plugin named '{subcommand}' was found"
+        ))
     }
 }
 

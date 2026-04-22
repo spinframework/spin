@@ -1,8 +1,8 @@
 use spin_app::locked::LockedApp;
 use spin_factors::{
-    anyhow::{self, Context},
-    wasmtime::{component::Linker, Engine},
     App, RuntimeFactors,
+    anyhow::{self, Context},
+    wasmtime::{Engine, component::Linker},
 };
 use spin_loader::FilesMountStrategy;
 

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use url::Url;
 
 const ALLOW_ALL_HOSTS: &str = "insecure:allow-all";

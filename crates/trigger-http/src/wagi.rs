@@ -1,17 +1,17 @@
 use std::{io::Cursor, net::SocketAddr};
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 use http_body_util::BodyExt;
 use hyper::{Request, Response};
 use spin_factor_wasi::WasiFactor;
 use spin_factors::RuntimeFactors;
 use spin_http::{config::WagiTriggerConfig, routes::RouteMatch, wagi};
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi_http::p2::body::HyperIncomingBody as Body;
 
-use crate::{headers::compute_default_headers, server::HttpExecutor, TriggerInstanceBuilder};
+use crate::{TriggerInstanceBuilder, headers::compute_default_headers, server::HttpExecutor};
 
 pub struct WagiHttpExecutor<'a> {
     pub wagi_config: &'a WagiTriggerConfig,

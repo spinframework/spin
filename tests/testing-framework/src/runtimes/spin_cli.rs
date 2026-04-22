@@ -1,10 +1,10 @@
 //! The Spin CLI runtime (i.e., the `spin` command-line tool).
 
 use test_environment::{
+    TestEnvironment, TestEnvironmentConfig,
     http::{Request, Response},
     io::OutputStream,
     services::ServicesConfig,
-    TestEnvironment, TestEnvironmentConfig,
 };
 
 use super::SpinAppType;

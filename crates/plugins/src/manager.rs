@@ -1,23 +1,23 @@
 use crate::{
+    SPIN_INTERNAL_COMMANDS,
     error::*,
     lookup::PluginLookup,
-    manifest::{warn_unsupported_version, PluginManifest, PluginPackage},
+    manifest::{PluginManifest, PluginPackage, warn_unsupported_version},
     store::PluginStore,
-    SPIN_INTERNAL_COMMANDS,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use path_absolutize::Absolutize;
-use reqwest::{header::HeaderMap, Client};
+use reqwest::{Client, header::HeaderMap};
 use serde::Serialize;
 use spin_common::sha256;
 use std::{
     cmp::Ordering,
     fs::{self, File},
-    io::{copy, Cursor},
+    io::{Cursor, copy},
     path::{Path, PathBuf},
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 use url::Url;
 
 // Url scheme prefix of a plugin that is installed from a local source
@@ -367,8 +367,13 @@ async fn download_plugin(
         .await?;
     if !plugin_bin.status().is_success() {
         match plugin_bin.status() {
-            reqwest::StatusCode::NOT_FOUND => bail!("The download URL specified in the plugin manifest was not found ({target_url} returned HTTP error 404). Please contact the plugin author."),
-            _ => bail!("HTTP error {} when downloading plugin from {target_url}", plugin_bin.status()),
+            reqwest::StatusCode::NOT_FOUND => bail!(
+                "The download URL specified in the plugin manifest was not found ({target_url} returned HTTP error 404). Please contact the plugin author."
+            ),
+            _ => bail!(
+                "HTTP error {} when downloading plugin from {target_url}",
+                plugin_bin.status()
+            ),
         }
     }
 

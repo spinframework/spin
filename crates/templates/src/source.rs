@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context};
-use tempfile::{tempdir, TempDir};
+use anyhow::{Context, anyhow};
+use tempfile::{TempDir, tempdir};
 use tokio::process::Command;
 use url::Url;
 

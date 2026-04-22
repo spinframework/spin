@@ -1,9 +1,9 @@
 use super::{
-    http_types::{Method, Request, Response},
     Context, TestConfig,
+    http_types::{Method, Request, Response},
 };
 use anyhow::{anyhow, ensure};
-use wasmtime::{component::InstancePre, Engine};
+use wasmtime::{Engine, component::InstancePre};
 
 pub(crate) async fn test(
     engine: &Engine,

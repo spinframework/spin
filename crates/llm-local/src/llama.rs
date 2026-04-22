@@ -1,6 +1,6 @@
 use crate::InferencingModel;
-use anyhow::{anyhow, bail, Context, Result};
-use candle::{safetensors::load_buffer, utils, Device, Tensor};
+use anyhow::{Context, Result, anyhow, bail};
+use candle::{Device, Tensor, safetensors::load_buffer, utils};
 use candle_nn::VarBuilder;
 use candle_transformers::{
     generation::{LogitsProcessor, Sampling},

@@ -1,7 +1,7 @@
 //! Conversions between WIT representations and the SQL types as surfaced by
 //! the tokio_postgres driver.
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use spin_world::spin::postgres4_2_0::postgres::{self as v4};
 
 use super::decimal::RangeableDecimal;

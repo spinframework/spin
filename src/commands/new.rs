@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use itertools::Itertools;
 use path_absolutize::Absolutize;
@@ -386,7 +386,9 @@ fn validate_name(name: &str) -> Result<String, String> {
         "do"
     };
 
-    let msg = format!("Each segment of the name must start with a letter. {invalid_text} {verb} not start with a letter");
+    let msg = format!(
+        "Each segment of the name must start with a letter. {invalid_text} {verb} not start with a letter"
+    );
     Err(msg)
 }
 

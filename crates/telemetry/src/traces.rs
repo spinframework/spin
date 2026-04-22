@@ -1,13 +1,13 @@
 use anyhow::bail;
 use opentelemetry::{global, trace::TracerProvider};
 use opentelemetry_sdk::{
+    Resource,
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,
-    Resource,
 };
 use tracing::Subscriber;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
-use tracing_subscriber::{registry::LookupSpan, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, registry::LookupSpan};
 
 use crate::detector::SpinResourceDetector;
 use crate::env::OtlpProtocol;

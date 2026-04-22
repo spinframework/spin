@@ -4,13 +4,13 @@ use anyhow::bail;
 use http::{Request, Uri};
 use spin_common::{assert_matches, assert_not_matches};
 use spin_factor_outbound_http::{
-    intercept::{InterceptOutcome, InterceptRequest, OutboundHttpInterceptor},
     ErrorCode, HostFutureIncomingResponse, OutboundHttpFactor, SelfRequestOrigin,
+    intercept::{InterceptOutcome, InterceptRequest, OutboundHttpInterceptor},
 };
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_variables::VariablesFactor;
-use spin_factors::{anyhow, RuntimeFactors};
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors::{RuntimeFactors, anyhow};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::async_trait;
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi_http::p2::types::OutgoingRequestConfig;

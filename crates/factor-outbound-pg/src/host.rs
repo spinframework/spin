@@ -2,20 +2,20 @@
 
 use anyhow::Result;
 use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::postgres3_0_0::postgres::{self as v3};
 use spin_world::spin::postgres4_2_0::postgres::{self as v4};
 use spin_world::v1::postgres as v1;
 use spin_world::v1::rdbms_types as v1_types;
 use spin_world::v2::postgres::{self as v2};
 use spin_world::v2::rdbms_types as v2_types;
-use spin_world::MAX_HOST_BUFFERED_BYTES;
+use tracing::Level;
 use tracing::field::Empty;
 use tracing::instrument;
-use tracing::Level;
 
+use crate::InstanceState;
 use crate::allowed_hosts::AllowedHostChecker;
 use crate::client::{Client, ClientFactory, HashableCertificate, QueryAsyncResult};
-use crate::InstanceState;
 
 impl<CF: ClientFactory> InstanceState<CF> {
     async fn open_connection<Conn: 'static>(
@@ -330,15 +330,13 @@ impl<CF: ClientFactory> crate::PgFactorData<CF> {
             .await
             .map_err(|e| v4::Error::ConnectionFailed(format!("{e:?}")))?;
 
-        let rsrc = accessor.with(|mut access| {
+        accessor.with(|mut access| {
             let host = access.get();
             host.connections
                 .push(client)
                 .map_err(|_| v4::Error::ConnectionFailed("too many connections".into()))
                 .map(Resource::new_own)
-        });
-
-        rsrc
+        })
     }
 }
 
@@ -446,14 +444,16 @@ impl<CF: ClientFactory> v1::Host for InstanceState<CF> {
         statement: String,
         params: Vec<v1_types::ParameterValue>,
     ) -> Result<u64, v1::PgError> {
-        delegate!(self.execute(
-            address,
-            statement,
-            params
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<Vec<_>, _>>()?
-        ))
+        delegate!(
+            self.execute(
+                address,
+                statement,
+                params
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<_>, _>>()?
+            )
+        )
     }
 
     async fn query(
@@ -462,14 +462,16 @@ impl<CF: ClientFactory> v1::Host for InstanceState<CF> {
         statement: String,
         params: Vec<v1_types::ParameterValue>,
     ) -> Result<v1_types::RowSet, v1::PgError> {
-        delegate!(self.query(
-            address,
-            statement,
-            params
-                .into_iter()
-                .map(TryInto::try_into)
-                .collect::<Result<Vec<_>, _>>()?
-        ))
+        delegate!(
+            self.query(
+                address,
+                statement,
+                params
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<_>, _>>()?
+            )
+        )
         .map(Into::into)
     }
 

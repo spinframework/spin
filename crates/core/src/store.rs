@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::time::{Duration, Instant};
 
-use crate::{limits::StoreLimitsAsync, State, WasmtimeEngine};
+use crate::{State, WasmtimeEngine, limits::StoreLimitsAsync};
 
 #[cfg(doc)]
 use crate::EngineBuilder;

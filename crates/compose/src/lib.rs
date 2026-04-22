@@ -155,7 +155,9 @@ pub enum ComposeError {
         conflicts: Vec<(String, Vec<DependencyName>)>,
     },
     /// Dependency doesn't contain an export to satisfy the import.
-    #[error("dependency '{dependency_name}' doesn't export '{export_name}' to satisfy import '{import_name}'")]
+    #[error(
+        "dependency '{dependency_name}' doesn't export '{export_name}' to satisfy import '{import_name}'"
+    )]
     MissingExport {
         dependency_name: DependencyName,
         export_name: String,

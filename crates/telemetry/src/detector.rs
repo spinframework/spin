@@ -2,8 +2,8 @@ use std::env;
 
 use opentelemetry::{Key, KeyValue, Value};
 use opentelemetry_sdk::{
-    resource::{EnvResourceDetector, ResourceDetector},
     Resource,
+    resource::{EnvResourceDetector, ResourceDetector},
 };
 
 const OTEL_SERVICE_NAME: &str = "OTEL_SERVICE_NAME";

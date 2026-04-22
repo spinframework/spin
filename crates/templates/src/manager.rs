@@ -193,7 +193,7 @@ impl TemplateManager {
                     return Ok(InstallationResult::Skipped(
                         id.to_owned(),
                         SkippedReason::AlreadyExists,
-                    ))
+                    ));
                 }
                 ExistsBehaviour::Update => {
                     copy_template_over_existing(id, source_dir, &dest_dir, source).await?
@@ -877,7 +877,9 @@ mod tests {
 
         let spin_toml = tokio::fs::read_to_string(&spin_toml_path).await.unwrap();
         assert!(spin_toml.contains("source = \"hello/target/wasm32-wasip2/release/hello.wasm\""));
-        assert!(spin_toml.contains("source = \"encore/target/wasm32-wasip2/release/hello_2.wasm\""));
+        assert!(
+            spin_toml.contains("source = \"encore/target/wasm32-wasip2/release/hello_2.wasm\"")
+        );
     }
 
     #[tokio::test]
@@ -1138,10 +1140,12 @@ mod tests {
             .await
             .expect_err("generate into existing dir should have failed");
 
-        assert!(tokio::fs::read_to_string(&manifest_path)
-            .await
-            .unwrap()
-            .contains("cookies"));
+        assert!(
+            tokio::fs::read_to_string(&manifest_path)
+                .await
+                .unwrap()
+                .contains("cookies")
+        );
     }
 
     #[tokio::test]
@@ -1167,10 +1171,12 @@ mod tests {
             .await
             .expect("generate into existing dir should have succeeded");
 
-        assert!(tokio::fs::read_to_string(&manifest_path)
-            .await
-            .unwrap()
-            .contains("[[trigger.http]]"));
+        assert!(
+            tokio::fs::read_to_string(&manifest_path)
+                .await
+                .unwrap()
+                .contains("[[trigger.http]]")
+        );
     }
 
     #[tokio::test]

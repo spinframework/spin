@@ -1,6 +1,6 @@
 //! Cache for OCI registry entities.
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 
 use std::{
     path::PathBuf,

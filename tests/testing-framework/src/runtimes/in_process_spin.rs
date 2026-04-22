@@ -7,9 +7,9 @@ use spin_runtime_factors::{FactorsBuilder, TriggerAppArgs, TriggerFactors};
 use spin_trigger::{cli::TriggerAppBuilder, loader::ComponentLoader};
 use spin_trigger_http::{HttpServer, HttpTrigger, InstanceReuseConfig, OutputFormat};
 use test_environment::{
+    Runtime, TestEnvironment, TestEnvironmentConfig,
     http::{Request, Response},
     services::ServicesConfig,
-    Runtime, TestEnvironment, TestEnvironmentConfig,
 };
 
 /// An instance of Spin running in the same process as the tests instead of as a separate process

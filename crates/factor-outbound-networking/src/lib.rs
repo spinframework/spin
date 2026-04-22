@@ -8,8 +8,8 @@ use futures_util::FutureExt as _;
 use spin_factor_variables::VariablesFactor;
 use spin_factor_wasi::{SocketAddrUse, WasiFactor};
 use spin_factors::{
-    anyhow::{self, Context},
     ConfigureAppContext, Error, Factor, FactorInstanceBuilder, PrepareContext, RuntimeFactors,
+    anyhow::{self, Context},
 };
 use spin_outbound_networking_config::allowed_hosts::{DisallowedHostHandler, OutboundAllowedHosts};
 use url::Url;

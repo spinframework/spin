@@ -5,7 +5,7 @@ use client::Client;
 use mysql_async::Conn as MysqlClient;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::{
-    config::allowed_hosts::OutboundAllowedHosts, OutboundNetworkingFactor,
+    OutboundNetworkingFactor, config::allowed_hosts::OutboundAllowedHosts,
 };
 use spin_factors::{Factor, FactorData, InitContext, RuntimeFactors, SelfInstanceBuilder};
 use spin_world::v1::mysql as v1;

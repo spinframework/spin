@@ -7,12 +7,12 @@ use spin_factors::RuntimeFactors;
 use spin_http::body;
 use spin_http::routes::RouteMatch;
 use spin_world::v1::http_types;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
 use crate::{
+    Body, TriggerInstanceBuilder,
     headers::{append_headers, prepare_request_headers},
     server::HttpExecutor,
-    Body, TriggerInstanceBuilder,
 };
 
 /// An [`HttpExecutor`] that uses the `fermyon:spin/inbound-http` interface.

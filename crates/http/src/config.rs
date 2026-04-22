@@ -19,10 +19,16 @@ pub struct HttpTriggerConfig {
 impl HttpTriggerConfig {
     pub fn lookup_key(&self, trigger_id: &str) -> anyhow::Result<crate::routes::TriggerLookupKey> {
         match (&self.component, &self.static_response) {
-            (None, None) => Err(anyhow::anyhow!("Triggers must specify either component or static_response - {trigger_id} has neither")),
-            (Some(_), Some(_)) => Err(anyhow::anyhow!("Triggers must specify either component or static_response - {trigger_id} has both")),
+            (None, None) => Err(anyhow::anyhow!(
+                "Triggers must specify either component or static_response - {trigger_id} has neither"
+            )),
+            (Some(_), Some(_)) => Err(anyhow::anyhow!(
+                "Triggers must specify either component or static_response - {trigger_id} has both"
+            )),
             (Some(c), None) => Ok(crate::routes::TriggerLookupKey::Component(c.to_string())),
-            (None, Some(_)) => Ok(crate::routes::TriggerLookupKey::Trigger(trigger_id.to_string())),
+            (None, Some(_)) => Ok(crate::routes::TriggerLookupKey::Trigger(
+                trigger_id.to_string(),
+            )),
         }
     }
 }

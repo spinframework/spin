@@ -146,7 +146,10 @@ impl InProcDatabase {
     /// Get a new connection creator for a local database.
     ///
     /// `base_dir` is the base directory path from which `path` is resolved if it is a relative path.
-    fn connection_creator(self, base_dir: &Path) -> anyhow::Result<impl ConnectionCreator> {
+    fn connection_creator(
+        self,
+        base_dir: &Path,
+    ) -> anyhow::Result<impl ConnectionCreator + 'static> {
         let path = self
             .path
             .as_ref()

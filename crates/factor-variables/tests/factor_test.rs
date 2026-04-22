@@ -1,7 +1,7 @@
 use spin_expressions::{Key, Provider};
-use spin_factor_variables::{runtime_config::RuntimeConfig, VariablesFactor};
-use spin_factors::{anyhow, RuntimeFactors};
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factor_variables::{VariablesFactor, runtime_config::RuntimeConfig};
+use spin_factors::{RuntimeFactors, anyhow};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::v2::variables::Host;
 
 #[derive(RuntimeFactors)]

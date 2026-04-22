@@ -8,7 +8,7 @@ mod integration_tests {
         http::{Method, Request, Response},
         services::ServicesConfig,
     };
-    use testing_framework::runtimes::{spin_cli::SpinConfig, SpinAppType};
+    use testing_framework::runtimes::{SpinAppType, spin_cli::SpinConfig};
 
     pub use super::testcases::{
         assert_spin_request, bootstap_env, http_smoke_test_template, run_test, spin_binary,
@@ -1247,9 +1247,11 @@ route = "/..."
         let output = env.run_in(&mut execute)?;
 
         // Verify plugin successfully wrote to output file
-        assert!(std::str::from_utf8(&output.stdout)?
-            .trim()
-            .contains("This is an example Spin plugin!"));
+        assert!(
+            std::str::from_utf8(&output.stdout)?
+                .trim()
+                .contains("This is an example Spin plugin!")
+        );
 
         // Upgrade plugin to newer version
         *plugin_manifest_json.get_mut("version").unwrap() = serde_json::json!("0.2.1");
@@ -1774,14 +1776,16 @@ route = "/..."
         // longer than the tiny tests we normally build there (and it's pointless if the user just wants to build
         // Spin without running any tests) so we do it here instead.  Subsequent builds after the first one should
         // be very fast.
-        assert!(std::process::Command::new("cargo")
-            .arg("build")
-            .arg("--target-dir")
-            .arg(trigger_dir.join("target"))
-            .arg("--manifest-path")
-            .arg(trigger_dir.join("Cargo.toml"))
-            .status()?
-            .success());
+        assert!(
+            std::process::Command::new("cargo")
+                .arg("build")
+                .arg("--target-dir")
+                .arg(trigger_dir.join("target"))
+                .arg("--manifest-path")
+                .arg(trigger_dir.join("Cargo.toml"))
+                .status()?
+                .success()
+        );
 
         // Create a test plugin store so we don't modify the user's real one.
         let plugin_store_dir = Path::new(concat!(env!("OUT_DIR"), "/plugin-store"));
@@ -1860,7 +1864,7 @@ mod otel_integration_tests {
         http::{Method, Request, Response},
         services::ServicesConfig,
     };
-    use testing_framework::runtimes::{spin_cli::SpinConfig, SpinAppType};
+    use testing_framework::runtimes::{SpinAppType, spin_cli::SpinConfig};
 
     use crate::testcases::run_test_inited;
 
@@ -1902,10 +1906,12 @@ mod otel_integration_tests {
                 assert_eq!(spans.len(), 2);
 
                 // They're all part of the same trace which implies context propagation is working
-                assert!(spans
-                    .iter()
-                    .map(|s| s.trace_id.clone())
-                    .all(|t| t == spans[0].trace_id));
+                assert!(
+                    spans
+                        .iter()
+                        .map(|s| s.trace_id.clone())
+                        .all(|t| t == spans[0].trace_id)
+                );
 
                 Ok(())
             },
@@ -2082,10 +2088,12 @@ mod otel_integration_tests {
 
                 assert_eq!(spans.len(), 6);
 
-                assert!(spans
-                    .iter()
-                    .map(|s| s.trace_id.clone())
-                    .all(|t| t == spans[0].trace_id));
+                assert!(
+                    spans
+                        .iter()
+                        .map(|s| s.trace_id.clone())
+                        .all(|t| t == spans[0].trace_id)
+                );
 
                 let top_handle_get_span = spans
                     .iter()
@@ -2327,10 +2335,12 @@ mod otel_integration_tests {
 
                 let spans = rt.block_on(collector.exported_spans(7, Duration::from_secs(5)));
 
-                assert!(spans
-                    .iter()
-                    .map(|s| s.trace_id.clone())
-                    .all(|t| t == spans[0].trace_id));
+                assert!(
+                    spans
+                        .iter()
+                        .map(|s| s.trace_id.clone())
+                        .all(|t| t == spans[0].trace_id)
+                );
 
                 Ok(())
             },
@@ -2371,10 +2381,12 @@ mod otel_integration_tests {
 
                 let spans = rt.block_on(collector.exported_spans(7, Duration::from_secs(5)));
 
-                assert!(spans
-                    .iter()
-                    .map(|s| s.trace_id.clone())
-                    .all(|t| t == spans[0].trace_id));
+                assert!(
+                    spans
+                        .iter()
+                        .map(|s| s.trace_id.clone())
+                        .all(|t| t == spans[0].trace_id)
+                );
 
                 Ok(())
             },

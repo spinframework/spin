@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, ensure};
 use oci_distribution::Reference;
 use reqwest::Url;
 use spin_common::ui::quoted_path;

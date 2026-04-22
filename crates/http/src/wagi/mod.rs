@@ -5,12 +5,12 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use anyhow::Error;
 use http::{
-    header::{HeaderName, HOST},
-    request::Parts,
     HeaderMap, HeaderValue, Response, StatusCode,
+    header::{HOST, HeaderName},
+    request::Parts,
 };
 
-use crate::{body, routes::RouteMatch, Body};
+use crate::{Body, body, routes::RouteMatch};
 
 /// This sets the version of CGI that WAGI adheres to.
 ///

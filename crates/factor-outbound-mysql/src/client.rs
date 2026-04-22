@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use futures::stream::TryStreamExt as _;
 use mysql_async::consts::ColumnType;
 use mysql_async::prelude::{FromValue, Queryable as _};
-use mysql_async::{from_value_opt, Conn as MysqlClient, Opts, OptsBuilder, SslOpts};
+use mysql_async::{Conn as MysqlClient, Opts, OptsBuilder, SslOpts, from_value_opt};
 use spin_core::async_trait;
 use spin_world::v2::mysql::{self as v2};
 use spin_world::v2::rdbms_types::{
@@ -284,10 +284,12 @@ mod test {
 
     #[test]
     fn test_mysql_address_without_ssl_mode() {
-        assert!(build_opts("mysql://myuser:password@127.0.0.1/db")
-            .unwrap()
-            .ssl_opts()
-            .is_none())
+        assert!(
+            build_opts("mysql://myuser:password@127.0.0.1/db")
+                .unwrap()
+                .ssl_opts()
+                .is_none()
+        )
     }
 
     #[test]

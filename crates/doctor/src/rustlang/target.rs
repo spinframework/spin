@@ -150,8 +150,12 @@ impl Treatment for TargetDiagnosis {
 
     async fn dry_run(&self, _patient: &PatientApp) -> Result<String> {
         let message = match self {
-            Self::RustNotInstalled => "Download and run the Rust installer from https://rustup.rs, with the `--target wasm32-wasip2` option",
-            Self::WasmTargetNotInstalled => "Run the following command:\n    `rustup target add wasm32-wasip2`",
+            Self::RustNotInstalled => {
+                "Download and run the Rust installer from https://rustup.rs, with the `--target wasm32-wasip2` option"
+            }
+            Self::WasmTargetNotInstalled => {
+                "Run the following command:\n    `rustup target add wasm32-wasip2`"
+            }
         };
         Ok(message.into())
     }
@@ -172,7 +176,9 @@ impl Treatment for TargetDiagnosis {
 async fn install_rust_with_wasi_target() -> Result<()> {
     let status = run_rust_installer().await?;
     anyhow::ensure!(status.success(), "Rust installation failed: {status:?}");
-    let stop = StopDiagnosing::new("Because Rust was just installed, you may need to run a script or restart your command shell to add Rust to your PATH. Please follow the instructions at the end of the installer output above before re-running `spin doctor`.");
+    let stop = StopDiagnosing::new(
+        "Because Rust was just installed, you may need to run a script or restart your command shell to add Rust to your PATH. Please follow the instructions at the end of the installer output above before re-running `spin doctor`.",
+    );
     Err(anyhow::anyhow!(stop))
 }
 

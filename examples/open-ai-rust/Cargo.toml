@@ -3,8 +3,8 @@ name = "open-ai-rust"
 authors = ["Spin Framework Contributors"]
 description = "Example showing using openAI with Spin"
 version = "0.1.0"
-rust-version = "1.78"
-edition = "2021"
+rust-version = "1.93"
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib"]

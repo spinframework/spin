@@ -1,13 +1,13 @@
 use crate::build_info::*;
-use crate::commands::plugins::{update, Install};
+use crate::commands::plugins::{Install, update};
 use crate::opts::PLUGIN_OVERRIDE_COMPATIBILITY_CHECK_FLAG;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use spin_common::ui::quoted_path;
 use spin_plugins::{
-    badger::BadgerChecker, error::Error as PluginError, manifest::warn_unsupported_version,
-    PluginStore,
+    PluginStore, badger::BadgerChecker, error::Error as PluginError,
+    manifest::warn_unsupported_version,
 };
-use std::io::{stderr, IsTerminal};
+use std::io::{IsTerminal, stderr};
 use std::{collections::HashMap, env, process};
 use tokio::process::Command;
 
@@ -157,17 +157,17 @@ async fn consider_install(
         return Ok(None); // No update badgering needed if we just updated/installed it!
     }
 
-    if stderr().is_terminal() {
-        if let Some(plugin) = match_catalogue_plugin(plugin_store, plugin_name) {
-            let package = spin_plugins::manager::get_package(&plugin)?;
-            if offer_install(&plugin, package)? {
-                let plugin_installer = installer_for(plugin_name);
-                plugin_installer.run().await?;
-                eprintln!();
-                return Ok(None); // No update badgering needed if we just updated/installed it!
-            } else {
-                process::exit(2);
-            }
+    if stderr().is_terminal()
+        && let Some(plugin) = match_catalogue_plugin(plugin_store, plugin_name)
+    {
+        let package = spin_plugins::manager::get_package(&plugin)?;
+        if offer_install(&plugin, package)? {
+            let plugin_installer = installer_for(plugin_name);
+            plugin_installer.run().await?;
+            eprintln!();
+            return Ok(None); // No update badgering needed if we just updated/installed it!
+        } else {
+            process::exit(2);
         }
     }
 
@@ -268,7 +268,9 @@ async fn report_badger_result(badger: tokio::task::JoinHandle<BadgerChecker>) {
                 "This plugin can be upgraded.",
                 "Version {eligible} is available and compatible."
             );
-            eprintln!("Version {questionable} is also available, but may not be backward compatible with your current plugin.");
+            eprintln!(
+                "Version {questionable} is also available, but may not be backward compatible with your current plugin."
+            );
             eprintln!("To upgrade, run `{}`.", eligible.upgrade_command());
         }
         Err(e) => {

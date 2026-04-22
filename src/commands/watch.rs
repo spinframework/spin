@@ -378,7 +378,7 @@ mod despurifier {
     use std::collections::HashMap;
     use std::sync::Mutex;
     use std::time::SystemTime;
-    use watchexec_events::{filekind::FileEventKind, Tag};
+    use watchexec_events::{Tag, filekind::FileEventKind};
 
     pub struct Despurifier {
         process_start_time: SystemTime,
@@ -487,7 +487,9 @@ impl ReconfigurableWatcher {
         match self {
             Self::Actual((watchexec, rtf)) => {
                 if let Err(e) = rtf.build_config(&watchexec.config).await {
-                    tracing::error!("Unable to re-configure watcher after manifest change. Changes in files newly added to the application may not be detected. Error: {e}");
+                    tracing::error!(
+                        "Unable to re-configure watcher after manifest change. Changes in files newly added to the application may not be detected. Error: {e}"
+                    );
                 };
             }
             Self::Dummy => (),

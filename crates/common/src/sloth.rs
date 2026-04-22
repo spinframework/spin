@@ -1,7 +1,7 @@
 //! Warn on slow operations
 
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 /// Print a warning message after the given duration unless the returned
 /// [`SlothGuard`] is dropped first.

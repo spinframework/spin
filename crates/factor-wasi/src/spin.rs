@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use spin_common::{ui::quoted_path, url::parse_file_url};
-use spin_factors::anyhow::{ensure, Context};
+use spin_factors::anyhow::{Context, ensure};
 
 use crate::FilesMounter;
 
