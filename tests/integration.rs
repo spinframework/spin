@@ -108,7 +108,7 @@ mod integration_tests {
             },
             ServicesConfig::none(),
             move |env| {
-                let stdout = env.runtime_mut().stdout().to_owned();
+                let stdout = env.runtime_mut().wait_for_non_empty_stdout()?.to_owned();
 
                 let check_json = || -> anyhow::Result<()> {
                     let parsed: serde_json::Value =

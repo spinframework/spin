@@ -203,6 +203,27 @@ impl SpinCli {
         self.stdout.output_as_str().unwrap_or("<non-utf8>")
     }
 
+    pub fn wait_for_non_empty_stdout(&mut self) -> anyhow::Result<&str> {
+        const WAIT_FOR_STDOUT_MILLIS: u64 = 5000;
+        const POLL_STDOUT_INTERVAL_MILLIS: u64 = 50;
+        const NUM_WAITS: u64 = WAIT_FOR_STDOUT_MILLIS / POLL_STDOUT_INTERVAL_MILLIS;
+
+        for _ in 0..NUM_WAITS {
+            if !self.stdout().is_empty() {
+                // We don't mind if additional stuff has arrived on stdout since
+                // the empty check. As long as stdout can't go backwards we're okay.
+                // (And snapshotting makes the borrow checker mad, so...)
+                return Ok(self.stdout());
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(
+                POLL_STDOUT_INTERVAL_MILLIS,
+            ));
+        }
+
+        anyhow::bail!("waited for text to appear on stdout but it didn't");
+    }
+
     pub fn stderr(&mut self) -> &str {
         self.stderr.output_as_str().unwrap_or("<non-utf8>")
     }
