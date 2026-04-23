@@ -9,6 +9,8 @@ pub enum MaintenanceCommands {
     GenerateReference(GenerateReference),
     /// Generate JSON schema for application manifest.
     GenerateManifestSchema(GenerateSchema),
+    /// Generate shell completions. Requires the COMPLETE environment variable to be set.
+    GenerateCompletions,
 }
 
 impl MaintenanceCommands {
@@ -16,6 +18,7 @@ impl MaintenanceCommands {
         match self {
             MaintenanceCommands::GenerateReference(cmd) => cmd.run().await,
             MaintenanceCommands::GenerateManifestSchema(cmd) => cmd.run().await,
+            MaintenanceCommands::GenerateCompletions => GenerateCompletions::run().await,
         }
     }
 }
@@ -146,4 +149,42 @@ fn write(output: &Option<PathBuf>, text: &str) -> anyhow::Result<()> {
         None => println!("{text}"),
     }
     Ok(())
+}
+
+#[derive(Parser, Debug)]
+pub struct GenerateCompletions;
+
+impl GenerateCompletions {
+    async fn run() -> anyhow::Result<()> {
+        // This intentionally does not use `crate::is_completions_request`.
+        // The reason is that `is_completions_request` may grow stronger, because it must
+        // avoid inferring a completion scenario when there isn't one (because the
+        // consequence of getting it wrong would be 'you can't run Spin commands').
+        // Whereas this check has to be as weak as possible, because it must avoid inferring a
+        // *non*-completion scenario when there *is* one (because the consequence
+        // of doing so would be 'you can't generate completions', whereas the consequence of
+        // failing to spot a non-completion scenario is merely 'you don't get a good error').
+        if std::env::var_os("COMPLETE").is_none() {
+            anyhow::bail!(
+                "Set the COMPLETE environment variable to the name of your shell while generating completions."
+            );
+        }
+
+        // `SpinApp::Up` is associated with `UpCommand`, which does its work by clever
+        // parsing tricks. `clap_complete` is frustratingly oblivious to these clever
+        // parsing tricks, so if you run it over `SpinApp`, it doesn't generate completions
+        // for `spin up`. So we sub in the `inner()` which carries the actual 'real' clap parsing.
+        let factory = || {
+            let cmd = crate::SpinApp::command();
+            let up_inner = crate::commands::up::UpCommand::inner()
+                .name("up")
+                .alias("u");
+            cmd.mut_subcommand("up", |_| up_inner)
+        };
+
+        let env = clap_complete::env::CompleteEnv::with_factory(factory);
+        env.complete();
+
+        Ok(())
+    }
 }
