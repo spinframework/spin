@@ -47,6 +47,7 @@ pub struct WatchCommand {
     /// The build profile to build and run. The default is the anonymous profile (usually
     /// the release build).
     #[clap(long)]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::profiles))]
     pub profile: Option<String>,
 
     /// Clear the screen before each run.

@@ -69,6 +69,7 @@ pub struct Install {
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
         required_unless_present_any = [PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT, PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT],
     )]
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::installable_plugins))]
     pub name: Option<String>,
 
     /// Path to local plugin manifest.
@@ -163,6 +164,7 @@ impl Install {
 #[derive(Parser, Debug)]
 pub struct Uninstall {
     /// Name of Spin plugin.
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::installed_plugins))]
     pub name: String,
 }
 
@@ -189,6 +191,7 @@ pub struct Upgrade {
         name = PLUGIN_NAME_OPT,
         conflicts_with = PLUGIN_ALL_OPT,
     )]
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::installed_plugins))]
     pub name: Option<String>,
 
     /// Upgrade all plugins.
@@ -463,6 +466,7 @@ impl Upgrade {
 #[derive(Parser, Debug)]
 pub struct Show {
     /// Name of Spin plugin.
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::all_plugins))]
     pub name: String,
 }
 
@@ -922,6 +926,71 @@ async fn try_install(
         Ok(true)
     } else {
         Ok(false)
+    }
+}
+
+mod completions {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    pub fn installable_plugins() -> Vec<clap_complete::CompletionCandidate> {
+        let Ok(plugin_manager) = PluginManager::try_default() else {
+            return vec![];
+        };
+
+        let Ok(catalogue_plugins) = plugin_manager.store().catalogue_manifests() else {
+            return vec![];
+        };
+        let catalogue_names: HashSet<_> = catalogue_plugins.iter().map(|m| m.name()).collect();
+
+        let Ok(installed_plugins) = plugin_manager.store().installed_manifests() else {
+            return vec![];
+        };
+        let installed_names: HashSet<_> = installed_plugins.iter().map(|m| m.name()).collect();
+
+        let installable_names = catalogue_names.difference(&installed_names);
+
+        installable_names
+            .map(clap_complete::CompletionCandidate::new)
+            .collect()
+    }
+
+    pub fn installed_plugins() -> Vec<clap_complete::CompletionCandidate> {
+        let Ok(plugin_manager) = PluginManager::try_default() else {
+            return vec![];
+        };
+
+        let Ok(installed_plugins) = plugin_manager.store().installed_manifests() else {
+            return vec![];
+        };
+
+        installed_plugins
+            .iter()
+            .map(|m| clap_complete::CompletionCandidate::new(m.name()))
+            .collect()
+    }
+
+    pub fn all_plugins() -> Vec<clap_complete::CompletionCandidate> {
+        let Ok(plugin_manager) = PluginManager::try_default() else {
+            return vec![];
+        };
+
+        let Ok(catalogue_plugins) = plugin_manager.store().catalogue_manifests() else {
+            return vec![];
+        };
+        let catalogue_names: HashSet<_> = catalogue_plugins.iter().map(|m| m.name()).collect();
+
+        let Ok(installed_plugins) = plugin_manager.store().installed_manifests() else {
+            return vec![];
+        };
+        let installed_names: HashSet<_> = installed_plugins.iter().map(|m| m.name()).collect();
+
+        let all_names = catalogue_names.union(&installed_names);
+
+        all_names
+            .map(clap_complete::CompletionCandidate::new)
+            .collect()
     }
 }
 

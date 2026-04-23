@@ -84,7 +84,7 @@ impl UpCommand {
 /// Argument parser for UpCommand.
 #[derive(Parser, Debug, Default)]
 #[clap(about = "Start the Spin application", disable_help_flag = true)]
-struct UpCommandInner {
+pub(crate) struct UpCommandInner {
     #[clap(short = 'h', long = "help")]
     pub help: bool,
 
@@ -123,6 +123,7 @@ struct UpCommandInner {
     /// The build profile to run. The default is the anonymous profile (usually
     /// the release build).
     #[clap(long)]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::profiles))]
     pub profile: Option<String>,
 
     /// Ignore server certificate errors from a registry
@@ -138,11 +139,11 @@ struct UpCommandInner {
     pub env: Vec<(String, String)>,
 
     /// Temporary directory for the static assets of the components.
-    #[clap(long = "temp", alias = "tmp")]
+    #[clap(long = "temp", alias = "tmp", value_hint = clap::ValueHint::DirPath)]
     pub tmp: Option<PathBuf>,
 
     /// Cache directory for downloaded components and assets.
-    #[clap(long)]
+    #[clap(long, value_hint = clap::ValueHint::DirPath)]
     pub cache_dir: Option<PathBuf>,
 
     /// For local apps with directory mounts and no excluded files, mount them directly instead of using a temporary
@@ -161,6 +162,7 @@ struct UpCommandInner {
 
     /// [Experimental] Component ID to run. This can be specified multiple times. The default is all components.
     #[clap(short = 'c', long = "component-id")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::components))]
     pub components: Vec<String>,
 
     /// All other args, to be passed through to the trigger

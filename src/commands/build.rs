@@ -28,10 +28,12 @@ pub struct BuildCommand {
     /// The build profile to build. The default is the anonymous profile (usually
     /// the release build).
     #[clap(long)]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::profiles))]
     pub profile: Option<String>,
 
     /// Component ID to build. This can be specified multiple times. The default is all components.
     #[clap(short = 'c', long)]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::components))]
     pub component_id: Vec<String>,
 
     /// By default, if the application manifest specifies one or more deployment targets, Spin

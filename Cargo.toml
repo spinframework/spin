@@ -78,6 +78,7 @@ spin-trigger-http = { path = "crates/trigger-http" }
 spin-trigger-redis = { path = "crates/trigger-redis" }
 terminal = { path = "crates/terminal" }
 rand.workspace = true
+clap_complete = { version = "4.6.2", features = ["unstable-dynamic"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # This needs to be an explicit dependency to enable

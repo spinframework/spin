@@ -1,5 +1,6 @@
 pub mod build_info;
 pub mod commands;
+pub(crate) mod completions;
 mod directory_rels;
 pub(crate) mod opts;
 pub mod subprocess;
@@ -17,7 +18,7 @@ use commands::{
     plugins::PluginCommands,
     registry::RegistryCommands,
     templates::TemplateCommands,
-    up::UpCommand,
+    up::{UpCommand, UpCommandInner},
     watch::WatchCommand,
 };
 use spin_runtime_factors::FactorsBuilder;
@@ -29,6 +30,10 @@ use spin_trigger_redis::RedisTrigger;
 pub use opts::HELP_ARGS_ONLY_TRIGGER_TYPE;
 
 pub async fn run() -> anyhow::Result<()> {
+    if is_completion_request() {
+        return (MaintenanceCommands::GenerateCompletions).run().await;
+    }
+
     let version = build_info();
     spin_telemetry::init(version.clone()).context("Failed to initialize telemetry")?;
 
@@ -65,6 +70,10 @@ pub async fn run() -> anyhow::Result<()> {
         .run()
         .await
         .inspect_err(|err| tracing::debug!(?err))
+}
+
+fn is_completion_request() -> bool {
+    std::env::var_os("COMPLETE").is_some_and(|v| !v.is_empty())
 }
 
 /// The Spin CLI
