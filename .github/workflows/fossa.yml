@@ -1,0 +1,36 @@
+name: fossa
+on:
+  push:
+    branches:
+      - main
+      - v*
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  fossa-scan:
+    # Don't attempt to run FOSSA on forks
+    if: github.repository_owner == 'spinframework'
+    runs-on: ubuntu-latest
+    env:
+      FOSSA_API_KEY: d21f74dd762b95fa3e318b70e8428ca5 # This is a push-only token that is safe to be exposed
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Run FOSSA Scan"
+        uses: fossas/fossa-action@v1.7.0
+        with:
+          api-key: ${{ env.FOSSA_API_KEY }}
+
+      - name: "Run FOSSA Test"
+        if: github.event_name == 'pull_request'
+        uses: fossas/fossa-action@v1.7.0
+        with:
+          api-key: ${{ env.FOSSA_API_KEY }}
+          run-tests: true
+      #     TODO: uncomment once we have scans from the main branch
+      #     test-diff-revision: ${{ github.event.pull_request.base.sha }}
