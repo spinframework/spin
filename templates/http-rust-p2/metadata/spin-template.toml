@@ -1,0 +1,13 @@
+manifest_version = "1"
+id = "http-rust"
+description = "WASI Preview 2 HTTP request handler using Rust"
+tags = ["http", "rust"]
+
+[add_component]
+skip_files = ["spin.toml"]
+[add_component.snippets]
+component = "component.txt"
+
+[parameters]
+project-description = { type = "string",  prompt = "Description", default = "" }
+http-path = { type = "string", prompt = "HTTP path", default = "/...", pattern = "^/\\S*$" }
