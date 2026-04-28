@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::{Context, ensure};
-use rustls::client::danger::ServerCertVerifier;
+use rustls::client::{WantsClientCert, danger::ServerCertVerifier};
 
 use crate::runtime_config::{ClientCertRuntimeConfig, ClientTlsRuntimeConfig};
 
@@ -114,36 +114,32 @@ impl TlsClientConfig {
                 .cloned()
                 .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
 
-            let verifier: Arc<dyn ServerCertVerifier> = if root_certificates.is_empty() {
-                Arc::new(
-                    rustls_platform_verifier::Verifier::new(crypto_provider.clone())
-                        .context("failed to initialize platform certificate verifier")?,
-                )
+            let verifier_result = if root_certificates.is_empty() {
+                rustls_platform_verifier::Verifier::new(crypto_provider.clone())
+                    .map(|v| Arc::new(v) as Arc<dyn ServerCertVerifier>)
             } else {
-                Arc::new(
-                    rustls_platform_verifier::Verifier::new_with_extra_roots(
-                        root_certificates,
-                        crypto_provider.clone(),
-                    )
-                    .context(
-                        "failed to initialize platform certificate verifier with extra roots",
-                    )?,
+                rustls_platform_verifier::Verifier::new_with_extra_roots(
+                    root_certificates.clone(),
+                    crypto_provider.clone(),
                 )
+                .map(|v| Arc::new(v) as Arc<dyn ServerCertVerifier>)
             };
 
-            rustls::ClientConfig::builder_with_provider(crypto_provider)
-                .with_safe_default_protocol_versions()?
-                .dangerous()
-                .with_custom_certificate_verifier(verifier)
+            match verifier_result {
+                Ok(verifier) => rustls::ClientConfig::builder_with_provider(crypto_provider)
+                    .with_safe_default_protocol_versions()?
+                    .dangerous()
+                    .with_custom_certificate_verifier(verifier),
+                Err(err) if use_webpki_roots => {
+                    // Fall back to webpki roots if platform verifier creation failed
+                    Self::builder_with_root_store(use_webpki_roots, root_certificates)?
+                }
+                Err(err) => {
+                    return Err(err).context("failed to initialize platform certificate verifier");
+                }
+            }
         } else {
-            let mut root_store = rustls::RootCertStore::empty();
-            if use_webpki_roots {
-                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            }
-            for cert in root_certificates {
-                root_store.add(cert)?;
-            }
-            rustls::ClientConfig::builder().with_root_certificates(root_store)
+            Self::builder_with_root_store(use_webpki_roots, root_certificates)?
         };
 
         let client_config = if let Some(ClientCertRuntimeConfig {
@@ -156,6 +152,20 @@ impl TlsClientConfig {
             builder.with_no_client_auth()
         };
         Ok(Self(client_config.into()))
+    }
+
+    fn builder_with_root_store(
+        use_webpki_roots: bool,
+        root_certificates: Vec<rustls_pki_types::CertificateDer<'static>>,
+    ) -> anyhow::Result<rustls::ConfigBuilder<rustls::ClientConfig, WantsClientCert>> {
+        let mut root_store = rustls::RootCertStore::empty();
+        if use_webpki_roots {
+            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        }
+        for cert in root_certificates {
+            root_store.add(cert)?;
+        }
+        Ok(rustls::ClientConfig::builder().with_root_certificates(root_store))
     }
 
     /// Returns the inner [`rustls::ClientConfig`] for consumption by rustls APIs.
