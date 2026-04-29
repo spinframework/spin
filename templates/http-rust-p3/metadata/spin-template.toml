@@ -1,6 +1,6 @@
 manifest_version = "1"
-id = "http-rust-p2"
-description = "HTTP request handler compatible with Spin 3.x hosts"
+id = "http-rust-p3"
+description = "HTTP request handler compatible with Spin 4.x hosts"
 tags = ["http", "rust"]
 
 [add_component]
