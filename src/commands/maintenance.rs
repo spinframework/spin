@@ -9,6 +9,8 @@ pub enum MaintenanceCommands {
     GenerateReference(GenerateReference),
     /// Generate JSON schema for application manifest.
     GenerateManifestSchema(GenerateSchema),
+    /// Generate shell completions. Requires the COMPLETE environment variable to be set.
+    GenerateCompletions,
 }
 
 impl MaintenanceCommands {
@@ -16,6 +18,7 @@ impl MaintenanceCommands {
         match self {
             MaintenanceCommands::GenerateReference(cmd) => cmd.run().await,
             MaintenanceCommands::GenerateManifestSchema(cmd) => cmd.run().await,
+            MaintenanceCommands::GenerateCompletions => GenerateCompletions::run().await,
         }
     }
 }
@@ -146,4 +149,62 @@ fn write(output: &Option<PathBuf>, text: &str) -> anyhow::Result<()> {
         None => println!("{text}"),
     }
     Ok(())
+}
+
+#[derive(Parser, Debug)]
+pub struct GenerateCompletions;
+
+impl GenerateCompletions {
+    async fn run() -> anyhow::Result<()> {
+        if std::env::var_os("COMPLETE").is_none() {
+            anyhow::bail!(
+                "Set the COMPLETE environment variable to the name of your shell while generating completions."
+            );
+        }
+
+        let env = clap_complete::env::CompleteEnv::with_factory(TheRealSpinApp::command);
+        env.complete();
+
+        Ok(())
+    }
+}
+
+#[derive(Parser)]
+#[clap(
+    name = "spin",
+    styles = spin_common::cli::CLAP_STYLES,
+    // Sort subcommands
+    next_display_order = None,
+)]
+#[expect(clippy::large_enum_variant)]
+enum TheRealSpinApp {
+    #[clap(subcommand, alias = "template")]
+    Templates(crate::TemplateCommands),
+    #[clap(alias = "n")]
+    New(crate::NewCommand),
+    #[clap(alias = "a")]
+    Add(crate::AddCommand),
+    #[clap(alias = "u")]
+    Up(crate::UpCommandInner),
+    // acts as a cross-level subcommand shortcut -> `spin cloud deploy`
+    #[clap(alias = "d")]
+    Deploy(crate::DeployCommand),
+    // acts as a cross-level subcommand shortcut -> `spin cloud login`
+    Login(crate::LoginCommand),
+    #[clap(subcommand, alias = "oci")]
+    Registry(crate::RegistryCommands),
+    #[clap(alias = "b")]
+    Build(crate::BuildCommand),
+    #[clap(subcommand, alias = "plugin")]
+    Plugins(crate::PluginCommands),
+    #[clap(subcommand, hide = true)]
+    Trigger(crate::TriggerCommands),
+    #[clap(external_subcommand)]
+    #[allow(dead_code)]
+    External(Vec<String>),
+    #[clap(alias = "w")]
+    Watch(crate::WatchCommand),
+    Doctor(crate::DoctorCommand),
+    #[clap(subcommand, hide = true)]
+    Maintenance(MaintenanceCommands),
 }
