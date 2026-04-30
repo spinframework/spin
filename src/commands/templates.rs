@@ -163,6 +163,7 @@ impl Install {
     fn print_installed_templates(&self, installation_results: &InstallationResults) {
         let templates = &installation_results.installed;
         let skipped = &installation_results.skipped;
+        let removed = &installation_results.removed;
 
         if templates.is_empty() && skipped.is_empty() {
             println!("The specified source contained no templates");
@@ -190,6 +191,24 @@ impl Install {
 
                 for (id, reason) in skipped {
                     table.add_row(vec![id.clone(), skipped_reason_text(reason)]);
+                }
+
+                println!();
+                println!("{table}");
+            }
+            if !removed.is_empty() {
+                println!();
+                println!(
+                    "Removed {} templates no longer in repository",
+                    removed.len()
+                );
+
+                let mut table = Table::new();
+                table.set_header(vec!["Name"]);
+                table.load_preset(comfy_table::presets::ASCII_BORDERS_ONLY_CONDENSED);
+
+                for id in removed {
+                    table.add_row(vec![id.clone()]);
                 }
 
                 println!();
@@ -356,6 +375,7 @@ impl Upgrade {
 
     fn print_upgrade_summary(&self, summary: &UpgradeSummary) {
         let templates = &summary.upgraded;
+        let removed = &summary.removed;
         let errors = &summary.errored_repos;
 
         if templates.is_empty() {
@@ -376,6 +396,25 @@ impl Upgrade {
         }
 
         println!();
+
+        if !removed.is_empty() {
+            println!(
+                "Removed {} template(s) no longer in repository/ies",
+                removed.len()
+            );
+
+            let mut table = Table::new();
+            table.set_header(vec!["Name"]);
+            table.load_preset(comfy_table::presets::ASCII_BORDERS_ONLY_CONDENSED);
+
+            for id in removed {
+                table.add_row(vec![id.clone()]);
+            }
+
+            println!();
+            println!("{table}");
+            println!();
+        }
 
         if !errors.is_empty() {
             // Thanks English
@@ -440,6 +479,7 @@ fn elements_at<T>(source: Vec<T>, indexes: Vec<usize>) -> Vec<T> {
 
 struct UpgradeSummary {
     upgraded: Vec<Template>,
+    removed: Vec<String>,
     errored_repos: Vec<(String, String)>,
 }
 
@@ -447,6 +487,7 @@ impl UpgradeSummary {
     fn new() -> Self {
         Self {
             upgraded: vec![],
+            removed: vec![],
             errored_repos: vec![],
         }
     }
@@ -457,7 +498,10 @@ impl UpgradeSummary {
         installation_results: anyhow::Result<InstallationResults>,
     ) {
         match installation_results {
-            Ok(list) => self.upgraded.extend(list.installed),
+            Ok(list) => {
+                self.upgraded.extend(list.installed);
+                self.removed.extend(list.removed);
+            }
             Err(e) => self.errored_repos.push((url.to_owned(), e.to_string())),
         }
     }
@@ -611,6 +655,9 @@ fn skipped_reason_text(reason: &SkippedReason) -> String {
     match reason {
         SkippedReason::AlreadyExists => "Already exists".to_owned(),
         SkippedReason::InvalidManifest(msg) => format!("Template load error: {msg}"),
+        SkippedReason::CouldNotRemove => {
+            "No longer exists in source, but could not uninstall".to_owned()
+        }
     }
 }
 
