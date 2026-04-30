@@ -257,6 +257,11 @@ impl Template {
         }
     }
 
+    pub(crate) fn is_from_source_repo(&self, source_repo: &url::Url) -> bool {
+        self.source_repo()
+            .is_some_and(|r| r == source_repo.as_str())
+    }
+
     /// A human-readable description of where the template was installed
     /// from.
     pub fn installed_from_or_empty(&self) -> &str {
