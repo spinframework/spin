@@ -1,7 +1,6 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use anyhow::{Context, ensure};
-use rustls::client::danger::ServerCertVerifier;
 
 use crate::runtime_config::{ClientCertRuntimeConfig, ClientTlsRuntimeConfig};
 
@@ -38,9 +37,9 @@ impl TlsClientConfigs {
                 "client TLS 'hosts' list may not be empty"
             );
             let tls_client_config = TlsClientConfig::new(
-                root_certificates,
-                use_webpki_roots,
                 use_platform_roots,
+                use_webpki_roots,
+                root_certificates,
                 client_cert,
             )
             .context("error building TLS client config")?;
@@ -104,46 +103,37 @@ pub struct TlsClientConfig(Arc<rustls::ClientConfig>);
 
 impl TlsClientConfig {
     fn new(
-        root_certificates: Vec<rustls_pki_types::CertificateDer<'static>>,
-        use_webpki_roots: bool,
         use_platform_roots: bool,
+        use_webpki_roots: bool,
+        root_certificates: Vec<rustls_pki_types::CertificateDer<'static>>,
         client_cert: Option<ClientCertRuntimeConfig>,
     ) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            use_platform_roots || use_webpki_roots || !root_certificates.is_empty(),
+            "at least one of 'use_platform_roots', 'use_webpki_roots', or 'root_certificates' must be set"
+        );
+
+        let mut extra_roots: Box<dyn Iterator<Item = _>> = Box::new(root_certificates.into_iter());
+        if use_webpki_roots {
+            extra_roots = Box::new(
+                extra_roots.chain(webpki_root_certs::TLS_SERVER_ROOT_CERTS.iter().cloned()),
+            );
+        }
+
+        let builder = rustls::ClientConfig::builder();
         let builder = if use_platform_roots {
-            let crypto_provider = rustls::crypto::CryptoProvider::get_default()
-                .cloned()
-                .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
-
-            let verifier: Arc<dyn ServerCertVerifier> = if root_certificates.is_empty() {
-                Arc::new(
-                    rustls_platform_verifier::Verifier::new(crypto_provider.clone())
-                        .context("failed to initialize platform certificate verifier")?,
-                )
-            } else {
-                Arc::new(
-                    rustls_platform_verifier::Verifier::new_with_extra_roots(
-                        root_certificates,
-                        crypto_provider.clone(),
-                    )
-                    .context(
-                        "failed to initialize platform certificate verifier with extra roots",
-                    )?,
-                )
-            };
-
-            rustls::ClientConfig::builder_with_provider(crypto_provider)
-                .with_safe_default_protocol_versions()?
+            let verifier = rustls_platform_verifier::Verifier::new_with_extra_roots(
+                extra_roots,
+                builder.crypto_provider().clone(),
+            )
+            .context("failed to initialize platform certificate verifier")?;
+            builder
                 .dangerous()
-                .with_custom_certificate_verifier(verifier)
+                .with_custom_certificate_verifier(Arc::new(verifier))
         } else {
             let mut root_store = rustls::RootCertStore::empty();
-            if use_webpki_roots {
-                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            }
-            for cert in root_certificates {
-                root_store.add(cert)?;
-            }
-            rustls::ClientConfig::builder().with_root_certificates(root_store)
+            extra_roots.try_for_each(|cert| root_store.add(cert))?;
+            builder.with_root_certificates(root_store)
         };
 
         let client_config = if let Some(ClientCertRuntimeConfig {
@@ -174,7 +164,7 @@ impl Deref for TlsClientConfig {
 
 impl Default for TlsClientConfig {
     fn default() -> Self {
-        Self::new(vec![], false, true, None).expect("default client config should be valid")
+        Self::new(true, false, vec![], None).expect("default client config should be valid")
     }
 }
 
@@ -214,7 +204,7 @@ mod tests {
             hosts: vec!["test-host".into()],
             root_certificates: vec![],
             use_platform_roots: false,
-            use_webpki_roots: false,
+            use_webpki_roots: true,
             client_cert: None,
         }])?;
         let config = configs.get_tls_client_config("test-component", "test-host");
