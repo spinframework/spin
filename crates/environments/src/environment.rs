@@ -10,6 +10,7 @@ mod env_loader;
 mod lockfile;
 
 use definition::WorldName;
+pub use env_loader::load_environment_def;
 
 use crate::Targets;
 

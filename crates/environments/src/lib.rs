@@ -5,6 +5,7 @@ use anyhow::{Context, anyhow};
 mod environment;
 mod loader;
 
+pub use environment::load_environment_def;
 use environment::{CandidateWorld, CandidateWorlds, TargetEnvironment, TriggerType};
 pub use loader::ApplicationToValidate;
 use loader::ComponentToValidate;

@@ -75,6 +75,11 @@ pub struct TemplateNewCommandCore {
 /// Scaffold a new application based on a template.
 #[derive(Parser, Debug)]
 pub struct NewCommand {
+    /// The Spin platform or runtime for which you want to develop the application.
+    /// If present, Spin will offer only templates tailored for that environment.
+    #[clap(long, short = 'E')]
+    target_environment: Option<String>,
+
     #[clap(flatten)]
     options: TemplateNewCommandCore,
 }
@@ -96,7 +101,12 @@ pub struct AddCommand {
 
 impl NewCommand {
     pub async fn run(&self) -> Result<()> {
-        self.options.run(TemplateVariantInfo::NewApplication).await
+        self.options
+            .run(
+                self.target_environment.as_ref(),
+                TemplateVariantInfo::NewApplication,
+            )
+            .await
     }
 }
 
@@ -122,15 +132,22 @@ impl AddCommand {
             );
         }
         self.options
-            .run(TemplateVariantInfo::AddComponent { manifest_path })
+            .run(
+                None, /* TODO: extract from manifest? */
+                TemplateVariantInfo::AddComponent { manifest_path },
+            )
             .await
     }
 }
 
 impl TemplateNewCommandCore {
-    pub async fn run(&self, variant: TemplateVariantInfo) -> Result<()> {
-        let template_manager = TemplateManager::try_default()
-            .context("Failed to construct template directory path")?;
+    pub async fn run(
+        &self,
+        target_environment: Option<&String>,
+        variant: TemplateVariantInfo,
+    ) -> Result<()> {
+        let (template_manager, suggested_plugins) =
+            env_templates_and_plugins(target_environment).await?;
 
         let (name, template_id) = self.resolve_name_template_syntax(&template_manager, &variant)?;
 
@@ -192,10 +209,13 @@ impl TemplateNewCommandCore {
         let run = template.run(options);
 
         if std::io::stderr().is_terminal() {
-            run.interactive().await
+            run.interactive().await?;
+            _ = suggest_plugins(&suggested_plugins).await;
         } else {
-            run.silent().await
+            run.silent().await?;
         }
+
+        Ok(())
     }
 
     // Try to guess if the user is using v1 or v2 syntax, and fix things up so
@@ -247,6 +267,46 @@ impl TemplateNewCommandCore {
         };
         Ok((name, template_id))
     }
+}
+
+async fn env_templates_and_plugins(
+    target_environment: Option<&String>,
+) -> anyhow::Result<(TemplateManager, Vec<String>)> {
+    Ok(match target_environment {
+        Some(env) => {
+            //   - resolve the TE
+            let env_ref = spin_manifest::schema::v2::TargetEnvironmentRef::File {
+                path: PathBuf::from(env),
+            };
+            let (env_name, env_def, _) =
+                spin_environments::load_environment_def(&env_ref, &std::env::current_dir()?)
+                    .await?;
+            //   - create a TM for it
+            let template_manager = TemplateManager::for_environment(&env_name)?;
+            //   - install the templates to that TM
+            let env_templates = env_def.templates();
+            if let Some(env_templates) = env_templates {
+                let source = spin_templates::TemplateSource::try_from_git(
+                    env_templates.url(),
+                    env_templates.tag(),
+                    crate::build_info::SPIN_VERSION,
+                )?;
+                template_manager
+                    .install(
+                        &source,
+                        &spin_templates::InstallOptions::default().update(true),
+                        &DiscardingReporter,
+                    )
+                    .await?;
+            }
+            (template_manager, env_def.plugins().to_vec())
+        }
+        None => {
+            let template_manager = TemplateManager::try_default()
+                .context("Failed to construct template directory path")?;
+            (template_manager, vec![])
+        }
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -394,6 +454,90 @@ fn validate_name(name: &str) -> Result<String, String> {
     Err(msg)
 }
 
+async fn suggest_plugins(plugins: &[String]) {
+    let Ok(plugin_manager) = spin_plugins::manager::PluginManager::try_default() else {
+        return;
+    };
+    _ = plugin_manager.update().await;
+
+    let plugins = plugins
+        .iter()
+        .filter(|p| !plugin_manager.is_installed(p))
+        .collect::<Vec<_>>();
+
+    match plugins.len() {
+        0 => {}
+        1 => prompt_install_one_plugin(&plugin_manager, plugins[0]).await,
+        _ => prompt_install_multiple_plugins(plugin_manager, plugins).await,
+    }
+}
+
+async fn prompt_install_one_plugin(plugin_manager: &spin_plugins::PluginManager, plugin: &str) {
+    eprintln!("The {plugin} plugin is recommended for working with your target environment.",);
+    let should_install = dialoguer::Confirm::new()
+        .with_prompt("Would you like to install it now?")
+        .default(false)
+        .interact_opt()
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    if should_install {
+        if plugin_manager
+            .install_latest(plugin, crate::build_info::SPIN_VERSION)
+            .await
+            .is_err()
+        {
+            eprintln!(
+                "Plugin installation failed. You can try manually using `spin plugins install -E`."
+            );
+        }
+    } else {
+        eprintln!(
+            "You can review and install the recommended plugins using `spin plugins` with the `-E` option"
+        );
+    }
+}
+
+async fn prompt_install_multiple_plugins(
+    plugin_manager: spin_plugins::PluginManager,
+    plugins: Vec<&String>,
+) {
+    eprintln!("The following plugins are recommended for working with your target environment.");
+    eprintln!("Use arrow keys to move between them and Space to select one for install.");
+    let chosen = dialoguer::MultiSelect::new()
+        .items(&plugins)
+        .interact_opt()
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    if chosen.is_empty() {
+        eprintln!(
+            "You can review and install the recommended plugins using `spin plugins` with the `-E` option"
+        );
+    } else {
+        let chosen = chosen
+            .into_iter()
+            .map(|index| plugins[index])
+            .collect::<Vec<_>>();
+        for plugin in &chosen {
+            if plugin_manager
+                .install_latest(plugin, crate::build_info::SPIN_VERSION)
+                .await
+                .is_err()
+            {
+                eprintln!(
+                    "Plugin `{plugin}` installation failed. You can try manually using `spin plugins install -E`."
+                );
+            }
+        }
+        if chosen.len() < plugins.len() {
+            eprintln!(
+                "You can review and install unchosen recommanded plugins using `spin plugins` with the `-E` option"
+            );
+        }
+    }
+}
+
 mod completions {
     use super::*;
 
@@ -432,6 +576,15 @@ mod completions {
 
         let h = tokio::runtime::Handle::current();
         tokio::task::block_in_place(move || h.block_on(fut))
+    }
+}
+
+struct DiscardingReporter;
+
+impl spin_templates::ProgressReporter for DiscardingReporter {
+    fn report(&self, _: impl AsRef<str>) {
+        // Commit it then to the flames: for it can contain nothing but
+        // sophistry and illusion.
     }
 }
 

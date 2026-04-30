@@ -130,6 +130,24 @@ impl PluginManager {
         Ok(plugin_manifest.name())
     }
 
+    /// Installs the latest (default) version of the given plugin from the
+    /// catalogue, checking for compatbility against the given Spin version
+    /// (unfortunately we can't infer this because this is a crate not a command).
+    ///
+    /// This is roughly equivalent to `spin plugins install <name>` with no options.
+    pub async fn install_latest(&self, name: &str, spin_version: &str) -> anyhow::Result<String> {
+        let manifest_location = ManifestLocation::PluginsRepository(PluginRef {
+            name: name.to_string(),
+            version: None,
+        });
+        let plugin_manifest = self
+            .get_manifest(&manifest_location, false, spin_version, &None)
+            .await?;
+        let plugin_package = plugin_manifest.get_package().unwrap();
+        self.install(&plugin_manifest, plugin_package, &manifest_location, &None)
+            .await
+    }
+
     /// Uninstalls a plugin with a given name, removing it and it's manifest from the local plugins
     /// directory.
     /// Returns true if plugin was successfully uninstalled and false if plugin did not exist.

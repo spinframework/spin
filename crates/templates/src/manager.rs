@@ -116,6 +116,12 @@ impl TemplateManager {
         Ok(Self::new(store))
     }
 
+    /// Creates an environment-specific `TemplateManager` for the default install location.
+    pub fn for_environment(env: &str) -> anyhow::Result<Self> {
+        let store = TemplateStore::for_environment(env)?;
+        Ok(Self::new(store))
+    }
+
     pub(crate) fn new(store: TemplateStore) -> Self {
         Self { store }
     }
@@ -177,7 +183,7 @@ impl TemplateManager {
             }
         }
 
-        let mut to_remove = match &options.exists_behaviour {
+        let to_remove = match &options.exists_behaviour {
             ExistsBehaviour::Skip => vec![],
             ExistsBehaviour::Update => local_but_not_source.into_iter().collect::<Vec<_>>(),
         };
@@ -192,7 +198,7 @@ impl TemplateManager {
 
         installed.sort_by_key(|t| t.id().to_owned());
         skipped.sort_by_key(|(id, _)| id.clone());
-        to_remove.sort();
+        removed.sort();
 
         Ok(InstallationResults {
             installed,

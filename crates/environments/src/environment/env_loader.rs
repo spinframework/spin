@@ -2,6 +2,7 @@
 //! a fully realised collection of WIT packages with their worlds and
 //! mappings.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
@@ -72,31 +73,34 @@ async fn load_environment<'a>(
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<(&'a TargetEnvironmentRef, TargetEnvironment)> {
-    let env = match env_id {
-        TargetEnvironmentRef::Catalogue(id) => {
-            load_environment_from_catalogue(id, cache, lockfile).await
-        }
-        TargetEnvironmentRef::Http { url } => {
-            load_environment_from_http(url, cache, lockfile).await
-        }
-        TargetEnvironmentRef::File { path } => {
-            load_environment_from_file(app_dir.join(path), cache, lockfile).await
-        }
-    }?;
+    let (name, env_def, relative_to_dir) = load_environment_def(env_id, app_dir).await?;
+    let env =
+        load_environment_from_env_def(&name, env_def, &relative_to_dir, cache, lockfile).await?;
     Ok((env_id, env))
 }
 
-/// Loads a `TargetEnvironment` from the catalogue. If not found, the catalogue is refreshed
+pub async fn load_environment_def(
+    env_id: &TargetEnvironmentRef,
+    app_dir: &Path,
+) -> Result<(String, EnvironmentDefinition, Option<PathBuf>), anyhow::Error> {
+    match env_id {
+        TargetEnvironmentRef::Catalogue(id) => load_environment_def_from_catalogue(id).await,
+        TargetEnvironmentRef::Http { url } => load_environment_def_from_http(url).await,
+        TargetEnvironmentRef::File { path } => {
+            load_environment_def_from_file(app_dir.join(path)).await
+        }
+    }
+}
+
+/// Loads a `EnvironmentDefinition` from the catalogue. If not found, the catalogue is refreshed
 /// and retried. Any remote packages the environment references will be used
 /// from cache if available; otherwise, they will be saved to the cache, and the
 /// in-memory lockfile object updated.
-async fn load_environment_from_catalogue(
+async fn load_environment_def_from_catalogue(
     env_id: &str,
-    cache: &spin_loader::cache::Cache,
-    lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
-) -> anyhow::Result<TargetEnvironment> {
+) -> anyhow::Result<(String, EnvironmentDefinition, Option<PathBuf>)> {
     let catalogue = Catalogue::try_default()?;
-    let env_id = env_id.replace(':', "@"); // back compat
+    let env_id = env_id.replace(':', "@");
     let env_def = match catalogue.get(&env_id).await? {
         Some(env_def) => env_def,
         None => {
@@ -107,21 +111,18 @@ async fn load_environment_from_catalogue(
                 .with_context(|| anyhow!("Cannot load target environment '{env_id}'"))?
         }
     };
-    load_environment_from_env_def(&env_id, env_def, None, cache, lockfile).await
+    Ok((env_id, env_def, None))
 }
 
-/// Loads a `TargetEnvironment` from the environment definition at the given
+/// Loads a `EnvironmentDefinition` from the given
 /// URL. Any remote packages the environment references will be used
 /// from cache if available; otherwise, they will be saved to the cache, and the
 /// in-memory lockfile object updated.
-async fn load_environment_from_http(
+async fn load_environment_def_from_http(
     url: &str,
-    cache: &spin_loader::cache::Cache,
-    lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
-) -> anyhow::Result<TargetEnvironment> {
+) -> anyhow::Result<(String, EnvironmentDefinition, Option<PathBuf>)> {
     let toml_text = reqwest::get(url).await?.text().await?;
     let env_def: EnvironmentDefinition = toml::from_str(&toml_text)?;
-
     let url = url::Url::parse(url)?;
     let env_id = url
         .path_segments()
@@ -132,19 +133,17 @@ async fn load_environment_from_http(
         .rsplit_once('.')
         .map(|(stem, _)| stem)
         .unwrap_or(env_id);
-    load_environment_from_env_def(env_id, env_def, None, cache, lockfile).await
+    Ok((env_id.to_owned(), env_def, None))
 }
 
-/// Loads a `TargetEnvironment` from the given TOML file. Any remote packages
+/// Loads a `EnvironmentDefinition` from the given TOML file. Any remote packages
 /// it references will be used from cache if available; otherwise, they will be saved
 /// to the cache, and the in-memory lockfile object updated.
-async fn load_environment_from_file(
+async fn load_environment_def_from_file(
     path: impl AsRef<Path>,
-    cache: &spin_loader::cache::Cache,
-    lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
-) -> anyhow::Result<TargetEnvironment> {
+) -> Result<(String, EnvironmentDefinition, Option<PathBuf>), anyhow::Error> {
     let path = path.as_ref();
-    let env_def_dir = path.parent();
+    let env_def_dir = path.parent().map(|p| p.to_owned());
     let name = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -157,7 +156,7 @@ async fn load_environment_from_file(
         )
     })?;
     let env_def: EnvironmentDefinition = toml::from_str(&toml_text)?;
-    load_environment_from_env_def(&name, env_def, env_def_dir, cache, lockfile).await
+    Ok((name, env_def, env_def_dir))
 }
 
 /// Loads a `TargetEnvironment` from the given TOML text. Any remote packages
@@ -166,7 +165,7 @@ async fn load_environment_from_file(
 async fn load_environment_from_env_def(
     name: &str,
     env: EnvironmentDefinition,
-    relative_to_dir: Option<&Path>,
+    relative_to_dir: &Option<PathBuf>,
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<TargetEnvironment> {
@@ -205,7 +204,7 @@ async fn load_environment_from_env_def(
 
 async fn load_worlds(
     world_refs: &[WorldRef],
-    relative_to_dir: Option<&Path>,
+    relative_to_dir: &Option<PathBuf>,
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<CandidateWorlds> {
@@ -220,7 +219,7 @@ async fn load_worlds(
 
 async fn load_world(
     world_ref: &WorldRef,
-    relative_to_dir: Option<&Path>,
+    relative_to_dir: &Option<PathBuf>,
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<CandidateWorld> {
