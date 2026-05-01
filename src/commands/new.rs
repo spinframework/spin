@@ -30,15 +30,17 @@ pub struct TemplateNewCommandCore {
 
     /// The template from which to create the new application or component. Run `spin templates list` to see available options.
     #[clap(short = 't', long = "template")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::template_ids))]
     pub template_id: Option<String>,
 
     /// Filter templates to select by tags.
     #[clap(long = "tag", conflicts_with = "template_id")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::template_tags))]
     pub tags: Vec<String>,
 
     /// The directory in which to create the new application or component.
     /// The default is the name argument.
-    #[clap(short = 'o', long = "output", group = "location")]
+    #[clap(short = 'o', long = "output", group = "location", value_hint = clap::ValueHint::DirPath)]
     pub output_path: Option<PathBuf>,
 
     /// Create the new application or component in the current directory.
@@ -390,6 +392,47 @@ fn validate_name(name: &str) -> Result<String, String> {
         "Each segment of the name must start with a letter. {invalid_text} {verb} not start with a letter"
     );
     Err(msg)
+}
+
+mod completions {
+    use super::*;
+
+    pub fn template_ids() -> Vec<clap_complete::CompletionCandidate> {
+        let fut = async move {
+            let Ok(template_manager) = TemplateManager::try_default() else {
+                return vec![];
+            };
+            let Ok(list) = template_manager.list().await else {
+                return vec![];
+            };
+            list.templates
+                .iter()
+                .map(|t| clap_complete::CompletionCandidate::new(t.id()))
+                .collect::<Vec<_>>()
+        };
+
+        let h = tokio::runtime::Handle::current();
+        tokio::task::block_in_place(move || h.block_on(fut))
+    }
+
+    pub fn template_tags() -> Vec<clap_complete::CompletionCandidate> {
+        let fut = async move {
+            let Ok(template_manager) = TemplateManager::try_default() else {
+                return vec![];
+            };
+            let Ok(list) = template_manager.list().await else {
+                return vec![];
+            };
+            list.templates
+                .iter()
+                .flat_map(|t| t.tags())
+                .map(clap_complete::CompletionCandidate::new)
+                .collect::<Vec<_>>()
+        };
+
+        let h = tokio::runtime::Handle::current();
+        tokio::task::block_in_place(move || h.block_on(fut))
+    }
 }
 
 #[cfg(test)]
