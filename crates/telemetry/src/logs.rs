@@ -2,6 +2,7 @@ use std::{ascii::escape_default, sync::OnceLock};
 
 use anyhow::bail;
 use opentelemetry::logs::{LogRecord, Logger, LoggerProvider};
+use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry_sdk::{
     Resource,
     logs::{BatchConfigBuilder, SdkLogger, log_processor_with_async_runtime::BatchLogProcessor},
@@ -93,6 +94,7 @@ pub(crate) fn init_otel_logging_backend(spin_version: String) -> anyhow::Result<
             .build()?,
         OtlpProtocol::HttpProtobuf => opentelemetry_otlp::LogExporter::builder()
             .with_http()
+            .with_http_client(crate::rustls_reqwest_client()?)
             .build()?,
         OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
     };
