@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/spinframework/spin-go-sdk/v2/redis"
+	"github.com/spinframework/spin-go-sdk/v3/redis"
 )
 
 func init() {
