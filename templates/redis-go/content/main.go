@@ -14,3 +14,6 @@ func init() {
 		return nil
 	})
 }
+
+// main function must be included for the compiler but is not executed.
+func main() {}

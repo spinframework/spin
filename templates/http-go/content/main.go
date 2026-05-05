@@ -13,3 +13,6 @@ func init() {
 		fmt.Fprintln(w, "Hello World!")
 	})
 }
+
+// main function must be included for the compiler but is not executed.
+func main() {}
