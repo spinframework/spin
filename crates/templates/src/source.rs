@@ -93,6 +93,13 @@ impl TemplateSource {
             _ => None,
         }
     }
+
+    pub(crate) fn as_git_url(&self) -> Option<&Url> {
+        match self {
+            TemplateSource::Git(git) => Some(&git.url),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) struct LocalTemplateSource {

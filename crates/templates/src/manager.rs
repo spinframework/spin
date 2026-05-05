@@ -68,6 +68,8 @@ pub enum SkippedReason {
     AlreadyExists,
     /// The template was skipped because its manifest was missing or invalid.
     InvalidManifest(String),
+    /// The template was removed from the source but could not be removed locally.
+    CouldNotRemove,
 }
 
 /// The results of installing a set of templates.
@@ -76,6 +78,8 @@ pub struct InstallationResults {
     pub installed: Vec<Template>,
     /// The templates that were skipped during the install operation.
     pub skipped: Vec<(String, SkippedReason)>,
+    /// The templates that were removed during the install operation.
+    pub removed: Vec<String>,
 }
 
 /// The result of listing templates.
@@ -139,6 +143,21 @@ impl TemplateManager {
         let mut installed = vec![];
         let mut skipped = vec![];
 
+        let mut local_but_not_source = if let Some(upgrading_repo) = source.as_git_url() {
+            let local = self
+                .list()
+                .await
+                .map(|list| list.templates)
+                .unwrap_or_default();
+            local
+                .into_iter()
+                .filter(|t| t.is_from_source_repo(upgrading_repo))
+                .map(|t| t.id().to_string())
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+
         for template_dir in template_dirs {
             let install_result = self
                 .install_one(&template_dir, options, source, reporter)
@@ -147,15 +166,39 @@ impl TemplateManager {
                     format!("Failed to install template from {}", template_dir.display())
                 })?;
             match install_result {
-                InstallationResult::Installed(template) => installed.push(template),
-                InstallationResult::Skipped(id, reason) => skipped.push((id, reason)),
+                InstallationResult::Installed(template) => {
+                    local_but_not_source.remove(template.id());
+                    installed.push(template);
+                }
+                InstallationResult::Skipped(id, reason) => {
+                    local_but_not_source.remove(id.as_str());
+                    skipped.push((id, reason));
+                }
+            }
+        }
+
+        let mut to_remove = match &options.exists_behaviour {
+            ExistsBehaviour::Skip => vec![],
+            ExistsBehaviour::Update => local_but_not_source.into_iter().collect::<Vec<_>>(),
+        };
+        let mut removed = Vec::with_capacity(to_remove.len());
+
+        for id in &to_remove {
+            match self.uninstall(id).await {
+                Ok(_) => removed.push(id.clone()),
+                Err(_) => skipped.push((id.to_string(), SkippedReason::CouldNotRemove)),
             }
         }
 
         installed.sort_by_key(|t| t.id().to_owned());
         skipped.sort_by_key(|(id, _)| id.clone());
+        to_remove.sort();
 
-        Ok(InstallationResults { installed, skipped })
+        Ok(InstallationResults {
+            installed,
+            skipped,
+            removed,
+        })
     }
 
     async fn install_one(
