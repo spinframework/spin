@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::bail;
 use bytes::Bytes;
 use http::{Request, Uri};
-use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Empty};
+use http_body_util::{BodyExt, Empty, combinators::UnsyncBoxBody};
 use spin_common::{assert_matches, assert_not_matches};
 use spin_factor_outbound_http::{
     ErrorCode, HostFutureIncomingResponse, OutboundHttpFactor, SelfRequestOrigin,
@@ -16,18 +16,18 @@ use spin_factors::{RuntimeFactors, anyhow};
 use spin_factors_test::{TestEnvironment, toml};
 use spin_world::async_trait;
 use tracing::{
+    Subscriber,
     field::{Field, Visit},
     span::{self, Record},
-    Subscriber,
 };
 use tracing_subscriber::{
+    Layer,
     layer::{Context, SubscriberExt},
     registry::LookupSpan,
-    Layer,
 };
 use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi_http::p2::types::OutgoingRequestConfig;
-use wasmtime_wasi_http::p3::{bindings::http::types as p3_types, RequestOptions};
+use wasmtime_wasi_http::p3::{RequestOptions, bindings::http::types as p3_types};
 
 #[derive(RuntimeFactors)]
 struct TestFactors {
@@ -254,10 +254,10 @@ struct CaptureVisitor<'a> {
 
 impl Visit for CaptureVisitor<'_> {
     fn record_debug(&mut self, f: &Field, _v: &dyn std::fmt::Debug) {
-        self.records.lock().unwrap().push((
-            self.span_name.to_string(),
-            f.name().to_string(),
-        ));
+        self.records
+            .lock()
+            .unwrap()
+            .push((self.span_name.to_string(), f.name().to_string()));
     }
 }
 
@@ -275,7 +275,7 @@ fn fast_p3_options() -> Option<RequestOptions> {
     })
 }
 
-fn p3_noop_cleanup_fut(
-) -> Box<dyn std::future::Future<Output = Result<(), p3_types::ErrorCode>> + Send> {
+fn p3_noop_cleanup_fut()
+-> Box<dyn std::future::Future<Output = Result<(), p3_types::ErrorCode>> + Send> {
     Box::new(async { Ok(()) })
 }
