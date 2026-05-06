@@ -1,6 +1,6 @@
 manifest_version = "1"
 id = "redis-go"
-description = "Redis message handler using (Tiny)Go"
+description = "Redis message handler using Go"
 tags = ["redis", "go"]
 
 [parameters]
