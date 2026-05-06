@@ -6,6 +6,6 @@ component = "{{project-name | kebab_case}}"
 source = "{{ output-path }}/main.wasm"
 allowed_outbound_hosts = []
 [component.{{project-name | kebab_case}}.build]
-command = "tinygo build -target=wasip1 -gc=leaking -buildmode=c-shared -no-debug -o main.wasm ."
+command = "go tool componentize-go build"
 workdir = "{{ output-path }}"
 watch = ["**/*.go", "go.mod"]
