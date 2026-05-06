@@ -8821,6 +8821,7 @@ dependencies = [
  "tower-service",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
