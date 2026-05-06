@@ -214,12 +214,20 @@ fn match_catalogue_plugin(
     plugin_store: &PluginStore,
     plugin_name: &str,
 ) -> Option<spin_plugins::manifest::PluginManifest> {
+    use itertools::Itertools;
+
     let Ok(known) = plugin_store.catalogue_manifests() else {
         return None;
     };
-    known
+    let candidates = known
         .into_iter()
-        .find(|m| m.name() == plugin_name && m.has_compatible_package())
+        .filter(|m| m.name() == plugin_name && m.has_compatible_package());
+
+    // We care about getting the latest because it's the return of this that is used
+    // to show the plugin installation offer to the user (e.g. URL).
+    let mut candidates_latest_first =
+        candidates.sorted_by(|a, b| b.compare_versions(a).unwrap_or(std::cmp::Ordering::Equal));
+    candidates_latest_first.next()
 }
 
 async fn report_badger_result(badger: tokio::task::JoinHandle<BadgerChecker>) {
