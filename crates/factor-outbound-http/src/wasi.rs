@@ -197,40 +197,45 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
                 .and_then(|v| v.between_bytes_timeout)
                 .unwrap_or(DEFAULT_TIMEOUT),
         };
-        Box::new(async {
-            match request_sender
-                .send(
-                    request.map(|body| body.map_err(p3_to_p2_error_code).boxed_unsync()),
-                    config,
-                )
-                .await
-            {
-                Ok(IncomingResponse {
-                    resp,
-                    between_bytes_timeout,
-                    ..
-                }) => Ok((
-                    resp.map(|body| {
-                        BetweenBytesTimeoutBody {
-                            body,
-                            sleep: None,
-                            timeout: between_bytes_timeout,
+        Box::new(
+            async {
+                match request_sender
+                    .send(
+                        request.map(|body| body.map_err(p3_to_p2_error_code).boxed_unsync()),
+                        config,
+                    )
+                    .await
+                {
+                    Ok(IncomingResponse {
+                        resp,
+                        between_bytes_timeout,
+                        ..
+                    }) => Ok((
+                        resp.map(|body| {
+                            BetweenBytesTimeoutBody {
+                                body,
+                                sleep: None,
+                                timeout: between_bytes_timeout,
+                            }
+                            .boxed_unsync()
+                        }),
+                        Box::new(async {
+                            // TODO: Can we plumb connection errors through to here, or
+                            // will `hyper_util::client::legacy::Client` pass them all
+                            // via the response body?
+                            Ok(())
+                        }) as Box<dyn Future<Output = _> + Send>,
+                    )),
+                    Err(http_error) => match http_error.downcast() {
+                        Ok(error_code) => {
+                            Err(TrappableError::from(p2_to_p3_error_code(error_code)))
                         }
-                        .boxed_unsync()
-                    }),
-                    Box::new(async {
-                        // TODO: Can we plumb connection errors through to here, or
-                        // will `hyper_util::client::legacy::Client` pass them all
-                        // via the response body?
-                        Ok(())
-                    }) as Box<dyn Future<Output = _> + Send>,
-                )),
-                Err(http_error) => match http_error.downcast() {
-                    Ok(error_code) => Err(TrappableError::from(p2_to_p3_error_code(error_code))),
-                    Err(trap) => Err(TrappableError::trap(trap)),
-                },
+                        Err(trap) => Err(TrappableError::trap(trap)),
+                    },
+                }
             }
-        })
+            .in_current_span(),
+        )
     }
 }
 
