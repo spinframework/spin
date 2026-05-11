@@ -2375,6 +2375,7 @@ dependencies = [
  "hyper 1.8.1",
  "hyper-util",
  "rustls 0.23.37",
+ "rustls-native-certs 0.8.3",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.4",
@@ -4169,6 +4170,7 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls 0.23.37",
+ "rustls-native-certs 0.8.3",
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "serde",
@@ -5112,6 +5114,7 @@ dependencies = [
  "spin-factor-outbound-networking",
  "spin-factors",
  "spin-resource-table",
+ "spin-telemetry",
  "spin-world",
  "tokio",
  "tracing",
@@ -5139,7 +5142,7 @@ dependencies = [
  "spin-serde",
  "tracing",
  "url",
- "webpki-roots",
+ "webpki-root-certs",
 ]
 
 [[package]]
@@ -5164,6 +5167,7 @@ dependencies = [
  "spin-factors",
  "spin-locked-app",
  "spin-resource-table",
+ "spin-telemetry",
  "spin-wasi-async",
  "spin-world",
  "tokio",
@@ -5511,6 +5515,7 @@ dependencies = [
  "opentelemetry-appender-tracing",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "reqwest",
  "terminal",
  "tracing",
  "tracing-opentelemetry",
@@ -7128,9 +7133,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-root-certs"
-version = "1.0.6"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "804f18a4ac2676ffb4e8b5b5fa9ae38af06df08162314f96a68d2a363e21a8ca"
+checksum = "f31141ce3fc3e300ae89b78c0dd67f9708061d1d2eda54b8209346fd6be9a92c"
 dependencies = [
  "rustls-pki-types",
 ]

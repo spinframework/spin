@@ -1,7 +1,7 @@
 use crate::{
     SPIN_INTERNAL_COMMANDS,
     error::*,
-    lookup::PluginLookup,
+    lookup::PluginRef,
     manifest::{PluginManifest, PluginPackage, warn_unsupported_version},
     store::PluginStore,
 };
@@ -30,7 +30,7 @@ pub enum ManifestLocation {
     /// Plugin manifest should be pulled from a specific address.
     Remote(Url),
     /// Plugin manifest lives in the centralized plugins repository
-    PluginsRepository(PluginLookup),
+    PluginsRepository(PluginRef),
 }
 
 impl ManifestLocation {
@@ -61,7 +61,11 @@ pub(crate) enum RawInstallRecord {
     Local { file: PathBuf },
 }
 
-/// Provides accesses to functionality to inspect and manage the installation of plugins.
+/// The entry point for plugin functionality. Use this to list, install, and remove
+/// plugins, and to locate plugin binaries for execution.
+///
+/// PluginManager also provides access to the catalogue of available manifests via
+/// the `catalogue()` function. It also provides for synchronised catalogue updates.
 pub struct PluginManager {
     store: PluginStore,
 }
@@ -71,11 +75,6 @@ impl PluginManager {
     pub fn try_default() -> anyhow::Result<Self> {
         let store = PluginStore::try_default()?;
         Ok(Self { store })
-    }
-
-    /// Returns the underlying store object
-    pub fn store(&self) -> &PluginStore {
-        &self.store
     }
 
     /// Installs the Spin plugin with the given manifest If installing a plugin from the centralized
@@ -135,7 +134,7 @@ impl PluginManager {
     /// directory.
     /// Returns true if plugin was successfully uninstalled and false if plugin did not exist.
     pub fn uninstall(&self, plugin_name: &str) -> Result<bool> {
-        let plugin_store = self.store();
+        let plugin_store = &self.store;
         let manifest_file = plugin_store.installed_manifest_path(plugin_name);
         let exists = manifest_file.exists();
         if exists {
@@ -168,7 +167,7 @@ impl PluginManager {
         }
 
         // Disallow reinstalling identical plugins and downgrading unless permitted.
-        if let Ok(installed) = self.store.read_plugin_manifest(&plugin_manifest.name()) {
+        if let Ok(installed) = self.get_installed_manifest(&plugin_manifest.name()) {
             if &installed == plugin_manifest {
                 return Ok(InstallAction::NoAction {
                     name: plugin_manifest.name(),
@@ -251,28 +250,144 @@ impl PluginManager {
             }
             ManifestLocation::PluginsRepository(lookup) => {
                 lookup
-                    .resolve_manifest(
-                        self.store().get_plugins_directory(),
-                        skip_compatibility_check,
-                        spin_version,
-                    )
+                    .resolve_manifest(&self.catalogue(), skip_compatibility_check, spin_version)
                     .await?
             }
         };
         Ok(plugin_manifest)
     }
 
-    pub async fn update_lock(&self) -> PluginManagerUpdateLock {
+    /// Returns the PluginManifest for an installed plugin with a given name.
+    /// Looks up and parses the JSON plugin manifest file into object form.
+    pub fn get_installed_manifest(&self, plugin_name: &str) -> PluginLookupResult<PluginManifest> {
+        let manifest_path = self.store.installed_manifest_path(plugin_name);
+        tracing::info!("Reading plugin manifest from {}", manifest_path.display());
+        let manifest_file = File::open(manifest_path.clone()).map_err(|e| {
+            Error::NotFound(NotFoundError::new(
+                Some(plugin_name.to_string()),
+                manifest_path.display().to_string(),
+                e.to_string(),
+            ))
+        })?;
+        let manifest = serde_json::from_reader(manifest_file).map_err(|e| {
+            Error::InvalidManifest(InvalidManifestError::new(
+                Some(plugin_name.to_string()),
+                manifest_path.display().to_string(),
+                e.to_string(),
+            ))
+        })?;
+        Ok(manifest)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        let manifests_dir = self.store.installed_manifests_directory();
+        if !manifests_dir.exists() {
+            return true;
+        }
+        let Ok(mut rd) = manifests_dir.read_dir() else {
+            return true;
+        };
+        rd.next().is_none()
+    }
+
+    pub fn installed_plugins(&self) -> anyhow::Result<Vec<PluginManifest>> {
+        let manifests_dir = self.store.installed_manifests_directory();
+        let manifest_paths = crate::util::json_files_in(&manifests_dir);
+        let manifests = manifest_paths
+            .iter()
+            .filter_map(|path| crate::util::try_read_manifest_from(path))
+            .collect();
+        Ok(manifests)
+    }
+
+    pub async fn installed_plugins_latest_versions(
+        &self,
+        skip_compatibility_check: bool,
+        spin_version: &str,
+        auth_header_value: &Option<String>,
+    ) -> anyhow::Result<Vec<(PluginManifest, ManifestLocation)>> {
+        let mut plugins = vec![];
+
+        let manifests_dir = self.store.installed_manifests_directory();
+
+        for plugin in std::fs::read_dir(manifests_dir)? {
+            let path = plugin?.path();
+            let name = path
+                .file_stem()
+                .ok_or_else(|| anyhow!("No stem for path {}", path.display()))?
+                .to_str()
+                .ok_or_else(|| anyhow!("Cannot convert path {} stem to str", path.display()))?
+                .to_string();
+            let manifest_location =
+                ManifestLocation::PluginsRepository(PluginRef::new(&name, None));
+            let manifest = match self
+                .get_manifest(
+                    &manifest_location,
+                    skip_compatibility_check,
+                    spin_version,
+                    auth_header_value,
+                )
+                .await
+            {
+                Err(Error::NotFound(e)) => {
+                    tracing::info!("Could not upgrade plugin '{name}': {e:?}");
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+                Ok(m) => m,
+            };
+
+            plugins.push((manifest, manifest_location));
+        }
+
+        Ok(plugins)
+    }
+
+    pub fn is_installed(&self, plugin_name: &str) -> bool {
+        self.installed_plugins()
+            .unwrap_or_default()
+            .iter()
+            .any(|m| m.name() == plugin_name)
+    }
+
+    pub fn is_installed_exact(&self, manifest: &PluginManifest) -> bool {
+        match self.get_installed_manifest(&manifest.name()) {
+            Ok(m) => m.eq(manifest),
+            Err(_) => false,
+        }
+    }
+
+    pub async fn update(&self) -> Result<()> {
+        let mut locker = self.update_lock().await;
+        let guard = locker.lock_updates();
+        if guard.denied() {
+            anyhow::bail!("Another plugin update operation is already in progress");
+        }
+
+        let url = crate::catalogue::plugins_repo_url()?;
+        self.catalogue().fetch_from_remote(&url).await?;
+        Ok(())
+    }
+
+    async fn update_lock(&self) -> PluginManagerUpdateLock {
         let lock = self.update_lock_impl().await;
         PluginManagerUpdateLock::from(lock)
     }
 
     async fn update_lock_impl(&self) -> anyhow::Result<fd_lock::RwLock<tokio::fs::File>> {
-        let plugins_dir = self.store().get_plugins_directory();
+        let plugins_dir = self.store.get_plugins_directory();
         tokio::fs::create_dir_all(plugins_dir).await?;
         let file = tokio::fs::File::create(plugins_dir.join(".updatelock")).await?;
         let locker = fd_lock::RwLock::new(file);
         Ok(locker)
+    }
+
+    pub fn catalogue(&self) -> crate::Catalogue {
+        self.store.catalogue()
+    }
+
+    pub fn installed_binary_path(&self, plugin_name: &str) -> PathBuf {
+        self.store.installed_binary_path(plugin_name)
     }
 
     fn write_install_record(&self, plugin_name: &str, source: &ManifestLocation) {
@@ -338,18 +453,6 @@ pub enum InstallAction {
     Continue,
     /// No further action is required. This occurs when the plugin is already at the desired version.
     NoAction { name: String, version: String },
-}
-
-/// Gets the appropriate package for the running OS and Arch if exists
-pub fn get_package(plugin_manifest: &PluginManifest) -> Result<&PluginPackage> {
-    use std::env::consts::{ARCH, OS};
-    plugin_manifest
-        .packages
-        .iter()
-        .find(|p| p.os.rust_name() == OS && p.arch.rust_name() == ARCH)
-        .ok_or_else(|| {
-            anyhow!("This plugin does not support this OS ({OS}) or architecture ({ARCH}).")
-        })
 }
 
 async fn download_plugin(

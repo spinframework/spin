@@ -3,9 +3,9 @@ use crate::commands::plugins::{Install, update};
 use crate::opts::PLUGIN_OVERRIDE_COMPATIBILITY_CHECK_FLAG;
 use anyhow::{Result, anyhow};
 use spin_common::ui::quoted_path;
+use spin_plugins::PluginManager;
 use spin_plugins::{
-    PluginStore, badger::BadgerChecker, error::Error as PluginError,
-    manifest::warn_unsupported_version,
+    badger::BadgerChecker, error::Error as PluginError, manifest::warn_unsupported_version,
 };
 use std::io::{IsTerminal, stderr};
 use std::{collections::HashMap, env, process};
@@ -54,16 +54,16 @@ pub async fn execute_external_subcommand(
     cmd: clap::Command,
 ) -> anyhow::Result<()> {
     let (plugin_name, args, override_compatibility_check) = parse_subcommand(subcmd)?;
-    let plugin_store = PluginStore::try_default()?;
+    let plugin_manager = PluginManager::try_default()?;
     let plugin_version = ensure_plugin_available(
         &plugin_name,
-        &plugin_store,
+        &plugin_manager,
         cmd,
         override_compatibility_check,
     )
     .await?;
 
-    let binary = plugin_store.installed_binary_path(&plugin_name);
+    let binary = plugin_manager.installed_binary_path(&plugin_name);
     if !binary.exists() {
         return Err(anyhow!(
             "plugin executable {} is missing. Try uninstalling and installing the plugin '{}' again.",
@@ -111,11 +111,11 @@ fn set_kill_on_ctrl_c(child: &tokio::process::Child) {
 
 async fn ensure_plugin_available(
     plugin_name: &str,
-    plugin_store: &PluginStore,
+    plugin_manager: &PluginManager,
     cmd: clap::Command,
     override_compatibility_check: bool,
 ) -> anyhow::Result<Option<String>> {
-    let plugin_version = match plugin_store.read_plugin_manifest(plugin_name) {
+    let plugin_version = match plugin_manager.get_installed_manifest(plugin_name) {
         Ok(manifest) => {
             if let Err(e) =
                 warn_unsupported_version(&manifest, SPIN_VERSION, override_compatibility_check)
@@ -127,7 +127,7 @@ async fn ensure_plugin_available(
             Some(manifest.version().to_owned())
         }
         Err(PluginError::NotFound(e)) => {
-            consider_install(plugin_name, plugin_store, cmd, &e).await?
+            consider_install(plugin_name, plugin_manager, cmd, &e).await?
         }
         Err(e) => return Err(e.into()),
     };
@@ -136,7 +136,7 @@ async fn ensure_plugin_available(
 
 async fn consider_install(
     plugin_name: &str,
-    plugin_store: &PluginStore,
+    plugin_manager: &PluginManager,
     cmd: clap::Command,
     e: &spin_plugins::error::NotFoundError,
 ) -> anyhow::Result<Option<String>> {
@@ -158,9 +158,9 @@ async fn consider_install(
     }
 
     if stderr().is_terminal()
-        && let Some(plugin) = match_catalogue_plugin(plugin_store, plugin_name)
+        && let Some(plugin) = match_catalogue_plugin(plugin_manager, plugin_name)
     {
-        let package = spin_plugins::manager::get_package(&plugin)?;
+        let package = plugin.get_package()?;
         if offer_install(&plugin, package)? {
             let plugin_installer = installer_for(plugin_name);
             plugin_installer.run().await?;
@@ -211,12 +211,12 @@ fn installer_for(plugin_name: &str) -> Install {
 }
 
 fn match_catalogue_plugin(
-    plugin_store: &PluginStore,
+    plugin_manager: &PluginManager,
     plugin_name: &str,
 ) -> Option<spin_plugins::manifest::PluginManifest> {
     use itertools::Itertools;
 
-    let Ok(known) = plugin_store.catalogue_manifests() else {
+    let Ok(known) = plugin_manager.catalogue().manifests() else {
         return None;
     };
     let candidates = known

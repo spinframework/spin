@@ -188,10 +188,10 @@ fn plugin_help_entries() -> Vec<PluginHelpEntry> {
 }
 
 fn installed_plugin_help_entries() -> Vec<PluginHelpEntry> {
-    let Ok(manager) = spin_plugins::manager::PluginManager::try_default() else {
+    let Ok(manager) = spin_plugins::PluginManager::try_default() else {
         return vec![];
     };
-    let Ok(manifests) = manager.store().installed_manifests() else {
+    let Ok(manifests) = manager.installed_plugins() else {
         return vec![];
     };
 

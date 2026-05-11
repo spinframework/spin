@@ -168,18 +168,15 @@ impl BadgerEvaluator {
     }
 
     async fn available_upgrades(&self) -> anyhow::Result<AvailableUpgrades> {
-        let store = self.plugin_manager.store();
+        let catalogue = self.plugin_manager.catalogue();
 
         let latest_version = {
-            let latest_lookup = crate::lookup::PluginLookup::new(&self.plugin_name, None);
-            let latest_manifest = latest_lookup
-                .resolve_manifest_exact(store.get_plugins_directory())
-                .await
-                .ok();
+            let latest_lookup = crate::lookup::PluginRef::new(&self.plugin_name, None);
+            let latest_manifest = latest_lookup.resolve_manifest_exact(&catalogue).await.ok();
             latest_manifest.and_then(|m| semver::Version::parse(m.version()).ok())
         };
 
-        let manifests = store.catalogue_manifests()?;
+        let manifests = catalogue.manifests()?;
         let relevant_manifests = manifests
             .into_iter()
             .filter(|m| m.name() == self.plugin_name);

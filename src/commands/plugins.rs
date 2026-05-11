@@ -1,16 +1,15 @@
 // Needed for clap derive: https://github.com/clap-rs/clap/issues/4857
 #![allow(clippy::almost_swapped)]
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use semver::Version;
 use spin_plugins::{
-    error::Error,
-    lookup::{PluginLookup, fetch_plugins_repo, plugins_repo_url},
-    manager::{self, InstallAction, ManifestLocation, PluginManager},
+    PluginManager, PluginRef,
+    manager::{InstallAction, ManifestLocation},
     manifest::{PluginManifest, PluginPackage},
 };
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use url::Url;
 
 use crate::build_info::*;
@@ -127,7 +126,7 @@ impl Install {
             (Some(path), None, None) => ManifestLocation::Local(path.to_path_buf()),
             (None, Some(url), None) => ManifestLocation::Remote(url.clone()),
             (None, None, Some(name)) => {
-                ManifestLocation::PluginsRepository(PluginLookup::new(name, self.version.clone()))
+                ManifestLocation::PluginsRepository(PluginRef::new(name, self.version.clone()))
             }
             _ => {
                 return Err(anyhow::anyhow!(
@@ -261,31 +260,30 @@ impl Upgrade {
     /// the catalogue and prompts user to choose which ones to upgrade.
     pub async fn run(self) -> Result<()> {
         let manager = PluginManager::try_default()?;
-        let manifests_dir = manager.store().installed_manifests_directory();
 
         // Check if no plugins are currently installed
-        if !manifests_dir.exists() {
+        if manager.is_empty() {
             println!("No currently installed plugins to upgrade.");
             return Ok(());
         }
 
         if self.all {
-            self.upgrade_all(manifests_dir).await
+            self.upgrade_all(&manager).await
         } else if self.name.is_none()
             && self.local_manifest_src.is_none()
             && self.remote_manifest_src.is_none()
         {
             // Default behavior (multiselect)
-            self.upgrade_multiselect().await
+            self.upgrade_multiselect(&manager).await
         } else {
-            self.upgrade_one().await
+            self.upgrade_one(&manager).await
         }
     }
 
     // Multiselect plugin upgrade experience
-    async fn upgrade_multiselect(self) -> Result<()> {
-        let catalogue_plugins = list_catalogue_plugins().await?;
-        let installed_plugins = list_installed_plugins()?;
+    async fn upgrade_multiselect(self, manager: &PluginManager) -> Result<()> {
+        let catalogue_plugins = list_catalogue_plugins(manager).await?;
+        let installed_plugins = list_installed_plugins(manager)?;
 
         let installed_in_catalogue: Vec<_> = installed_plugins
             .into_iter()
@@ -306,10 +304,8 @@ impl Upgrade {
         // Getting only eligible plugins to upgrade
         for installed_plugin in installed_in_catalogue {
             let manager = PluginManager::try_default()?;
-            let manifest_location = ManifestLocation::PluginsRepository(PluginLookup::new(
-                &installed_plugin.name,
-                None,
-            ));
+            let manifest_location =
+                ManifestLocation::PluginsRepository(PluginRef::new(&installed_plugin.name, None));
 
             // Attempt to get the manifest to check eligibility to upgrade
             if let Ok(manifest) = manager
@@ -366,10 +362,8 @@ impl Upgrade {
         // Upgrade plugins selected
         for (installed_plugin, manifest) in plugins_selected {
             let manager = PluginManager::try_default()?;
-            let manifest_location = ManifestLocation::PluginsRepository(PluginLookup::new(
-                &installed_plugin.name,
-                None,
-            ));
+            let manifest_location =
+                ManifestLocation::PluginsRepository(PluginRef::new(&installed_plugin.name, None));
 
             try_install(
                 &manifest,
@@ -387,37 +381,18 @@ impl Upgrade {
     }
 
     // Install the latest of all currently installed plugins
-    async fn upgrade_all(&self, manifests_dir: impl AsRef<Path>) -> Result<()> {
-        let manager = PluginManager::try_default()?;
-        for plugin in std::fs::read_dir(manifests_dir)? {
-            let path = plugin?.path();
-            let name = path
-                .file_stem()
-                .ok_or_else(|| anyhow!("No stem for path {}", path.display()))?
-                .to_str()
-                .ok_or_else(|| anyhow!("Cannot convert path {} stem to str", path.display()))?
-                .to_string();
-            let manifest_location =
-                ManifestLocation::PluginsRepository(PluginLookup::new(&name, None));
-            let manifest = match manager
-                .get_manifest(
-                    &manifest_location,
-                    self.override_compatibility_check,
-                    SPIN_VERSION,
-                    &self.auth_header_value,
-                )
-                .await
-            {
-                Err(Error::NotFound(e)) => {
-                    tracing::info!("Could not upgrade plugin '{name}': {e:?}");
-                    continue;
-                }
-                Err(e) => return Err(e.into()),
-                Ok(m) => m,
-            };
+    async fn upgrade_all(&self, manager: &PluginManager) -> Result<()> {
+        for (manifest, manifest_location) in manager
+            .installed_plugins_latest_versions(
+                self.override_compatibility_check,
+                SPIN_VERSION,
+                &self.auth_header_value,
+            )
+            .await?
+        {
             try_install(
                 &manifest,
-                &manager,
+                manager,
                 self.yes_to_all,
                 self.override_compatibility_check,
                 self.downgrade,
@@ -429,12 +404,11 @@ impl Upgrade {
         Ok(())
     }
 
-    async fn upgrade_one(self) -> Result<()> {
-        let manager = PluginManager::try_default()?;
+    async fn upgrade_one(self, manager: &PluginManager) -> Result<()> {
         let manifest_location = match (self.local_manifest_src, self.remote_manifest_src) {
             (Some(path), None) => ManifestLocation::Local(path),
             (None, Some(url)) => ManifestLocation::Remote(url),
-            _ => ManifestLocation::PluginsRepository(PluginLookup::new(
+            _ => ManifestLocation::PluginsRepository(PluginRef::new(
                 self.name
                     .as_ref()
                     .context("plugin name is required for upgrades")?,
@@ -451,7 +425,7 @@ impl Upgrade {
             .await?;
         try_install(
             &manifest,
-            &manager,
+            manager,
             self.yes_to_all,
             self.override_compatibility_check,
             self.downgrade,
@@ -475,7 +449,7 @@ impl Show {
         let manager = PluginManager::try_default()?;
         let manifest = manager
             .get_manifest(
-                &ManifestLocation::PluginsRepository(PluginLookup::new(&self.name, None)),
+                &ManifestLocation::PluginsRepository(PluginRef::new(&self.name, None)),
                 false,
                 SPIN_VERSION,
                 &None,
@@ -506,10 +480,8 @@ fn is_potential_upgrade(current: &PluginManifest, candidate: &PluginManifest) ->
 
 // Make list_installed_plugins and list_catalogue_plugins into 'free' module-level functions
 // in order to call them in Upgrade::upgrade_multiselect
-fn list_installed_plugins() -> Result<Vec<PluginDescriptor>> {
-    let manager = PluginManager::try_default()?;
-    let store = manager.store();
-    let manifests = store.installed_manifests()?;
+fn list_installed_plugins(manager: &PluginManager) -> Result<Vec<PluginDescriptor>> {
+    let manifests = manager.installed_plugins()?;
     let descriptors = manifests
         .into_iter()
         .map(|m| PluginDescriptor {
@@ -524,20 +496,19 @@ fn list_installed_plugins() -> Result<Vec<PluginDescriptor>> {
     Ok(descriptors)
 }
 
-async fn list_catalogue_plugins() -> Result<Vec<PluginDescriptor>> {
+async fn list_catalogue_plugins(manager: &PluginManager) -> Result<Vec<PluginDescriptor>> {
     if update_silent().await.is_err() {
         terminal::warn!("Couldn't update plugins registry cache - using most recent");
     }
 
-    let manager = PluginManager::try_default()?;
-    let store = manager.store();
-    let manifests = store.catalogue_manifests();
+    let catalogue = manager.catalogue();
+    let manifests = catalogue.manifests();
     let descriptors = manifests?
         .into_iter()
         .map(|m| PluginDescriptor {
             name: m.name(),
             version: m.version().to_owned(),
-            installed: m.is_installed_in(store),
+            installed: manager.is_installed_exact(&m),
             compatibility: PluginCompatibility::for_current(&m),
             manifest: m,
             installed_version: None,
@@ -546,9 +517,11 @@ async fn list_catalogue_plugins() -> Result<Vec<PluginDescriptor>> {
     Ok(descriptors)
 }
 
-async fn list_catalogue_and_installed_plugins() -> Result<Vec<PluginDescriptor>> {
-    let catalogue = list_catalogue_plugins().await?;
-    let installed = list_installed_plugins()?;
+async fn list_catalogue_and_installed_plugins(
+    manager: &PluginManager,
+) -> Result<Vec<PluginDescriptor>> {
+    let catalogue = list_catalogue_plugins(manager).await?;
+    let installed = list_installed_plugins(manager)?;
     Ok(merge_plugin_lists(catalogue, installed))
 }
 
@@ -645,10 +618,12 @@ pub enum ListFormat {
 
 impl List {
     pub async fn run(self) -> Result<()> {
+        let manager = PluginManager::try_default()?;
+
         let mut plugins = if self.installed {
-            list_installed_plugins()
+            list_installed_plugins(&manager)
         } else {
-            list_catalogue_and_installed_plugins().await
+            list_catalogue_and_installed_plugins(&manager).await
         }?;
 
         if self.summary {
@@ -845,17 +820,7 @@ pub(crate) async fn update() -> Result<()> {
 
 pub(crate) async fn update_silent() -> Result<()> {
     let manager = PluginManager::try_default()?;
-
-    let mut locker = manager.update_lock().await;
-    let guard = locker.lock_updates();
-    if guard.denied() {
-        anyhow::bail!("Another plugin update operation is already in progress");
-    }
-
-    let plugins_dir = manager.store().get_plugins_directory();
-    let url = plugins_repo_url()?;
-    fetch_plugins_repo(&url, plugins_dir, true).await?;
-    Ok(())
+    manager.update().await
 }
 
 fn continue_to_install(
@@ -906,7 +871,7 @@ async fn try_install(
         return Ok(false);
     }
 
-    let package = manager::get_package(manifest)?;
+    let package = manifest.get_package()?;
     if continue_to_install(manifest, package, yes_to_all)? {
         let installed = manager
             .install(manifest, package, source, auth_header_value)
@@ -939,12 +904,12 @@ mod completions {
             return vec![];
         };
 
-        let Ok(catalogue_plugins) = plugin_manager.store().catalogue_manifests() else {
+        let Ok(catalogue_plugins) = plugin_manager.catalogue().manifests() else {
             return vec![];
         };
         let catalogue_names: HashSet<_> = catalogue_plugins.iter().map(|m| m.name()).collect();
 
-        let Ok(installed_plugins) = plugin_manager.store().installed_manifests() else {
+        let Ok(installed_plugins) = plugin_manager.installed_plugins() else {
             return vec![];
         };
         let installed_names: HashSet<_> = installed_plugins.iter().map(|m| m.name()).collect();
@@ -961,7 +926,7 @@ mod completions {
             return vec![];
         };
 
-        let Ok(installed_plugins) = plugin_manager.store().installed_manifests() else {
+        let Ok(installed_plugins) = plugin_manager.installed_plugins() else {
             return vec![];
         };
 
@@ -976,12 +941,12 @@ mod completions {
             return vec![];
         };
 
-        let Ok(catalogue_plugins) = plugin_manager.store().catalogue_manifests() else {
+        let Ok(catalogue_plugins) = plugin_manager.catalogue().manifests() else {
             return vec![];
         };
         let catalogue_names: HashSet<_> = catalogue_plugins.iter().map(|m| m.name()).collect();
 
-        let Ok(installed_plugins) = plugin_manager.store().installed_manifests() else {
+        let Ok(installed_plugins) = plugin_manager.installed_plugins() else {
             return vec![];
         };
         let installed_names: HashSet<_> = installed_plugins.iter().map(|m| m.name()).collect();

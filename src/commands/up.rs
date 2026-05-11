@@ -682,24 +682,19 @@ fn parse_env_var(s: &str) -> Result<(String, String)> {
 
 fn resolve_trigger_plugin(trigger_type: &str) -> Result<String> {
     use crate::commands::plugins::PluginCompatibility;
-    use spin_plugins::manager::PluginManager;
+    use spin_plugins::PluginManager;
 
     let subcommand = format!("trigger-{trigger_type}");
     let plugin_manager = PluginManager::try_default()
         .with_context(|| format!("Failed to access plugins looking for '{subcommand}'"))?;
-    let plugin_store = plugin_manager.store();
-    let is_installed = plugin_store
-        .installed_manifests()
-        .unwrap_or_default()
-        .iter()
-        .any(|m| m.name() == subcommand);
 
-    if is_installed {
+    if plugin_manager.is_installed(&subcommand) {
         return Ok(subcommand);
     }
 
-    if let Some(known) = plugin_store
-        .catalogue_manifests()
+    if let Some(known) = plugin_manager
+        .catalogue()
+        .manifests()
         .unwrap_or_default()
         .iter()
         .find(|m| m.name() == subcommand)
