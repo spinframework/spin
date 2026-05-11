@@ -46,14 +46,19 @@ impl InProcDatabaseLocation {
 /// A connection to a sqlite database
 pub struct InProcConnection {
     location: InProcDatabaseLocation,
+    allow_attach_file: bool,
     connection: OnceLock<Arc<Mutex<rusqlite::Connection>>>,
 }
 
 impl InProcConnection {
-    pub fn new(location: InProcDatabaseLocation) -> Result<Self, sqlite::Error> {
+    pub fn new(
+        location: InProcDatabaseLocation,
+        allow_attach_file: bool,
+    ) -> Result<Self, sqlite::Error> {
         let connection = OnceLock::new();
         Ok(Self {
             location,
+            allow_attach_file,
             connection,
         })
     }
@@ -74,6 +79,18 @@ impl InProcConnection {
             InProcDatabaseLocation::Path(path) => rusqlite::Connection::open(path),
         }
         .map_err(|e| sqlite::Error::Io(e.to_string()))?;
+        if !self.allow_attach_file {
+            connection.authorizer(Some(|ctx: rusqlite::hooks::AuthContext<'_>| {
+                use rusqlite::hooks::{AuthAction, Authorization};
+                match ctx.action {
+                    // Deny attaching files except tempfile ("") and in-memory (":memory:") databases
+                    AuthAction::Attach { filename } if !matches!(filename, "" | ":memory:") => {
+                        Authorization::Deny
+                    }
+                    _ => Authorization::Allow,
+                }
+            }));
+        }
         Ok(Arc::new(Mutex::new(connection)))
     }
 }

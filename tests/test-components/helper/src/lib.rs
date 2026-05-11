@@ -109,7 +109,7 @@ pub fn outgoing_body(body: OutgoingBody, buffer: Vec<u8>) -> Result<(), ErrorCod
                             offset += count;
                         }
                         Err(e) => {
-                            return Err(ErrorCode::InternalError(Some(format!("I/O error: {e}"))))
+                            return Err(ErrorCode::InternalError(Some(format!("I/O error: {e}"))));
                         }
                     }
                 }
@@ -174,12 +174,12 @@ macro_rules! ensure_eq {
 
 #[macro_export]
 macro_rules! bail {
-    ($fmt:expr, $($arg:tt)*) => {{
+    ($fmt:expr $(, $($arg:tt)*)?) => {{
         let krate = module_path!().split("::").next().unwrap();
         let file = file!();
         let line = line!();
         return Err(format!(
-            "{krate}#({file}:{line}) {}", format_args!($fmt, $($arg)*)
+            "{krate}#({file}:{line}) {}", format_args!($fmt $(, $($arg)*)?)
         ));
     }};
 }

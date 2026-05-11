@@ -53,9 +53,23 @@ impl Component {
 
         // This should exceed the 128MB query result limit:
         match conn.execute("SELECT * FROM test_data", &[]) {
-            Ok(_) => bail!("large select should not have succeeded",),
+            Ok(_) => bail!("large select should not have succeeded"),
             Err(Error::Io(s)) if s.contains("query result exceeds limit") => {}
-            Err(e) => bail!("unexpected error: {e}",),
+            Err(e) => bail!("unexpected error: {e}"),
+        }
+
+        // ATTACH tempfile and in-memory are allowed
+        for allowed_stmt in ["ATTACH '' AS tempfile", "ATTACH ':memory:' AS inmemory"] {
+            conn.execute(allowed_stmt, &[])
+                .map_err(|e| format!("{allowed_stmt:?} failed: {e:?}"))?;
+        }
+        // ATTACH <file> forbidden by default; VACUUM INTO uses ATTACH under the hood
+        for forbidden_stmt in ["ATTACH 'any_file' AS attach_file", "VACUUM INTO 'any_file'"] {
+            match conn.execute(forbidden_stmt, &[]) {
+                Ok(_) => bail!("{forbidden_stmt:?} should fail"),
+                Err(Error::Io(s)) if s.contains("authoriz") => {}
+                Err(e) => bail!("unexpected error for {forbidden_stmt:?}: {e:?}"),
+            }
         }
 
         Ok(())

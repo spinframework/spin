@@ -126,7 +126,7 @@ impl RuntimeConfigResolver {
             .map(|p| p.join(DEFAULT_SQLITE_DB_FILENAME));
         let factory = move || {
             let location = InProcDatabaseLocation::from_path(path.clone())?;
-            let connection = spin_sqlite_inproc::InProcConnection::new(location)?;
+            let connection = spin_sqlite_inproc::InProcConnection::new(location, false)?;
             Ok(Arc::new(connection) as _)
         };
         Arc::new(factory)
@@ -140,6 +140,13 @@ const DEFAULT_SQLITE_DB_FILENAME: &str = "sqlite_db.db";
 #[serde(deny_unknown_fields)]
 pub struct InProcDatabase {
     pub path: Option<PathBuf>,
+
+    /// If `false` (the default), disallows `ATTACH`ing an existing file to a
+    /// database connection.
+    ///
+    /// Note: Attaching a new tempfile or `:memory:` database is always allowed.
+    #[serde(default)]
+    pub allow_attach_file: bool,
 }
 
 impl InProcDatabase {
@@ -156,7 +163,10 @@ impl InProcDatabase {
             .map(|p| resolve_relative_path(p, base_dir));
         let location = InProcDatabaseLocation::from_path(path)?;
         let factory = move || {
-            let connection = spin_sqlite_inproc::InProcConnection::new(location.clone())?;
+            let connection = spin_sqlite_inproc::InProcConnection::new(
+                location.clone(),
+                self.allow_attach_file,
+            )?;
             Ok(Arc::new(connection) as _)
         };
         Ok(factory)
