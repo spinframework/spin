@@ -20,9 +20,7 @@ The Spin project consists of several codebases with different release cycles. Th
     - [Spin Deps Plugin](https://github.com/spinframework/spin-deps-plugin)
     - [Spin OTel Plugin](https://github.com/spinframework/otel-plugin)
 - Triggers:
-    - [Spin Command Trigger](https://github.com/spinframework/spin-trigger-command)
-    - [Spin SQS Trigger](https://github.com/spinframework/spin-trigger-sqs)
-    - [Spin Cron Trigger](https://github.com/spinframework/spin-trigger-cron)
+    - [Spin Trigger Plugins](https://github.com/spinframework/spin-trigger-plugins)
 - Other
     - [Spin Fileserver](https://github.com/spinframework/spin-fileserver)
     - [Spin Redirect](https://github.com/spinframework/spin-redirect)
