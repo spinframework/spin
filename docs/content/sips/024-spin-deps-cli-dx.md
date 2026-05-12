@@ -19,7 +19,7 @@ However, authoring the dependency entries by hand requires understanding the TOM
 `spin deps add` provides a guided CLI experience for adding a component dependency. It resolves the source, inspects the Wasm component's exports, and writes the correct entry into `spin.toml`, along with regenerating the `spin-dependencies.wit` file.
 
 # Proposal
-∏
+
 ## Command Syntax
 
 ```
@@ -40,9 +40,9 @@ The `<source>` positional argument accepts three forms:
 
 | Flag | Description |
 |------|-------------|
-| `--to <component-id>` | Target component to add the dependency to. Prompted if omitted and the app has multiple components. |
-| `-f, --from <path>` | Path to the `spin.toml` manifest. Defaults to the current directory. |
-| `--export <name>` | Export to use from the dependency. Prompted if omitted and the component has multiple exports. |
+| `--to <component-id>` | Parent component to add the dependency to. Prompted if omitted and the app has multiple components. |
+| `-f, --file <path>` | Path to the `spin.toml` manifest. Defaults to the current directory. |
+| `--export <name>` | Export to use from the dependency. Prompted if omitted and the dependency has multiple exports. |
 | `-d, --digest <sha256>` | SHA-256 digest for verifying HTTP downloads. Required for HTTP sources. |
 | `-r, --registry <url>` | Override the default registry. Only applies to registry sources. |
 | `--inherit <value>` | Capability inheritance: `true`/`all`, `false`/`none`, or comma-separated capabilities. Prompted if omitted and the dependency requires capabilities. |
@@ -218,7 +218,7 @@ The command produces entries in `spin.toml` matching the schema defined in [SIP 
 
 # Local dependency with no inheritance
 [component.worker.dependencies]
-"my-export" = { path = "my-component.wasm" }
+"my-export" = { path = "./my-component.wasm" }
 
 # HTTP dependency
 [component.dashboard.dependencies]
@@ -227,19 +227,7 @@ The command produces entries in `spin.toml` matching the schema defined in [SIP 
 
 ## Capability Detection
 
-The command detects required capabilities by inspecting the dependency's component-level imports and matching them against the capability sets defined in [SIP 023](docs/content/sips/023-granular-capability-inheritance.md) using **semver-compatible** matching (via `wac_graph::types::are_semver_compatible`). This means a dependency importing `wasi:http/outgoing-handler@0.2.7` correctly matches the `allowed_outbound_hosts` capability set even though the set is defined with `@0.2.6`.
-
-The recognized capability sets are:
-
-| Capability | Example interfaces |
-|---|---|
-| `ai_models` | `fermyon:spin/llm` |
-| `allowed_outbound_hosts` | `wasi:http/outgoing-handler`, `wasi:sockets/tcp`, `fermyon:spin/mqtt` |
-| `environment` | `wasi:cli/environment` |
-| `files` | `wasi:filesystem/preopens` |
-| `key_value_stores` | `fermyon:spin/key-value` |
-| `sqlite_databases` | `fermyon:spin/sqlite` |
-| `variables` | `fermyon:spin/variables` |
+The command detects required capabilities by inspecting the dependency's component-level imports and matching them against the capability sets defined in [SIP 023](docs/content/sips/023-granular-capability-inheritance.md) using **semver-compatible** matching. This means a dependency importing `wasi:http/outgoing-handler@0.2.7` correctly matches the `allowed_outbound_hosts` capability set even though the set is defined with `@0.2.6`.
 
 ## Potential Future Work
 
