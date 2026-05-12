@@ -739,15 +739,12 @@ impl ComponentDependencies {
 #[serde(untagged, deny_unknown_fields)]
 pub enum TargetEnvironmentRef {
     /// Environment definition doc reference e.g. `spin-up:3.2`, `my-host`. This is looked up
-    /// in the default environment catalogue (registry).
-    DefaultRegistry(String),
-    /// An environment definition doc in an OCI registry other than the default
-    Registry {
-        /// Registry or prefix hosting the environment document e.g. `ghcr.io/my/environments`.
-        registry: String,
-        /// Environment definition document name e.g. `my-spin-env:1.2`. For hosted environments
-        /// where you always want `latest`, omit the version tag e.g. `my-host`.
-        id: String,
+    /// in the default environment catalogue (the `spin-environments` repo, `env` directory).
+    Catalogue(String),
+    /// An environment definition doc HTTP URL
+    Http {
+        /// The environment document URL e.g. `https://github.com/me/environments/blob/main/target-envs/spin-up.3.6.toml`.
+        url: String,
     },
     /// A local environment document file. This is expected to contain a serialised
     /// EnvironmentDefinition in TOML format.

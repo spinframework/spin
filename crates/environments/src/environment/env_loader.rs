@@ -10,11 +10,12 @@ use futures::future::try_join_all;
 use spin_common::ui::quoted_path;
 use spin_manifest::schema::v2::TargetEnvironmentRef;
 
+use crate::environment::catalogue::Catalogue;
+
 use super::definition::{EnvironmentDefinition, WorldName, WorldRef};
 use super::lockfile::TargetEnvironmentLockfile;
-use super::{CandidateWorld, CandidateWorlds, TargetEnvironment, UnknownTrigger, is_versioned};
+use super::{CandidateWorld, CandidateWorlds, TargetEnvironment, UnknownTrigger};
 
-const DEFAULT_ENV_DEF_REGISTRY_PREFIX: &str = "ghcr.io/spinframework/environments";
 const DEFAULT_PACKAGE_REGISTRY: &str = "spinframework.dev";
 
 /// Load all the listed environments from their registries or paths.
@@ -72,12 +73,11 @@ async fn load_environment<'a>(
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<(&'a TargetEnvironmentRef, TargetEnvironment)> {
     let env = match env_id {
-        TargetEnvironmentRef::DefaultRegistry(id) => {
-            load_environment_from_registry(DEFAULT_ENV_DEF_REGISTRY_PREFIX, id, cache, lockfile)
-                .await
+        TargetEnvironmentRef::Catalogue(id) => {
+            load_environment_from_catalogue(id, cache, lockfile).await
         }
-        TargetEnvironmentRef::Registry { registry, id } => {
-            load_environment_from_registry(registry, id, cache, lockfile).await
+        TargetEnvironmentRef::Http { url } => {
+            load_environment_from_http(url, cache, lockfile).await
         }
         TargetEnvironmentRef::File { path } => {
             load_environment_from_file(app_dir.join(path), cache, lockfile).await
@@ -86,18 +86,53 @@ async fn load_environment<'a>(
     Ok((env_id, env))
 }
 
-/// Loads a `TargetEnvironment` from the environment definition at the given
-/// registry location. The environment and any remote packages it references will be used
+/// Loads a `TargetEnvironment` from the catalogue. If not found, the catalogue is refreshed
+/// and retried. Any remote packages the environment references will be used
 /// from cache if available; otherwise, they will be saved to the cache, and the
 /// in-memory lockfile object updated.
-async fn load_environment_from_registry(
-    registry: &str,
+async fn load_environment_from_catalogue(
     env_id: &str,
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<TargetEnvironment> {
-    let env_def_toml = load_env_def_toml_from_registry(registry, env_id, cache, lockfile).await?;
-    load_environment_from_toml(env_id, &env_def_toml, None, cache, lockfile).await
+    let catalogue = Catalogue::try_default()?;
+    let env_id = env_id.replace(':', "@"); // back compat
+    let env_def = match catalogue.get(&env_id).await? {
+        Some(env_def) => env_def,
+        None => {
+            catalogue.update().await?;
+            catalogue
+                .get(&env_id)
+                .await?
+                .with_context(|| anyhow!("Cannot load target environment '{env_id}'"))?
+        }
+    };
+    load_environment_from_env_def(&env_id, env_def, None, cache, lockfile).await
+}
+
+/// Loads a `TargetEnvironment` from the environment definition at the given
+/// URL. Any remote packages the environment references will be used
+/// from cache if available; otherwise, they will be saved to the cache, and the
+/// in-memory lockfile object updated.
+async fn load_environment_from_http(
+    url: &str,
+    cache: &spin_loader::cache::Cache,
+    lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
+) -> anyhow::Result<TargetEnvironment> {
+    let toml_text = reqwest::get(url).await?.text().await?;
+    let env_def: EnvironmentDefinition = toml::from_str(&toml_text)?;
+
+    let url = url::Url::parse(url)?;
+    let env_id = url
+        .path_segments()
+        .with_context(|| format!("environment URL {url} does not have a path"))?
+        .next_back()
+        .with_context(|| format!("environment URL {url} does not have a path"))?;
+    let env_id = env_id
+        .rsplit_once('.')
+        .map(|(stem, _)| stem)
+        .unwrap_or(env_id);
+    load_environment_from_env_def(env_id, env_def, None, cache, lockfile).await
 }
 
 /// Loads a `TargetEnvironment` from the given TOML file. Any remote packages
@@ -121,21 +156,20 @@ async fn load_environment_from_file(
             quoted_path(path)
         )
     })?;
-    load_environment_from_toml(&name, &toml_text, env_def_dir, cache, lockfile).await
+    let env_def: EnvironmentDefinition = toml::from_str(&toml_text)?;
+    load_environment_from_env_def(&name, env_def, env_def_dir, cache, lockfile).await
 }
 
 /// Loads a `TargetEnvironment` from the given TOML text. Any remote packages
 /// it references will be used from cache if available; otherwise, they will be saved
 /// to the cache, and the in-memory lockfile object updated.
-async fn load_environment_from_toml(
+async fn load_environment_from_env_def(
     name: &str,
-    toml_text: &str,
+    env: EnvironmentDefinition,
     relative_to_dir: Option<&Path>,
     cache: &spin_loader::cache::Cache,
     lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
 ) -> anyhow::Result<TargetEnvironment> {
-    let env: EnvironmentDefinition = toml::from_str(toml_text)?;
-
     let mut trigger_worlds = HashMap::new();
     let mut trigger_capabilities = HashMap::new();
 
@@ -167,82 +201,6 @@ async fn load_environment_from_toml(
         unknown_trigger,
         unknown_capabilities,
     })
-}
-
-/// Loads the text (assumed to be TOML) from the environment definition at the given
-/// registry location. The environment will be used from cache if available; otherwise,
-/// it be saved to the cache, and the in-memory lockfile object updated.
-async fn load_env_def_toml_from_registry(
-    registry: &str,
-    env_id: &str,
-    cache: &spin_loader::cache::Cache,
-    lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
-) -> anyhow::Result<String> {
-    if let Some(digest) = lockfile.read().await.env_digest(registry, env_id)
-        && let Ok(cache_file) = cache.data_file(digest)
-        && let Ok(bytes) = tokio::fs::read(&cache_file).await
-    {
-        return Ok(String::from_utf8_lossy(&bytes).to_string());
-    }
-
-    let (bytes, digest) = download_env_def_file(registry, env_id)
-        .await
-        .with_context(|| format!("downloading target environment {env_id} from {registry}"))?;
-
-    let toml_text = String::from_utf8_lossy(&bytes).to_string();
-
-    _ = cache.write_data(bytes, &digest).await;
-    lockfile
-        .write()
-        .await
-        .set_env_digest(registry, env_id, &digest);
-
-    Ok(toml_text)
-}
-
-/// Downloads a single-layer document from the given registry.
-/// (You can create a suitable document with e.g. `oras push ghcr.io/my/envs/sample:1.0 sample.toml`.)
-/// The image must be publicly accessible (which is *NOT* the default with GHCR).
-///
-/// The return value is a tuple of (content, digest).
-async fn download_env_def_file(registry: &str, env_id: &str) -> anyhow::Result<(Vec<u8>, String)> {
-    // This implies env_id is in the format spin-up:3.2
-    let registry_id = if is_versioned(env_id) {
-        env_id.to_string()
-    } else {
-        // Testing versionless tags with GHCR it didn't work
-        // TODO: is this expected or am I being a dolt
-        // TODO: is this a suitable workaround
-        format!("{env_id}:latest")
-    };
-
-    let reference = format!("{registry}/{registry_id}");
-    let reference = oci_distribution::Reference::try_from(reference)?;
-
-    let config = oci_distribution::client::ClientConfig::default();
-    let client = oci_distribution::client::Client::new(config);
-    let auth = oci_distribution::secrets::RegistryAuth::Anonymous;
-
-    let (manifest, digest) = client.pull_manifest(&reference, &auth).await?;
-
-    let im = match manifest {
-        oci_distribution::manifest::OciManifest::Image(im) => im,
-        oci_distribution::manifest::OciManifest::ImageIndex(_) => {
-            anyhow::bail!("unexpected registry format for {reference}")
-        }
-    };
-
-    let count = im.layers.len();
-
-    if count != 1 {
-        anyhow::bail!("artifact {reference} should have had exactly one layer");
-    }
-
-    let the_layer = &im.layers[0];
-    let mut out = Vec::with_capacity(the_layer.size.try_into().unwrap_or_default());
-    client.pull_blob(&reference, the_layer, &mut out).await?;
-
-    Ok((out, digest))
 }
 
 async fn load_worlds(
