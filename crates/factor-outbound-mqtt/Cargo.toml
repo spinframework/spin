@@ -6,7 +6,8 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-rumqttc = { version = "0.24", features = ["url"] }
+# Upstream hasn't been updating dependencies: https://github.com/bytebeamio/rumqtt/issues/1046
+rumqttc = { git = "https://github.com/spinframework/rumqtt", rev = "65b7b39a70b12d1781acb61cc07f1f1b680e7643", default-features = false, features = ["use-rustls-no-provider", "url"] }
 spin-core = { path = "../core" }
 spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
