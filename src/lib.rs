@@ -2,7 +2,9 @@ pub mod build_info;
 pub mod commands;
 pub(crate) mod completions;
 mod directory_rels;
+mod opt_value;
 pub(crate) mod opts;
+mod parse_env;
 pub mod subprocess;
 
 use anyhow::{Context, Error};

@@ -143,7 +143,9 @@ impl PluginManager {
         let plugin_manifest = self
             .get_manifest(&manifest_location, false, spin_version, &None)
             .await?;
-        let plugin_package = plugin_manifest.get_package().unwrap();
+        let plugin_package = plugin_manifest
+            .get_package()
+            .context("Plugin does not contain a compatible package")?;
         self.install(&plugin_manifest, plugin_package, &manifest_location, &None)
             .await
     }

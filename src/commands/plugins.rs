@@ -12,8 +12,11 @@ use spin_plugins::{
 use std::path::PathBuf;
 use url::Url;
 
-use crate::build_info::*;
 use crate::opts::*;
+use crate::{
+    build_info::*,
+    opt_value::{FLAG_NOT_PRESENT, FLAG_PRESENT_BUT_NO_VALUE, OptionalValueFlag},
+};
 
 /// Install/uninstall Spin plugins.
 #[derive(Subcommand, Debug)]
@@ -66,7 +69,8 @@ pub struct Install {
         name = PLUGIN_NAME_OPT,
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
-        required_unless_present_any = [PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT, PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT],
+        conflicts_with = PLUGIN_TARGET_ENV_OPT,
+        required_unless_present_any = [PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT, PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT, PLUGIN_TARGET_ENV_OPT],
     )]
     #[arg(add = clap_complete::ArgValueCandidates::new(completions::installable_plugins))]
     pub name: Option<String>,
@@ -78,6 +82,7 @@ pub struct Install {
         long = "file",
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_NAME_OPT,
+        conflicts_with = PLUGIN_TARGET_ENV_OPT,
     )]
     pub local_manifest_src: Option<PathBuf>,
 
@@ -88,8 +93,17 @@ pub struct Install {
         long = "url",
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_NAME_OPT,
+        conflicts_with = PLUGIN_TARGET_ENV_OPT,
     )]
     pub remote_manifest_src: Option<Url>,
+
+    /// The Spin platform or runtime for which you want to install plugins.
+    #[clap(name = PLUGIN_TARGET_ENV_OPT, long, short = 'E', num_args = 0..=1, default_value(FLAG_NOT_PRESENT), default_missing_value(FLAG_PRESENT_BUT_NO_VALUE),
+        conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
+        conflicts_with = PLUGIN_NAME_OPT,
+        conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
+    )]
+    pub target_environment: String,
 
     /// Skips prompt to accept the installation of the plugin.
     #[clap(short = 'y', long = "yes")]
@@ -111,6 +125,7 @@ pub struct Install {
         short = 'v',
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
+        conflicts_with = PLUGIN_TARGET_ENV_OPT,
         requires(PLUGIN_NAME_OPT)
     )]
     pub version: Option<Version>,
@@ -118,6 +133,12 @@ pub struct Install {
 
 impl Install {
     pub async fn run(&self) -> Result<()> {
+        let manager = PluginManager::try_default()?;
+
+        if self.target_environment().is_present() {
+            return self.install_env_plugins(&manager).await;
+        }
+
         let manifest_location = match (
             &self.local_manifest_src,
             &self.remote_manifest_src,
@@ -134,7 +155,7 @@ impl Install {
                 ));
             }
         };
-        let manager = PluginManager::try_default()?;
+
         // Downgrades are only allowed via the `upgrade` subcommand
         let downgrade = false;
         let manifest = manager
@@ -156,6 +177,133 @@ impl Install {
         )
         .await?;
         Ok(())
+    }
+
+    fn target_environment(&self) -> OptionalValueFlag {
+        (&self.target_environment).into()
+    }
+
+    async fn install_env_plugins(&self, manager: &PluginManager) -> anyhow::Result<()> {
+        let Some((env_name, env_def)) =
+            crate::parse_env::env_def_from(self.target_environment()).await?
+        else {
+            anyhow::bail!("No target environment found");
+        };
+
+        let env_plugins = env_def.plugins();
+        let uninstalled_plugins = env_plugins
+            .iter()
+            .filter(|p| !manager.is_installed(p))
+            .collect::<Vec<_>>();
+
+        if uninstalled_plugins.is_empty() {
+            eprintln!("All recommended plugins for the selected environment are installed");
+            return Ok(());
+        }
+
+        suggest_plugins(manager, &env_name, env_plugins, false).await
+    }
+}
+
+pub async fn suggest_plugins(
+    plugin_manager: &PluginManager,
+    env_name: &str,
+    plugins: &[String],
+    show_manual_help: bool,
+) -> anyhow::Result<()> {
+    _ = plugin_manager.update().await;
+
+    let plugins = plugins
+        .iter()
+        .filter(|p| !plugin_manager.is_installed(p))
+        .collect::<Vec<_>>();
+
+    match plugins.len() {
+        0 => {}
+        1 => {
+            prompt_install_one_plugin(plugin_manager, env_name, plugins[0], show_manual_help).await
+        }
+        _ => {
+            prompt_install_multiple_plugins(plugin_manager, env_name, plugins, show_manual_help)
+                .await
+        }
+    };
+
+    Ok(())
+}
+
+async fn prompt_install_one_plugin(
+    plugin_manager: &spin_plugins::PluginManager,
+    env_name: &str,
+    plugin: &str,
+    show_manual_help: bool,
+) {
+    eprintln!("The {plugin} plugin is recommended for working with {env_name} environment.",);
+    let should_install = dialoguer::Confirm::new()
+        .with_prompt("Would you like to install it now?")
+        .default(false)
+        .interact_opt()
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    if should_install {
+        let did_install = plugin_manager
+            .install_latest(plugin, crate::build_info::SPIN_VERSION)
+            .await
+            .is_ok();
+        if !did_install && show_manual_help {
+            eprintln!(
+                "Plugin installation failed. You can try manually using `spin plugins install -E`."
+            );
+        }
+    } else if show_manual_help {
+        eprintln!(
+            "You can review and install the recommended plugins using `spin plugins` with the `-E` option"
+        )
+    }
+}
+
+async fn prompt_install_multiple_plugins(
+    plugin_manager: &spin_plugins::PluginManager,
+    env_name: &str,
+    plugins: Vec<&String>,
+    show_manual_help: bool,
+) {
+    eprintln!(
+        "The following plugins are recommended for working with the {env_name} target environment."
+    );
+    eprintln!("Use arrow keys to move between them and Space to select one for install.");
+    let chosen = dialoguer::MultiSelect::new()
+        .items(&plugins)
+        .interact_opt()
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    if chosen.is_empty() && show_manual_help {
+        eprintln!(
+            "You can review and install the recommended plugins using `spin plugins` with the `-E` option"
+        );
+    } else {
+        let chosen = chosen
+            .into_iter()
+            .map(|index| plugins[index])
+            .collect::<Vec<_>>();
+        for plugin in &chosen {
+            let did_install = plugin_manager
+                .install_latest(plugin, crate::build_info::SPIN_VERSION)
+                .await
+                .is_ok();
+            if !did_install && show_manual_help {
+                eprintln!(
+                    "Plugin `{plugin}` installation failed. You can try manually using `spin plugins install -E`."
+                );
+            }
+        }
+        if chosen.len() < plugins.len() && show_manual_help {
+            eprintln!(
+                "You can review and install unchosen recommended plugins using `spin plugins` with the `-E` option"
+            );
+        }
     }
 }
 
@@ -525,6 +673,20 @@ async fn list_catalogue_and_installed_plugins(
     Ok(merge_plugin_lists(catalogue, installed))
 }
 
+async fn list_env_plugins(
+    manager: &PluginManager,
+    env_def: &spin_environments::EnvironmentDefinition,
+) -> Result<Vec<PluginDescriptor>> {
+    let plugins = env_def.plugins();
+
+    let candidates = list_catalogue_and_installed_plugins(manager)
+        .await?
+        .into_iter()
+        .filter(|p| plugins.contains(&p.name))
+        .collect();
+    Ok(summarise(candidates))
+}
+
 fn summarise(all_plugins: Vec<PluginDescriptor>) -> Vec<PluginDescriptor> {
     use itertools::Itertools;
 
@@ -607,6 +769,10 @@ pub struct List {
     /// The format in which to list the plugins.
     #[clap(value_enum, long, default_value_t = ListFormat::default())]
     pub format: ListFormat,
+
+    /// The Spin platform or runtime for which you want to list plugins.
+    #[clap(long, short = 'E', num_args = 0..=1, default_value(FLAG_NOT_PRESENT), default_missing_value(FLAG_PRESENT_BUT_NO_VALUE), group = "which")]
+    target_environment: String,
 }
 
 #[derive(ValueEnum, Clone, Debug, Default)]
@@ -623,7 +789,11 @@ impl List {
         let mut plugins = if self.installed {
             list_installed_plugins(&manager)
         } else {
-            list_catalogue_and_installed_plugins(&manager).await
+            let env_def = crate::parse_env::env_def_from(self.target_environment()).await?;
+            match env_def {
+                None => list_catalogue_and_installed_plugins(&manager).await,
+                Some((_, env_def)) => list_env_plugins(&manager, &env_def).await,
+            }
         }?;
 
         if self.summary {
@@ -675,6 +845,10 @@ impl List {
         println!("{json_text}");
         Ok(())
     }
+
+    fn target_environment(&self) -> OptionalValueFlag {
+        (&self.target_environment).into()
+    }
 }
 
 /// Search for plugins by name.
@@ -696,6 +870,7 @@ impl Search {
             summary: false,
             filter: self.filter.clone(),
             format: self.format.clone(),
+            target_environment: FLAG_NOT_PRESENT.to_string(),
         };
 
         list_cmd.run().await

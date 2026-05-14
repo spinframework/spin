@@ -204,6 +204,7 @@ fn installer_for(plugin_name: &str) -> Install {
         yes_to_all: true,
         local_manifest_src: None,
         remote_manifest_src: None,
+        target_environment: crate::opt_value::FLAG_NOT_PRESENT.to_string(),
         override_compatibility_check: false,
         version: None,
         auth_header_value: None,

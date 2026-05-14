@@ -9,6 +9,7 @@ mod definition;
 mod env_loader;
 mod lockfile;
 
+pub use definition::EnvironmentDefinition;
 use definition::WorldName;
 pub use env_loader::load_environment_def;
 
