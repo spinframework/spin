@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 use futures::stream::TryStreamExt as _;
 use http_body_util::BodyExt;
+use opentelemetry_semantic_conventions::attribute::{
+    HTTP_REQUEST_METHOD, HTTP_RESPONSE_STATUS_CODE, SERVER_ADDRESS, SERVER_PORT, URL_FULL,
+};
 use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
 use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::v1::{
@@ -120,7 +123,7 @@ impl spin_http::Host for crate::InstanceState {
         drop(permit);
 
         tracing::trace!("Returning response from outbound request to {req_url}");
-        span.record("http.response.status_code", resp.status().as_u16());
+        span.record(HTTP_RESPONSE_STATUS_CODE, resp.status().as_u16());
         response_from_reqwest(resp).await
     }
 }
@@ -162,14 +165,14 @@ fn record_request_fields(span: &Span, req: &Request) {
     // Set otel.name to just the method name to fit with OpenTelemetry conventions
     // <https://opentelemetry.io/docs/specs/semconv/http/http-spans/#name>
     span.record("otel.name", method)
-        .record("http.request.method", method)
-        .record("url.full", req.uri.clone());
+        .record(HTTP_REQUEST_METHOD, method)
+        .record(URL_FULL, req.uri.clone());
     if let Ok(uri) = req.uri.parse::<http::Uri>()
         && let Some(authority) = uri.authority()
     {
-        span.record("server.address", authority.host());
+        span.record(SERVER_ADDRESS, authority.host());
         if let Some(port) = authority.port() {
-            span.record("server.port", port.as_u16());
+            span.record(SERVER_PORT, port.as_u16());
         }
     }
 }

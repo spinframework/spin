@@ -6135,6 +6135,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "opentelemetry-semantic-conventions"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fb3a2f78c2d55362cd6c313b8abedfbc0142ab3c2676822068fd2ab7d51f9b7"
+
+[[package]]
 name = "opentelemetry_sdk"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8807,6 +8813,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.8.1",
  "hyper-util",
+ "opentelemetry-semantic-conventions",
  "pin-project-lite",
  "reqwest 0.12.9",
  "rustls 0.23.37",
@@ -8877,6 +8884,7 @@ dependencies = [
  "futures-util",
  "http 1.3.1",
  "ip_network",
+ "opentelemetry-semantic-conventions",
  "rustls 0.23.37",
  "rustls-pki-types",
  "rustls-platform-verifier",
@@ -9525,6 +9533,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.8.1",
  "hyper-util",
+ "opentelemetry-semantic-conventions",
  "pin-project-lite",
  "rand 0.9.1",
  "rustls 0.23.37",

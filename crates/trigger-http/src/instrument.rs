@@ -1,5 +1,6 @@
 use anyhow::Result;
 use http::Response;
+use opentelemetry_semantic_conventions::attribute::{ERROR_TYPE, HTTP_RESPONSE_STATUS_CODE};
 use tracing::Level;
 
 use crate::Body;
@@ -52,13 +53,13 @@ pub(crate) fn finalize_http_span(
             }
 
             // Set status code
-            span.record("http.response.status_code", response.status().as_u16());
+            span.record(HTTP_RESPONSE_STATUS_CODE, response.status().as_u16());
 
             Ok(response)
         }
         Err(err) => {
             instrument_error(&err);
-            span.record("http.response.status_code", 500);
+            span.record(HTTP_RESPONSE_STATUS_CODE, 500);
             span.record("otel.name", method);
             Err(err)
         }
@@ -69,7 +70,7 @@ pub(crate) fn finalize_http_span(
 pub(crate) fn instrument_error(err: &anyhow::Error) {
     let span = tracing::Span::current();
     tracing::event!(target:module_path!(), Level::INFO, error = %err);
-    span.record("error.type", format!("{err:?}"));
+    span.record(ERROR_TYPE, format!("{err:?}"));
 }
 
 /// MatchedRoute is used as a response extension to track the route that was matched for OTel

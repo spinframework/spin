@@ -95,6 +95,8 @@ pub fn mark_as_error<E: std::fmt::Display>(err: &E, blame: Option<Blame>) {
     let current_span = tracing::Span::current();
     current_span.set_status(opentelemetry::trace::Status::error(err.to_string()));
     if let Some(blame) = blame {
-        current_span.set_attribute("error.blame", blame.as_str());
+        // `error.blame` is a Spin-specific attribute, not part of the OTel semantic conventions.
+        const ERROR_BLAME: &str = "error.blame";
+        current_span.set_attribute(ERROR_BLAME, blame.as_str());
     }
 }
