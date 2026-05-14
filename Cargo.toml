@@ -162,6 +162,7 @@ opentelemetry_sdk = {version = "0.28", features = [
   "experimental_logs_batch_log_processor_with_async_runtime",
   "experimental_async_runtime"
 ]}
+opentelemetry-semantic-conventions = "0.28"
 path-absolutize = "3"
 pin-project-lite = "0.2.16"
 quote = "1"
