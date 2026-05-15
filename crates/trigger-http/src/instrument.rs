@@ -1,8 +1,6 @@
 use anyhow::Result;
 use http::Response;
-use opentelemetry_semantic_conventions::attribute::{
-    ERROR_TYPE, HTTP_RESPONSE_STATUS_CODE, HTTP_ROUTE,
-};
+use opentelemetry_semantic_conventions::attribute as otel_attribute;
 use tracing::Level;
 
 use crate::Body;
@@ -48,20 +46,23 @@ pub(crate) fn finalize_http_span(
             let matched_route = response.extensions().get::<MatchedRoute>();
             // Set otel.name and http.route
             if let Some(MatchedRoute { route }) = matched_route {
-                span.record(HTTP_ROUTE, route);
+                span.record(otel_attribute::HTTP_ROUTE, route);
                 span.record("otel.name", format!("{method} {route}"));
             } else {
                 span.record("otel.name", method);
             }
 
             // Set status code
-            span.record(HTTP_RESPONSE_STATUS_CODE, response.status().as_u16());
+            span.record(
+                otel_attribute::HTTP_RESPONSE_STATUS_CODE,
+                response.status().as_u16(),
+            );
 
             Ok(response)
         }
         Err(err) => {
             instrument_error(&err);
-            span.record(HTTP_RESPONSE_STATUS_CODE, 500);
+            span.record(otel_attribute::HTTP_RESPONSE_STATUS_CODE, 500);
             span.record("otel.name", method);
             Err(err)
         }
@@ -72,7 +73,7 @@ pub(crate) fn finalize_http_span(
 pub(crate) fn instrument_error(err: &anyhow::Error) {
     let span = tracing::Span::current();
     tracing::event!(target:module_path!(), Level::INFO, error = %err);
-    span.record(ERROR_TYPE, format!("{err:?}"));
+    span.record(otel_attribute::ERROR_TYPE, format!("{err:?}"));
 }
 
 /// MatchedRoute is used as a response extension to track the route that was matched for OTel
