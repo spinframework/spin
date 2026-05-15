@@ -17,8 +17,8 @@ use crate::intercept::InterceptOutcome;
 
 impl spin_http::Host for crate::InstanceState {
     #[instrument(name = "spin_outbound_http.send_request", skip_all,
-        fields(otel.kind = "client", url.full = Empty, http.request.method = Empty,
-        http.response.status_code = Empty, otel.name = Empty, server.address = Empty, server.port = Empty))]
+        fields(otel.kind = "client", {URL_FULL} = Empty, {HTTP_REQUEST_METHOD} = Empty,
+        {HTTP_RESPONSE_STATUS_CODE} = Empty, otel.name = Empty, {SERVER_ADDRESS} = Empty, {SERVER_PORT} = Empty))]
     async fn send_request(&mut self, req: Request) -> Result<Response, HttpError> {
         self.hooks.otel.reparent_tracing_span();
 

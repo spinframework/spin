@@ -27,7 +27,7 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
 };
 use opentelemetry_semantic_conventions::attribute::{
-    HTTP_RESPONSE_STATUS_CODE, SERVER_ADDRESS, SERVER_PORT, URL_FULL,
+    HTTP_REQUEST_METHOD, HTTP_RESPONSE_STATUS_CODE, SERVER_ADDRESS, SERVER_PORT, URL_FULL,
 };
 use spin_factor_outbound_networking::{
     ComponentTlsClientConfigs, TlsClientConfig,
@@ -138,13 +138,14 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
         skip_all,
         fields(
             otel.kind = "client",
-            url.full = Empty,
-            http.request.method = %request.method(),
+            {URL_FULL} = Empty,
+            {HTTP_REQUEST_METHOD} = %request.method(),
             otel.name = %request.method(),
+            // Incubating convention; not yet a stable `opentelemetry_semantic_conventions` constant.
             http.response.body.size = Empty,
-            http.response.status_code = Empty,
-            server.address = Empty,
-            server.port = Empty,
+            {HTTP_RESPONSE_STATUS_CODE} = Empty,
+            {SERVER_ADDRESS} = Empty,
+            {SERVER_PORT} = Empty,
         )
     )]
     #[allow(clippy::type_complexity)]
@@ -403,12 +404,12 @@ impl p2::WasiHttpHooks for InstanceHttpHooks {
         skip_all,
         fields(
             otel.kind = "client",
-            url.full = Empty,
-            http.request.method = %request.method(),
+            {URL_FULL} = Empty,
+            {HTTP_REQUEST_METHOD} = %request.method(),
             otel.name = %request.method(),
-            http.response.status_code = Empty,
-            server.address = Empty,
-            server.port = Empty,
+            {HTTP_RESPONSE_STATUS_CODE} = Empty,
+            {SERVER_ADDRESS} = Empty,
+            {SERVER_PORT} = Empty,
         )
     )]
     fn send_request(
