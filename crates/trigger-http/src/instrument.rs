@@ -1,6 +1,8 @@
 use anyhow::Result;
 use http::Response;
-use opentelemetry_semantic_conventions::attribute::{ERROR_TYPE, HTTP_RESPONSE_STATUS_CODE};
+use opentelemetry_semantic_conventions::attribute::{
+    ERROR_TYPE, HTTP_RESPONSE_STATUS_CODE, HTTP_ROUTE,
+};
 use tracing::Level;
 
 use crate::Body;
@@ -11,18 +13,18 @@ macro_rules! http_span {
         tracing::info_span!(
             "spin_trigger_http.handle_http_request",
             "otel.kind" = "server",
-            "http.request.method" = %$request.method(),
-            "network.peer.address" = %$addr.ip(),
-            "network.peer.port" = %$addr.port(),
-            "network.protocol.name" = "http",
-            "url.path" = $request.uri().path(),
-            "url.query" = $request.uri().query().unwrap_or(""),
-            "url.scheme" = $request.uri().scheme_str().unwrap_or(""),
-            "client.address" = $request.headers().get("x-forwarded-for").and_then(|val| val.to_str().ok()),
+            {opentelemetry_semantic_conventions::attribute::HTTP_REQUEST_METHOD} = %$request.method(),
+            {opentelemetry_semantic_conventions::attribute::NETWORK_PEER_ADDRESS} = %$addr.ip(),
+            {opentelemetry_semantic_conventions::attribute::NETWORK_PEER_PORT} = %$addr.port(),
+            {opentelemetry_semantic_conventions::attribute::NETWORK_PROTOCOL_NAME} = "http",
+            {opentelemetry_semantic_conventions::attribute::URL_PATH} = $request.uri().path(),
+            {opentelemetry_semantic_conventions::attribute::URL_QUERY} = $request.uri().query().unwrap_or(""),
+            {opentelemetry_semantic_conventions::attribute::URL_SCHEME} = $request.uri().scheme_str().unwrap_or(""),
+            {opentelemetry_semantic_conventions::attribute::CLIENT_ADDRESS} = $request.headers().get("x-forwarded-for").and_then(|val| val.to_str().ok()),
             // Recorded later
-            "error.type" = ::tracing::field::Empty,
-            "http.response.status_code" = ::tracing::field::Empty,
-            "http.route" = ::tracing::field::Empty,
+            {opentelemetry_semantic_conventions::attribute::ERROR_TYPE} = ::tracing::field::Empty,
+            {opentelemetry_semantic_conventions::attribute::HTTP_RESPONSE_STATUS_CODE} = ::tracing::field::Empty,
+            {opentelemetry_semantic_conventions::attribute::HTTP_ROUTE} = ::tracing::field::Empty,
             "otel.name" = ::tracing::field::Empty,
         )
     };
@@ -46,7 +48,7 @@ pub(crate) fn finalize_http_span(
             let matched_route = response.extensions().get::<MatchedRoute>();
             // Set otel.name and http.route
             if let Some(MatchedRoute { route }) = matched_route {
-                span.record("http.route", route);
+                span.record(HTTP_ROUTE, route);
                 span.record("otel.name", format!("{method} {route}"));
             } else {
                 span.record("otel.name", method);
