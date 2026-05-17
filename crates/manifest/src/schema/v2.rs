@@ -754,6 +754,16 @@ pub enum TargetEnvironmentRef {
     },
 }
 
+impl std::fmt::Display for TargetEnvironmentRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Catalogue(e) => e.fmt(f),
+            Self::Http { url } => url.fmt(f),
+            Self::File { path } => path.display().fmt(f),
+        }
+    }
+}
+
 mod kebab_or_snake_case {
     use serde::{Deserialize, Serialize};
     pub use spin_serde::{KebabId, SnakeId};

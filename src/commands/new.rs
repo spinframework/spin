@@ -151,7 +151,7 @@ impl TemplateNewCommandCore {
         variant: TemplateVariantInfo,
     ) -> Result<()> {
         let (template_manager, suggested_plugins) =
-            env_templates_and_plugins(target_environment).await?;
+            env_templates_and_plugins(target_environment, &variant).await?;
 
         let (name, template_id) = self.resolve_name_template_syntax(&template_manager, &variant)?;
 
@@ -285,11 +285,25 @@ impl TemplateNewCommandCore {
 
 async fn env_templates_and_plugins(
     target_environment: Option<&String>,
+    variant: &TemplateVariantInfo,
 ) -> anyhow::Result<(TemplateManager, Vec<String>)> {
-    Ok(match target_environment {
-        Some(env) => {
-            //   - resolve the TE
-            let env_ref = parse_env(env);
+    let target_env_ref = match variant {
+        TemplateVariantInfo::NewApplication => target_environment.map(|te| parse_env(te)),
+        TemplateVariantInfo::AddComponent { manifest_path } => {
+            match infer_target_env_from_file(manifest_path) {
+                Ok(t) => t,
+                Err(_) => {
+                    terminal::warn!(
+                        "Couldn't determine target environment; using your installed templates.\n"
+                    );
+                    None
+                }
+            }
+        }
+    };
+
+    Ok(match target_env_ref {
+        Some(env_ref) => {
             let loaded_env =
                 spin_environments::load_environment_def(&env_ref, &std::env::current_dir()?)
                     .await?;
@@ -314,11 +328,28 @@ async fn env_templates_and_plugins(
                     .await?;
             }
             if is_empty(&template_manager).await {
-                anyhow::bail!(
-                    "The {env} environment doesn't list any associated templates. Run `spin new` without `-E` to use generic templates."
-                );
+                match variant {
+                    TemplateVariantInfo::NewApplication => {
+                        anyhow::bail!(
+                            "The {env_ref} environment doesn't list any associated templates. Run `spin new` without `-E` to use generic templates."
+                        );
+                    }
+                    TemplateVariantInfo::AddComponent { .. } => {
+                        // `spin add` doesn't have an option for skipping a templateless env (the equivalent of `spin new` without `-E`).
+                        // Fall back to the installed templates.
+                        terminal::warn!(
+                            "The application targets the {env_ref} environment, but that doesn't list any associated templates."
+                        );
+                        eprintln!(
+                            "Templates will instead be taken from the installed template set."
+                        );
+                        eprintln!();
+                        (TemplateManager::try_default()?, vec![])
+                    }
+                }
+            } else {
+                (template_manager, env_def.plugins().to_vec())
             }
-            (template_manager, env_def.plugins().to_vec())
         }
         None => {
             let template_manager = TemplateManager::try_default()
@@ -326,6 +357,25 @@ async fn env_templates_and_plugins(
             (template_manager, vec![])
         }
     })
+}
+
+fn infer_target_env_from_file(
+    manifest_path: impl AsRef<Path>,
+) -> anyhow::Result<Option<spin_manifest::schema::v2::TargetEnvironmentRef>> {
+    let manifest = spin_manifest::manifest_from_file(manifest_path)?;
+    match manifest.application.targets.len() {
+        0 => Ok(None),
+        1 => Ok(Some(manifest.application.targets[0].clone())),
+        _ => {
+            terminal::warn!("This application targets multiple environments.");
+            eprintln!(
+                "Spin doesn't currently support environment-specific templates for multiple environments."
+            );
+            eprintln!("Templates will instead be taken from the installed template set.");
+            eprintln!();
+            Ok(None)
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -386,10 +436,16 @@ async fn prompt_template(
         .collect::<Vec<_>>();
 
     if templates.is_empty() {
-        if tags.len() == 1 {
-            bail!("No templates matched '{}'", tags[0]);
-        } else {
-            bail!("No templates matched all tags");
+        match tags.len() {
+            0 => {
+                bail!("No suitable templates found");
+            } // can happen if `spin add` has env, env has templates, but no templates are add-able
+            1 => {
+                bail!("No templates matched '{}'", tags[0]);
+            }
+            _ => {
+                bail!("No templates matched all tags");
+            }
         }
     }
 
