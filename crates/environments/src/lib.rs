@@ -6,7 +6,7 @@ mod environment;
 mod loader;
 
 use environment::{CandidateWorld, CandidateWorlds, TargetEnvironment, TriggerType};
-pub use environment::{EnvironmentDefinition, load_environment_def};
+pub use environment::{Catalogue, EnvironmentDefinition, load_environment_def};
 pub use loader::ApplicationToValidate;
 use loader::ComponentToValidate;
 use spin_manifest::schema::v2::TargetEnvironmentRef;

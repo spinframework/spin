@@ -63,6 +63,34 @@ impl Catalogue {
             .with_context(|| format!("Environment '{env_id}' definition is invalid format"))?;
         Ok(Some(env_def))
     }
+
+    pub async fn list(&self) -> anyhow::Result<Vec<String>> {
+        let mut envs = vec![];
+
+        for ns_entry in self.envs_root.read_dir()? {
+            let Ok(ns_entry) = ns_entry else {
+                continue; // avoid blocking the list for one error
+            };
+            if ns_entry.path().is_dir() {
+                let Ok(ns_reader) = ns_entry.path().read_dir() else {
+                    continue;
+                };
+                for env_entry in ns_reader {
+                    let Ok(env_entry) = env_entry else {
+                        continue;
+                    };
+                    if env_entry.path().is_file()
+                        && let Some(env_name) =
+                            env_entry.path().file_stem().and_then(|s| s.to_str())
+                    {
+                        envs.push(env_name.to_owned());
+                    }
+                }
+            }
+        }
+
+        Ok(envs)
+    }
 }
 
 fn sans_version(id: &str) -> &str {
