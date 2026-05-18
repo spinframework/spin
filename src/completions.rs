@@ -38,6 +38,21 @@ pub fn components() -> Vec<CompletionCandidate> {
     components.keys().map(CompletionCandidate::new).collect()
 }
 
+pub fn environments() -> Vec<CompletionCandidate> {
+    let fut = async move {
+        let Ok(catalogue) = spin_environments::Catalogue::try_default() else {
+            return vec![];
+        };
+
+        let envs = catalogue.list().await.unwrap_or_default();
+
+        envs.into_iter().map(CompletionCandidate::new).collect()
+    };
+
+    let h = tokio::runtime::Handle::current();
+    tokio::task::block_in_place(move || h.block_on(fut))
+}
+
 fn load_manifest_toml() -> Option<toml::Table> {
     let mut args = std::env::args();
 
