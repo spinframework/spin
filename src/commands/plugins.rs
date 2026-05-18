@@ -103,6 +103,7 @@ pub struct Install {
         conflicts_with = PLUGIN_NAME_OPT,
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
     )]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::environments))]
     pub target_environment: String,
 
     /// Skips prompt to accept the installation of the plugin.
@@ -772,6 +773,7 @@ pub struct List {
 
     /// The Spin platform or runtime for which you want to list plugins.
     #[clap(long, short = 'E', num_args = 0..=1, default_value(FLAG_NOT_PRESENT), default_missing_value(FLAG_PRESENT_BUT_NO_VALUE), group = "which")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::environments))]
     target_environment: String,
 }
 

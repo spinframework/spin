@@ -81,6 +81,7 @@ pub struct NewCommand {
     /// The Spin platform or runtime for which you want to develop the application.
     /// If present, Spin will offer only templates tailored for that environment.
     #[clap(long, short = 'E')]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::environments))]
     target_environment: Option<String>,
 
     #[clap(flatten)]
