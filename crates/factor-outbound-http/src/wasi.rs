@@ -26,6 +26,7 @@ use hyper_util::{
     },
     rt::{TokioExecutor, TokioIo},
 };
+use opentelemetry_semantic_conventions::attribute as otel_attribute;
 use spin_factor_outbound_networking::{
     ComponentTlsClientConfigs, TlsClientConfig,
     config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
@@ -135,13 +136,14 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
         skip_all,
         fields(
             otel.kind = "client",
-            url.full = Empty,
-            http.request.method = %request.method(),
+            {otel_attribute::URL_FULL} = Empty,
+            {otel_attribute::HTTP_REQUEST_METHOD} = %request.method(),
             otel.name = %request.method(),
+            // Incubating convention; not yet a stable `opentelemetry_semantic_conventions` constant.
             http.response.body.size = Empty,
-            http.response.status_code = Empty,
-            server.address = Empty,
-            server.port = Empty,
+            {otel_attribute::HTTP_RESPONSE_STATUS_CODE} = Empty,
+            {otel_attribute::SERVER_ADDRESS} = Empty,
+            {otel_attribute::SERVER_PORT} = Empty,
         )
     )]
     #[allow(clippy::type_complexity)]
@@ -269,6 +271,9 @@ impl<B: Body<Error = p2_types::ErrorCode>> Body for BetweenBytesTimeoutBody<B> {
 
                 let mut record_body_size_once = |body_size: u64| {
                     if let Some(span) = me.span.take() {
+                        // `http.response.body.size` is incubating (behind semconv_experimental)
+                        // in opentelemetry-semantic-conventions 0.28. Leave as literal to avoid
+                        // enabling the experimental feature.
                         span.record("http.response.body.size", body_size);
                     }
                 };
@@ -397,12 +402,12 @@ impl p2::WasiHttpHooks for InstanceHttpHooks {
         skip_all,
         fields(
             otel.kind = "client",
-            url.full = Empty,
-            http.request.method = %request.method(),
+            {otel_attribute::URL_FULL} = Empty,
+            {otel_attribute::HTTP_REQUEST_METHOD} = %request.method(),
             otel.name = %request.method(),
-            http.response.status_code = Empty,
-            server.address = Empty,
-            server.port = Empty,
+            {otel_attribute::HTTP_RESPONSE_STATUS_CODE} = Empty,
+            {otel_attribute::SERVER_ADDRESS} = Empty,
+            {otel_attribute::SERVER_PORT} = Empty,
         )
     )]
     fn send_request(
@@ -484,12 +489,12 @@ impl RequestSender {
         // Backfill span fields after potentially updating the URL in the interceptor
         let span = tracing::Span::current();
         if let Some(addr) = override_connect_addr {
-            span.record("server.address", addr.ip().to_string());
-            span.record("server.port", addr.port());
+            span.record(otel_attribute::SERVER_ADDRESS, addr.ip().to_string());
+            span.record(otel_attribute::SERVER_PORT, addr.port());
         } else if let Some(authority) = request.uri().authority() {
-            span.record("server.address", authority.host());
+            span.record(otel_attribute::SERVER_ADDRESS, authority.host());
             if let Some(port) = authority.port_u16() {
-                span.record("server.port", port);
+                span.record(otel_attribute::SERVER_PORT, port);
             }
         }
 
@@ -523,7 +528,7 @@ impl RequestSender {
             }
             *uri = builder.build().unwrap();
         }
-        tracing::Span::current().record("url.full", uri.to_string());
+        tracing::Span::current().record(otel_attribute::URL_FULL, uri.to_string());
 
         let is_self_request = match request.uri().authority() {
             // Some SDKs require an authority, so we support e.g. http://self.alt/self-request
@@ -630,7 +635,10 @@ impl RequestSender {
             .map(|body| body.map_err(hyper_request_error).boxed_unsync());
 
         let span = tracing::Span::current();
-        span.record("http.response.status_code", resp.status().as_u16());
+        span.record(
+            otel_attribute::HTTP_RESPONSE_STATUS_CODE,
+            resp.status().as_u16(),
+        );
 
         record_content_length_header(&span, resp.headers(), "http.response.header.content-length");
 

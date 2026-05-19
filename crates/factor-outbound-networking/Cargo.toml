@@ -21,6 +21,7 @@ spin-manifest = { path = "../manifest" }
 spin-outbound-networking-config = { path = "../outbound-networking-config" }
 spin-serde = { path = "../serde" }
 tracing = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
 url = { workspace = true }
 webpki-root-certs = "1.0.7"
 
