@@ -5,11 +5,12 @@ mod tls;
 use std::{collections::HashMap, sync::Arc};
 
 use futures_util::FutureExt as _;
+use opentelemetry_semantic_conventions::attribute::SERVER_PORT;
 use spin_factor_variables::VariablesFactor;
 use spin_factor_wasi::{SocketAddrUse, WasiFactor};
 use spin_factors::{
-    anyhow::{self, Context},
     ConfigureAppContext, Error, Factor, FactorInstanceBuilder, PrepareContext, RuntimeFactors,
+    anyhow::{self, Context},
 };
 use spin_outbound_networking_config::allowed_hosts::{DisallowedHostHandler, OutboundAllowedHosts};
 use url::Url;
@@ -227,8 +228,10 @@ impl FactorInstanceBuilder for InstanceBuilder {
 pub fn record_address_fields(address: &str) {
     if let Ok(url) = Url::parse(address) {
         let span = tracing::Span::current();
+        // `db.address` and `db.namespace` are incubating in opentelemetry-semantic-conventions 0.28.
+        // Leaving as string literals to avoid enabling the semconv_experimental feature.
         span.record("db.address", url.host_str().unwrap_or_default());
-        span.record("server.port", url.port().unwrap_or_default());
+        span.record(SERVER_PORT, url.port().unwrap_or_default());
         span.record("db.namespace", url.path().trim_start_matches('/'));
     }
 }

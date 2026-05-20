@@ -13,7 +13,7 @@ pub use spin_http_routes::WELL_KNOWN_PREFIX;
 #[cfg(feature = "runtime")]
 pub mod body {
     use super::Body;
-    use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Empty, Full};
+    use http_body_util::{BodyExt, Empty, Full, combinators::UnsyncBoxBody};
     use hyper::body::Bytes;
 
     pub fn full(bytes: Bytes) -> Body {

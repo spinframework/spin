@@ -82,12 +82,11 @@ pub fn compute_default_headers<'a>(
 
 pub fn strip_forbidden_headers(req: &mut Request<Body>) {
     let headers = req.headers_mut();
-    if let Some(host_header) = headers.get("Host") {
-        if let Ok(host) = host_header.to_str() {
-            if is_service_chaining_host(host) {
-                headers.remove("Host");
-            }
-        }
+    if let Some(host_header) = headers.get("Host")
+        && let Ok(host) = host_header.to_str()
+        && is_service_chaining_host(host)
+    {
+        headers.remove("Host");
     }
 }
 

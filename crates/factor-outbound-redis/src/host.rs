@@ -1,18 +1,18 @@
 use std::net::SocketAddr;
 
 use anyhow::Result;
-use redis::io::AsyncDNSResolver;
 use redis::AsyncConnectionConfig;
-use redis::{aio::MultiplexedConnection, AsyncCommands, FromRedisValue, Value};
+use redis::io::AsyncDNSResolver;
+use redis::{AsyncCommands, FromRedisValue, Value, aio::MultiplexedConnection};
 use spin_core::wasmtime::component::{Accessor, Resource};
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::redis::redis as v3;
 use spin_world::v1::{redis as v1, redis_types};
 use spin_world::v2::redis as v2;
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
 use crate::allowed_hosts::AllowedHostChecker;
 
@@ -254,15 +254,13 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
             .await
             .map_err(other_error_v3)?;
 
-        let rsrc = accessor.with(|mut access| {
+        accessor.with(|mut access| {
             let host = access.get();
             host.connections
                 .push(conn)
                 .map(Resource::new_own)
                 .map_err(|_| v3::Error::TooManyConnections)
-        });
-
-        rsrc
+        })
     }
 
     #[instrument(name = "spin_outbound_redis.publish", skip(accessor, connection, payload), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("PUBLISH {}", channel)))]

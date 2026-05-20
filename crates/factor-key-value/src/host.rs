@@ -7,10 +7,10 @@ use spin_core::{
 use spin_factor_otel::OtelFactorState;
 use spin_resource_table::Table;
 use spin_telemetry::traces::{self, Blame};
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::key_value::key_value as v3;
 use spin_world::v2::key_value;
 use spin_world::wasi::keyvalue as wasi_keyvalue;
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use std::{any::Any, collections::HashSet, sync::Arc};
 use tracing::instrument;
 
@@ -63,7 +63,7 @@ pub trait Store: Sync + Send {
     async fn delete_many(&self, keys: Vec<String>) -> Result<(), Error>;
     async fn increment(&self, key: String, delta: i64) -> Result<i64, Error>;
     async fn new_compare_and_swap(&self, bucket_rep: u32, key: &str)
-        -> Result<Arc<dyn Cas>, Error>;
+    -> Result<Arc<dyn Cas>, Error>;
 }
 
 pub struct KeyValueDispatch {
@@ -266,15 +266,13 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
         let store = manager.get(&label).await.map_err(to_v3_err)?;
         store.after_open().await.map_err(to_v3_err)?;
 
-        let rsrc = accessor.with(|mut access| {
+        accessor.with(|mut access| {
             let host = access.get();
             host.stores
                 .push(store)
                 .map(Resource::new_own)
                 .map_err(|()| v3::Error::StoreTableFull)
-        });
-
-        rsrc
+        })
     }
 
     async fn get<T>(

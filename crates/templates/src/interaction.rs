@@ -1,9 +1,9 @@
 use std::{collections::HashMap, path::Path};
 
 use crate::{
+    Run,
     cancellable::Cancellable,
     template::{TemplateParameter, TemplateParameterDataType},
-    Run,
 };
 
 use anyhow::anyhow;
@@ -147,10 +147,10 @@ fn ask_choice(
     allowed_values: &[String],
 ) -> anyhow::Result<String> {
     let mut select = Select::new().with_prompt(prompt).items(allowed_values);
-    if let Some(s) = default_value {
-        if let Some(default_index) = allowed_values.iter().position(|item| item == s) {
-            select = select.default(default_index);
-        }
+    if let Some(s) = default_value
+        && let Some(default_index) = allowed_values.iter().position(|item| item == s)
+    {
+        select = select.default(default_index);
     }
     let selected_index = select.interact()?;
     Ok(allowed_values[selected_index].clone())

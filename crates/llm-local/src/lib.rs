@@ -3,13 +3,13 @@ mod llama;
 
 use anyhow::Context;
 use bert::{BertModel, Config};
-use candle::{safetensors::load_buffer, DType};
+use candle::{DType, safetensors::load_buffer};
 use candle_nn::VarBuilder;
 use spin_common::ui::quoted_path;
 use spin_core::async_trait;
 use spin_world::v2::llm::{self as wasi_llm};
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,

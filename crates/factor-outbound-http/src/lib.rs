@@ -9,31 +9,31 @@ use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Context;
 use http::{
-    uri::{Authority, Parts, PathAndQuery, Scheme},
     HeaderValue, Uri,
+    uri::{Authority, Parts, PathAndQuery, Scheme},
 };
 use intercept::OutboundHttpInterceptor;
 use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::{
-    config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
     ComponentTlsClientConfigs, OutboundNetworkingFactor,
+    config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
 };
 use spin_factors::{
-    anyhow, ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors,
-    SelfInstanceBuilder,
+    ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
+    anyhow,
 };
 use tokio::sync::Semaphore;
 use wasmtime_wasi_http::WasiHttpCtx;
 
 pub use wasmtime_wasi_http::p2::{
+    HttpResult,
     bindings::http::types::ErrorCode,
     body::HyperOutgoingBody,
     types::{HostFutureIncomingResponse, OutgoingRequestConfig},
-    HttpResult,
 };
 
-pub use wasi::{p2_to_p3_error_code, p3_to_p2_error_code, MutexBody, NotifyOnDropBody};
+pub use wasi::{MutexBody, NotifyOnDropBody, p2_to_p3_error_code, p3_to_p2_error_code};
 
 #[derive(Default)]
 pub struct OutboundHttpFactor {

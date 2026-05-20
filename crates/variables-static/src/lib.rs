@@ -1,7 +1,7 @@
 use std::{collections::HashMap, hash::Hash, sync::Arc};
 
 use serde::Deserialize;
-use spin_expressions::{async_trait::async_trait, Key, Provider};
+use spin_expressions::{Key, Provider, async_trait::async_trait};
 use spin_factors::anyhow;
 
 pub use source::*;

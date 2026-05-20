@@ -68,6 +68,8 @@ pub enum SkippedReason {
     AlreadyExists,
     /// The template was skipped because its manifest was missing or invalid.
     InvalidManifest(String),
+    /// The template was removed from the source but could not be removed locally.
+    CouldNotRemove,
 }
 
 /// The results of installing a set of templates.
@@ -76,6 +78,8 @@ pub struct InstallationResults {
     pub installed: Vec<Template>,
     /// The templates that were skipped during the install operation.
     pub skipped: Vec<(String, SkippedReason)>,
+    /// The templates that were removed during the install operation.
+    pub removed: Vec<String>,
 }
 
 /// The result of listing templates.
@@ -112,6 +116,12 @@ impl TemplateManager {
         Ok(Self::new(store))
     }
 
+    /// Creates an environment-specific `TemplateManager` for the default install location.
+    pub fn for_environment(env: &str) -> anyhow::Result<Self> {
+        let store = TemplateStore::for_environment(env)?;
+        Ok(Self::new(store))
+    }
+
     pub(crate) fn new(store: TemplateStore) -> Self {
         Self { store }
     }
@@ -139,6 +149,21 @@ impl TemplateManager {
         let mut installed = vec![];
         let mut skipped = vec![];
 
+        let mut local_but_not_source = if let Some(upgrading_repo) = source.as_git_url() {
+            let local = self
+                .list()
+                .await
+                .map(|list| list.templates)
+                .unwrap_or_default();
+            local
+                .into_iter()
+                .filter(|t| t.is_from_source_repo(upgrading_repo))
+                .map(|t| t.id().to_string())
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+
         for template_dir in template_dirs {
             let install_result = self
                 .install_one(&template_dir, options, source, reporter)
@@ -147,15 +172,39 @@ impl TemplateManager {
                     format!("Failed to install template from {}", template_dir.display())
                 })?;
             match install_result {
-                InstallationResult::Installed(template) => installed.push(template),
-                InstallationResult::Skipped(id, reason) => skipped.push((id, reason)),
+                InstallationResult::Installed(template) => {
+                    local_but_not_source.remove(template.id());
+                    installed.push(template);
+                }
+                InstallationResult::Skipped(id, reason) => {
+                    local_but_not_source.remove(id.as_str());
+                    skipped.push((id, reason));
+                }
+            }
+        }
+
+        let to_remove = match &options.exists_behaviour {
+            ExistsBehaviour::Skip => vec![],
+            ExistsBehaviour::Update => local_but_not_source.into_iter().collect::<Vec<_>>(),
+        };
+        let mut removed = Vec::with_capacity(to_remove.len());
+
+        for id in &to_remove {
+            match self.uninstall(id).await {
+                Ok(_) => removed.push(id.clone()),
+                Err(_) => skipped.push((id.to_string(), SkippedReason::CouldNotRemove)),
             }
         }
 
         installed.sort_by_key(|t| t.id().to_owned());
         skipped.sort_by_key(|(id, _)| id.clone());
+        removed.sort();
 
-        Ok(InstallationResults { installed, skipped })
+        Ok(InstallationResults {
+            installed,
+            skipped,
+            removed,
+        })
     }
 
     async fn install_one(
@@ -193,7 +242,7 @@ impl TemplateManager {
                     return Ok(InstallationResult::Skipped(
                         id.to_owned(),
                         SkippedReason::AlreadyExists,
-                    ))
+                    ));
                 }
                 ExistsBehaviour::Update => {
                     copy_template_over_existing(id, source_dir, &dest_dir, source).await?
@@ -566,7 +615,7 @@ mod tests {
         }
     }
 
-    const TPLS_IN_THIS: usize = 11;
+    const TPLS_IN_THIS: usize = 12;
 
     #[tokio::test]
     async fn can_install_into_new_directory() {
@@ -877,7 +926,9 @@ mod tests {
 
         let spin_toml = tokio::fs::read_to_string(&spin_toml_path).await.unwrap();
         assert!(spin_toml.contains("source = \"hello/target/wasm32-wasip2/release/hello.wasm\""));
-        assert!(spin_toml.contains("source = \"encore/target/wasm32-wasip2/release/hello_2.wasm\""));
+        assert!(
+            spin_toml.contains("source = \"encore/target/wasm32-wasip2/release/hello_2.wasm\"")
+        );
     }
 
     #[tokio::test]
@@ -1138,10 +1189,12 @@ mod tests {
             .await
             .expect_err("generate into existing dir should have failed");
 
-        assert!(tokio::fs::read_to_string(&manifest_path)
-            .await
-            .unwrap()
-            .contains("cookies"));
+        assert!(
+            tokio::fs::read_to_string(&manifest_path)
+                .await
+                .unwrap()
+                .contains("cookies")
+        );
     }
 
     #[tokio::test]
@@ -1167,10 +1220,12 @@ mod tests {
             .await
             .expect("generate into existing dir should have succeeded");
 
-        assert!(tokio::fs::read_to_string(&manifest_path)
-            .await
-            .unwrap()
-            .contains("[[trigger.http]]"));
+        assert!(
+            tokio::fs::read_to_string(&manifest_path)
+                .await
+                .unwrap()
+                .contains("[[trigger.http]]")
+        );
     }
 
     #[tokio::test]

@@ -5,7 +5,7 @@ use env::otel_logs_enabled;
 use env::otel_metrics_enabled;
 use env::otel_tracing_enabled;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
-use tracing_subscriber::{fmt, prelude::*, registry, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, fmt, prelude::*, registry};
 
 mod alert_in_dev;
 pub mod detector;
@@ -107,4 +107,12 @@ pub fn init(spin_version: String) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Build a reqwest::Client that explicitly uses rustls as the TLS backend with native root certs.
+pub(crate) fn rustls_reqwest_client() -> anyhow::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .use_rustls_tls()
+        .build()
+        .context("failed to build rustls reqwest client for OTLP exporter")
 }

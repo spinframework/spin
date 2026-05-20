@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use itertools::Itertools;
 use path_absolutize::Absolutize;
@@ -13,7 +13,10 @@ use tokio;
 
 use spin_templates::{RunOptions, Template, TemplateManager, TemplateVariantInfo};
 
-use crate::opts::{APP_MANIFEST_FILE_OPT, DEFAULT_MANIFEST_FILE};
+use crate::{
+    opts::{APP_MANIFEST_FILE_OPT, DEFAULT_MANIFEST_FILE},
+    parse_env::parse_env,
+};
 
 /// Scaffold a new application based on a template.
 #[derive(Parser, Debug)]
@@ -30,15 +33,17 @@ pub struct TemplateNewCommandCore {
 
     /// The template from which to create the new application or component. Run `spin templates list` to see available options.
     #[clap(short = 't', long = "template")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::template_ids))]
     pub template_id: Option<String>,
 
     /// Filter templates to select by tags.
     #[clap(long = "tag", conflicts_with = "template_id")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::template_tags))]
     pub tags: Vec<String>,
 
     /// The directory in which to create the new application or component.
     /// The default is the name argument.
-    #[clap(short = 'o', long = "output", group = "location")]
+    #[clap(short = 'o', long = "output", group = "location", value_hint = clap::ValueHint::DirPath)]
     pub output_path: Option<PathBuf>,
 
     /// Create the new application or component in the current directory.
@@ -73,6 +78,12 @@ pub struct TemplateNewCommandCore {
 /// Scaffold a new application based on a template.
 #[derive(Parser, Debug)]
 pub struct NewCommand {
+    /// The Spin platform or runtime for which you want to develop the application.
+    /// If present, Spin will offer only templates tailored for that environment.
+    #[clap(long, short = 'E')]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::environments))]
+    target_environment: Option<String>,
+
     #[clap(flatten)]
     options: TemplateNewCommandCore,
 }
@@ -94,7 +105,12 @@ pub struct AddCommand {
 
 impl NewCommand {
     pub async fn run(&self) -> Result<()> {
-        self.options.run(TemplateVariantInfo::NewApplication).await
+        self.options
+            .run(
+                self.target_environment.as_ref(),
+                TemplateVariantInfo::NewApplication,
+            )
+            .await
     }
 }
 
@@ -120,15 +136,22 @@ impl AddCommand {
             );
         }
         self.options
-            .run(TemplateVariantInfo::AddComponent { manifest_path })
+            .run(
+                None, /* TODO: extract from manifest? */
+                TemplateVariantInfo::AddComponent { manifest_path },
+            )
             .await
     }
 }
 
 impl TemplateNewCommandCore {
-    pub async fn run(&self, variant: TemplateVariantInfo) -> Result<()> {
-        let template_manager = TemplateManager::try_default()
-            .context("Failed to construct template directory path")?;
+    pub async fn run(
+        &self,
+        target_environment: Option<&String>,
+        variant: TemplateVariantInfo,
+    ) -> Result<()> {
+        let (template_manager, suggested_plugins) =
+            env_templates_and_plugins(target_environment, &variant).await?;
 
         let (name, template_id) = self.resolve_name_template_syntax(&template_manager, &variant)?;
 
@@ -190,10 +213,23 @@ impl TemplateNewCommandCore {
         let run = template.run(options);
 
         if std::io::stderr().is_terminal() {
-            run.interactive().await
+            run.interactive().await?;
+            if let Ok(plugin_manager) = spin_plugins::manager::PluginManager::try_default()
+                && let Some(env_name) = target_environment.as_ref()
+            {
+                _ = super::plugins::suggest_plugins(
+                    &plugin_manager,
+                    env_name,
+                    &suggested_plugins,
+                    true,
+                )
+                .await;
+            };
         } else {
-            run.silent().await
+            run.silent().await?;
         }
+
+        Ok(())
     }
 
     // Try to guess if the user is using v1 or v2 syntax, and fix things up so
@@ -244,6 +280,101 @@ impl TemplateNewCommandCore {
             (None, Some(_), None) => panic!("got second positional arg without first"),
         };
         Ok((name, template_id))
+    }
+}
+
+async fn env_templates_and_plugins(
+    target_environment: Option<&String>,
+    variant: &TemplateVariantInfo,
+) -> anyhow::Result<(TemplateManager, Vec<String>)> {
+    let target_env_ref = match variant {
+        TemplateVariantInfo::NewApplication => target_environment.map(|te| parse_env(te)),
+        TemplateVariantInfo::AddComponent { manifest_path } => {
+            match infer_target_env_from_file(manifest_path) {
+                Ok(t) => t,
+                Err(_) => {
+                    terminal::warn!(
+                        "Couldn't determine target environment; using your installed templates.\n"
+                    );
+                    None
+                }
+            }
+        }
+    };
+
+    Ok(match target_env_ref {
+        Some(env_ref) => {
+            let loaded_env =
+                spin_environments::load_environment_def(&env_ref, &std::env::current_dir()?)
+                    .await?;
+            let env_name = loaded_env.name;
+            let env_def = loaded_env.env_def;
+            //   - create a TM for it
+            let template_manager = TemplateManager::for_environment(&env_name)?;
+            //   - install the templates to that TM
+            let env_templates = env_def.templates();
+            if let Some(env_templates) = env_templates {
+                let source = spin_templates::TemplateSource::try_from_git(
+                    env_templates.url(),
+                    env_templates.tag(),
+                    crate::build_info::SPIN_VERSION,
+                )?;
+                template_manager
+                    .install(
+                        &source,
+                        &spin_templates::InstallOptions::default().update(true),
+                        &DiscardingReporter,
+                    )
+                    .await?;
+            }
+            if is_empty(&template_manager).await {
+                match variant {
+                    TemplateVariantInfo::NewApplication => {
+                        anyhow::bail!(
+                            "The {env_ref} environment doesn't list any associated templates. Run `spin new` without `-E` to use generic templates."
+                        );
+                    }
+                    TemplateVariantInfo::AddComponent { .. } => {
+                        // `spin add` doesn't have an option for skipping a templateless env (the equivalent of `spin new` without `-E`).
+                        // Fall back to the installed templates.
+                        terminal::warn!(
+                            "The application targets the {env_ref} environment, but that doesn't list any associated templates."
+                        );
+                        eprintln!(
+                            "Templates will instead be taken from the installed template set."
+                        );
+                        eprintln!();
+                        (TemplateManager::try_default()?, vec![])
+                    }
+                }
+            } else {
+                (template_manager, env_def.plugins().to_vec())
+            }
+        }
+        None => {
+            let template_manager = TemplateManager::try_default()
+                .context("Failed to construct template directory path")?;
+            (template_manager, vec![])
+        }
+    })
+}
+
+fn infer_target_env_from_file(
+    manifest_path: impl AsRef<Path>,
+) -> anyhow::Result<Option<spin_manifest::schema::v2::TargetEnvironmentRef>> {
+    let manifest = spin_manifest::manifest_from_file(manifest_path)?;
+    match manifest.application.targets.len() {
+        0 => Ok(None),
+        1 => Ok(Some(manifest.application.targets[0].clone())),
+        _ => {
+            terminal::warn!("This application targets multiple environments.");
+            eprintln!(
+                "Spin doesn't currently support environment-specific templates for multiple environments."
+            );
+            eprintln!("Templates will instead be taken from the installed template set.");
+            eprintln!();
+            Ok(None)
+        }
     }
 }
 
@@ -305,10 +436,16 @@ async fn prompt_template(
         .collect::<Vec<_>>();
 
     if templates.is_empty() {
-        if tags.len() == 1 {
-            bail!("No templates matched '{}'", tags[0]);
-        } else {
-            bail!("No templates matched all tags");
+        match tags.len() {
+            0 => {
+                bail!("No suitable templates found");
+            } // can happen if `spin add` has env, env has templates, but no templates are add-able
+            1 => {
+                bail!("No templates matched '{}'", tags[0]);
+            }
+            _ => {
+                bail!("No templates matched all tags");
+            }
         }
     }
 
@@ -341,6 +478,16 @@ async fn list_or_install_templates(
     } else {
         Ok(Some(list_results.templates))
     }
+}
+
+async fn is_empty(template_manager: &TemplateManager) -> bool {
+    template_manager
+        .list()
+        .await
+        .ok()
+        .map(|lr| lr.templates)
+        .unwrap_or_default()
+        .is_empty()
 }
 
 async fn prompt_name(variant: &TemplateVariantInfo) -> anyhow::Result<String> {
@@ -386,8 +533,60 @@ fn validate_name(name: &str) -> Result<String, String> {
         "do"
     };
 
-    let msg = format!("Each segment of the name must start with a letter. {invalid_text} {verb} not start with a letter");
+    let msg = format!(
+        "Each segment of the name must start with a letter. {invalid_text} {verb} not start with a letter"
+    );
     Err(msg)
+}
+
+mod completions {
+    use super::*;
+
+    pub fn template_ids() -> Vec<clap_complete::CompletionCandidate> {
+        let fut = async move {
+            let Ok(template_manager) = TemplateManager::try_default() else {
+                return vec![];
+            };
+            let Ok(list) = template_manager.list().await else {
+                return vec![];
+            };
+            list.templates
+                .iter()
+                .map(|t| clap_complete::CompletionCandidate::new(t.id()))
+                .collect::<Vec<_>>()
+        };
+
+        let h = tokio::runtime::Handle::current();
+        tokio::task::block_in_place(move || h.block_on(fut))
+    }
+
+    pub fn template_tags() -> Vec<clap_complete::CompletionCandidate> {
+        let fut = async move {
+            let Ok(template_manager) = TemplateManager::try_default() else {
+                return vec![];
+            };
+            let Ok(list) = template_manager.list().await else {
+                return vec![];
+            };
+            list.templates
+                .iter()
+                .flat_map(|t| t.tags())
+                .map(clap_complete::CompletionCandidate::new)
+                .collect::<Vec<_>>()
+        };
+
+        let h = tokio::runtime::Handle::current();
+        tokio::task::block_in_place(move || h.block_on(fut))
+    }
+}
+
+struct DiscardingReporter;
+
+impl spin_templates::ProgressReporter for DiscardingReporter {
+    fn report(&self, _: impl AsRef<str>) {
+        // Commit it then to the flames: for it can contain nothing but
+        // sophistry and illusion.
+    }
 }
 
 #[cfg(test)]

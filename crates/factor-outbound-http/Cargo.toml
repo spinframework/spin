@@ -27,6 +27,7 @@ tokio-rustls = { workspace = true }
 tower-service = { workspace = true }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
@@ -35,6 +36,7 @@ wasmtime-wasi-http = { workspace = true }
 spin-common = { path = "../common" }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factors-test = { path = "../factors-test" }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 
 [features]
 default = ["spin-cli"]

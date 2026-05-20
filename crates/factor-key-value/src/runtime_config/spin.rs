@@ -18,7 +18,7 @@ pub trait MakeKeyValueStore: 'static + Send + Sync {
 
     /// Creates a new store manager from the runtime configuration.
     fn make_store(&self, runtime_config: Self::RuntimeConfig)
-        -> anyhow::Result<Self::StoreManager>;
+    -> anyhow::Result<Self::StoreManager>;
 }
 
 /// A function that creates a store manager from a TOML table.

@@ -1,14 +1,14 @@
 use super::{Context, TestConfig};
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use rand_chacha::ChaCha12Core;
 use rand_core::{
-    block::{BlockRng, BlockRngCore},
     SeedableRng,
+    block::{BlockRng, BlockRngCore},
 };
 use serde::Serialize;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::{
     collections::HashSet,
@@ -17,10 +17,10 @@ use std::{
     ops::Deref,
     time::{Duration, SystemTime},
 };
-use wasmtime::{component::InstancePre, Engine};
+use wasmtime::{Engine, component::InstancePre};
 use wasmtime_wasi::{
-    p2::pipe::{MemoryInputPipe, MemoryOutputPipe},
     HostWallClock,
+    p2::pipe::{MemoryInputPipe, MemoryOutputPipe},
 };
 
 /// Report of which WASI functions a module successfully used, if any

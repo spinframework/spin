@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use futures::future::try_join_all;
 use spin_common::ui::quoted_path;
 

@@ -5,10 +5,10 @@ use std::{
 
 use spin_factor_sqlite::{QueryAsyncResult, RuntimeConfig, SqliteFactor};
 use spin_factors::{
-    anyhow::{self, bail, Context as _},
     RuntimeFactors,
+    anyhow::{self, Context as _, bail},
 };
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::{async_trait, spin::sqlite3_1_0::sqlite as v3, v2::sqlite as v2};
 use v2::HostConnection as _;
 
@@ -31,9 +31,10 @@ async fn errors_when_non_configured_database_used() -> anyhow::Result<()> {
         bail!("Expected build_instance_state to error but it did not");
     };
 
-    assert!(err
-        .to_string()
-        .contains("One or more components use SQLite databases which are not defined."));
+    assert!(
+        err.to_string()
+            .contains("One or more components use SQLite databases which are not defined.")
+    );
 
     Ok(())
 }

@@ -21,7 +21,7 @@
 
 #![deny(warnings)]
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use fermyon::spin::http_types::{Method, Request, Response};
 use serde::{Deserialize, Serialize};
 use std::{future::Future, str};
@@ -34,8 +34,8 @@ use test_postgres::Postgres;
 use test_redis::Redis;
 use wasmtime::error::Context as _;
 use wasmtime::{
-    component::{Component, HasSelf, InstancePre, Linker},
     Engine, Store,
+    component::{Component, HasSelf, InstancePre, Linker},
 };
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use wasmtime::component::{Linker, Resource};
-use wasmtime_wasi_http::p2::bindings as latest;
 use wasmtime_wasi_http::p2::WasiHttpCtxView;
+use wasmtime_wasi_http::p2::bindings as latest;
 
 mod bindings {
     use super::latest;
@@ -468,41 +468,39 @@ impl wasi::http::outgoing_handler::Host for WasiHttpCtxView<'_> {
                 let options = latest::http::types::HostRequestOptions::new(self)?;
                 let borrow = || Resource::new_borrow(request.rep());
 
-                if let Some(ms) = connect_timeout_ms {
-                    if let Err(()) = latest::http::types::HostRequestOptions::set_connect_timeout(
+                if let Some(ms) = connect_timeout_ms
+                    && let Err(()) = latest::http::types::HostRequestOptions::set_connect_timeout(
                         self,
                         borrow(),
                         Some(ms.into()),
-                    )? {
-                        latest::http::types::HostRequestOptions::drop(self, options)?;
-                        wasmtime::bail!("invalid connect timeout supplied");
-                    }
+                    )?
+                {
+                    latest::http::types::HostRequestOptions::drop(self, options)?;
+                    wasmtime::bail!("invalid connect timeout supplied");
                 }
 
-                if let Some(ms) = first_byte_timeout_ms {
-                    if let Err(()) =
+                if let Some(ms) = first_byte_timeout_ms
+                    && let Err(()) =
                         latest::http::types::HostRequestOptions::set_first_byte_timeout(
                             self,
                             borrow(),
                             Some(ms.into()),
                         )?
-                    {
-                        latest::http::types::HostRequestOptions::drop(self, options)?;
-                        wasmtime::bail!("invalid first byte timeout supplied");
-                    }
+                {
+                    latest::http::types::HostRequestOptions::drop(self, options)?;
+                    wasmtime::bail!("invalid first byte timeout supplied");
                 }
 
-                if let Some(ms) = between_bytes_timeout_ms {
-                    if let Err(()) =
+                if let Some(ms) = between_bytes_timeout_ms
+                    && let Err(()) =
                         latest::http::types::HostRequestOptions::set_between_bytes_timeout(
                             self,
                             borrow(),
                             Some(ms.into()),
                         )?
-                    {
-                        latest::http::types::HostRequestOptions::drop(self, options)?;
-                        wasmtime::bail!("invalid between bytes timeout supplied");
-                    }
+                {
+                    latest::http::types::HostRequestOptions::drop(self, options)?;
+                    wasmtime::bail!("invalid between bytes timeout supplied");
                 }
 
                 Some(options)

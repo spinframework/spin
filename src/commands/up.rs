@@ -9,7 +9,7 @@ use std::{
     process::Stdio,
 };
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use clap::{CommandFactory, Parser};
 use reqwest::Url;
 use spin_app::locked::LockedApp;
@@ -84,7 +84,7 @@ impl UpCommand {
 /// Argument parser for UpCommand.
 #[derive(Parser, Debug, Default)]
 #[clap(about = "Start the Spin application", disable_help_flag = true)]
-struct UpCommandInner {
+pub(crate) struct UpCommandInner {
     #[clap(short = 'h', long = "help")]
     pub help: bool,
 
@@ -123,6 +123,7 @@ struct UpCommandInner {
     /// The build profile to run. The default is the anonymous profile (usually
     /// the release build).
     #[clap(long)]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::profiles))]
     pub profile: Option<String>,
 
     /// Ignore server certificate errors from a registry
@@ -138,11 +139,11 @@ struct UpCommandInner {
     pub env: Vec<(String, String)>,
 
     /// Temporary directory for the static assets of the components.
-    #[clap(long = "temp", alias = "tmp")]
+    #[clap(long = "temp", alias = "tmp", value_hint = clap::ValueHint::DirPath)]
     pub tmp: Option<PathBuf>,
 
     /// Cache directory for downloaded components and assets.
-    #[clap(long)]
+    #[clap(long, value_hint = clap::ValueHint::DirPath)]
     pub cache_dir: Option<PathBuf>,
 
     /// For local apps with directory mounts and no excluded files, mount them directly instead of using a temporary
@@ -161,6 +162,7 @@ struct UpCommandInner {
 
     /// [Experimental] Component ID to run. This can be specified multiple times. The default is all components.
     #[clap(short = 'c', long = "component-id")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::components))]
     pub components: Vec<String>,
 
     /// All other args, to be passed through to the trigger
@@ -180,7 +182,9 @@ impl UpCommandInner {
                 let _ = child.wait().await?;
                 return Ok(());
             } else {
-                bail!("Default file '{DEFAULT_MANIFEST_FILE}' not found. Run `spin up --from <APPLICATION>`, or `spin up --help` for usage.");
+                bail!(
+                    "Default file '{DEFAULT_MANIFEST_FILE}' not found. Run `spin up --from <APPLICATION>`, or `spin up --help` for usage."
+                );
             }
         }
 
@@ -569,10 +573,10 @@ impl UpCommandInner {
 
         for arg in &self.trigger_args {
             if is_flag_arg(arg) {
-                if let Some(prev_group) = pending_group.take() {
-                    if !prev_group.is_empty() {
-                        groups.push(prev_group);
-                    }
+                if let Some(prev_group) = pending_group.take()
+                    && !prev_group.is_empty()
+                {
+                    groups.push(prev_group);
                 }
                 pending_group = Some(vec![arg]);
             } else if let Some(mut pending) = pending_group.take() {
@@ -678,34 +682,35 @@ fn parse_env_var(s: &str) -> Result<(String, String)> {
 
 fn resolve_trigger_plugin(trigger_type: &str) -> Result<String> {
     use crate::commands::plugins::PluginCompatibility;
-    use spin_plugins::manager::PluginManager;
+    use spin_plugins::PluginManager;
 
     let subcommand = format!("trigger-{trigger_type}");
     let plugin_manager = PluginManager::try_default()
         .with_context(|| format!("Failed to access plugins looking for '{subcommand}'"))?;
-    let plugin_store = plugin_manager.store();
-    let is_installed = plugin_store
-        .installed_manifests()
-        .unwrap_or_default()
-        .iter()
-        .any(|m| m.name() == subcommand);
 
-    if is_installed {
+    if plugin_manager.is_installed(&subcommand) {
         return Ok(subcommand);
     }
 
-    if let Some(known) = plugin_store
-        .catalogue_manifests()
+    if let Some(known) = plugin_manager
+        .catalogue()
+        .manifests()
         .unwrap_or_default()
         .iter()
         .find(|m| m.name() == subcommand)
     {
         match PluginCompatibility::for_current(known) {
-            PluginCompatibility::Compatible => Err(anyhow!("No built-in trigger named '{trigger_type}', but plugin '{subcommand}' is available to install")),
-            _ => Err(anyhow!("No built-in trigger named '{trigger_type}', and plugin '{subcommand}' is not compatible"))
+            PluginCompatibility::Compatible => Err(anyhow!(
+                "No built-in trigger named '{trigger_type}', but plugin '{subcommand}' is available to install"
+            )),
+            _ => Err(anyhow!(
+                "No built-in trigger named '{trigger_type}', and plugin '{subcommand}' is not compatible"
+            )),
         }
     } else {
-        Err(anyhow!("No built-in trigger named '{trigger_type}', and no plugin named '{subcommand}' was found"))
+        Err(anyhow!(
+            "No built-in trigger named '{trigger_type}', and no plugin named '{subcommand}' was found"
+        ))
     }
 }
 

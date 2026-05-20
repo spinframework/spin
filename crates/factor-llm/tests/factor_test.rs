@@ -2,8 +2,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use spin_factor_llm::{LlmEngine, LlmFactor};
-use spin_factors::{anyhow, RuntimeFactors};
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors::{RuntimeFactors, anyhow};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::v1::llm::{self as v1};
 use spin_world::v2::llm::{self as v2, Host};
 use tokio::sync::Mutex;

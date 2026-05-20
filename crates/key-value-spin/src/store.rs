@@ -1,8 +1,8 @@
 use anyhow::Result;
-use rusqlite::{named_params, Connection};
+use rusqlite::{Connection, named_params};
 use spin_core::async_trait;
 use spin_factor_key_value::{
-    log_cas_error, log_error, log_error_v3, v3, Cas, Error, Store, StoreManager, SwapError,
+    Cas, Error, Store, StoreManager, SwapError, log_cas_error, log_error, log_error_v3, v3,
 };
 use std::rc::Rc;
 use std::{
@@ -554,10 +554,11 @@ mod test {
             ("bin".to_string(), b"baz".to_vec()),
             ("alex".to_string(), b"pat".to_vec()),
         ];
-        assert!(kv
-            .set_many(Resource::new_own(rep), keys_and_values.clone())
-            .await
-            .is_ok());
+        assert!(
+            kv.set_many(Resource::new_own(rep), keys_and_values.clone())
+                .await
+                .is_ok()
+        );
 
         let res = kv
             .get_many(

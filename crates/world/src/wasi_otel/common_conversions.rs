@@ -1,7 +1,7 @@
 use crate::wasi::{self, clocks0_2_0::wall_clock};
 use serde::{
-    de::{self, SeqAccess, Visitor},
     Deserialize,
+    de::{self, SeqAccess, Visitor},
 };
 use std::{
     fmt,

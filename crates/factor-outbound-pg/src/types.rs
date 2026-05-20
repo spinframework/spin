@@ -1,7 +1,7 @@
 use anyhow::Result;
 use spin_world::spin::postgres4_2_0::postgres::{self as v4, DbDataType, DbValue, ParameterValue};
 use tokio_postgres::types::{FromSql, Type};
-use tokio_postgres::{types::ToSql, Row};
+use tokio_postgres::{Row, types::ToSql};
 
 mod convert;
 mod decimal;

@@ -1,8 +1,8 @@
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::v1::llm::{self as v1};
 use spin_world::v2::llm::{self as v2};
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
 use crate::InstanceState;
 
