@@ -2,7 +2,7 @@ use std::{fmt::Debug, path::PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
-use dialoguer::{console::Emoji, Confirm, Select};
+use dialoguer::{Confirm, Select, console::Emoji};
 use spin_doctor::{Diagnosis, DryRunNotSupported, PatientDiagnosis};
 
 use crate::opts::APP_MANIFEST_FILE_OPT;

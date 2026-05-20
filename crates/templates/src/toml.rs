@@ -57,19 +57,25 @@ mod test {
         }
         .into();
 
-        assert!(get_at(document.clone(), &["name"])
-            .expect("should find name")
-            .is_str());
-        assert!(get_at(document.clone(), &["application", "redis"])
-            .expect("should find application.redis")
-            .is_table());
+        assert!(
+            get_at(document.clone(), &["name"])
+                .expect("should find name")
+                .is_str()
+        );
+        assert!(
+            get_at(document.clone(), &["application", "redis"])
+                .expect("should find application.redis")
+                .is_table()
+        );
         assert!(
             get_at(document.clone(), &["application", "redis", "trigger"])
                 .expect("should find application.redis.trigger")
                 .is_table()
         );
-        assert!(get_at(document.clone(), &["trigger", "redis"])
-            .expect("should find trigger.redis.channel")
-            .is_array());
+        assert!(
+            get_at(document.clone(), &["trigger", "redis"])
+                .expect("should find trigger.redis.channel")
+                .is_array()
+        );
     }
 }

@@ -4,7 +4,7 @@
 
 mod manifest;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use manifest::ComponentBuildInfo;
 use spin_common::{paths::parent_dir, ui::quoted_path};
 use spin_manifest::schema::v2;
@@ -43,7 +43,9 @@ pub async fn build(
     if wit_generation.generate() {
         let wit_gen_errs = regenerate_wits(&components_to_build, &app_dir).await;
         if !wit_gen_errs.is_empty() {
-            terminal::warn!("One or more components specified dependencies for which Spin couldn't generate import interfaces.");
+            terminal::warn!(
+                "One or more components specified dependencies for which Spin couldn't generate import interfaces."
+            );
             eprintln!(
                 "If these components rely on Spin-generated interfaces they may fail to build."
             );
@@ -63,7 +65,9 @@ pub async fn build(
     if let Some(e) = build_info.load_error() {
         // The manifest had errors. We managed to attempt a build anyway, but we want to
         // let the user know about them.
-        terminal::warn!("The manifest has errors not related to the Wasm component build. Error details:\n{e:#}");
+        terminal::warn!(
+            "The manifest has errors not related to the Wasm component build. Error details:\n{e:#}"
+        );
         // Checking deployment targets requires a healthy manifest (because trigger types etc.),
         // if any of these were specified, warn they are being skipped.
         let should_have_checked_targets =
@@ -109,7 +113,9 @@ pub async fn build(
             for error in target_validation.errors() {
                 terminal::error!("{error}");
             }
-            anyhow::bail!("All components built successfully, but one or more was incompatible with one or more of the deployment targets.");
+            anyhow::bail!(
+                "All components built successfully, but one or more was incompatible with one or more of the deployment targets."
+            );
         }
     }
 
@@ -195,7 +201,9 @@ fn build_components(
 ) -> anyhow::Result<()> {
     if components_to_build.iter().all(|c| c.build.is_none()) {
         println!("None of the components have a build command.");
-        println!("For information on specifying a build command, see https://spinframework.dev/build#setting-up-for-spin-build.");
+        println!(
+            "For information on specifying a build command, see https://spinframework.dev/build#setting-up-for-spin-build."
+        );
         return Ok(());
     }
 
@@ -205,7 +213,9 @@ fn build_components(
     let (components_to_build, has_cycle) = sort(components_to_build);
 
     if has_cycle {
-        tracing::debug!("There is a dependency cycle among components. Spin cannot guarantee to build dependencies before consumers.");
+        tracing::debug!(
+            "There is a dependency cycle among components. Spin cannot guarantee to build dependencies before consumers."
+        );
     }
 
     components_to_build
@@ -449,7 +459,9 @@ pub fn warn_if_not_latest_build(manifest_path: &Path, profile: Option<&str>) {
             Some(p) => format!(" --profile {p}"),
             None => "".to_string(),
         };
-        terminal::warn!("You built a different profile more recently than the one you are running. If the app appears to be behaving like an older version then run `spin up --build{profile_opt}`.");
+        terminal::warn!(
+            "You built a different profile more recently than the one you are running. If the app appears to be behaving like an older version then run `spin up --build{profile_opt}`."
+        );
     }
 }
 

@@ -308,7 +308,10 @@ fn ensure_is_acceptable_dependency(
     if surprises.is_empty() {
         Ok(())
     } else {
-        anyhow::bail!("Dependencies may not have their own resources or permissions. Component {depended_on_id} cannot be used as a dependency of {depender_id} because it specifies: {}", surprises.join(", "));
+        anyhow::bail!(
+            "Dependencies may not have their own resources or permissions. Component {depended_on_id} cannot be used as a dependency of {depender_id} because it specifies: {}",
+            surprises.join(", ")
+        );
     }
 }
 

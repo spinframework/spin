@@ -1,6 +1,6 @@
 use spin_common::{ui::quoted_path, url::parse_file_url};
 use spin_compose::ComponentSourceLoaderFs;
-use spin_core::{async_trait, wasmtime, Component};
+use spin_core::{Component, async_trait, wasmtime};
 use spin_factors::{AppComponent, RuntimeFactors};
 use wasmtime::error::Context as _;
 

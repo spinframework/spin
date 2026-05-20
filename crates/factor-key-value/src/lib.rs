@@ -19,7 +19,7 @@ use spin_locked_app::MetadataKey;
 pub const KEY_VALUE_STORES_KEY: MetadataKey<Vec<String>> = MetadataKey::new("key_value_stores");
 pub use host::to_v3_err;
 pub use host::{
-    log_cas_error, log_error, log_error_v3, Error, KeyValueDispatch, Store, StoreManager,
+    Error, KeyValueDispatch, Store, StoreManager, log_cas_error, log_error, log_error_v3,
 };
 pub use runtime_config::RuntimeConfig;
 use spin_core::async_trait;

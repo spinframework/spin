@@ -4,11 +4,15 @@ use anyhow::Context;
 use spin_common::ui::quoted_path;
 use spin_manifest::schema::v2::TargetEnvironmentRef;
 
+mod catalogue;
 mod definition;
 mod env_loader;
 mod lockfile;
 
+pub use catalogue::Catalogue;
+pub use definition::EnvironmentDefinition;
 use definition::WorldName;
+pub use env_loader::load_environment_def;
 
 use crate::Targets;
 
@@ -232,10 +236,6 @@ impl CandidateWorld {
             package_bytes: bytes,
         })
     }
-}
-
-pub(super) fn is_versioned(env_id: &str) -> bool {
-    env_id.contains(':')
 }
 
 pub type TriggerType = String;

@@ -12,6 +12,7 @@ anyhow = { workspace = true }
 futures = { workspace = true }
 # Removing default features for mysql_async to remove flate2/zlib feature
 mysql_async = { version = "0.35", default-features = false, features = [
+  "minimal-rust",
   "native-tls-tls",
 ] }
 spin-core = { path = "../core" }
@@ -19,6 +20,7 @@ spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-resource-table = { path = "../table" }
+spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }

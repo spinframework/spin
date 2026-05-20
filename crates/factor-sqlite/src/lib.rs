@@ -8,7 +8,7 @@ use host::InstanceState;
 
 use async_trait::async_trait;
 use spin_factor_otel::OtelFactorState;
-use spin_factors::{anyhow, Factor};
+use spin_factors::{Factor, anyhow};
 use spin_locked_app::MetadataKey;
 use spin_world::spin::sqlite3_1_0::sqlite as v3;
 use spin_world::v1::sqlite as v1;

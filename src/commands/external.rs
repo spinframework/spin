@@ -1,13 +1,13 @@
 use crate::build_info::*;
-use crate::commands::plugins::{update, Install};
+use crate::commands::plugins::{Install, update};
 use crate::opts::PLUGIN_OVERRIDE_COMPATIBILITY_CHECK_FLAG;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use spin_common::ui::quoted_path;
+use spin_plugins::PluginManager;
 use spin_plugins::{
     badger::BadgerChecker, error::Error as PluginError, manifest::warn_unsupported_version,
-    PluginStore,
 };
-use std::io::{stderr, IsTerminal};
+use std::io::{IsTerminal, stderr};
 use std::{collections::HashMap, env, process};
 use tokio::process::Command;
 
@@ -54,16 +54,16 @@ pub async fn execute_external_subcommand(
     cmd: clap::Command,
 ) -> anyhow::Result<()> {
     let (plugin_name, args, override_compatibility_check) = parse_subcommand(subcmd)?;
-    let plugin_store = PluginStore::try_default()?;
+    let plugin_manager = PluginManager::try_default()?;
     let plugin_version = ensure_plugin_available(
         &plugin_name,
-        &plugin_store,
+        &plugin_manager,
         cmd,
         override_compatibility_check,
     )
     .await?;
 
-    let binary = plugin_store.installed_binary_path(&plugin_name);
+    let binary = plugin_manager.installed_binary_path(&plugin_name);
     if !binary.exists() {
         return Err(anyhow!(
             "plugin executable {} is missing. Try uninstalling and installing the plugin '{}' again.",
@@ -111,11 +111,11 @@ fn set_kill_on_ctrl_c(child: &tokio::process::Child) {
 
 async fn ensure_plugin_available(
     plugin_name: &str,
-    plugin_store: &PluginStore,
+    plugin_manager: &PluginManager,
     cmd: clap::Command,
     override_compatibility_check: bool,
 ) -> anyhow::Result<Option<String>> {
-    let plugin_version = match plugin_store.read_plugin_manifest(plugin_name) {
+    let plugin_version = match plugin_manager.get_installed_manifest(plugin_name) {
         Ok(manifest) => {
             if let Err(e) =
                 warn_unsupported_version(&manifest, SPIN_VERSION, override_compatibility_check)
@@ -127,7 +127,7 @@ async fn ensure_plugin_available(
             Some(manifest.version().to_owned())
         }
         Err(PluginError::NotFound(e)) => {
-            consider_install(plugin_name, plugin_store, cmd, &e).await?
+            consider_install(plugin_name, plugin_manager, cmd, &e).await?
         }
         Err(e) => return Err(e.into()),
     };
@@ -136,7 +136,7 @@ async fn ensure_plugin_available(
 
 async fn consider_install(
     plugin_name: &str,
-    plugin_store: &PluginStore,
+    plugin_manager: &PluginManager,
     cmd: clap::Command,
     e: &spin_plugins::error::NotFoundError,
 ) -> anyhow::Result<Option<String>> {
@@ -157,17 +157,17 @@ async fn consider_install(
         return Ok(None); // No update badgering needed if we just updated/installed it!
     }
 
-    if stderr().is_terminal() {
-        if let Some(plugin) = match_catalogue_plugin(plugin_store, plugin_name) {
-            let package = spin_plugins::manager::get_package(&plugin)?;
-            if offer_install(&plugin, package)? {
-                let plugin_installer = installer_for(plugin_name);
-                plugin_installer.run().await?;
-                eprintln!();
-                return Ok(None); // No update badgering needed if we just updated/installed it!
-            } else {
-                process::exit(2);
-            }
+    if stderr().is_terminal()
+        && let Some(plugin) = match_catalogue_plugin(plugin_manager, plugin_name)
+    {
+        let package = plugin.get_package()?;
+        if offer_install(&plugin, package)? {
+            let plugin_installer = installer_for(plugin_name);
+            plugin_installer.run().await?;
+            eprintln!();
+            return Ok(None); // No update badgering needed if we just updated/installed it!
+        } else {
+            process::exit(2);
         }
     }
 
@@ -204,6 +204,7 @@ fn installer_for(plugin_name: &str) -> Install {
         yes_to_all: true,
         local_manifest_src: None,
         remote_manifest_src: None,
+        target_environment: crate::opt_value::FLAG_NOT_PRESENT.to_string(),
         override_compatibility_check: false,
         version: None,
         auth_header_value: None,
@@ -211,15 +212,23 @@ fn installer_for(plugin_name: &str) -> Install {
 }
 
 fn match_catalogue_plugin(
-    plugin_store: &PluginStore,
+    plugin_manager: &PluginManager,
     plugin_name: &str,
 ) -> Option<spin_plugins::manifest::PluginManifest> {
-    let Ok(known) = plugin_store.catalogue_manifests() else {
+    use itertools::Itertools;
+
+    let Ok(known) = plugin_manager.catalogue().manifests() else {
         return None;
     };
-    known
+    let candidates = known
         .into_iter()
-        .find(|m| m.name() == plugin_name && m.has_compatible_package())
+        .filter(|m| m.name() == plugin_name && m.has_compatible_package());
+
+    // We care about getting the latest because it's the return of this that is used
+    // to show the plugin installation offer to the user (e.g. URL).
+    let mut candidates_latest_first =
+        candidates.sorted_by(|a, b| b.compare_versions(a).unwrap_or(std::cmp::Ordering::Equal));
+    candidates_latest_first.next()
 }
 
 async fn report_badger_result(badger: tokio::task::JoinHandle<BadgerChecker>) {
@@ -268,7 +277,9 @@ async fn report_badger_result(badger: tokio::task::JoinHandle<BadgerChecker>) {
                 "This plugin can be upgraded.",
                 "Version {eligible} is available and compatible."
             );
-            eprintln!("Version {questionable} is also available, but may not be backward compatible with your current plugin.");
+            eprintln!(
+                "Version {questionable} is also available, but may not be backward compatible with your current plugin."
+            );
             eprintln!("To upgrade, run `{}`.", eligible.upgrade_command());
         }
         Err(e) => {

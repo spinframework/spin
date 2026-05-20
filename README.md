@@ -53,10 +53,10 @@ WebAssembly is a language-agnostic runtime: you can build WebAssembly components
 
 ## Usage
 
-Below is an example of using the `spin` CLI to create a new Spin application.  To run the example you will need to install the `wasm32-wasip1` target for Rust.
+Below is an example of using the `spin` CLI to create a new Spin application.  To run the example you will need to install the `wasm32-wasip2` target for Rust.
 
 ```bash
-$ rustup target add wasm32-wasip1
+$ rustup target add wasm32-wasip2
 ```
 
 First, run the `spin new` command to create a Spin application from a template.
@@ -69,7 +69,7 @@ Running the `spin new` command created a `hello-rust` directory with all the nec
 ```bash
 # Compile to Wasm by executing the `build` command.
 $ spin build
-Executing the build command for component hello-rust: cargo build --target wasm32-wasip1 --release
+Executing the build command for component hello-rust: cargo build --target wasm32-wasip2 --release
     Finished release [optimized] target(s) in 0.03s
 Successfully ran the build command for the Spin components.
 

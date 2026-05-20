@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{values::ValuesMap, Error, Result};
+use crate::{Error, Result, values::ValuesMap};
 
 /// MetadataKey is a handle to a typed metadata value.
 pub struct MetadataKey<T = String> {

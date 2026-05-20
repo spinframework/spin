@@ -12,7 +12,12 @@ const TIMER_TRIGGER_INTEGRATION_TEST: &str = "examples/spin-timer/app-example";
 fn main() {
     // Don't inherit flags from our own invocation of cargo into sub-invocations
     // since the flags are intended for the host and we're compiling for wasm.
-    std::env::remove_var("CARGO_ENCODED_RUSTFLAGS");
+    //
+    // SAFETY: `remove_var` is safe to call when no other threads are running, and
+    // we are at the top of a non-async `main`.
+    unsafe {
+        std::env::remove_var("CARGO_ENCODED_RUSTFLAGS");
+    }
 
     // Extract environment information to be passed to plugins.
     // Git information will be set to defaults if Spin is not

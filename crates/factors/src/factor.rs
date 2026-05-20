@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use wasmtime::component::{HasData, Linker, ResourceTable};
 
 use crate::{
-    prepare::FactorInstanceBuilder, App, AsInstanceState, Error, PrepareContext, RuntimeFactors,
+    App, AsInstanceState, Error, PrepareContext, RuntimeFactors, prepare::FactorInstanceBuilder,
 };
 
 /// A contained (i.e., "factored") piece of runtime functionality.
@@ -124,7 +124,7 @@ pub trait FactorField {
     type Factor: Factor;
 
     fn get(field: &mut Self::State)
-        -> (&mut FactorInstanceState<Self::Factor>, &mut ResourceTable);
+    -> (&mut FactorInstanceState<Self::Factor>, &mut ResourceTable);
 }
 
 impl<T, G> InitContext<G::Factor> for FactorInitContext<'_, T, G>

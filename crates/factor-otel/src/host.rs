@@ -1,6 +1,6 @@
 use crate::InstanceState;
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::anyhow;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry_sdk::error::OTelSdkError;
 use opentelemetry_sdk::logs::LogProcessor;

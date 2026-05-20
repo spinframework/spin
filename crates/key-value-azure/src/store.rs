@@ -1,15 +1,15 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use azure_data_cosmos::{
+    CosmosEntity,
     prelude::{
         AuthorizationToken, CollectionClient, CosmosClient, CosmosClientBuilder, Operation, Query,
     },
-    CosmosEntity,
 };
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use spin_factor_key_value::{
-    log_cas_error, log_error, log_error_v3, v3, Cas, Error, Store, StoreManager, SwapError,
+    Cas, Error, Store, StoreManager, SwapError, log_cas_error, log_error, log_error_v3, v3,
 };
 use std::sync::{Arc, Mutex};
 

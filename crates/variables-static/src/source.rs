@@ -1,5 +1,5 @@
 use spin_common::ui::quoted_path;
-use spin_factors::anyhow::{self, bail, Context as _};
+use spin_factors::anyhow::{self, Context as _, bail};
 use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 #[derive(Clone, Debug)]

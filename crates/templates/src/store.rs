@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use crate::directory::subdirectories;
 
+const ENV_SCOPED_TEMPLATES_DIR: &str = ".envs";
+
 pub(crate) struct TemplateStore {
     root: PathBuf,
 }
@@ -21,6 +23,16 @@ impl TemplateStore {
 
     pub(crate) fn try_default() -> anyhow::Result<Self> {
         Ok(Self::new(data_dir()?.join("templates")))
+    }
+
+    pub(crate) fn for_environment(env: &str) -> anyhow::Result<Self> {
+        let env_dir = UNSAFE_CHARACTERS.replace_all(env, "_");
+        Ok(Self::new(
+            data_dir()?
+                .join("templates")
+                .join(".envs")
+                .join(env_dir.as_ref()),
+        ))
     }
 
     pub(crate) fn get_directory(&self, id: impl AsRef<str>) -> PathBuf {
@@ -48,7 +60,11 @@ impl TemplateStore {
             )
         })?;
 
-        Ok(template_dirs.iter().map(TemplateLayout::new).collect())
+        Ok(template_dirs
+            .iter()
+            .filter(|dp| !Self::is_known_non_template_dir(dp)) // the awkward double negative is because we are ruling out *known* special dirs rather than ruling *in* template dirs
+            .map(TemplateLayout::new)
+            .collect())
     }
 
     fn relative_dir(id: &str) -> impl AsRef<Path> {
@@ -58,6 +74,12 @@ impl TemplateStore {
         // detected, etc.
         let id_sha256 = spin_common::sha256::hex_digest_from_bytes(id);
         format!("{}_{}", UNSAFE_CHARACTERS.replace_all(id, "_"), id_sha256)
+    }
+
+    fn is_known_non_template_dir(path: impl AsRef<Path>) -> bool {
+        path.as_ref()
+            .file_name()
+            .is_some_and(|n| n == ENV_SCOPED_TEMPLATES_DIR)
     }
 }
 

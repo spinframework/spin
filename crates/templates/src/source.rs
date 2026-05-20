@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context};
-use tempfile::{tempdir, TempDir};
+use anyhow::{Context, anyhow};
+use tempfile::{TempDir, tempdir};
 use tokio::process::Command;
 use url::Url;
 
@@ -90,6 +90,13 @@ impl TemplateSource {
     pub async fn resolved_tag(&self) -> Option<String> {
         match self {
             Self::Git(g) => version_matched_tag(g.url.as_str(), &g.spin_version).await,
+            _ => None,
+        }
+    }
+
+    pub(crate) fn as_git_url(&self) -> Option<&Url> {
+        match self {
+            TemplateSource::Git(git) => Some(&git.url),
             _ => None,
         }
     }

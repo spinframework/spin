@@ -1,9 +1,9 @@
 [package]
 name = "test-components"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 
 [build-dependencies]
-cargo_toml = "0.17"
+cargo_toml = "0.22"
 wit-component = { workspace = true }

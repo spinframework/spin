@@ -7,10 +7,10 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use http::{
-    uri::{Authority, Scheme},
     Request, Response, StatusCode, Uri,
+    uri::{Authority, Scheme},
 };
 use http_body_util::BodyExt;
 use hyper::{
@@ -45,15 +45,15 @@ use wasmtime_wasi_http::handler::{HandlerState, StoreBundle};
 use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
 
 use crate::{
+    Body, InstanceReuseConfig, NotFoundRouteKind, OutputFormat, TlsConfig, TriggerApp,
+    TriggerInstanceBuilder,
     headers::strip_forbidden_headers,
-    instrument::{finalize_http_span, http_span, instrument_error, MatchedRoute},
+    instrument::{MatchedRoute, finalize_http_span, http_span, instrument_error},
     outbound_http::OutboundHttpInterceptor,
     spin::SpinHttpExecutor,
     wagi::WagiHttpExecutor,
     wasi::WasiHttpExecutor,
     wasip3::Wasip3HttpExecutor,
-    Body, InstanceReuseConfig, NotFoundRouteKind, OutputFormat, TlsConfig, TriggerApp,
-    TriggerInstanceBuilder,
 };
 
 pub const MAX_RETRIES: u16 = 10;
@@ -497,14 +497,13 @@ impl<F: RuntimeFactors> HttpServer<F> {
     fn not_found(kind: NotFoundRouteKind) -> anyhow::Result<Response<Body>> {
         use std::sync::atomic::{AtomicBool, Ordering};
         static SHOWN_GENERIC_404_WARNING: AtomicBool = AtomicBool::new(false);
-        if let NotFoundRouteKind::Normal(route) = kind {
-            if !SHOWN_GENERIC_404_WARNING.fetch_or(true, Ordering::Relaxed)
-                && std::io::stderr().is_terminal()
-            {
-                terminal::warn!(
-                    "Request to {route} matched no pattern, and received a generic 404 response. To serve a more informative 404 page, add a catch-all (/...) route."
-                );
-            }
+        if let NotFoundRouteKind::Normal(route) = kind
+            && !SHOWN_GENERIC_404_WARNING.fetch_or(true, Ordering::Relaxed)
+            && std::io::stderr().is_terminal()
+        {
+            terminal::warn!(
+                "Request to {route} matched no pattern, and received a generic 404 response. To serve a more informative 404 page, add a catch-all (/...) route."
+            );
         }
         Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)

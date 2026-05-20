@@ -4,14 +4,14 @@
 //! want application developers to know they have a problem.
 
 use tracing::{Event, Subscriber};
-use tracing_subscriber::{filter::filter_fn, registry::LookupSpan, Layer};
+use tracing_subscriber::{Layer, filter::filter_fn, registry::LookupSpan};
 
 const ALERT_IN_DEV_TAG: &str = "alert_in_dev";
 
 /// A layer which prints a terminal warning (using [terminal::warn!]) if
 /// a trace event contains the tag "alert_in_dev" (with any value).
-pub(crate) fn alert_in_dev_layer<S: Subscriber + for<'span> LookupSpan<'span> + 'static>(
-) -> impl Layer<S> {
+pub(crate) fn alert_in_dev_layer<S: Subscriber + for<'span> LookupSpan<'span> + 'static>()
+-> impl Layer<S> {
     CommandLineAlertingLayer.with_filter(filter_fn(|meta| {
         meta.fields().field(ALERT_IN_DEV_TAG).is_some()
     }))

@@ -1,4 +1,4 @@
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use toml::Value;
 use toml_edit::{DocumentMut, InlineTable, Item, Table};
@@ -33,21 +33,21 @@ impl Diagnostic for TriggerDiagnostic {
             .get("trigger")
             .and_then(|item| item.get("type"))
             .and_then(|item| item.as_str());
-        if let Some("http") = trigger_type {
-            if let Some(Value::Array(components)) = manifest.get("component") {
-                let single_component = components.len() == 1;
-                for component in components {
-                    let id = component
-                        .get("id")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or("<missing ID>")
-                        .to_string();
-                    diags.extend(TriggerDiagnosis::for_http_component_trigger(
-                        id,
-                        component.get("trigger"),
-                        single_component,
-                    ));
-                }
+        if let Some("http") = trigger_type
+            && let Some(Value::Array(components)) = manifest.get("component")
+        {
+            let single_component = components.len() == 1;
+            for component in components {
+                let id = component
+                    .get("id")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("<missing ID>")
+                    .to_string();
+                diags.extend(TriggerDiagnosis::for_http_component_trigger(
+                    id,
+                    component.get("trigger"),
+                    single_component,
+                ));
             }
         }
 
@@ -166,10 +166,10 @@ impl ManifestTreatment for TriggerDiagnosis {
                 let trigger_type = trigger.entry("type").or_insert(Item::Value("http".into()));
                 if let Some("http") = trigger_type.as_str() {
                     // Strip "type" trailing space
-                    if let Some(decor) = trigger_type.as_value_mut().map(|v| v.decor_mut()) {
-                        if let Some(suffix) = decor.suffix().and_then(|s| s.as_str()) {
-                            decor.set_suffix(suffix.to_string().trim());
-                        }
+                    if let Some(decor) = trigger_type.as_value_mut().map(|v| v.decor_mut())
+                        && let Some(suffix) = decor.suffix().and_then(|s| s.as_str())
+                    {
+                        decor.set_suffix(suffix.to_string().trim());
                     }
                 }
             }

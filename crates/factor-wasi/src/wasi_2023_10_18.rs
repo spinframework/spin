@@ -1,21 +1,21 @@
 use spin_factors::anyhow::Result;
 use std::mem;
 use wasmtime::component::{Linker, Resource, ResourceTable};
+use wasmtime_wasi::TrappableError;
 use wasmtime_wasi::cli::{WasiCli, WasiCliCtxView};
 use wasmtime_wasi::clocks::{WasiClocks, WasiClocksCtxView};
 use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemCtxView};
 use wasmtime_wasi::p2::DynPollable;
 use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
 use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsCtxView};
-use wasmtime_wasi::TrappableError;
 
 mod latest {
     pub use wasmtime_wasi::p2::bindings::*;
 }
 
 mod bindings {
-    use super::latest;
     pub use super::UdpSocket;
+    use super::latest;
 
     wasmtime::component::bindgen!({
         path: "../../wit",

@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use spin_common::{ui::quoted_path, url::parse_file_url};
 use spin_locked_app::locked::{LockedComponent, LockedComponentSource};
 

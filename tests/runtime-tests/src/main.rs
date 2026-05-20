@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use runtime_tests::RuntimeTest;
-use testing_framework::runtimes::spin_cli::SpinCli;
 use testing_framework::OnTestError;
+use testing_framework::runtimes::spin_cli::SpinCli;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();

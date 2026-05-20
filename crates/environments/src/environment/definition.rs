@@ -23,6 +23,8 @@ pub struct EnvironmentDefinition {
     triggers: HashMap<String, TriggerEnvironment>,
     #[serde(default)]
     default: Option<TriggerEnvironment>,
+    #[serde(default)]
+    metadata: Metadata,
 }
 
 /// The environment definition for a trigger, comprising the worlds which are
@@ -53,6 +55,14 @@ impl EnvironmentDefinition {
 
     pub fn default(&self) -> Option<&TriggerEnvironment> {
         self.default.as_ref()
+    }
+
+    pub fn templates(&self) -> Option<&GitRepo> {
+        self.metadata.templates.as_ref()
+    }
+
+    pub fn plugins(&self) -> &[String] {
+        &self.metadata.plugins
     }
 }
 
@@ -147,6 +157,30 @@ impl std::fmt::Display for WorldName {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+pub struct Metadata {
+    #[serde(default)]
+    templates: Option<GitRepo>,
+    #[serde(default)]
+    plugins: Vec<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct GitRepo {
+    url: String,
+    tag: Option<String>,
+}
+
+impl GitRepo {
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    pub fn tag(&self) -> &Option<String> {
+        &self.tag
     }
 }
 

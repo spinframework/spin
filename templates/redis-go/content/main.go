@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/spinframework/spin-go-sdk/v2/redis"
+	"github.com/spinframework/spin-go-sdk/v3/redis"
 )
 
 func init() {
@@ -14,3 +14,6 @@ func init() {
 		return nil
 	})
 }
+
+// main function must be included for the compiler but is not executed.
+func main() {}
