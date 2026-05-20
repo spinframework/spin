@@ -1783,6 +1783,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
+name = "fixedbitset"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
+
+[[package]]
 name = "flate2"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3273,15 +3279,14 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "openssl"
-version = "0.10.78"
+version = "0.10.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f38c4372413cdaaf3cc79dd92d29d7d9f5ab09b51b10dded508fb90bb70b9222"
+checksum = "a45fa2aa886c42762255da344f0a0d313e254066c46aad76f300c3d3da62d967"
 dependencies = [
  "bitflags",
  "cfg-if",
  "foreign-types",
  "libc",
- "once_cell",
  "openssl-macros",
  "openssl-sys",
 ]
@@ -3311,9 +3316,9 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.114"
+version = "0.9.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13ce1245cd07fcc4cfdb438f7507b0c7e4f3849a69fd84d52374c66d83741bb6"
+checksum = "f28a22dc7140cda5f096e5e7724a6962ca81a7f8bfd2979f9b18c11af56318c4"
 dependencies = [
  "cc",
  "libc",
@@ -3392,6 +3397,12 @@ dependencies = [
  "prost 0.13.5",
  "tonic",
 ]
+
+[[package]]
+name = "opentelemetry-semantic-conventions"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fb3a2f78c2d55362cd6c313b8abedfbc0142ab3c2676822068fd2ab7d51f9b7"
 
 [[package]]
 name = "opentelemetry_sdk"
@@ -3489,7 +3500,7 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
- "fixedbitset",
+ "fixedbitset 0.4.2",
  "indexmap 2.14.0",
 ]
 
@@ -4238,20 +4249,22 @@ dependencies = [
 
 [[package]]
 name = "rumqttc"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1568e15fab2d546f940ed3a21f48bbbd1c494c90c99c4481339364a497f94a9"
+version = "0.25.1"
+source = "git+https://github.com/spinframework/rumqtt?rev=65b7b39a70b12d1781acb61cc07f1f1b680e7643#65b7b39a70b12d1781acb61cc07f1f1b680e7643"
 dependencies = [
  "bytes",
+ "fixedbitset 0.5.7",
  "flume",
  "futures-util",
  "log",
- "rustls-native-certs 0.7.3",
+ "rustls-native-certs 0.8.3",
  "rustls-pemfile 2.2.0",
- "rustls-webpki 0.102.8",
- "thiserror 1.0.69",
+ "rustls-webpki 0.103.10",
+ "thiserror 2.0.17",
  "tokio",
- "tokio-rustls 0.25.0",
+ "tokio-rustls 0.26.4",
+ "tokio-stream",
+ "tokio-util",
  "url",
 ]
 
@@ -5067,6 +5080,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.8.1",
  "hyper-util",
+ "opentelemetry-semantic-conventions",
  "pin-project-lite",
  "reqwest",
  "rustls 0.23.37",
@@ -5129,6 +5143,7 @@ dependencies = [
  "futures-util",
  "http 1.3.1",
  "ip_network",
+ "opentelemetry-semantic-conventions",
  "rustls 0.23.37",
  "rustls-pki-types",
  "rustls-platform-verifier",
@@ -6213,9 +6228,9 @@ checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
 name = "tracing"
-version = "0.1.41"
+version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
+checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
  "log",
  "pin-project-lite",
@@ -6225,9 +6240,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.28"
+version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "395ae124c09f9e6918a2310af6038fba074bcf474ac352496d5910dd59a2226d"
+checksum = "7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6236,9 +6251,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-core"
-version = "0.1.33"
+version = "0.1.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e672c95779cf947c5311f83787af4fa8fffd12fb27e4993211a84bdfd9610f9c"
+checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
  "valuable",
