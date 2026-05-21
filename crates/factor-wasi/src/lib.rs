@@ -4,10 +4,12 @@ mod wasi_2023_10_18;
 mod wasi_2023_11_10;
 
 use std::{
+    collections::HashMap,
     future::Future,
     io::{Read, Write},
     net::SocketAddr,
     path::Path,
+    sync::{Arc, Mutex},
 };
 
 use io::{PipeReadStream, PipedWriteStream};
@@ -15,15 +17,334 @@ use spin_factors::{
     AppComponent, Factor, FactorInstanceBuilder, InitContext, PrepareContext, RuntimeFactors,
     RuntimeFactorsInstanceState, anyhow,
 };
-use wasmtime::component::HasData;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use wasmtime::component::{HasData, Resource};
 use wasmtime_wasi::cli::{StdinStream, StdoutStream, WasiCli, WasiCliCtxView};
 use wasmtime_wasi::clocks::{WasiClocks, WasiClocksCtxView};
 use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemCtxView};
+use wasmtime_wasi::p2::bindings::sockets::network::{
+    ErrorCode as SocketErrorCode, Host as NetworkHost, Network,
+};
+use wasmtime_wasi::p2::bindings::sockets::tcp::{self as p2_tcp, IpSocketAddress, ShutdownType};
+use wasmtime_wasi::p2::bindings::sockets::tcp_create_socket as p2_tcp_create;
+use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
-use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsCtxView};
+use wasmtime_wasi::sockets::{TcpSocket, WasiSockets, WasiSocketsCtxView};
 use wasmtime_wasi::{DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView};
 
 pub use wasmtime_wasi::sockets::SocketAddrUse;
+
+/// Shared state for tracking per-socket semaphore permits. Permits are
+/// acquired in `start_connect` and released when the socket resource is dropped.
+pub struct SocketPermitState {
+    semaphore: Arc<Semaphore>,
+    /// Active permits keyed by socket resource rep (u32). Removed (and the
+    /// permit dropped/released) when the WASI socket resource is dropped.
+    active: Mutex<HashMap<u32, OwnedSemaphorePermit>>,
+}
+
+impl SocketPermitState {
+    pub fn new(semaphore: Arc<Semaphore>) -> Arc<Self> {
+        Arc::new(Self {
+            semaphore,
+            active: Mutex::new(HashMap::new()),
+        })
+    }
+}
+
+/// A view over WASI socket state that carries an optional per-instance socket
+/// permit store, enabling per-connection quota tracking.
+pub struct SpinSocketsView<'a> {
+    pub(crate) inner: WasiSocketsCtxView<'a>,
+    pub(crate) permit_state: Option<Arc<SocketPermitState>>,
+}
+
+impl<'a> std::ops::Deref for SpinSocketsView<'a> {
+    type Target = WasiSocketsCtxView<'a>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl std::ops::DerefMut for SpinSocketsView<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+/// [`HasData`] accessor for [`SpinSocketsView`], used in place of [`WasiSockets`]
+/// when registering TCP socket bindings so that `start_connect` and `drop` can
+/// participate in socket quota tracking.
+pub struct SpinSockets;
+
+impl HasData for SpinSockets {
+    type Data<'a> = SpinSocketsView<'a>;
+}
+
+impl p2_tcp::Host for SpinSocketsView<'_> {}
+
+impl p2_tcp::HostTcpSocket for SpinSocketsView<'_> {
+    async fn start_bind(
+        &mut self,
+        this: Resource<TcpSocket>,
+        network: Resource<Network>,
+        local_address: IpSocketAddress,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::start_bind(&mut self.inner, this, network, local_address).await
+    }
+
+    fn finish_bind(&mut self, this: Resource<TcpSocket>) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::finish_bind(&mut self.inner, this)
+    }
+
+    async fn start_connect(
+        &mut self,
+        this: Resource<TcpSocket>,
+        network: Resource<Network>,
+        remote_address: IpSocketAddress,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        let socket_rep = this.rep();
+        let permit = if let Some(state) = &self.permit_state {
+            let state = Arc::clone(state);
+            match state.semaphore.clone().try_acquire_owned() {
+                Ok(permit) => Some((state, permit)),
+                // wasi has no "quota exceeded" error code; ConnectionRefused is the closest available.
+                Err(_) => return Err(SocketErrorCode::ConnectionRefused.into()),
+            }
+        } else {
+            None
+        };
+        let result =
+            p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address)
+                .await;
+        if let (Some((state, permit)), Ok(())) = (permit, &result) {
+            state
+                .active
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(socket_rep, permit);
+        }
+        // On Err, any acquired permit is dropped here, returning it to the semaphore.
+        result
+    }
+
+    fn finish_connect(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<(Resource<DynInputStream>, Resource<DynOutputStream>)>
+    {
+        p2_tcp::HostTcpSocket::finish_connect(&mut self.inner, this)
+    }
+
+    fn start_listen(&mut self, this: Resource<TcpSocket>) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::start_listen(&mut self.inner, this)
+    }
+
+    fn finish_listen(&mut self, this: Resource<TcpSocket>) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::finish_listen(&mut self.inner, this)
+    }
+
+    fn accept(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<(
+        Resource<TcpSocket>,
+        Resource<DynInputStream>,
+        Resource<DynOutputStream>,
+    )> {
+        p2_tcp::HostTcpSocket::accept(&mut self.inner, this)
+    }
+
+    fn local_address(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<IpSocketAddress> {
+        p2_tcp::HostTcpSocket::local_address(&mut self.inner, this)
+    }
+
+    fn remote_address(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<IpSocketAddress> {
+        p2_tcp::HostTcpSocket::remote_address(&mut self.inner, this)
+    }
+
+    fn is_listening(&mut self, this: Resource<TcpSocket>) -> wasmtime::Result<bool> {
+        p2_tcp::HostTcpSocket::is_listening(&mut self.inner, this)
+    }
+
+    fn address_family(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime::Result<wasmtime_wasi::p2::bindings::sockets::network::IpAddressFamily> {
+        p2_tcp::HostTcpSocket::address_family(&mut self.inner, this)
+    }
+
+    fn set_listen_backlog_size(
+        &mut self,
+        this: Resource<TcpSocket>,
+        value: u64,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::set_listen_backlog_size(&mut self.inner, this, value)
+    }
+
+    fn keep_alive_enabled(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<bool> {
+        p2_tcp::HostTcpSocket::keep_alive_enabled(&mut self.inner, this)
+    }
+
+    fn set_keep_alive_enabled(
+        &mut self,
+        this: Resource<TcpSocket>,
+        value: bool,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::set_keep_alive_enabled(&mut self.inner, this, value)
+    }
+
+    fn keep_alive_idle_time(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<u64> {
+        p2_tcp::HostTcpSocket::keep_alive_idle_time(&mut self.inner, this)
+    }
+
+    fn set_keep_alive_idle_time(
+        &mut self,
+        this: Resource<TcpSocket>,
+        value: u64,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::set_keep_alive_idle_time(&mut self.inner, this, value)
+    }
+
+    fn keep_alive_interval(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<u64> {
+        p2_tcp::HostTcpSocket::keep_alive_interval(&mut self.inner, this)
+    }
+
+    fn set_keep_alive_interval(
+        &mut self,
+        this: Resource<TcpSocket>,
+        value: u64,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::set_keep_alive_interval(&mut self.inner, this, value)
+    }
+
+    fn keep_alive_count(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<u32> {
+        p2_tcp::HostTcpSocket::keep_alive_count(&mut self.inner, this)
+    }
+
+    fn set_keep_alive_count(
+        &mut self,
+        this: Resource<TcpSocket>,
+        value: u32,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::set_keep_alive_count(&mut self.inner, this, value)
+    }
+
+    fn hop_limit(&mut self, this: Resource<TcpSocket>) -> wasmtime_wasi::p2::SocketResult<u8> {
+        p2_tcp::HostTcpSocket::hop_limit(&mut self.inner, this)
+    }
+
+    fn set_hop_limit(
+        &mut self,
+        this: Resource<TcpSocket>,
+        value: u8,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::set_hop_limit(&mut self.inner, this, value)
+    }
+
+    fn receive_buffer_size(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<u64> {
+        p2_tcp::HostTcpSocket::receive_buffer_size(&mut self.inner, this)
+    }
+
+    fn set_receive_buffer_size(
+        &mut self,
+        this: Resource<TcpSocket>,
+        value: u64,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::set_receive_buffer_size(&mut self.inner, this, value)
+    }
+
+    fn send_buffer_size(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<u64> {
+        p2_tcp::HostTcpSocket::send_buffer_size(&mut self.inner, this)
+    }
+
+    fn set_send_buffer_size(
+        &mut self,
+        this: Resource<TcpSocket>,
+        value: u64,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::set_send_buffer_size(&mut self.inner, this, value)
+    }
+
+    fn subscribe(&mut self, this: Resource<TcpSocket>) -> wasmtime::Result<Resource<DynPollable>> {
+        p2_tcp::HostTcpSocket::subscribe(&mut self.inner, this)
+    }
+
+    fn shutdown(
+        &mut self,
+        this: Resource<TcpSocket>,
+        shutdown_type: ShutdownType,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::shutdown(&mut self.inner, this, shutdown_type)
+    }
+
+    fn drop(&mut self, this: Resource<TcpSocket>) -> wasmtime::Result<()> {
+        // Release the permit before dropping the socket resource.
+        if let Some(state) = &self.permit_state {
+            state
+                .active
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&this.rep());
+        }
+        p2_tcp::HostTcpSocket::drop(&mut self.inner, this)
+    }
+}
+
+impl NetworkHost for SpinSocketsView<'_> {
+    fn convert_error_code(
+        &mut self,
+        error: wasmtime_wasi::p2::SocketError,
+    ) -> wasmtime::Result<wasmtime_wasi::p2::bindings::sockets::network::ErrorCode> {
+        NetworkHost::convert_error_code(&mut self.inner, error)
+    }
+
+    fn network_error_code(
+        &mut self,
+        err: Resource<wasmtime::Error>,
+    ) -> wasmtime::Result<Option<wasmtime_wasi::p2::bindings::sockets::network::ErrorCode>> {
+        NetworkHost::network_error_code(&mut self.inner, err)
+    }
+}
+
+impl wasmtime_wasi::p2::bindings::sockets::network::HostNetwork for SpinSocketsView<'_> {
+    fn drop(&mut self, this: Resource<Network>) -> wasmtime::Result<()> {
+        wasmtime_wasi::p2::bindings::sockets::network::HostNetwork::drop(&mut self.inner, this)
+    }
+}
+
+impl p2_tcp_create::Host for SpinSocketsView<'_> {
+    fn create_tcp_socket(
+        &mut self,
+        address_family: wasmtime_wasi::p2::bindings::sockets::network::IpAddressFamily,
+    ) -> wasmtime_wasi::p2::SocketResult<Resource<TcpSocket>> {
+        p2_tcp_create::Host::create_tcp_socket(&mut self.inner, address_family)
+    }
+}
 
 pub struct WasiFactor {
     files_mounter: Box<dyn FilesMounter>,
@@ -58,11 +379,14 @@ impl WasiFactor {
 
     pub fn get_sockets_impl(
         runtime_instance_state: &mut impl RuntimeFactorsInstanceState,
-    ) -> Option<WasiSocketsCtxView<'_>> {
+    ) -> Option<SpinSocketsView<'_>> {
         let (state, table) = runtime_instance_state.get_with_table::<WasiFactor>()?;
-        Some(WasiSocketsCtxView {
-            ctx: state.ctx.sockets(),
-            table,
+        Some(SpinSocketsView {
+            inner: WasiSocketsCtxView {
+                ctx: state.ctx.sockets(),
+                table,
+            },
+            permit_state: state.socket_permit_state.clone(),
         })
     }
 }
@@ -174,6 +498,27 @@ trait InitContextExt: InitContext<WasiFactor> {
         ) -> wasmtime::Result<()>,
     ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), &O::default(), Self::get_sockets)
+    }
+
+    fn get_spin_sockets(data: &mut Self::StoreData) -> SpinSocketsView<'_> {
+        let (state, table) = Self::get_data_with_table(data);
+        SpinSocketsView {
+            inner: WasiSocketsCtxView {
+                ctx: state.ctx.sockets(),
+                table,
+            },
+            permit_state: state.socket_permit_state.clone(),
+        }
+    }
+
+    fn link_tcp_bindings(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            fn(&mut Self::StoreData) -> SpinSocketsView<'_>,
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
+        add_to_linker(self.linker(), Self::get_spin_sockets)
     }
 
     fn link_io_bindings(
@@ -294,10 +639,11 @@ impl Factor for WasiFactor {
         ctx.link_cli_bindings(p3::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p2::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p3::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
-        ctx.link_sockets_bindings(p2::bindings::sockets::tcp::add_to_linker::<_, WasiSockets>)?;
-        ctx.link_sockets_bindings(
-            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, WasiSockets>,
+        ctx.link_tcp_bindings(p2::bindings::sockets::tcp::add_to_linker::<_, SpinSockets>)?;
+        ctx.link_tcp_bindings(
+            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, SpinSockets>,
         )?;
+        // UDP sockets are not subject to the max_sockets_per_app quota — enforcement is TCP-only.
         ctx.link_sockets_bindings(p2::bindings::sockets::udp::add_to_linker::<_, WasiSockets>)?;
         ctx.link_sockets_bindings(
             p2::bindings::sockets::udp_create_socket::add_to_linker::<_, WasiSockets>,
@@ -339,7 +685,10 @@ impl Factor for WasiFactor {
         self.files_mounter
             .mount_files(ctx.app_component(), mount_ctx)?;
 
-        let mut builder = InstanceBuilder { ctx: wasi_ctx };
+        let mut builder = InstanceBuilder {
+            ctx: wasi_ctx,
+            socket_permit_state: None,
+        };
 
         // Apply environment variables
         builder.env(ctx.app_component().environment());
@@ -396,6 +745,7 @@ impl MountFilesContext<'_> {
 
 pub struct InstanceBuilder {
     ctx: WasiCtxBuilder,
+    socket_permit_state: Option<Arc<SocketPermitState>>,
 }
 
 impl InstanceBuilder {
@@ -466,14 +816,24 @@ impl FactorInstanceBuilder for InstanceBuilder {
     type InstanceState = InstanceState;
 
     fn build(self) -> anyhow::Result<Self::InstanceState> {
-        let InstanceBuilder { ctx: mut wasi_ctx } = self;
+        let InstanceBuilder {
+            ctx: mut wasi_ctx,
+            socket_permit_state,
+        } = self;
         Ok(InstanceState {
             ctx: wasi_ctx.build(),
+            socket_permit_state,
         })
     }
 }
 
 impl InstanceBuilder {
+    /// Sets the socket permit state for per-connection quota tracking.
+    /// Called by `OutboundNetworkingFactor` when `max_sockets_per_app` is configured.
+    pub fn set_socket_permit_state(&mut self, state: Arc<SocketPermitState>) {
+        self.socket_permit_state = Some(state);
+    }
+
     pub fn outbound_socket_addr_check<F, Fut>(&mut self, check: F)
     where
         F: Fn(SocketAddr, SocketAddrUse) -> Fut + Send + Sync + Clone + 'static,
@@ -496,4 +856,5 @@ impl InstanceBuilder {
 
 pub struct InstanceState {
     ctx: WasiCtx,
+    socket_permit_state: Option<Arc<SocketPermitState>>,
 }
