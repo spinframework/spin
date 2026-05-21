@@ -1,3 +1,5 @@
+use std::time::{Duration, SystemTime};
+
 const SPIN_ENV_REPO: &str = "https://github.com/spinframework/spin-environments";
 const ENVS_DIR_IN_REPO: &str = "envs";
 
@@ -7,6 +9,8 @@ pub struct Catalogue {
 }
 
 static CATALOGUE_UPDATE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+const JUST_IN_TIME_UPDATE_TIMEOUT: Duration = Duration::from_secs(2);
+const RECENCY_WINDOW: Duration = Duration::from_hours(1);
 
 impl Catalogue {
     pub fn try_default() -> anyhow::Result<Self> {
@@ -17,11 +21,69 @@ impl Catalogue {
         Ok(Self::new(root))
     }
 
+    async fn is_recent(&self) -> bool {
+        let Ok(last_update_file) = self.last_update_file() else {
+            return false;
+        };
+
+        match tokio::fs::read_to_string(&last_update_file).await {
+            Err(_) => false,
+            Ok(text) => {
+                let Ok(time_since_epoch) = text.parse() else {
+                    return false;
+                };
+                let now = SystemTime::now();
+                let Some(last) =
+                    SystemTime::UNIX_EPOCH.checked_add(Duration::from_secs(time_since_epoch))
+                else {
+                    return false;
+                };
+                let Ok(diff) = now.duration_since(last) else {
+                    return false;
+                };
+                diff < RECENCY_WINDOW
+            }
+        }
+    }
+
+    fn last_update_file(&self) -> Result<PathBuf, ()> {
+        let Some(parent_dir) = self.git_root.parent() else {
+            return Err(());
+        };
+        let last_update_file = parent_dir.join("environments-last-update.txt");
+        Ok(last_update_file)
+    }
+
+    async fn save_last_update_time(&self) {
+        let Ok(last_update_file) = self.last_update_file() else {
+            return;
+        };
+        let Ok(last_update_dur) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) else {
+            return;
+        };
+        let last_update_text = last_update_dur.as_secs().to_string();
+        _ = tokio::fs::write(&last_update_file, last_update_text).await;
+    }
+
     fn new(git_root: PathBuf) -> Self {
         Self {
             git_root: git_root.clone(),
             envs_root: git_root.join(ENVS_DIR_IN_REPO),
         }
+    }
+
+    /// Updates if we have not updated recently, ignoring
+    /// failures. The scenario here is unverioned environments,
+    /// where we don't want them to get stale, but don't want
+    /// to slow the user down with frequent checks or long stalls
+    /// while airplane wifi tries to reach the repo, only to
+    /// find out there's nothing to go...
+    async fn try_update(&self) {
+        if self.is_recent().await {
+            return;
+        }
+
+        _ = tokio::time::timeout(JUST_IN_TIME_UPDATE_TIMEOUT, self.update()).await;
     }
 
     pub async fn update(&self) -> anyhow::Result<()> {
@@ -31,15 +93,24 @@ impl Catalogue {
         let url = Url::parse(SPIN_ENV_REPO)?;
         let git_source = GitSource::new(&url, None, &self.git_root);
         if self.git_root.exists() {
-            git_source.pull().await
+            git_source.pull().await.unwrap();
         } else {
             tokio::fs::create_dir_all(&self.git_root).await?;
-            git_source.clone_repo().await
+            git_source.clone_repo().await?;
         }
+        self.save_last_update_time().await;
+        Ok(())
     }
 
     /// This requires `env_id` to be normalised to the `ns@version` form
     pub async fn get(&self, env_id: &str) -> anyhow::Result<Option<EnvironmentDefinition>> {
+        // We don't want to keep returning old versions of a mutable env
+        // until we get an unrelated reason to update.
+        if is_unversioned(env_id) {
+            // update if we can, in case the unversioned env has changed
+            self.try_update().await;
+        }
+
         // We add (redundant) directories to avoid having a single flat
         // namespace that becomes unmanageable.
         //
@@ -98,6 +169,10 @@ fn sans_version(id: &str) -> &str {
         None => id,
         Some((stem, _)) => stem,
     }
+}
+
+fn is_unversioned(id: &str) -> bool {
+    id.rsplit_once('@').is_none()
 }
 
 // From here on this is a copy of plugins/git.rs, which itself was
