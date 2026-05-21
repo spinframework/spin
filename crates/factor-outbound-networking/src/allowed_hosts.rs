@@ -49,9 +49,9 @@ pub fn validate_service_chaining_for_components(
             let allowed_hosts = allowed_outbound_hosts(&component).context("failed to get allowed hosts")?;
             for host in allowed_hosts {
                 // Templated URLs are not yet resolved at this point, so ignore unresolvable URIs
-                if let Ok(uri) = host.parse::<http::Uri>() {
-                    if let Some(chaining_target) = parse_service_chaining_target(&uri) {
-                        if !retained_components.contains(&chaining_target.as_ref()) {
+                if let Ok(uri) = host.parse::<http::Uri>() &&
+                    let Some(chaining_target) = parse_service_chaining_target(&uri) &&
+                        !retained_components.contains(&chaining_target.as_ref()) {
                             if chaining_target == "*" {
                                 return  Err(anyhow::anyhow!("Selected component '{}' cannot use wildcard service chaining: allowed_outbound_hosts = [\"http://*.spin.internal\"]", component.id()));
                             }
@@ -60,8 +60,6 @@ pub fn validate_service_chaining_for_components(
                                 component.id(), chaining_target
                             ));
                         }
-                    }
-                }
             }
         }
         anyhow::Ok(())

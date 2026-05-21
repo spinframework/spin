@@ -10,25 +10,26 @@ use std::{
     time::Duration,
 };
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use futures::channel::oneshot;
 use http::{
+    HeaderMap, Uri,
     header::{CONTENT_LENGTH, HOST},
     uri::Scheme,
-    HeaderMap, Uri,
 };
 use http_body::{Body, Frame, SizeHint};
-use http_body_util::{combinators::UnsyncBoxBody, BodyExt};
+use http_body_util::{BodyExt, combinators::UnsyncBoxBody};
 use hyper_util::{
     client::legacy::{
-        connect::{Connected, Connection},
         Client,
+        connect::{Connected, Connection},
     },
     rt::{TokioExecutor, TokioIo},
 };
+use opentelemetry_semantic_conventions::attribute as otel_attribute;
 use spin_factor_outbound_networking::{
-    config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
     ComponentTlsClientConfigs, TlsClientConfig,
+    config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
 };
 use spin_factors::RuntimeFactorsInstanceState;
 use tokio::{
@@ -39,23 +40,23 @@ use tokio::{
 };
 use tokio_rustls::client::TlsStream;
 use tower_service::Service;
-use tracing::{field::Empty, instrument, Instrument, Span};
+use tracing::{Instrument, Span, field::Empty, instrument};
 use wasmtime::component::HasData;
 use wasmtime_wasi::TrappableError;
 use wasmtime_wasi_http::{
     p2::{
-        self,
+        self, HttpError, WasiHttpCtxView,
         bindings::http::types::{self as p2_types, ErrorCode},
         body::HyperOutgoingBody,
         types::{HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
-        HttpError, WasiHttpCtxView,
     },
     p3::{self, bindings::http::types as p3_types},
 };
 
 use crate::{
+    InstanceHttpHooks, OutboundHttpFactor, SelfRequestOrigin,
     intercept::{InterceptOutcome, OutboundHttpInterceptor},
-    wasi_2023_10_18, wasi_2023_11_10, InstanceHttpHooks, OutboundHttpFactor, SelfRequestOrigin,
+    wasi_2023_10_18, wasi_2023_11_10,
 };
 
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
@@ -135,12 +136,14 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
         skip_all,
         fields(
             otel.kind = "client",
-            url.full = Empty,
-            http.request.method = %request.method(),
+            {otel_attribute::URL_FULL} = Empty,
+            {otel_attribute::HTTP_REQUEST_METHOD} = %request.method(),
             otel.name = %request.method(),
-            http.response.status_code = Empty,
-            server.address = Empty,
-            server.port = Empty,
+            // Incubating convention; not yet a stable `opentelemetry_semantic_conventions` constant.
+            http.response.body.size = Empty,
+            {otel_attribute::HTTP_RESPONSE_STATUS_CODE} = Empty,
+            {otel_attribute::SERVER_ADDRESS} = Empty,
+            {otel_attribute::SERVER_PORT} = Empty,
         )
     )]
     #[allow(clippy::type_complexity)]
@@ -197,40 +200,47 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
                 .and_then(|v| v.between_bytes_timeout)
                 .unwrap_or(DEFAULT_TIMEOUT),
         };
-        Box::new(async {
-            match request_sender
-                .send(
-                    request.map(|body| body.map_err(p3_to_p2_error_code).boxed_unsync()),
-                    config,
-                )
-                .await
-            {
-                Ok(IncomingResponse {
-                    resp,
-                    between_bytes_timeout,
-                    ..
-                }) => Ok((
-                    resp.map(|body| {
-                        BetweenBytesTimeoutBody {
-                            body,
-                            sleep: None,
-                            timeout: between_bytes_timeout,
+        Box::new(
+            async {
+                match request_sender
+                    .send(
+                        request.map(|body| body.map_err(p3_to_p2_error_code).boxed_unsync()),
+                        config,
+                    )
+                    .await
+                {
+                    Ok(IncomingResponse {
+                        resp,
+                        between_bytes_timeout,
+                        ..
+                    }) => Ok((
+                        resp.map(|body| {
+                            BetweenBytesTimeoutBody {
+                                body,
+                                sleep: None,
+                                timeout: between_bytes_timeout,
+                                byte_count: 0,
+                                span: Some(Span::current()),
+                            }
+                            .boxed_unsync()
+                        }),
+                        Box::new(async {
+                            // TODO: Can we plumb connection errors through to here, or
+                            // will `hyper_util::client::legacy::Client` pass them all
+                            // via the response body?
+                            Ok(())
+                        }) as Box<dyn Future<Output = _> + Send>,
+                    )),
+                    Err(http_error) => match http_error.downcast() {
+                        Ok(error_code) => {
+                            Err(TrappableError::from(p2_to_p3_error_code(error_code)))
                         }
-                        .boxed_unsync()
-                    }),
-                    Box::new(async {
-                        // TODO: Can we plumb connection errors through to here, or
-                        // will `hyper_util::client::legacy::Client` pass them all
-                        // via the response body?
-                        Ok(())
-                    }) as Box<dyn Future<Output = _> + Send>,
-                )),
-                Err(http_error) => match http_error.downcast() {
-                    Ok(error_code) => Err(TrappableError::from(p2_to_p3_error_code(error_code))),
-                    Err(trap) => Err(TrappableError::trap(trap)),
-                },
+                        Err(trap) => Err(TrappableError::trap(trap)),
+                    },
+                }
             }
-        })
+            .in_current_span(),
+        )
     }
 }
 
@@ -241,6 +251,8 @@ pin_project_lite::pin_project! {
         #[pin]
         sleep: Option<tokio::time::Sleep>,
         timeout: Duration,
+        byte_count: u64,
+        span: Option<Span>,
     }
 }
 
@@ -253,9 +265,36 @@ impl<B: Body<Error = p2_types::ErrorCode>> Body for BetweenBytesTimeoutBody<B> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let mut me = self.project();
-        match me.body.poll_frame(cx) {
+        match me.body.as_mut().poll_frame(cx) {
             Poll::Ready(value) => {
                 me.sleep.as_mut().set(None);
+
+                let mut record_body_size_once = |body_size: u64| {
+                    if let Some(span) = me.span.take() {
+                        // `http.response.body.size` is incubating (behind semconv_experimental)
+                        // in opentelemetry-semantic-conventions 0.28. Leave as literal to avoid
+                        // enabling the experimental feature.
+                        span.record("http.response.body.size", body_size);
+                    }
+                };
+
+                match &value {
+                    Some(Ok(frame)) => {
+                        if let Some(data) = frame.data_ref() {
+                            *me.byte_count += data.remaining() as u64;
+                        }
+                        if me.body.as_ref().is_end_stream() {
+                            record_body_size_once(*me.byte_count);
+                        }
+                    }
+                    None => {
+                        record_body_size_once(*me.byte_count);
+                    }
+                    Some(Err(e)) => {
+                        tracing::warn!("error reading response body: {e:?}");
+                    }
+                }
+
                 Poll::Ready(value.map(|v| v.map_err(p2_to_p3_error_code)))
             }
             Poll::Pending => {
@@ -363,12 +402,12 @@ impl p2::WasiHttpHooks for InstanceHttpHooks {
         skip_all,
         fields(
             otel.kind = "client",
-            url.full = Empty,
-            http.request.method = %request.method(),
+            {otel_attribute::URL_FULL} = Empty,
+            {otel_attribute::HTTP_REQUEST_METHOD} = %request.method(),
             otel.name = %request.method(),
-            http.response.status_code = Empty,
-            server.address = Empty,
-            server.port = Empty,
+            {otel_attribute::HTTP_RESPONSE_STATUS_CODE} = Empty,
+            {otel_attribute::SERVER_ADDRESS} = Empty,
+            {otel_attribute::SERVER_PORT} = Empty,
         )
     )]
     fn send_request(
@@ -450,12 +489,12 @@ impl RequestSender {
         // Backfill span fields after potentially updating the URL in the interceptor
         let span = tracing::Span::current();
         if let Some(addr) = override_connect_addr {
-            span.record("server.address", addr.ip().to_string());
-            span.record("server.port", addr.port());
+            span.record(otel_attribute::SERVER_ADDRESS, addr.ip().to_string());
+            span.record(otel_attribute::SERVER_PORT, addr.port());
         } else if let Some(authority) = request.uri().authority() {
-            span.record("server.address", authority.host());
+            span.record(otel_attribute::SERVER_ADDRESS, authority.host());
             if let Some(port) = authority.port_u16() {
-                span.record("server.port", port);
+                span.record(otel_attribute::SERVER_PORT, port);
             }
         }
 
@@ -489,7 +528,7 @@ impl RequestSender {
             }
             *uri = builder.build().unwrap();
         }
-        tracing::Span::current().record("url.full", uri.to_string());
+        tracing::Span::current().record(otel_attribute::URL_FULL, uri.to_string());
 
         let is_self_request = match request.uri().authority() {
             // Some SDKs require an authority, so we support e.g. http://self.alt/self-request
@@ -596,7 +635,10 @@ impl RequestSender {
             .map(|body| body.map_err(hyper_request_error).boxed_unsync());
 
         let span = tracing::Span::current();
-        span.record("http.response.status_code", resp.status().as_u16());
+        span.record(
+            otel_attribute::HTTP_RESPONSE_STATUS_CODE,
+            resp.status().as_u16(),
+        );
 
         record_content_length_header(&span, resp.headers(), "http.response.header.content-length");
 
@@ -901,10 +943,10 @@ impl AsyncWrite for PermittedTcpStream {
 /// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
 fn hyper_request_error(err: hyper::Error) -> ErrorCode {
     // If there's a source, we might be able to extract a wasi-http error from it.
-    if let Some(cause) = err.source() {
-        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
-            return err.clone();
-        }
+    if let Some(cause) = err.source()
+        && let Some(err) = cause.downcast_ref::<ErrorCode>()
+    {
+        return err.clone();
     }
 
     tracing::warn!("hyper request error: {err:?}");
@@ -915,10 +957,10 @@ fn hyper_request_error(err: hyper::Error) -> ErrorCode {
 /// Translate a [`hyper_util::client::legacy::Error`] to a wasi-http `ErrorCode` in the context of a request.
 fn hyper_legacy_request_error(err: hyper_util::client::legacy::Error) -> ErrorCode {
     // If there's a source, we might be able to extract a wasi-http error from it.
-    if let Some(cause) = err.source() {
-        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
-            return err.clone();
-        }
+    if let Some(cause) = err.source()
+        && let Some(err) = cause.downcast_ref::<ErrorCode>()
+    {
+        return err.clone();
     }
 
     tracing::warn!("hyper request error: {err:?}");
@@ -1140,9 +1182,9 @@ pub fn p3_to_p2_error_code(code: p3_types::ErrorCode) -> p2_types::ErrorCode {
 }
 
 fn record_content_length_header(span: &Span, headers: &HeaderMap, attr_name: &'static str) {
-    if let Some(content_length) = headers.get(CONTENT_LENGTH) {
-        if let Ok(size_str) = content_length.to_str() {
-            span.set_attribute(attr_name, size_str.to_string());
-        }
+    if let Some(content_length) = headers.get(CONTENT_LENGTH)
+        && let Ok(size_str) = content_length.to_str()
+    {
+        span.set_attribute(attr_name, size_str.to_string());
     }
 }

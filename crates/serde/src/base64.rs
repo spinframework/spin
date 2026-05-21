@@ -2,8 +2,8 @@
 
 use std::borrow::Cow;
 
-use base64::{engine::GeneralPurpose, prelude::BASE64_STANDARD_NO_PAD, Engine};
-use serde::{de, Deserialize, Deserializer, Serializer};
+use base64::{Engine, engine::GeneralPurpose, prelude::BASE64_STANDARD_NO_PAD};
+use serde::{Deserialize, Deserializer, Serializer, de};
 
 const BASE64: GeneralPurpose = BASE64_STANDARD_NO_PAD;
 

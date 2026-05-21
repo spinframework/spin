@@ -1,7 +1,10 @@
 pub mod build_info;
 pub mod commands;
+pub(crate) mod completions;
 mod directory_rels;
+mod opt_value;
 pub(crate) mod opts;
+mod parse_env;
 pub mod subprocess;
 
 use anyhow::{Context, Error};
@@ -21,14 +24,18 @@ use commands::{
     watch::WatchCommand,
 };
 use spin_runtime_factors::FactorsBuilder;
-use spin_trigger::cli::help::HelpArgsOnlyTrigger;
 use spin_trigger::cli::FactorsTriggerCommand;
+use spin_trigger::cli::help::HelpArgsOnlyTrigger;
 use spin_trigger_http::HttpTrigger;
 use spin_trigger_redis::RedisTrigger;
 
 pub use opts::HELP_ARGS_ONLY_TRIGGER_TYPE;
 
 pub async fn run() -> anyhow::Result<()> {
+    if is_completion_request() {
+        return (MaintenanceCommands::GenerateCompletions).run().await;
+    }
+
     let version = build_info();
     spin_telemetry::init(version.clone()).context("Failed to initialize telemetry")?;
 
@@ -54,17 +61,21 @@ pub async fn run() -> anyhow::Result<()> {
 
     let matches = cmd.clone().get_matches();
 
-    if let Some((subcmd, _)) = matches.subcommand() {
-        if plugin_help_entries.iter().any(|e| e.name == subcmd) {
-            let args = std::env::args().skip(1).collect();
-            return execute_external_subcommand(args, cmd).await;
-        }
+    if let Some((subcmd, _)) = matches.subcommand()
+        && plugin_help_entries.iter().any(|e| e.name == subcmd)
+    {
+        let args = std::env::args().skip(1).collect();
+        return execute_external_subcommand(args, cmd).await;
     }
 
     SpinApp::from_arg_matches(&matches)?
         .run()
         .await
         .inspect_err(|err| tracing::debug!(?err))
+}
+
+fn is_completion_request() -> bool {
+    std::env::var_os("COMPLETE").is_some_and(|v| !v.is_empty())
 }
 
 /// The Spin CLI
@@ -179,10 +190,10 @@ fn plugin_help_entries() -> Vec<PluginHelpEntry> {
 }
 
 fn installed_plugin_help_entries() -> Vec<PluginHelpEntry> {
-    let Ok(manager) = spin_plugins::manager::PluginManager::try_default() else {
+    let Ok(manager) = spin_plugins::PluginManager::try_default() else {
         return vec![];
     };
-    let Ok(manifests) = manager.store().installed_manifests() else {
+    let Ok(manifests) = manager.installed_plugins() else {
         return vec![];
     };
 

@@ -9,11 +9,13 @@ anyhow = { workspace = true }
 async-trait = "0.1"
 bytes = { workspace = true }
 chrono = { workspace = true }
+dirs = { workspace = true }
 futures = "0.3"
 futures-util = "0.3"
 id-arena = "2"
 indexmap = "2"
 oci-distribution = { git = "https://github.com/fermyon/oci-distribution", rev = "7e4ce9be9bcd22e78a28f06204931f10c44402ba" }
+reqwest = { workspace = true }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -26,6 +28,7 @@ spin-serde = { path = "../serde" }
 toml = { workspace = true }
 tokio = { version = "1.23", features = ["fs"] }
 tracing = { workspace = true }
+url = { workspace = true }
 wac-graph = "0.8"
 wac-types = "0.8"
 wasm-pkg-client = { workspace = true }

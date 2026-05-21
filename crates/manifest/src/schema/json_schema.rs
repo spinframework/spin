@@ -1,4 +1,4 @@
-use crate::schema::v2::{ComponentSpec, Map, OneOrManyComponentSpecs};
+use crate::schema::v2::{Component, ComponentSpec, Map, OneOrManyComponentSpecs};
 use schemars::JsonSchema;
 
 // The structs here allow dead code because they exist only
@@ -163,35 +163,34 @@ pub enum WatchCommand {
     Command(String),
 }
 
-pub fn toml_table(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-    schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-        instance_type: Some(schemars::schema::SingleOrVec::Single(Box::new(
-            schemars::schema::InstanceType::Object,
-        ))),
-        ..Default::default()
+pub fn toml_table(_gen: &mut schemars::generate::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "object"
     })
 }
 
-pub fn map_of_toml_tables(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-    schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-        instance_type: Some(schemars::schema::SingleOrVec::Single(Box::new(
-            schemars::schema::InstanceType::Object,
-        ))),
-        ..Default::default()
+pub fn map_of_toml_tables(_gen: &mut schemars::generate::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "type": "object"
     })
 }
 
 pub fn one_or_many<T: schemars::JsonSchema>(
-    gen: &mut schemars::gen::SchemaGenerator,
-) -> schemars::schema::Schema {
-    schemars::schema::Schema::Object(schemars::schema::SchemaObject {
-        subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
-            one_of: Some(vec![
-                gen.subschema_for::<T>(),
-                gen.subschema_for::<Vec<T>>(),
-            ]),
-            ..Default::default()
-        })),
-        ..Default::default()
+    generator: &mut schemars::generate::SchemaGenerator,
+) -> schemars::Schema {
+    schemars::json_schema!({
+        "oneOf": [
+            generator.subschema_for::<T>(),
+            generator.subschema_for::<Vec<T>>(),
+        ]
+    })
+}
+
+pub fn id_or_component(generator: &mut schemars::generate::SchemaGenerator) -> schemars::Schema {
+    schemars::json_schema!({
+        "oneOf": [
+            generator.subschema_for::<spin_serde::KebabId>(),
+            generator.subschema_for::<Component>(),
+        ]
     })
 }

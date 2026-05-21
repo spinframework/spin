@@ -12,8 +12,8 @@ use std::{
 
 use io::{PipeReadStream, PipedWriteStream};
 use spin_factors::{
-    anyhow, AppComponent, Factor, FactorInstanceBuilder, InitContext, PrepareContext,
-    RuntimeFactors, RuntimeFactorsInstanceState,
+    AppComponent, Factor, FactorInstanceBuilder, InitContext, PrepareContext, RuntimeFactors,
+    RuntimeFactorsInstanceState, anyhow,
 };
 use wasmtime::component::HasData;
 use wasmtime_wasi::cli::{StdinStream, StdoutStream, WasiCli, WasiCliCtxView};

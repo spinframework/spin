@@ -2,15 +2,15 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use spin_common::ui::quoted_path;
-use spin_factor_key_value::runtime_config::spin::{self as key_value};
 use spin_factor_key_value::KeyValueFactor;
-use spin_factor_llm::{spin as llm, LlmFactor};
+use spin_factor_key_value::runtime_config::spin::{self as key_value};
+use spin_factor_llm::{LlmFactor, spin as llm};
 use spin_factor_otel::OtelFactor;
 use spin_factor_outbound_http::OutboundHttpFactor;
 use spin_factor_outbound_mqtt::OutboundMqttFactor;
 use spin_factor_outbound_mysql::OutboundMysqlFactor;
-use spin_factor_outbound_networking::runtime_config::spin::SpinRuntimeConfig as OutboundNetworkingSpinRuntimeConfig;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
+use spin_factor_outbound_networking::runtime_config::spin::SpinRuntimeConfig as OutboundNetworkingSpinRuntimeConfig;
 use spin_factor_outbound_pg::OutboundPgFactor;
 use spin_factor_outbound_redis::OutboundRedisFactor;
 use spin_factor_sqlite::SqliteFactor;
@@ -18,7 +18,7 @@ use spin_factor_variables::VariablesFactor;
 use spin_factor_wasi::WasiFactor;
 use spin_factors::runtime_config::toml::GetTomlValue as _;
 use spin_factors::{
-    runtime_config::toml::TomlKeyTracker, FactorRuntimeConfigSource, RuntimeConfigSourceFinalizer,
+    FactorRuntimeConfigSource, RuntimeConfigSourceFinalizer, runtime_config::toml::TomlKeyTracker,
 };
 use spin_key_value_spin::{SpinKeyValueRuntimeConfig, SpinKeyValueStore};
 use spin_sqlite as sqlite;
@@ -568,9 +568,11 @@ mod tests {
             type = "spin"
         };
         let runtime_config = resolve_toml(toml, "config.toml").unwrap().runtime_config;
-        assert!(["default", "foo"]
-            .iter()
-            .all(|label| runtime_config.has_store_manager(label)));
+        assert!(
+            ["default", "foo"]
+                .iter()
+                .all(|label| runtime_config.has_store_manager(label))
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

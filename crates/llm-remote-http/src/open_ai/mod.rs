@@ -1,8 +1,8 @@
 mod schemas;
 
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
     Client, Url,
+    header::{HeaderMap, HeaderValue},
 };
 use spin_world::{
     async_trait,

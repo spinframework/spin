@@ -1,20 +1,22 @@
 // Needed for clap derive: https://github.com/clap-rs/clap/issues/4857
 #![allow(clippy::almost_swapped)]
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use semver::Version;
 use spin_plugins::{
-    error::Error,
-    lookup::{fetch_plugins_repo, plugins_repo_url, PluginLookup},
-    manager::{self, InstallAction, ManifestLocation, PluginManager},
+    PluginManager, PluginRef,
+    manager::{InstallAction, ManifestLocation},
     manifest::{PluginManifest, PluginPackage},
 };
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use url::Url;
 
-use crate::build_info::*;
 use crate::opts::*;
+use crate::{
+    build_info::*,
+    opt_value::{FLAG_NOT_PRESENT, FLAG_PRESENT_BUT_NO_VALUE, OptionalValueFlag},
+};
 
 /// Install/uninstall Spin plugins.
 #[derive(Subcommand, Debug)]
@@ -67,8 +69,10 @@ pub struct Install {
         name = PLUGIN_NAME_OPT,
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
-        required_unless_present_any = [PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT, PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT],
+        conflicts_with = PLUGIN_TARGET_ENV_OPT,
+        required_unless_present_any = [PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT, PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT, PLUGIN_TARGET_ENV_OPT],
     )]
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::installable_plugins))]
     pub name: Option<String>,
 
     /// Path to local plugin manifest.
@@ -78,6 +82,7 @@ pub struct Install {
         long = "file",
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_NAME_OPT,
+        conflicts_with = PLUGIN_TARGET_ENV_OPT,
     )]
     pub local_manifest_src: Option<PathBuf>,
 
@@ -88,8 +93,18 @@ pub struct Install {
         long = "url",
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_NAME_OPT,
+        conflicts_with = PLUGIN_TARGET_ENV_OPT,
     )]
     pub remote_manifest_src: Option<Url>,
+
+    /// The Spin platform or runtime for which you want to install plugins.
+    #[clap(name = PLUGIN_TARGET_ENV_OPT, long, short = 'E', num_args = 0..=1, default_value(FLAG_NOT_PRESENT), default_missing_value(FLAG_PRESENT_BUT_NO_VALUE),
+        conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
+        conflicts_with = PLUGIN_NAME_OPT,
+        conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
+    )]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::environments))]
+    pub target_environment: String,
 
     /// Skips prompt to accept the installation of the plugin.
     #[clap(short = 'y', long = "yes")]
@@ -111,6 +126,7 @@ pub struct Install {
         short = 'v',
         conflicts_with = PLUGIN_REMOTE_PLUGIN_MANIFEST_OPT,
         conflicts_with = PLUGIN_LOCAL_PLUGIN_MANIFEST_OPT,
+        conflicts_with = PLUGIN_TARGET_ENV_OPT,
         requires(PLUGIN_NAME_OPT)
     )]
     pub version: Option<Version>,
@@ -118,13 +134,29 @@ pub struct Install {
 
 impl Install {
     pub async fn run(&self) -> Result<()> {
-        let manifest_location = match (&self.local_manifest_src, &self.remote_manifest_src, &self.name) {
+        let manager = PluginManager::try_default()?;
+
+        if self.target_environment().is_present() {
+            return self.install_env_plugins(&manager).await;
+        }
+
+        let manifest_location = match (
+            &self.local_manifest_src,
+            &self.remote_manifest_src,
+            &self.name,
+        ) {
             (Some(path), None, None) => ManifestLocation::Local(path.to_path_buf()),
             (None, Some(url), None) => ManifestLocation::Remote(url.clone()),
-            (None, None, Some(name)) => ManifestLocation::PluginsRepository(PluginLookup::new(name, self.version.clone())),
-            _ => return Err(anyhow::anyhow!("For plugin lookup, must provide exactly one of: plugin name, url to manifest, local path to manifest")),
+            (None, None, Some(name)) => {
+                ManifestLocation::PluginsRepository(PluginRef::new(name, self.version.clone()))
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "For plugin lookup, must provide exactly one of: plugin name, url to manifest, local path to manifest"
+                ));
+            }
         };
-        let manager = PluginManager::try_default()?;
+
         // Downgrades are only allowed via the `upgrade` subcommand
         let downgrade = false;
         let manifest = manager
@@ -147,12 +179,140 @@ impl Install {
         .await?;
         Ok(())
     }
+
+    fn target_environment(&self) -> OptionalValueFlag {
+        (&self.target_environment).into()
+    }
+
+    async fn install_env_plugins(&self, manager: &PluginManager) -> anyhow::Result<()> {
+        let Some((env_name, env_def)) =
+            crate::parse_env::env_def_from(self.target_environment()).await?
+        else {
+            anyhow::bail!("No target environment found");
+        };
+
+        let env_plugins = env_def.plugins();
+        let uninstalled_plugins = env_plugins
+            .iter()
+            .filter(|p| !manager.is_installed(p))
+            .collect::<Vec<_>>();
+
+        if uninstalled_plugins.is_empty() {
+            eprintln!("All recommended plugins for the selected environment are installed");
+            return Ok(());
+        }
+
+        suggest_plugins(manager, &env_name, env_plugins, false).await
+    }
+}
+
+pub async fn suggest_plugins(
+    plugin_manager: &PluginManager,
+    env_name: &str,
+    plugins: &[String],
+    show_manual_help: bool,
+) -> anyhow::Result<()> {
+    _ = plugin_manager.update().await;
+
+    let plugins = plugins
+        .iter()
+        .filter(|p| !plugin_manager.is_installed(p))
+        .collect::<Vec<_>>();
+
+    match plugins.len() {
+        0 => {}
+        1 => {
+            prompt_install_one_plugin(plugin_manager, env_name, plugins[0], show_manual_help).await
+        }
+        _ => {
+            prompt_install_multiple_plugins(plugin_manager, env_name, plugins, show_manual_help)
+                .await
+        }
+    };
+
+    Ok(())
+}
+
+async fn prompt_install_one_plugin(
+    plugin_manager: &spin_plugins::PluginManager,
+    env_name: &str,
+    plugin: &str,
+    show_manual_help: bool,
+) {
+    eprintln!("The {plugin} plugin is recommended for working with {env_name} environment.",);
+    let should_install = dialoguer::Confirm::new()
+        .with_prompt("Would you like to install it now?")
+        .default(false)
+        .interact_opt()
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    if should_install {
+        let did_install = plugin_manager
+            .install_latest(plugin, crate::build_info::SPIN_VERSION)
+            .await
+            .is_ok();
+        if !did_install && show_manual_help {
+            eprintln!(
+                "Plugin installation failed. You can try manually using `spin plugins install -E`."
+            );
+        }
+    } else if show_manual_help {
+        eprintln!(
+            "You can review and install the recommended plugins using `spin plugins` with the `-E` option"
+        )
+    }
+}
+
+async fn prompt_install_multiple_plugins(
+    plugin_manager: &spin_plugins::PluginManager,
+    env_name: &str,
+    plugins: Vec<&String>,
+    show_manual_help: bool,
+) {
+    eprintln!(
+        "The following plugins are recommended for working with the {env_name} target environment."
+    );
+    eprintln!("Use arrow keys to move between them and Space to select one for install.");
+    let chosen = dialoguer::MultiSelect::new()
+        .items(&plugins)
+        .interact_opt()
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    if chosen.is_empty() && show_manual_help {
+        eprintln!(
+            "You can review and install the recommended plugins using `spin plugins` with the `-E` option"
+        );
+    } else {
+        let chosen = chosen
+            .into_iter()
+            .map(|index| plugins[index])
+            .collect::<Vec<_>>();
+        for plugin in &chosen {
+            let did_install = plugin_manager
+                .install_latest(plugin, crate::build_info::SPIN_VERSION)
+                .await
+                .is_ok();
+            if !did_install && show_manual_help {
+                eprintln!(
+                    "Plugin `{plugin}` installation failed. You can try manually using `spin plugins install -E`."
+                );
+            }
+        }
+        if chosen.len() < plugins.len() && show_manual_help {
+            eprintln!(
+                "You can review and install unchosen recommended plugins using `spin plugins` with the `-E` option"
+            );
+        }
+    }
 }
 
 /// Uninstalls specified plugin.
 #[derive(Parser, Debug)]
 pub struct Uninstall {
     /// Name of Spin plugin.
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::installed_plugins))]
     pub name: String,
 }
 
@@ -179,6 +339,7 @@ pub struct Upgrade {
         name = PLUGIN_NAME_OPT,
         conflicts_with = PLUGIN_ALL_OPT,
     )]
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::installed_plugins))]
     pub name: Option<String>,
 
     /// Upgrade all plugins.
@@ -248,31 +409,30 @@ impl Upgrade {
     /// the catalogue and prompts user to choose which ones to upgrade.
     pub async fn run(self) -> Result<()> {
         let manager = PluginManager::try_default()?;
-        let manifests_dir = manager.store().installed_manifests_directory();
 
         // Check if no plugins are currently installed
-        if !manifests_dir.exists() {
+        if manager.is_empty() {
             println!("No currently installed plugins to upgrade.");
             return Ok(());
         }
 
         if self.all {
-            self.upgrade_all(manifests_dir).await
+            self.upgrade_all(&manager).await
         } else if self.name.is_none()
             && self.local_manifest_src.is_none()
             && self.remote_manifest_src.is_none()
         {
             // Default behavior (multiselect)
-            self.upgrade_multiselect().await
+            self.upgrade_multiselect(&manager).await
         } else {
-            self.upgrade_one().await
+            self.upgrade_one(&manager).await
         }
     }
 
     // Multiselect plugin upgrade experience
-    async fn upgrade_multiselect(self) -> Result<()> {
-        let catalogue_plugins = list_catalogue_plugins().await?;
-        let installed_plugins = list_installed_plugins()?;
+    async fn upgrade_multiselect(self, manager: &PluginManager) -> Result<()> {
+        let catalogue_plugins = list_catalogue_plugins(manager).await?;
+        let installed_plugins = list_installed_plugins(manager)?;
 
         let installed_in_catalogue: Vec<_> = installed_plugins
             .into_iter()
@@ -293,10 +453,8 @@ impl Upgrade {
         // Getting only eligible plugins to upgrade
         for installed_plugin in installed_in_catalogue {
             let manager = PluginManager::try_default()?;
-            let manifest_location = ManifestLocation::PluginsRepository(PluginLookup::new(
-                &installed_plugin.name,
-                None,
-            ));
+            let manifest_location =
+                ManifestLocation::PluginsRepository(PluginRef::new(&installed_plugin.name, None));
 
             // Attempt to get the manifest to check eligibility to upgrade
             if let Ok(manifest) = manager
@@ -353,10 +511,8 @@ impl Upgrade {
         // Upgrade plugins selected
         for (installed_plugin, manifest) in plugins_selected {
             let manager = PluginManager::try_default()?;
-            let manifest_location = ManifestLocation::PluginsRepository(PluginLookup::new(
-                &installed_plugin.name,
-                None,
-            ));
+            let manifest_location =
+                ManifestLocation::PluginsRepository(PluginRef::new(&installed_plugin.name, None));
 
             try_install(
                 &manifest,
@@ -374,37 +530,18 @@ impl Upgrade {
     }
 
     // Install the latest of all currently installed plugins
-    async fn upgrade_all(&self, manifests_dir: impl AsRef<Path>) -> Result<()> {
-        let manager = PluginManager::try_default()?;
-        for plugin in std::fs::read_dir(manifests_dir)? {
-            let path = plugin?.path();
-            let name = path
-                .file_stem()
-                .ok_or_else(|| anyhow!("No stem for path {}", path.display()))?
-                .to_str()
-                .ok_or_else(|| anyhow!("Cannot convert path {} stem to str", path.display()))?
-                .to_string();
-            let manifest_location =
-                ManifestLocation::PluginsRepository(PluginLookup::new(&name, None));
-            let manifest = match manager
-                .get_manifest(
-                    &manifest_location,
-                    self.override_compatibility_check,
-                    SPIN_VERSION,
-                    &self.auth_header_value,
-                )
-                .await
-            {
-                Err(Error::NotFound(e)) => {
-                    tracing::info!("Could not upgrade plugin '{name}': {e:?}");
-                    continue;
-                }
-                Err(e) => return Err(e.into()),
-                Ok(m) => m,
-            };
+    async fn upgrade_all(&self, manager: &PluginManager) -> Result<()> {
+        for (manifest, manifest_location) in manager
+            .installed_plugins_latest_versions(
+                self.override_compatibility_check,
+                SPIN_VERSION,
+                &self.auth_header_value,
+            )
+            .await?
+        {
             try_install(
                 &manifest,
-                &manager,
+                manager,
                 self.yes_to_all,
                 self.override_compatibility_check,
                 self.downgrade,
@@ -416,12 +553,11 @@ impl Upgrade {
         Ok(())
     }
 
-    async fn upgrade_one(self) -> Result<()> {
-        let manager = PluginManager::try_default()?;
+    async fn upgrade_one(self, manager: &PluginManager) -> Result<()> {
         let manifest_location = match (self.local_manifest_src, self.remote_manifest_src) {
             (Some(path), None) => ManifestLocation::Local(path),
             (None, Some(url)) => ManifestLocation::Remote(url),
-            _ => ManifestLocation::PluginsRepository(PluginLookup::new(
+            _ => ManifestLocation::PluginsRepository(PluginRef::new(
                 self.name
                     .as_ref()
                     .context("plugin name is required for upgrades")?,
@@ -438,7 +574,7 @@ impl Upgrade {
             .await?;
         try_install(
             &manifest,
-            &manager,
+            manager,
             self.yes_to_all,
             self.override_compatibility_check,
             self.downgrade,
@@ -453,6 +589,7 @@ impl Upgrade {
 #[derive(Parser, Debug)]
 pub struct Show {
     /// Name of Spin plugin.
+    #[arg(add = clap_complete::ArgValueCandidates::new(completions::all_plugins))]
     pub name: String,
 }
 
@@ -461,7 +598,7 @@ impl Show {
         let manager = PluginManager::try_default()?;
         let manifest = manager
             .get_manifest(
-                &ManifestLocation::PluginsRepository(PluginLookup::new(&self.name, None)),
+                &ManifestLocation::PluginsRepository(PluginRef::new(&self.name, None)),
                 false,
                 SPIN_VERSION,
                 &None,
@@ -492,10 +629,8 @@ fn is_potential_upgrade(current: &PluginManifest, candidate: &PluginManifest) ->
 
 // Make list_installed_plugins and list_catalogue_plugins into 'free' module-level functions
 // in order to call them in Upgrade::upgrade_multiselect
-fn list_installed_plugins() -> Result<Vec<PluginDescriptor>> {
-    let manager = PluginManager::try_default()?;
-    let store = manager.store();
-    let manifests = store.installed_manifests()?;
+fn list_installed_plugins(manager: &PluginManager) -> Result<Vec<PluginDescriptor>> {
+    let manifests = manager.installed_plugins()?;
     let descriptors = manifests
         .into_iter()
         .map(|m| PluginDescriptor {
@@ -510,20 +645,19 @@ fn list_installed_plugins() -> Result<Vec<PluginDescriptor>> {
     Ok(descriptors)
 }
 
-async fn list_catalogue_plugins() -> Result<Vec<PluginDescriptor>> {
+async fn list_catalogue_plugins(manager: &PluginManager) -> Result<Vec<PluginDescriptor>> {
     if update_silent().await.is_err() {
         terminal::warn!("Couldn't update plugins registry cache - using most recent");
     }
 
-    let manager = PluginManager::try_default()?;
-    let store = manager.store();
-    let manifests = store.catalogue_manifests();
+    let catalogue = manager.catalogue();
+    let manifests = catalogue.manifests();
     let descriptors = manifests?
         .into_iter()
         .map(|m| PluginDescriptor {
             name: m.name(),
             version: m.version().to_owned(),
-            installed: m.is_installed_in(store),
+            installed: manager.is_installed_exact(&m),
             compatibility: PluginCompatibility::for_current(&m),
             manifest: m,
             installed_version: None,
@@ -532,10 +666,26 @@ async fn list_catalogue_plugins() -> Result<Vec<PluginDescriptor>> {
     Ok(descriptors)
 }
 
-async fn list_catalogue_and_installed_plugins() -> Result<Vec<PluginDescriptor>> {
-    let catalogue = list_catalogue_plugins().await?;
-    let installed = list_installed_plugins()?;
+async fn list_catalogue_and_installed_plugins(
+    manager: &PluginManager,
+) -> Result<Vec<PluginDescriptor>> {
+    let catalogue = list_catalogue_plugins(manager).await?;
+    let installed = list_installed_plugins(manager)?;
     Ok(merge_plugin_lists(catalogue, installed))
+}
+
+async fn list_env_plugins(
+    manager: &PluginManager,
+    env_def: &spin_environments::EnvironmentDefinition,
+) -> Result<Vec<PluginDescriptor>> {
+    let plugins = env_def.plugins();
+
+    let candidates = list_catalogue_and_installed_plugins(manager)
+        .await?
+        .into_iter()
+        .filter(|p| plugins.contains(&p.name))
+        .collect();
+    Ok(summarise(candidates))
 }
 
 fn summarise(all_plugins: Vec<PluginDescriptor>) -> Vec<PluginDescriptor> {
@@ -620,6 +770,11 @@ pub struct List {
     /// The format in which to list the plugins.
     #[clap(value_enum, long, default_value_t = ListFormat::default())]
     pub format: ListFormat,
+
+    /// The Spin platform or runtime for which you want to list plugins.
+    #[clap(long, short = 'E', num_args = 0..=1, default_value(FLAG_NOT_PRESENT), default_missing_value(FLAG_PRESENT_BUT_NO_VALUE), group = "which")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::environments))]
+    target_environment: String,
 }
 
 #[derive(ValueEnum, Clone, Debug, Default)]
@@ -631,10 +786,16 @@ pub enum ListFormat {
 
 impl List {
     pub async fn run(self) -> Result<()> {
+        let manager = PluginManager::try_default()?;
+
         let mut plugins = if self.installed {
-            list_installed_plugins()
+            list_installed_plugins(&manager)
         } else {
-            list_catalogue_and_installed_plugins().await
+            let env_def = crate::parse_env::env_def_from(self.target_environment()).await?;
+            match env_def {
+                None => list_catalogue_and_installed_plugins(&manager).await,
+                Some((_, env_def)) => list_env_plugins(&manager, &env_def).await,
+            }
         }?;
 
         if self.summary {
@@ -686,6 +847,10 @@ impl List {
         println!("{json_text}");
         Ok(())
     }
+
+    fn target_environment(&self) -> OptionalValueFlag {
+        (&self.target_environment).into()
+    }
 }
 
 /// Search for plugins by name.
@@ -707,6 +872,7 @@ impl Search {
             summary: false,
             filter: self.filter.clone(),
             format: self.format.clone(),
+            target_environment: FLAG_NOT_PRESENT.to_string(),
         };
 
         list_cmd.run().await
@@ -831,17 +997,7 @@ pub(crate) async fn update() -> Result<()> {
 
 pub(crate) async fn update_silent() -> Result<()> {
     let manager = PluginManager::try_default()?;
-
-    let mut locker = manager.update_lock().await;
-    let guard = locker.lock_updates();
-    if guard.denied() {
-        anyhow::bail!("Another plugin update operation is already in progress");
-    }
-
-    let plugins_dir = manager.store().get_plugins_directory();
-    let url = plugins_repo_url()?;
-    fetch_plugins_repo(&url, plugins_dir, true).await?;
-    Ok(())
+    manager.update().await
 }
 
 fn continue_to_install(
@@ -892,7 +1048,7 @@ async fn try_install(
         return Ok(false);
     }
 
-    let package = manager::get_package(manifest)?;
+    let package = manifest.get_package()?;
     if continue_to_install(manifest, package, yes_to_all)? {
         let installed = manager
             .install(manifest, package, source, auth_header_value)
@@ -912,6 +1068,71 @@ async fn try_install(
         Ok(true)
     } else {
         Ok(false)
+    }
+}
+
+mod completions {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    pub fn installable_plugins() -> Vec<clap_complete::CompletionCandidate> {
+        let Ok(plugin_manager) = PluginManager::try_default() else {
+            return vec![];
+        };
+
+        let Ok(catalogue_plugins) = plugin_manager.catalogue().manifests() else {
+            return vec![];
+        };
+        let catalogue_names: HashSet<_> = catalogue_plugins.iter().map(|m| m.name()).collect();
+
+        let Ok(installed_plugins) = plugin_manager.installed_plugins() else {
+            return vec![];
+        };
+        let installed_names: HashSet<_> = installed_plugins.iter().map(|m| m.name()).collect();
+
+        let installable_names = catalogue_names.difference(&installed_names);
+
+        installable_names
+            .map(clap_complete::CompletionCandidate::new)
+            .collect()
+    }
+
+    pub fn installed_plugins() -> Vec<clap_complete::CompletionCandidate> {
+        let Ok(plugin_manager) = PluginManager::try_default() else {
+            return vec![];
+        };
+
+        let Ok(installed_plugins) = plugin_manager.installed_plugins() else {
+            return vec![];
+        };
+
+        installed_plugins
+            .iter()
+            .map(|m| clap_complete::CompletionCandidate::new(m.name()))
+            .collect()
+    }
+
+    pub fn all_plugins() -> Vec<clap_complete::CompletionCandidate> {
+        let Ok(plugin_manager) = PluginManager::try_default() else {
+            return vec![];
+        };
+
+        let Ok(catalogue_plugins) = plugin_manager.catalogue().manifests() else {
+            return vec![];
+        };
+        let catalogue_names: HashSet<_> = catalogue_plugins.iter().map(|m| m.name()).collect();
+
+        let Ok(installed_plugins) = plugin_manager.installed_plugins() else {
+            return vec![];
+        };
+        let installed_names: HashSet<_> = installed_plugins.iter().map(|m| m.name()).collect();
+
+        let all_names = catalogue_names.union(&installed_names);
+
+        all_names
+            .map(clap_complete::CompletionCandidate::new)
+            .collect()
     }
 }
 

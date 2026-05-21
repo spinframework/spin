@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use spin_common::arg_parser::parse_kv;
-use spin_oci::{client::InferPredefinedAnnotations, Client, ComposeMode};
+use spin_oci::{Client, ComposeMode, client::InferPredefinedAnnotations};
 use std::{io::Read, path::PathBuf, time::Duration};
 
 /// Commands for working with OCI registries to distribute applications.
@@ -43,6 +43,7 @@ pub struct Push {
     /// The build profile to push. The default is the anonymous profile (usually
     /// the release build).
     #[clap(long)]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::profiles))]
     pub profile: Option<String>,
 
     /// Ignore server certificate errors
@@ -72,7 +73,7 @@ pub struct Push {
     pub reference: String,
 
     /// Cache directory for downloaded registry data.
-    #[clap(long)]
+    #[clap(long, value_hint = clap::ValueHint::DirPath)]
     pub cache_dir: Option<PathBuf>,
 
     /// Specifies the OCI image manifest annotations (in key=value format).

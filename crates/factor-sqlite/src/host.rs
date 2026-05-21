@@ -4,13 +4,13 @@ use std::sync::Arc;
 use spin_core::wasmtime::component::{Accessor, FutureReader, StreamReader};
 use spin_factor_otel::OtelFactorState;
 use spin_factors::wasmtime::component::Resource;
-use spin_factors::{anyhow, SelfInstanceBuilder};
+use spin_factors::{SelfInstanceBuilder, anyhow};
+use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::sqlite3_1_0::sqlite as v3;
 use spin_world::v1::sqlite as v1;
 use spin_world::v2::sqlite as v2;
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use tracing::field::Empty;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 
 use crate::{Connection, ConnectionCreator, QueryAsyncResult};
 
@@ -174,15 +174,13 @@ impl v3::HostConnectionWithStore for crate::SqliteFactorData {
             conn.summary().as_deref().unwrap_or("unknown"),
         );
 
-        let resource = accessor.with(|mut access| {
+        accessor.with(|mut access| {
             let host = access.get();
             host.connections
                 .push(conn)
                 .map_err(|()| v3::Error::Io("too many connections opened".to_string()))
                 .map(Resource::new_own)
-        });
-
-        resource
+        })
     }
 
     async fn execute_async<T>(

@@ -1,6 +1,6 @@
 //! Common CLI code and constants
 
-use clap::builder::{styling::AnsiColor, Styles};
+use clap::builder::{Styles, styling::AnsiColor};
 
 /// Clap [`Styles`] for Spin CLI and plugins.
 pub const CLAP_STYLES: Styles = Styles::styled()

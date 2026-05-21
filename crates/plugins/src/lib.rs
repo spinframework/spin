@@ -1,11 +1,16 @@
 pub mod badger;
+mod catalogue;
 pub mod error;
 mod git;
-pub mod lookup;
+mod lookup;
 pub mod manager;
 pub mod manifest;
 mod store;
-pub use store::PluginStore;
+mod util;
+
+pub use catalogue::Catalogue;
+pub use lookup::PluginRef;
+pub use manager::PluginManager;
 
 /// List of Spin internal subcommands
 pub(crate) const SPIN_INTERNAL_COMMANDS: &[&str] = &[

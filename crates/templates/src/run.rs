@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use itertools::Itertools;
 use path_absolutize::Absolutize;
 use walkdir::WalkDir;
@@ -293,39 +293,33 @@ impl Run {
             .with_context(|| format!("Error parsing snippet file {snippet_file}"))?;
 
         match id {
-            "component" => {
-                match &self.options.variant {
-                    TemplateVariantInfo::AddComponent { manifest_path } =>
-                        Ok(RenderOperation::AppendToml(
-                            manifest_path.clone(),
-                            content,
-                        )),
-                    TemplateVariantInfo::NewApplication =>
-                        Err(anyhow::anyhow!("Spin doesn't know what to do with a 'component' snippet outside an 'add component' operation")),
+            "component" => match &self.options.variant {
+                TemplateVariantInfo::AddComponent { manifest_path } => {
+                    Ok(RenderOperation::AppendToml(manifest_path.clone(), content))
                 }
+                TemplateVariantInfo::NewApplication => Err(anyhow::anyhow!(
+                    "Spin doesn't know what to do with a 'component' snippet outside an 'add component' operation"
+                )),
             },
-            "application_trigger" => {
-                match &self.options.variant {
-                    TemplateVariantInfo::AddComponent { manifest_path } =>
-                        Ok(RenderOperation::AppendToml(
-                            manifest_path.clone(),
-                            content,
-                        )),
-                    TemplateVariantInfo::NewApplication =>
-                        Err(anyhow::anyhow!("Spin doesn't know what to do with an 'application_trigger' snippet outside an 'add component' operation")),
-                    }
-            },
-            "variables" => {
-                match &self.options.variant {
-                    TemplateVariantInfo::AddComponent { manifest_path } =>
-                        Ok(RenderOperation::MergeToml(
-                            manifest_path.clone(),
-                            MergeTarget::Application("variables"),
-                            content,
-                        )),
-                    TemplateVariantInfo::NewApplication =>
-                        Err(anyhow::anyhow!("Spin doesn't know what to do with a 'variables' snippet outside an 'add component' operation")),
+            "application_trigger" => match &self.options.variant {
+                TemplateVariantInfo::AddComponent { manifest_path } => {
+                    Ok(RenderOperation::AppendToml(manifest_path.clone(), content))
                 }
+                TemplateVariantInfo::NewApplication => Err(anyhow::anyhow!(
+                    "Spin doesn't know what to do with an 'application_trigger' snippet outside an 'add component' operation"
+                )),
+            },
+            "variables" => match &self.options.variant {
+                TemplateVariantInfo::AddComponent { manifest_path } => {
+                    Ok(RenderOperation::MergeToml(
+                        manifest_path.clone(),
+                        MergeTarget::Application("variables"),
+                        content,
+                    ))
+                }
+                TemplateVariantInfo::NewApplication => Err(anyhow::anyhow!(
+                    "Spin doesn't know what to do with a 'variables' snippet outside an 'add component' operation"
+                )),
             },
             _ => Err(anyhow::anyhow!(
                 "Spin doesn't know what to do with snippet {id}",
@@ -372,10 +366,12 @@ impl Run {
             return Ok(());
         }
 
-        if let Err(e) = git::init_git_repo(&target_dir).await {
-            if !matches!(e, git::GitError::ProgramNotFound) {
-                terminal::warn!("Spin was unable to initialise a Git repository. Run `git init` manually if you want one.");
-            }
+        if let Err(e) = git::init_git_repo(&target_dir).await
+            && !matches!(e, git::GitError::ProgramNotFound)
+        {
+            terminal::warn!(
+                "Spin was unable to initialise a Git repository. Run `git init` manually if you want one."
+            );
         }
 
         Ok(())

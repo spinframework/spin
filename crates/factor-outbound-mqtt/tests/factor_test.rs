@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use spin_core::async_trait;
 use spin_factor_outbound_mqtt::{ClientCreator, MqttClient, OutboundMqttFactor};
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_variables::VariablesFactor;
-use spin_factors::{anyhow, RuntimeFactors};
-use spin_factors_test::{toml, TestEnvironment};
+use spin_factors::{RuntimeFactors, anyhow};
+use spin_factors_test::{TestEnvironment, toml};
 use spin_world::spin::mqtt::mqtt::{Error, Qos};
 
 pub struct MockMqttClient {}

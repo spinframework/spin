@@ -1,11 +1,9 @@
 use std::io::IsTerminal;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use url::Url;
-
-use crate::PluginStore;
 
 /// Expected schema of a plugin manifest. Should match the latest Spin plugin
 /// manifest JSON schema:
@@ -57,14 +55,9 @@ impl PluginManifest {
     pub fn has_compatible_package(&self) -> bool {
         self.packages.iter().any(|p| p.matches_current_os_arch())
     }
+
     pub fn is_compatible_spin_version(&self, spin_version: &str) -> bool {
         is_version_compatible_enough(&self.spin_compatibility, spin_version).unwrap_or(false)
-    }
-    pub fn is_installed_in(&self, store: &PluginStore) -> bool {
-        match store.read_plugin_manifest(&self.name) {
-            Ok(m) => m.eq(self),
-            Err(_) => false,
-        }
     }
 
     pub fn try_version(&self) -> Result<semver::Version, semver::Error> {
@@ -73,12 +66,23 @@ impl PluginManifest {
 
     // Compares the versions. Returns None if either's version string is invalid semver.
     pub fn compare_versions(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if let Ok(this_version) = self.try_version() {
-            if let Ok(other_version) = other.try_version() {
-                return Some(this_version.cmp_precedence(&other_version));
-            }
+        if let Ok(this_version) = self.try_version()
+            && let Ok(other_version) = other.try_version()
+        {
+            return Some(this_version.cmp_precedence(&other_version));
         }
         None
+    }
+
+    /// Gets the appropriate package for the running OS and Arch if exists
+    pub fn get_package(&self) -> Result<&PluginPackage> {
+        use std::env::consts::{ARCH, OS};
+        self.packages
+            .iter()
+            .find(|p| p.os.rust_name() == OS && p.arch.rust_name() == ARCH)
+            .ok_or_else(|| {
+                anyhow!("This plugin does not support this OS ({OS}) or architecture ({ARCH}).")
+            })
     }
 }
 
@@ -195,16 +199,20 @@ fn inner_warn_unsupported_version(
         let version = Version::parse(spin_version)?;
         if !version.pre.is_empty() {
             if std::io::stderr().is_terminal() && show_warnings {
-                terminal::warn!("You're using a pre-release version of Spin ({spin_version}). This plugin might not be compatible (supported: {supported_on}). Continuing anyway.");
+                terminal::warn!(
+                    "You're using a pre-release version of Spin ({spin_version}). This plugin might not be compatible (supported: {supported_on}). Continuing anyway."
+                );
             }
         } else if override_compatibility_check {
             if show_warnings {
-                terminal::warn!("Plugin is not compatible with this version of Spin (supported: {supported_on}, actual: {spin_version}). Check overridden ... continuing to install or execute plugin.");
+                terminal::warn!(
+                    "Plugin is not compatible with this version of Spin (supported: {supported_on}, actual: {spin_version}). Check overridden ... continuing to install or execute plugin."
+                );
             }
         } else {
             return Err(anyhow!(
-            "Plugin is not compatible with this version of Spin (supported: {supported_on}, actual: {spin_version}). Try running `spin plugins update && spin plugins upgrade --all` to install latest or override with `--override-compatibility-check`."
-        ));
+                "Plugin is not compatible with this version of Spin (supported: {supported_on}, actual: {spin_version}). Try running `spin plugins update && spin plugins upgrade --all` to install latest or override with `--override-compatibility-check`."
+            ));
         }
     }
     Ok(())

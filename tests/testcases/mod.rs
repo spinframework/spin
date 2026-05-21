@@ -1,7 +1,7 @@
 use anyhow::Context;
 use std::{collections::HashMap, path::PathBuf};
 use test_environment::{
-    http, manifest_template::EnvTemplate, services::ServicesConfig, TestEnvironment,
+    TestEnvironment, http, manifest_template::EnvTemplate, services::ServicesConfig,
 };
 use testing_framework::runtimes::spin_cli::{SpinCli, SpinConfig};
 
@@ -11,9 +11,9 @@ pub fn run_test(
     spin_config: SpinConfig,
     services_config: ServicesConfig,
     test: impl FnOnce(
-            &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
-        ) -> testing_framework::TestResult<anyhow::Error>
-        + 'static,
+        &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
+    ) -> testing_framework::TestResult<anyhow::Error>
+    + 'static,
 ) -> testing_framework::TestResult<anyhow::Error> {
     run_test_inited(test_name, spin_config, services_config, |_| Ok(()), test)
 }
@@ -24,13 +24,13 @@ pub fn run_test_inited(
     spin_config: SpinConfig,
     services_config: ServicesConfig,
     init_env: impl FnOnce(
-            &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
-        ) -> anyhow::Result<()>
-        + 'static,
+        &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
+    ) -> anyhow::Result<()>
+    + 'static,
     test: impl FnOnce(
-            &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
-        ) -> testing_framework::TestResult<anyhow::Error>
-        + 'static,
+        &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
+    ) -> testing_framework::TestResult<anyhow::Error>
+    + 'static,
 ) -> testing_framework::TestResult<anyhow::Error> {
     let mut env = bootstap_env(test_name, spin_config, services_config, init_env)
         .context("failed to boot test environment")?;
@@ -44,9 +44,9 @@ pub fn bootstap_env(
     spin_config: SpinConfig,
     services_config: ServicesConfig,
     init_env: impl FnOnce(
-            &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
-        ) -> anyhow::Result<()>
-        + 'static,
+        &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
+    ) -> anyhow::Result<()>
+    + 'static,
 ) -> anyhow::Result<TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>> {
     let test_name = test_name.into();
     let config = SpinCli::config(spin_config, services_config, move |env| {
