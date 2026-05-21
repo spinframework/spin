@@ -41,6 +41,13 @@ pub struct Variable {
     /// Learn more: https://spinframework.dev/variables#adding-variables-to-your-applications
     #[serde(default, skip_serializing_if = "is_false")]
     pub secret: bool,
+    /// If set, the variable may be unset.
+    ///
+    /// Example: `allow_unset = true`
+    ///
+    /// Learn more: https://spinframework.dev/variables#adding-variables-to-your-applications
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub allow_unset: bool,
 }
 
 /// The file, package, or URL containing the component Wasm binary. This may be:
