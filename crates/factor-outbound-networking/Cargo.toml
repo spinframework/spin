@@ -20,6 +20,7 @@ spin-locked-app = { path = "../locked-app" }
 spin-manifest = { path = "../manifest" }
 spin-outbound-networking-config = { path = "../outbound-networking-config" }
 spin-serde = { path = "../serde" }
+tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 url = { workspace = true }
@@ -30,6 +31,7 @@ spin-factors-test = { path = "../factors-test" }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 toml = { workspace = true }
+wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 
 [features]
