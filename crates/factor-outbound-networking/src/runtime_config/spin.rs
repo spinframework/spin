@@ -46,52 +46,48 @@ impl SpinRuntimeConfig {
         &self,
         table: &impl GetTomlValue,
     ) -> anyhow::Result<Option<super::RuntimeConfig>> {
-        let maybe_blocked_networks = self
-            .blocked_networks_from_table(table)
+        let maybe_outbound_networking = self
+            .outbound_networking_from_table(table)
             .context("failed to parse [outbound_networking] table")?;
         let maybe_tls_configs = self
             .tls_configs_from_table(table)
             .context("failed to parse [[client_tls]] table")?;
 
-        if maybe_blocked_networks.is_none() && maybe_tls_configs.is_none() {
+        if maybe_outbound_networking.is_none() && maybe_tls_configs.is_none() {
             return Ok(None);
         }
 
-        let (blocked_ip_networks, block_private_networks) =
-            maybe_blocked_networks.unwrap_or_default();
-
-        let client_tls_configs = maybe_tls_configs.unwrap_or_default();
+        let outbound_networking = maybe_outbound_networking.unwrap_or_default();
+        let mut blocked_ip_networks = vec![];
+        let mut block_private_networks = false;
+        for block_network in outbound_networking.block_networks {
+            match block_network {
+                CidrOrPrivate::Cidr(ip_network) => blocked_ip_networks.push(ip_network),
+                CidrOrPrivate::Private => {
+                    block_private_networks = true;
+                }
+            }
+        }
 
         let runtime_config = super::RuntimeConfig {
             blocked_ip_networks,
             block_private_networks,
-            client_tls_configs,
+            client_tls_configs: maybe_tls_configs.unwrap_or_default(),
+            max_sockets_per_app: outbound_networking.max_sockets,
         };
         Ok(Some(runtime_config))
     }
 
-    /// Attempts to parse (blocked_ip_networks, block_private_networks) from a
-    /// `[outbound_networking]` table.
-    fn blocked_networks_from_table(
+    /// Attempts to parse the `[outbound_networking]` table.
+    fn outbound_networking_from_table(
         &self,
         table: &impl GetTomlValue,
-    ) -> anyhow::Result<Option<(Vec<ip_network::IpNetwork>, bool)>> {
+    ) -> anyhow::Result<Option<OutboundNetworkingToml>> {
         let Some(value) = table.get("outbound_networking") else {
             return Ok(None);
         };
         let outbound_networking: OutboundNetworkingToml = value.clone().try_into()?;
-
-        let mut ip_networks = vec![];
-        let mut private_networks = false;
-        for block_network in outbound_networking.block_networks {
-            match block_network {
-                CidrOrPrivate::Cidr(ip_network) => ip_networks.push(ip_network),
-                CidrOrPrivate::Private => {
-                    private_networks = true;
-                }
-            }
-        }
-        Ok(Some((ip_networks, private_networks)))
+        Ok(Some(outbound_networking))
     }
 
     fn tls_configs_from_table<T: GetTomlValue>(
@@ -225,6 +221,7 @@ fn deserialize_hosts<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<S
 struct OutboundNetworkingToml {
     #[serde(default)]
     block_networks: Vec<CidrOrPrivate>,
+    max_sockets: Option<usize>,
 }
 
 #[derive(Debug)]

@@ -9069,6 +9069,7 @@ dependencies = [
  "toml 0.8.19",
  "tracing",
  "url",
+ "wasmtime",
  "wasmtime-wasi",
  "webpki-root-certs",
 ]

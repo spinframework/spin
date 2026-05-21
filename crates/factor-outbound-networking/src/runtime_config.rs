@@ -12,6 +12,9 @@ pub struct RuntimeConfig {
     pub block_private_networks: bool,
     /// TLS client configs
     pub client_tls_configs: Vec<ClientTlsRuntimeConfig>,
+    /// Maximum number of outbound socket connections across all instances of this app.
+    /// `None` means unlimited (default).
+    pub max_sockets_per_app: Option<usize>,
 }
 
 /// TLS configuration for one or more component(s) and host(s).
