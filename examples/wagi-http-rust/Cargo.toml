@@ -1,9 +1,0 @@
-[package]
-name = "wagihelloworld"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-miniserde = "0.1.42"
-
-[workspace]
