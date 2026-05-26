@@ -24,6 +24,7 @@ world platform {
   include wasi:keyvalue/imports@0.2.0-draft2;
   import spin:key-value/key-value@3.0.0;
   import spin:mqtt/mqtt@3.0.0;
+  import spin:mysql/mysql@3.0.0;
   import spin:postgres/postgres@3.0.0;
   import spin:postgres/postgres@4.2.0;
   import spin:redis/redis@3.0.0;

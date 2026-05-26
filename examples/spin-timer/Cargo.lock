@@ -5129,6 +5129,7 @@ dependencies = [
  "spin-factors",
  "spin-resource-table",
  "spin-telemetry",
+ "spin-wasi-async",
  "spin-world",
  "tokio",
  "tracing",
