@@ -1556,6 +1556,39 @@ route = "/..."
         Ok(())
     }
 
+    #[cfg(feature = "extern-dependencies-tests")]
+    #[test]
+    fn test_mysql_v3() -> anyhow::Result<()> {
+        run_test(
+            "mysql-v3",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::new(["mysql"])?,
+            move |env| {
+                let spin = env.runtime_mut();
+                let request = Request::full(Method::Get, "/", &[], None::<Vec<u8>>);
+                assert_spin_request(
+                    spin,
+                    request,
+                    Response::full(
+                        200,
+                        [("content-type".to_owned(), "text/plain".to_owned())]
+                            .into_iter()
+                            .collect(),
+                        vec![b"success".to_vec()],
+                    ),
+                )?;
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
     #[test]
     fn test_spin_inbound_http() -> anyhow::Result<()> {
         run_test(
