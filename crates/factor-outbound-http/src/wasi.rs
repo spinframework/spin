@@ -1190,3 +1190,43 @@ fn record_content_length_header(span: &Span, headers: &HeaderMap, attr_name: &'s
         span.set_attribute(attr_name, size_str.to_string());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test: the connect timeout must cover permit acquisition, not
+    /// just the TCP handshake.  Before the fix, a fully-saturated semaphore
+    /// caused `connect_tcp` to hang indefinitely; after the fix it returns
+    /// `ConnectionTimeout` within the configured deadline.
+    #[tokio::test]
+    async fn connect_timeout_applies_to_permit_acquisition() {
+        // Create a semaphore with exactly 1 permit and hold it immediately,
+        // leaving 0 permits available.  This simulates all outbound-connection
+        // slots being occupied.
+        let semaphore = Arc::new(Semaphore::new(1));
+        let _held = semaphore.clone().try_acquire_owned().unwrap();
+
+        let options = ConnectOptions {
+            // No blocked networks; we want the address to pass the filter.
+            blocked_networks: BlockedNetworks::default(),
+            // A very short deadline so the test runs quickly.
+            connect_timeout: Duration::from_millis(50),
+            tls_client_config: None,
+            // Skip DNS by supplying the address directly.
+            override_connect_addr: Some("127.0.0.1:1".parse().unwrap()),
+            concurrent_outbound_connections_semaphore: Some(semaphore),
+        };
+
+        // `connect_tcp` must time out while waiting for a permit rather than
+        // blocking forever.
+        let result = options
+            .connect_tcp(&Uri::from_static("http://test.example"), 80)
+            .await;
+
+        assert!(
+            matches!(result, Err(ErrorCode::ConnectionTimeout)),
+            "expected ConnectionTimeout"
+        );
+    }
+}
