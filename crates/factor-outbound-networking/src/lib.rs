@@ -209,7 +209,6 @@ pub struct InstanceBuilder {
     component_tls_client_configs: ComponentTlsClientConfigs,
 }
 
-
 impl InstanceBuilder {
     pub fn allowed_hosts(&self) -> OutboundAllowedHosts {
         self.allowed_hosts.clone()
