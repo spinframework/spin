@@ -27,19 +27,23 @@ use wasmtime_wasi::p2::bindings::sockets::network::{
 };
 use wasmtime_wasi::p2::bindings::sockets::tcp::{self as p2_tcp, IpSocketAddress, ShutdownType};
 use wasmtime_wasi::p2::bindings::sockets::tcp_create_socket as p2_tcp_create;
+use wasmtime_wasi::p2::bindings::sockets::udp as p2_udp;
+use wasmtime_wasi::p2::bindings::sockets::udp_create_socket as p2_udp_create;
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
-use wasmtime_wasi::sockets::{TcpSocket, WasiSockets, WasiSocketsCtxView};
+use wasmtime_wasi::sockets::{TcpSocket, UdpSocket, WasiSockets, WasiSocketsCtxView};
 use wasmtime_wasi::{DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView};
 
 pub use wasmtime_wasi::sockets::SocketAddrUse;
 
 /// Shared state for tracking per-socket semaphore permits. Permits are
-/// acquired in `start_connect` and released when the socket resource is dropped.
+/// acquired when a socket is allocated (at `start_connect` for TCP, at
+/// `create_udp_socket` for UDP) and released when the socket resource is dropped.
 pub struct SocketPermitState {
     semaphore: Arc<Semaphore>,
-    /// Active permits keyed by socket resource rep (u32). Removed (and the
-    /// permit dropped/released) when the WASI socket resource is dropped.
+    /// Active permits keyed by socket resource rep.
+    ///
+    /// Permits are removed (and the permit released) when the WASI socket resource is dropped.
     active: Mutex<HashMap<u32, OwnedSemaphorePermit>>,
 }
 
@@ -103,29 +107,26 @@ impl p2_tcp::HostTcpSocket for SpinSocketsView<'_> {
         network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> wasmtime_wasi::p2::SocketResult<()> {
-        let socket_rep = this.rep();
-        let permit = if let Some(state) = &self.permit_state {
-            let state = Arc::clone(state);
-            match state.semaphore.clone().try_acquire_owned() {
-                Ok(permit) => Some((state, permit)),
-                // wasi has no "quota exceeded" error code; ConnectionRefused is the closest available.
-                Err(_) => return Err(SocketErrorCode::ConnectionRefused.into()),
-            }
-        } else {
-            None
-        };
-        let result =
+        if let Some(state) = &self.permit_state {
+            // If we have a permit state, we need to acquire a permit before allowing the connection to proceed.
+            let socket_rep = this.rep();
+            let Ok(permit) = Arc::clone(&state.semaphore).try_acquire_owned() else {
+                // wasi has no "quota exceeded" error code. ConnectionRefused is the closest available.
+                return Err(SocketErrorCode::ConnectionRefused.into());
+            };
             p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address)
-                .await;
-        if let (Some((state, permit)), Ok(())) = (permit, &result) {
+                .await?;
+            // If the connection was successfully initiated, store the permit so it can be released when the socket is dropped.
             state
                 .active
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .insert(socket_rep, permit);
+            Ok(())
+        } else {
+            p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address)
+                .await
         }
-        // On Err, any acquired permit is dropped here, returning it to the semaphore.
-        result
     }
 
     fn finish_connect(
@@ -346,6 +347,196 @@ impl p2_tcp_create::Host for SpinSocketsView<'_> {
     }
 }
 
+impl p2_udp::Host for SpinSocketsView<'_> {}
+
+impl p2_udp::HostUdpSocket for SpinSocketsView<'_> {
+    async fn start_bind(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+        network: Resource<p2_udp::Network>,
+        local_address: p2_udp::IpSocketAddress,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_udp::HostUdpSocket::start_bind(&mut self.inner, this, network, local_address).await
+    }
+
+    fn finish_bind(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_udp::HostUdpSocket::finish_bind(&mut self.inner, this)
+    }
+
+    async fn stream(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+        remote_address: Option<p2_udp::IpSocketAddress>,
+    ) -> wasmtime_wasi::p2::SocketResult<(
+        Resource<p2_udp::IncomingDatagramStream>,
+        Resource<p2_udp::OutgoingDatagramStream>,
+    )> {
+        p2_udp::HostUdpSocket::stream(&mut self.inner, this, remote_address).await
+    }
+
+    fn local_address(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<p2_udp::IpSocketAddress> {
+        p2_udp::HostUdpSocket::local_address(&mut self.inner, this)
+    }
+
+    fn remote_address(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<p2_udp::IpSocketAddress> {
+        p2_udp::HostUdpSocket::remote_address(&mut self.inner, this)
+    }
+
+    fn address_family(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+    ) -> wasmtime::Result<p2_udp::IpAddressFamily> {
+        p2_udp::HostUdpSocket::address_family(&mut self.inner, this)
+    }
+
+    fn unicast_hop_limit(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<u8> {
+        p2_udp::HostUdpSocket::unicast_hop_limit(&mut self.inner, this)
+    }
+
+    fn set_unicast_hop_limit(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+        value: u8,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_udp::HostUdpSocket::set_unicast_hop_limit(&mut self.inner, this, value)
+    }
+
+    fn receive_buffer_size(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<u64> {
+        p2_udp::HostUdpSocket::receive_buffer_size(&mut self.inner, this)
+    }
+
+    fn set_receive_buffer_size(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+        value: u64,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_udp::HostUdpSocket::set_receive_buffer_size(&mut self.inner, this, value)
+    }
+
+    fn send_buffer_size(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<u64> {
+        p2_udp::HostUdpSocket::send_buffer_size(&mut self.inner, this)
+    }
+
+    fn set_send_buffer_size(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+        value: u64,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_udp::HostUdpSocket::set_send_buffer_size(&mut self.inner, this, value)
+    }
+
+    fn subscribe(
+        &mut self,
+        this: Resource<p2_udp::UdpSocket>,
+    ) -> wasmtime::Result<Resource<DynPollable>> {
+        p2_udp::HostUdpSocket::subscribe(&mut self.inner, this)
+    }
+
+    fn drop(&mut self, this: Resource<p2_udp::UdpSocket>) -> wasmtime::Result<()> {
+        // Release the permit before dropping the socket resource.
+        if let Some(state) = &self.permit_state {
+            state
+                .active
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&this.rep());
+        }
+        p2_udp::HostUdpSocket::drop(&mut self.inner, this)
+    }
+}
+
+impl p2_udp::HostIncomingDatagramStream for SpinSocketsView<'_> {
+    fn receive(
+        &mut self,
+        this: Resource<p2_udp::IncomingDatagramStream>,
+        max_results: u64,
+    ) -> wasmtime_wasi::p2::SocketResult<Vec<p2_udp::IncomingDatagram>> {
+        p2_udp::HostIncomingDatagramStream::receive(&mut self.inner, this, max_results)
+    }
+
+    fn subscribe(
+        &mut self,
+        this: Resource<p2_udp::IncomingDatagramStream>,
+    ) -> wasmtime::Result<Resource<DynPollable>> {
+        p2_udp::HostIncomingDatagramStream::subscribe(&mut self.inner, this)
+    }
+
+    fn drop(&mut self, this: Resource<p2_udp::IncomingDatagramStream>) -> wasmtime::Result<()> {
+        p2_udp::HostIncomingDatagramStream::drop(&mut self.inner, this)
+    }
+}
+
+impl p2_udp::HostOutgoingDatagramStream for SpinSocketsView<'_> {
+    fn check_send(
+        &mut self,
+        this: Resource<p2_udp::OutgoingDatagramStream>,
+    ) -> wasmtime_wasi::p2::SocketResult<u64> {
+        p2_udp::HostOutgoingDatagramStream::check_send(&mut self.inner, this)
+    }
+
+    async fn send(
+        &mut self,
+        this: Resource<p2_udp::OutgoingDatagramStream>,
+        datagrams: Vec<p2_udp::OutgoingDatagram>,
+    ) -> wasmtime_wasi::p2::SocketResult<u64> {
+        p2_udp::HostOutgoingDatagramStream::send(&mut self.inner, this, datagrams).await
+    }
+
+    fn subscribe(
+        &mut self,
+        this: Resource<p2_udp::OutgoingDatagramStream>,
+    ) -> wasmtime::Result<Resource<DynPollable>> {
+        p2_udp::HostOutgoingDatagramStream::subscribe(&mut self.inner, this)
+    }
+
+    fn drop(&mut self, this: Resource<p2_udp::OutgoingDatagramStream>) -> wasmtime::Result<()> {
+        p2_udp::HostOutgoingDatagramStream::drop(&mut self.inner, this)
+    }
+}
+
+impl p2_udp_create::Host for SpinSocketsView<'_> {
+    fn create_udp_socket(
+        &mut self,
+        address_family: wasmtime_wasi::p2::bindings::sockets::network::IpAddressFamily,
+    ) -> wasmtime_wasi::p2::SocketResult<Resource<UdpSocket>> {
+        if let Some(state) = &self.permit_state {
+            // If we have a permit state, we need to acquire a permit before allowing the socket creation to proceed.
+            let state = Arc::clone(state);
+            let permit = Arc::clone(&state.semaphore)
+                .try_acquire_owned()
+                .map_err(|_| SocketErrorCode::ConnectionRefused)?;
+            let sock = p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family)?;
+            // If the socket was successfully created, store the permit so it can be released when the socket is dropped.
+            state
+                .active
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(sock.rep(), permit);
+            Ok(sock)
+        } else {
+            p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family)
+        }
+    }
+}
+
 pub struct WasiFactor {
     files_mounter: Box<dyn FilesMounter>,
 }
@@ -511,7 +702,7 @@ trait InitContextExt: InitContext<WasiFactor> {
         }
     }
 
-    fn link_tcp_bindings(
+    fn link_spin_sockets_bindings(
         &mut self,
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
@@ -639,14 +830,17 @@ impl Factor for WasiFactor {
         ctx.link_cli_bindings(p3::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p2::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p3::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
-        ctx.link_tcp_bindings(p2::bindings::sockets::tcp::add_to_linker::<_, SpinSockets>)?;
-        ctx.link_tcp_bindings(
+        ctx.link_spin_sockets_bindings(
+            p2::bindings::sockets::tcp::add_to_linker::<_, SpinSockets>,
+        )?;
+        ctx.link_spin_sockets_bindings(
             p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, SpinSockets>,
         )?;
-        // UDP sockets are not subject to the max_sockets_per_app quota — enforcement is TCP-only.
-        ctx.link_sockets_bindings(p2::bindings::sockets::udp::add_to_linker::<_, WasiSockets>)?;
-        ctx.link_sockets_bindings(
-            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, WasiSockets>,
+        ctx.link_spin_sockets_bindings(
+            p2::bindings::sockets::udp::add_to_linker::<_, SpinSockets>,
+        )?;
+        ctx.link_spin_sockets_bindings(
+            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, SpinSockets>,
         )?;
         ctx.link_sockets_bindings(
             p2::bindings::sockets::instance_network::add_to_linker::<_, WasiSockets>,
@@ -829,7 +1023,6 @@ impl FactorInstanceBuilder for InstanceBuilder {
 
 impl InstanceBuilder {
     /// Sets the socket permit state for per-connection quota tracking.
-    /// Called by `OutboundNetworkingFactor` when `max_sockets_per_app` is configured.
     pub fn set_socket_permit_state(&mut self, state: Arc<SocketPermitState>) {
         self.socket_permit_state = Some(state);
     }
