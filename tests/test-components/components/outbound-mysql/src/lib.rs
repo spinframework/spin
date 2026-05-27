@@ -31,7 +31,7 @@ impl Component {
         ));
 
         // Insert 256 copies of a 1MB string, which exceeds the 128MB query
-        // result limit we impose in `factor-outbound-pg`:
+        // result limit we impose in `factor-outbound-mysql`:
         let big_text = "y".repeat(1 << 20);
         for i in 0..256 {
             ensure_ok!(conn.execute(

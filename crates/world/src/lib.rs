@@ -37,6 +37,7 @@ wasmtime::component::bindgen!({
         "fermyon:spin/variables@2.0.0.error" => v2::variables::Error,
         "spin:key-value/key-value@3.0.0.error" => spin::key_value::key_value::Error,
         "spin:mqtt/mqtt@3.0.0.error" => spin::mqtt::mqtt::Error,
+        "spin:mysql/mysql@3.0.0.error" => spin::mysql::mysql::Error,
         "spin:postgres/postgres@3.0.0.error" => spin::postgres3_0_0::postgres::Error,
         "spin:postgres/postgres@4.2.0.error" => spin::postgres4_2_0::postgres::Error,
         "spin:redis/redis@3.0.0.error" => spin::redis::redis::Error,

@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use futures::stream::TryStreamExt as _;
+use futures::{future::FutureExt as _, stream::TryStreamExt as _};
 use mysql_async::consts::ColumnType;
 use mysql_async::prelude::{FromValue, Queryable as _};
 use mysql_async::{Conn as MysqlClient, Opts, OptsBuilder, SslOpts, from_value_opt};
 use spin_core::async_trait;
+use spin_world::spin::mysql::mysql as v3;
 use spin_world::v2::mysql::{self as v2};
 use spin_world::v2::rdbms_types::{
     self as v2_types, Column, DbDataType, DbValue, ParameterValue, RowSet,
 };
+use tokio::sync::{Mutex, mpsc, oneshot};
 use url::Url;
 
 #[async_trait]
@@ -30,6 +32,20 @@ pub trait Client: Send + Sync + 'static {
         params: Vec<ParameterValue>,
         max_result_bytes: usize,
     ) -> Result<RowSet, v2::Error>;
+
+    async fn query_async(
+        client: Arc<Mutex<Self>>,
+        statement: String,
+        params: Vec<v3::ParameterValue>,
+        max_result_bytes: usize,
+    ) -> Result<
+        (
+            Vec<v3::Column>,
+            mpsc::Receiver<v3::Row>,
+            oneshot::Receiver<Result<(), v3::Error>>,
+        ),
+        v3::Error,
+    >;
 }
 
 #[async_trait]
@@ -100,6 +116,93 @@ impl Client for MysqlClient {
         }
 
         Ok(v2_types::RowSet { columns, rows })
+    }
+
+    async fn query_async(
+        client: Arc<Mutex<Self>>,
+        statement: String,
+        params: Vec<v3::ParameterValue>,
+        max_result_bytes: usize,
+    ) -> Result<
+        (
+            Vec<v3::Column>,
+            mpsc::Receiver<v3::Row>,
+            oneshot::Receiver<Result<(), v3::Error>>,
+        ),
+        v3::Error,
+    > {
+        let db_params = params
+            .into_iter()
+            .map(|v| to_sql_parameter(v2_types::ParameterValue::from(v)))
+            .collect::<Vec<_>>();
+        let parameters = mysql_async::Params::Positional(db_params);
+
+        let (rows_tx, rows_rx) = mpsc::channel(4);
+        let (err_tx, err_rx) = oneshot::channel();
+        let (columns_tx, columns_rx) = oneshot::channel();
+
+        let mut byte_count = std::mem::size_of::<(
+            Vec<v3::Column>,
+            mpsc::Receiver<v3::Row>,
+            oneshot::Receiver<Result<(), v3::Error>>,
+        )>();
+
+        tokio::spawn(
+            async move {
+                let mut client = client.lock().await;
+
+                let mut query_result = client
+                    .exec_iter(&statement, parameters)
+                    .await
+                    .map_err(|e| v3::Error::QueryFailed(format!("{e:?}")))?;
+
+                let columns = convert_columns(query_result.columns());
+
+                _ = columns_tx.send(
+                    columns
+                        .iter()
+                        .map(|v| v3::Column::from(v.clone()))
+                        .collect(),
+                );
+
+                let mut query_result = query_result
+                    .stream()
+                    .await
+                    .map_err(|e| v3::Error::Other(e.to_string()))?
+                    .ok_or_else(|| v3::Error::Other("unable to stream query result".into()))?;
+
+                while let Some(row) = query_result
+                    .try_next()
+                    .await
+                    .map_err(|e| v3::Error::Other(e.to_string()))?
+                {
+                    let row = convert_row(row, &columns).map_err(v3::Error::from)?;
+
+                    byte_count += row.iter().map(|v| v.memory_size()).sum::<usize>();
+                    if byte_count > max_result_bytes {
+                        return Err(v3::Error::Other(format!(
+                            "query result exceeds limit of {max_result_bytes} bytes"
+                        )));
+                    }
+
+                    rows_tx
+                        .send(row.into_iter().map(v3::DbValue::from).collect())
+                        .await
+                        .map_err(|e| v3::Error::Other(format!("async error: {e}")))?;
+                }
+
+                Ok(())
+            }
+            .map(move |result| {
+                _ = err_tx.send(result);
+            }),
+        );
+
+        let columns = columns_rx
+            .await
+            .map_err(|e| v3::Error::Other(format!("async error: {e}")))?;
+
+        Ok((columns, rows_rx, err_rx))
     }
 }
 

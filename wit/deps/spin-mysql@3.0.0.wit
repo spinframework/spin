@@ -1,0 +1,88 @@
+package spin:mysql@3.0.0;
+
+interface mysql {
+  /// Errors related to interacting with a database.
+  variant error {
+      connection-failed(string),
+      bad-parameter(string),
+      query-failed(string),
+      value-conversion-failed(string),
+      other(string)
+  }
+
+  /// Data types for a database column
+  enum db-data-type {
+      boolean,
+      int8,
+      int16,
+      int32,
+      int64,
+      uint8,
+      uint16,
+      uint32,
+      uint64,
+      floating32,
+      floating64,
+      str,
+      binary,
+      other,
+  }
+
+  /// Database values
+  variant db-value {
+      boolean(bool),
+      int8(s8),
+      int16(s16),
+      int32(s32),
+      int64(s64),
+      uint8(u8),
+      uint16(u16),
+      uint32(u32),
+      uint64(u64),
+      floating32(f32),
+      floating64(f64),
+      str(string),
+      binary(list<u8>),
+      db-null,
+      unsupported,
+  }
+
+  /// Values used in parameterized queries
+  variant parameter-value {
+      boolean(bool),
+      int8(s8),
+      int16(s16),
+      int32(s32),
+      int64(s64),
+      uint8(u8),
+      uint16(u16),
+      uint32(u32),
+      uint64(u64),
+      floating32(f32),
+      floating64(f64),
+      str(string),
+      binary(list<u8>),
+      db-null,
+  }
+
+  /// A database column
+  record column {
+      name: string,
+      data-type: db-data-type,
+  }
+
+  /// A database row
+  type row = list<db-value>;
+
+  /// A connection to a MySQL database.
+  resource connection {
+    /// Open a connection to the MySQL instance at `address`.
+    open: static async func(address: string) -> result<connection, error>;
+
+    /// query the database: select
+    query: async func(statement: string, params: list<parameter-value>) -> result<tuple<list<column>, stream<row>, future<result<_, error>>>, error>;
+
+    /// execute command to the database: insert, update, delete
+    execute: async func(statement: string, params: list<parameter-value>) -> result<_, error>;
+  }
+}

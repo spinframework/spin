@@ -2,8 +2,10 @@ use super::*;
 
 mod rdbms_types {
     use super::*;
+    use spin::mysql::mysql as mysql3;
     use spin::postgres3_0_0::postgres as pg3;
     use spin::postgres4_2_0::postgres as pg4;
+    use v2::mysql as mysql2;
 
     impl From<v2::rdbms_types::Column> for v1::rdbms_types::Column {
         fn from(value: v2::rdbms_types::Column) -> Self {
@@ -407,6 +409,103 @@ mod rdbms_types {
                 pg4::Error::QueryFailed(e) => pg3::Error::QueryFailed(pg_error_text(e)),
                 pg4::Error::ValueConversionFailed(e) => pg3::Error::ValueConversionFailed(e),
                 pg4::Error::Other(e) => pg3::Error::Other(e),
+            }
+        }
+    }
+
+    impl From<v2::rdbms_types::Column> for mysql3::Column {
+        fn from(column: v2::rdbms_types::Column) -> Self {
+            Self {
+                name: column.name,
+                data_type: column.data_type.into(),
+            }
+        }
+    }
+
+    impl From<v2::rdbms_types::DbDataType> for mysql3::DbDataType {
+        fn from(ty: v2::rdbms_types::DbDataType) -> Self {
+            match ty {
+                v2::rdbms_types::DbDataType::Boolean => Self::Boolean,
+                v2::rdbms_types::DbDataType::Int8 => Self::Int8,
+                v2::rdbms_types::DbDataType::Int16 => Self::Int16,
+                v2::rdbms_types::DbDataType::Int32 => Self::Int32,
+                v2::rdbms_types::DbDataType::Int64 => Self::Int64,
+                v2::rdbms_types::DbDataType::Uint8 => Self::Uint8,
+                v2::rdbms_types::DbDataType::Uint16 => Self::Uint16,
+                v2::rdbms_types::DbDataType::Uint32 => Self::Uint32,
+                v2::rdbms_types::DbDataType::Uint64 => Self::Uint64,
+                v2::rdbms_types::DbDataType::Floating32 => Self::Floating32,
+                v2::rdbms_types::DbDataType::Floating64 => Self::Floating64,
+                v2::rdbms_types::DbDataType::Str => Self::Str,
+                v2::rdbms_types::DbDataType::Binary => Self::Binary,
+                v2::rdbms_types::DbDataType::Other => Self::Other,
+            }
+        }
+    }
+
+    impl From<v2::rdbms_types::DbValue> for mysql3::DbValue {
+        fn from(ty: v2::rdbms_types::DbValue) -> Self {
+            match ty {
+                v2::rdbms_types::DbValue::Boolean(v) => Self::Boolean(v),
+                v2::rdbms_types::DbValue::Int8(v) => Self::Int8(v),
+                v2::rdbms_types::DbValue::Int16(v) => Self::Int16(v),
+                v2::rdbms_types::DbValue::Int32(v) => Self::Int32(v),
+                v2::rdbms_types::DbValue::Int64(v) => Self::Int64(v),
+                v2::rdbms_types::DbValue::Uint8(v) => Self::Uint8(v),
+                v2::rdbms_types::DbValue::Uint16(v) => Self::Uint16(v),
+                v2::rdbms_types::DbValue::Uint32(v) => Self::Uint32(v),
+                v2::rdbms_types::DbValue::Uint64(v) => Self::Uint64(v),
+                v2::rdbms_types::DbValue::Floating32(v) => Self::Floating32(v),
+                v2::rdbms_types::DbValue::Floating64(v) => Self::Floating64(v),
+                v2::rdbms_types::DbValue::Str(v) => Self::Str(v),
+                v2::rdbms_types::DbValue::Binary(v) => Self::Binary(v),
+                v2::rdbms_types::DbValue::DbNull => Self::DbNull,
+                v2::rdbms_types::DbValue::Unsupported => Self::Unsupported,
+            }
+        }
+    }
+
+    impl From<mysql2::Error> for mysql3::Error {
+        fn from(error: mysql2::Error) -> Self {
+            match error {
+                mysql2::Error::ConnectionFailed(v) => Self::ConnectionFailed(v),
+                mysql2::Error::BadParameter(v) => Self::BadParameter(v),
+                mysql2::Error::QueryFailed(v) => Self::QueryFailed(v),
+                mysql2::Error::ValueConversionFailed(v) => Self::ValueConversionFailed(v),
+                mysql2::Error::Other(v) => Self::Other(v),
+            }
+        }
+    }
+
+    impl From<mysql3::Error> for mysql2::Error {
+        fn from(error: mysql3::Error) -> Self {
+            match error {
+                mysql3::Error::ConnectionFailed(v) => Self::ConnectionFailed(v),
+                mysql3::Error::BadParameter(v) => Self::BadParameter(v),
+                mysql3::Error::QueryFailed(v) => Self::QueryFailed(v),
+                mysql3::Error::ValueConversionFailed(v) => Self::ValueConversionFailed(v),
+                mysql3::Error::Other(v) => Self::Other(v),
+            }
+        }
+    }
+
+    impl From<mysql3::ParameterValue> for mysql2::ParameterValue {
+        fn from(value: mysql3::ParameterValue) -> Self {
+            match value {
+                mysql3::ParameterValue::Boolean(v) => Self::Boolean(v),
+                mysql3::ParameterValue::Int8(v) => Self::Int8(v),
+                mysql3::ParameterValue::Int16(v) => Self::Int16(v),
+                mysql3::ParameterValue::Int32(v) => Self::Int32(v),
+                mysql3::ParameterValue::Int64(v) => Self::Int64(v),
+                mysql3::ParameterValue::Uint8(v) => Self::Uint8(v),
+                mysql3::ParameterValue::Uint16(v) => Self::Uint16(v),
+                mysql3::ParameterValue::Uint32(v) => Self::Uint32(v),
+                mysql3::ParameterValue::Uint64(v) => Self::Uint64(v),
+                mysql3::ParameterValue::Floating32(v) => Self::Floating32(v),
+                mysql3::ParameterValue::Floating64(v) => Self::Floating64(v),
+                mysql3::ParameterValue::Str(v) => Self::Str(v),
+                mysql3::ParameterValue::Binary(v) => Self::Binary(v),
+                mysql3::ParameterValue::DbNull => Self::DbNull,
             }
         }
     }
