@@ -738,23 +738,25 @@ impl ConnectOptions {
         // Remove blocked IPs
         crate::remove_blocked_addrs(&self.blocked_networks, &mut socket_addrs)?;
 
-        // If we're limiting concurrent outbound requests, acquire a permit
+        let connect = async {
+            // If we're limiting concurrent outbound requests, acquire a permit
+            let permit = crate::concurrent_outbound_connections::acquire_owned_semaphore(
+                "wasi",
+                &self.concurrent_outbound_connections_semaphore,
+            )
+            .await;
+            (TcpStream::connect(&*socket_addrs).await, permit)
+        };
 
-        let permit = crate::concurrent_outbound_connections::acquire_owned_semaphore(
-            "wasi",
-            &self.concurrent_outbound_connections_semaphore,
-        )
-        .await;
-
-        let stream = timeout(self.connect_timeout, TcpStream::connect(&*socket_addrs))
+        // Make sure that the connect timeout applies to both acquiring the outbound request permit and establishing the TCP connection,
+        // since acquiring the permit could potentially take a long time if there are many outbound requests happening.
+        let (stream, permit) = timeout(self.connect_timeout, connect)
             .await
-            .map_err(|_| ErrorCode::ConnectionTimeout)?
-            .map_err(|err| match err.kind() {
-                std::io::ErrorKind::AddrNotAvailable => {
-                    dns_error("address not available".into(), 0)
-                }
-                _ => ErrorCode::ConnectionRefused,
-            })?;
+            .map_err(|_| ErrorCode::ConnectionTimeout)?;
+        let stream = stream.map_err(|err| match err.kind() {
+            std::io::ErrorKind::AddrNotAvailable => dns_error("address not available".into(), 0),
+            _ => ErrorCode::ConnectionRefused,
+        })?;
         Ok(PermittedTcpStream {
             inner: stream,
             _permit: permit,
