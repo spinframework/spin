@@ -164,7 +164,7 @@ impl Deref for TlsClientConfig {
 
 impl Default for TlsClientConfig {
     fn default() -> Self {
-        Self::new(true, false, vec![], None).expect("default client config should be valid")
+        Self::new(true, true, vec![], None).expect("default client config should be valid")
     }
 }
 
