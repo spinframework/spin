@@ -1,15 +1,19 @@
 use std::io::IsTerminal;
 use std::net::SocketAddr;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
-use anyhow::{Context, Result, anyhow};
-use futures::TryFutureExt;
+use anyhow::{Context as _, Result, anyhow};
 use http::{HeaderName, HeaderValue};
+use http_body::{Body as HttpBody, Frame, SizeHint};
+use http_body_util::BodyExt;
 use hyper::{Request, Response};
 use spin_factor_outbound_http::wasi_2023_10_18::Proxy as Proxy2023_10_18;
 use spin_factor_outbound_http::wasi_2023_11_10::Proxy as Proxy2023_11_10;
 use spin_factors::RuntimeFactors;
 use spin_http::routes::RouteMatch;
 use spin_http::trigger::HandlerType;
+use tokio::task::AbortHandle;
 use tokio::{sync::oneshot, task};
 use tracing::{Instrument, Level, instrument};
 use wasmtime_wasi_http::handler::HandlerState;
@@ -130,29 +134,38 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
             }
             .in_current_span(),
         );
+        let abort_handle = handle.abort_handle();
 
         match response_rx.await {
             Ok(response) => {
-                task::spawn(
-                    async move {
-                        handle
-                            .await
-                            .context("guest invocation panicked")?
-                            .map_err(anyhow::Error::from)
-                            .context("guest invocation failed")?;
-
-                        Ok(())
-                    }
-                    .map_err(|e: anyhow::Error| {
-                        if std::io::stderr().is_terminal() {
-                            tracing::error!("Component error after response started. The response may not be fully sent: {e:?}");
-                        } else {
-                            terminal::warn!("Component error after response started: {e:?}");
+                task::spawn(async move {
+                    match handle.await {
+                        // Task was aborted because the incoming request was cancelled
+                        // (e.g. client disconnected). This is expected; don't log it as an error.
+                        Err(e) if e.is_cancelled() => {}
+                        result => {
+                            let result =
+                                result.context("guest invocation panicked").and_then(|r| {
+                                    r.map_err(anyhow::Error::from)
+                                        .context("guest invocation failed")
+                                });
+                            if let Err(e) = result {
+                                if std::io::stderr().is_terminal() {
+                                    tracing::error!(
+                                        "Component error after response started. The response may not be fully sent: {e:?}"
+                                    );
+                                } else {
+                                    terminal::warn!(
+                                        "Component error after response started: {e:?}"
+                                    );
+                                }
+                            }
                         }
-                    }),
-                );
+                    }
+                });
 
-                Ok(response.context("guest failed to produce a response")?)
+                let response = response.context("guest failed to produce a response")?;
+                Ok(response.map(|body| AbortOnDropBody::new(body, abort_handle).boxed_unsync()))
             }
 
             Err(_) => {
@@ -167,5 +180,48 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
                 ))
             }
         }
+    }
+}
+
+/// Wraps a response body and aborts a tokio task when the body is dropped.
+///
+/// Used so that if Hyper drops the response body (e.g. the client disconnected),
+/// the Wasm component task is aborted. This causes the Wasm `Store` to be dropped,
+/// which in turn drops any `HostFutureIncomingResponse::Pending(AbortOnDropJoinHandle)`
+/// resources — aborting all pending outbound HTTP requests immediately.
+struct AbortOnDropBody<B> {
+    body: B,
+    abort_handle: AbortHandle,
+}
+
+impl<B> AbortOnDropBody<B> {
+    fn new(body: B, abort_handle: AbortHandle) -> Self {
+        Self { body, abort_handle }
+    }
+}
+
+impl<B> Drop for AbortOnDropBody<B> {
+    fn drop(&mut self) {
+        self.abort_handle.abort();
+    }
+}
+
+impl<B: HttpBody + Unpin> HttpBody for AbortOnDropBody<B> {
+    type Data = B::Data;
+    type Error = B::Error;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        Pin::new(&mut self.body).poll_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.body.size_hint()
     }
 }
