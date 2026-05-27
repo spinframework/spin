@@ -18,6 +18,7 @@ pub struct InstanceState {
     connections: spin_resource_table::Table<Arc<dyn MqttClient>>,
     create_client: Arc<dyn ClientCreator>,
     otel: OtelFactorState,
+    max_payload_size_bytes: usize,
 }
 
 impl InstanceState {
@@ -25,12 +26,14 @@ impl InstanceState {
         allowed_hosts: OutboundAllowedHosts,
         create_client: Arc<dyn ClientCreator>,
         otel: OtelFactorState,
+        max_payload_size_bytes: usize,
     ) -> Self {
         Self {
             allowed_hosts: AllowedHostChecker::new(allowed_hosts),
             create_client,
             connections: spin_resource_table::Table::new(1024),
             otel,
+            max_payload_size_bytes,
         }
     }
 }
@@ -151,11 +154,20 @@ impl v3::HostConnectionWithStore for crate::MqttFactorData {
         payload: v3::Payload,
         qos: v3::Qos,
     ) -> Result<(), v3::Error> {
-        let conn = accessor.with(|mut access| {
+        let (conn, max_payload_size_bytes) = accessor.with(|mut access| {
             let host = access.get();
             host.otel.reparent_tracing_span();
             host.get_conn_v3(connection)
+                .map(|c| (c, host.max_payload_size_bytes))
         })?;
+
+        if payload.len() > max_payload_size_bytes {
+            return Err(v3::Error::Other(format!(
+                "payload size {} exceeds the maximum allowed size of {} bytes",
+                payload.len(),
+                max_payload_size_bytes
+            )));
+        }
 
         conn.publish_bytes(topic, qos, payload).await?;
 
@@ -214,6 +226,14 @@ impl v2::HostConnection for InstanceState {
         qos: v2::Qos,
     ) -> Result<(), v2::Error> {
         self.otel.reparent_tracing_span();
+
+        if payload.len() > self.max_payload_size_bytes {
+            return Err(v2::Error::Other(format!(
+                "payload size {} exceeds the maximum allowed size of {} bytes",
+                payload.len(),
+                self.max_payload_size_bytes
+            )));
+        }
 
         let conn = self.get_conn(connection)?;
 

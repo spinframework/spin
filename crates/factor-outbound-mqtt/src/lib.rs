@@ -1,5 +1,6 @@
 mod allowed_hosts;
 mod host;
+pub mod runtime_config;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,9 +31,13 @@ impl OutboundMqttFactor {
     }
 }
 
+pub struct AppState {
+    max_payload_size_bytes: usize,
+}
+
 impl Factor for OutboundMqttFactor {
-    type RuntimeConfig = ();
-    type AppState = ();
+    type RuntimeConfig = runtime_config::RuntimeConfig;
+    type AppState = AppState;
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
@@ -43,9 +48,12 @@ impl Factor for OutboundMqttFactor {
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        _ctx: ConfigureAppContext<T, Self>,
+        mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        Ok(())
+        let config = ctx.take_runtime_config().unwrap_or_default();
+        Ok(AppState {
+            max_payload_size_bytes: config.max_payload_size_bytes,
+        })
     }
 
     fn prepare<T: RuntimeFactors>(
@@ -61,6 +69,7 @@ impl Factor for OutboundMqttFactor {
             allowed_hosts,
             self.create_client.clone(),
             otel,
+            ctx.app_state().max_payload_size_bytes,
         ))
     }
 }
