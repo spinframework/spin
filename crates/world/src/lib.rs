@@ -47,9 +47,6 @@ wasmtime::component::bindgen!({
         "wasi:keyvalue/store.error" => wasi::keyvalue::store::Error,
         "wasi:keyvalue/atomics.cas-error" => wasi::keyvalue::atomics::CasError,
     },
-    with: {
-        "spin:mysql/mysql@3.0.0.connection": v2::mysql::Connection,
-    },
     anyhow: true,
 });
 

@@ -15,10 +15,7 @@ use crate::client::Client;
 use crate::{InstanceState, InstanceStateInner, MysqlFactorData};
 
 impl<C: Client> InstanceStateInner<C> {
-    async fn open_connection(
-        &mut self,
-        address: &str,
-    ) -> Result<Resource<v2::Connection>, v2::Error> {
+    async fn open_connection(&mut self, address: &str) -> Result<u32, v2::Error> {
         spin_factor_outbound_networking::record_address_fields(address);
 
         if !self.is_address_allowed(address).await.map_err(|e| {
@@ -50,23 +47,16 @@ impl<C: Client> InstanceStateInner<C> {
                 traces::mark_as_error(&err, Some(Blame::Guest));
                 err
             })
-            .map(Resource::new_own)
     }
 
-    fn get_client(
-        &mut self,
-        connection: Resource<v2::Connection>,
-    ) -> Result<Arc<Mutex<C>>, v2::Error> {
-        self.connections
-            .get(connection.rep())
-            .cloned()
-            .ok_or_else(|| {
-                // The connection table is managed entirely by the host, so a
-                // missing handle indicates a host-side bug, not a guest mistake.
-                let err = v2::Error::ConnectionFailed("no connection found".into());
-                traces::mark_as_error(&err, Some(Blame::Host));
-                err
-            })
+    fn get_client(&mut self, connection: u32) -> Result<Arc<Mutex<C>>, v2::Error> {
+        self.connections.get(connection).cloned().ok_or_else(|| {
+            // The connection table is managed entirely by the host, so a
+            // missing handle indicates a host-side bug, not a guest mistake.
+            let err = v2::Error::ConnectionFailed("no connection found".into());
+            traces::mark_as_error(&err, Some(Blame::Host));
+            err
+        })
     }
 
     async fn is_address_allowed(&self, address: &str) -> Result<bool> {
@@ -103,7 +93,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
         let state = accessor.with(|mut access| access.get().0.clone());
         let mut state = state.lock().await;
         state.otel.reparent_tracing_span();
-        Ok(state.open_connection(&address).await?)
+        Ok(Resource::new_own(state.open_connection(&address).await?))
     }
 
     #[instrument(name = "spin_outbound_mysql.execute", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", otel.name = statement))]
@@ -117,7 +107,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
         let client = {
             let mut state = state.lock().await;
             state.otel.reparent_tracing_span();
-            state.get_client(connection)?
+            state.get_client(connection.rep())?
         };
         client
             .lock()
@@ -139,7 +129,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
         let client = {
             let mut state = state.lock().await;
             state.otel.reparent_tracing_span();
-            state.get_client(connection)?
+            state.get_client(connection.rep())?
         };
 
         let (columns, stream, future) =
@@ -173,7 +163,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
         let mut state = self.0.lock().await;
         state.otel.reparent_tracing_span();
-        state.open_connection(&address).await
+        state.open_connection(&address).await.map(Resource::new_own)
     }
 
     #[instrument(name = "spin_outbound_mysql.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", otel.name = statement))]
@@ -186,7 +176,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
         let mut state = self.0.lock().await;
         state.otel.reparent_tracing_span();
         state
-            .get_client(connection)?
+            .get_client(connection.rep())?
             .lock()
             .await
             .execute(statement, params)
@@ -204,7 +194,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
         let mut state = self.0.lock().await;
         state.otel.reparent_tracing_span();
         state
-            .get_client(connection)?
+            .get_client(connection.rep())?
             .lock()
             .await
             .query(statement, params, MAX_HOST_BUFFERED_BYTES)
@@ -230,7 +220,7 @@ macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
         let connection = {
             let mut state = $self.0.lock().await;
-            state.open_connection(&$address).await?
+            Resource::new_own(state.open_connection(&$address).await?)
         };
         <Self as v2::HostConnection>::$name($self, connection, $($arg),*)
             .await
