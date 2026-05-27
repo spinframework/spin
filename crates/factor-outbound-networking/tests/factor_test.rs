@@ -10,6 +10,7 @@ use wasmtime_wasi::p2::bindings::sockets::instance_network::Host;
 use wasmtime_wasi::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily};
 use wasmtime_wasi::p2::bindings::sockets::tcp as p2_tcp;
 use wasmtime_wasi::p2::bindings::sockets::tcp_create_socket as p2_tcp_create;
+use wasmtime_wasi::p2::bindings::sockets::udp_create_socket as p2_udp_create;
 use wasmtime_wasi::sockets::SocketAddrUse;
 
 #[derive(RuntimeFactors)]
@@ -178,7 +179,7 @@ async fn socket_quota_releases_on_instance_drop() -> anyhow::Result<()> {
         let net = sockets.instance_network()?;
         let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
         p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into()).await?;
-        // sockets then state drop here, releasing the permit back to the semaphore
+        // sockets state dropped here releasing the permit back to the semaphore
     }
 
     // Second instance: quota should be fully available again
@@ -309,5 +310,88 @@ async fn socket_quota_releases_on_socket_drop() -> anyhow::Result<()> {
     let sock3 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
     p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock3, net3, addr.into()).await?;
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn socket_quota_blocks_excess_udp_sockets() -> anyhow::Result<()> {
+    let factors = TestFactors {
+        wasi: WasiFactor::new(DummyFilesMounter),
+        variables: VariablesFactor::default(),
+        networking: OutboundNetworkingFactor::new(),
+    };
+    let env = TestEnvironment::new(factors)
+        .extend_manifest(toml! {
+            [component.test-component]
+            source = "does-not-exist.wasm"
+            allowed_outbound_hosts = ["*://123.0.2.1:12345"]
+        })
+        .runtime_config(TestFactorsRuntimeConfig {
+            networking: Some(RuntimeConfig {
+                max_sockets_per_app: Some(2),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })?;
+
+    let mut state = env.build_instance_state().await?;
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+
+    // First two UDP socket creations should succeed.
+    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+
+    // Third should fail — quota exhausted.
+    let err =
+        p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).unwrap_err();
+    assert_eq!(err.downcast_ref(), Some(&ErrorCode::ConnectionRefused));
+    Ok(())
+}
+
+#[tokio::test]
+async fn socket_quota_shared_between_tcp_and_udp() -> anyhow::Result<()> {
+    let factors = TestFactors {
+        wasi: WasiFactor::new(DummyFilesMounter),
+        variables: VariablesFactor::default(),
+        networking: OutboundNetworkingFactor::new(),
+    };
+    let env = TestEnvironment::new(factors)
+        .extend_manifest(toml! {
+            [component.test-component]
+            source = "does-not-exist.wasm"
+            allowed_outbound_hosts = ["*://123.0.2.1:12345"]
+        })
+        .runtime_config(TestFactorsRuntimeConfig {
+            networking: Some(RuntimeConfig {
+                max_sockets_per_app: Some(2),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })?;
+
+    let mut state = env.build_instance_state().await?;
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
+
+    // Consume one permit with a TCP connection.
+    let net = sockets.instance_network()?;
+    let tcp_sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, tcp_sock, net, addr.into()).await?;
+
+    // Consume the second permit with a UDP socket — quota now full.
+    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+
+    // Any further allocation must fail — shared quota exhausted.
+    // UDP:
+    let err =
+        p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).unwrap_err();
+    assert_eq!(err.downcast_ref(), Some(&ErrorCode::ConnectionRefused));
+    // TCP:
+    let net = sockets.instance_network()?;
+    let tcp_sock2 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+    let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, tcp_sock2, net, addr.into())
+        .await
+        .unwrap_err();
+    assert_eq!(err.downcast_ref(), Some(&ErrorCode::ConnectionRefused));
     Ok(())
 }
