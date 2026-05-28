@@ -368,8 +368,10 @@ impl FactorRuntimeConfigSource<LlmFactor> for TomlRuntimeConfigSource<'_, '_> {
 }
 
 impl FactorRuntimeConfigSource<OutboundRedisFactor> for TomlRuntimeConfigSource<'_, '_> {
-    fn get_runtime_config(&mut self) -> anyhow::Result<Option<()>> {
-        Ok(None)
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<<OutboundRedisFactor as spin_factors::Factor>::RuntimeConfig>> {
+        spin_factor_outbound_redis::runtime_config::spin::config_from_table(&self.toml.table)
     }
 }
 
