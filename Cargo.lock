@@ -9168,6 +9168,7 @@ dependencies = [
  "spin-factors",
  "spin-factors-test",
  "tokio",
+ "tracing",
  "wasmtime",
  "wasmtime-wasi",
 ]

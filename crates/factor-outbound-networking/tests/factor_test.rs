@@ -128,7 +128,7 @@ async fn socket_quota_blocks_excess_connections() -> anyhow::Result<()> {
     let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock3, net3, addr.into())
         .await
         .unwrap_err();
-    assert_eq!(err.downcast_ref(), Some(&ErrorCode::ConnectionRefused));
+    assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
     Ok(())
 }
 
@@ -298,7 +298,7 @@ async fn socket_quota_releases_on_socket_drop() -> anyhow::Result<()> {
     let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock2, net2, addr.into())
         .await
         .unwrap_err();
-    assert_eq!(err.downcast_ref(), Some(&ErrorCode::ConnectionRefused));
+    assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
 
     // Explicitly drop sock1 before finish_connect — this should release the permit.
     let sock1_handle =
@@ -344,7 +344,7 @@ async fn socket_quota_blocks_excess_udp_sockets() -> anyhow::Result<()> {
     // Third should fail — quota exhausted.
     let err =
         p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).unwrap_err();
-    assert_eq!(err.downcast_ref(), Some(&ErrorCode::ConnectionRefused));
+    assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
     Ok(())
 }
 
@@ -385,13 +385,13 @@ async fn socket_quota_shared_between_tcp_and_udp() -> anyhow::Result<()> {
     // UDP:
     let err =
         p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).unwrap_err();
-    assert_eq!(err.downcast_ref(), Some(&ErrorCode::ConnectionRefused));
+    assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
     // TCP:
     let net = sockets.instance_network()?;
     let tcp_sock2 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
     let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, tcp_sock2, net, addr.into())
         .await
         .unwrap_err();
-    assert_eq!(err.downcast_ref(), Some(&ErrorCode::ConnectionRefused));
+    assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
     Ok(())
 }
