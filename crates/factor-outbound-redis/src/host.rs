@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use anyhow::Result;
 use redis::AsyncConnectionConfig;
@@ -11,6 +12,7 @@ use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::redis::redis as v3;
 use spin_world::v1::{redis as v1, redis_types};
 use spin_world::v2::redis as v2;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::field::Empty;
 use tracing::{Level, instrument};
 
@@ -19,7 +21,9 @@ use crate::allowed_hosts::AllowedHostChecker;
 pub struct InstanceState {
     pub(crate) allowed_host_checker: AllowedHostChecker,
     pub blocked_networks: BlockedNetworks,
-    pub connections: spin_resource_table::Table<MultiplexedConnection>,
+    pub connections:
+        spin_resource_table::Table<(MultiplexedConnection, Option<OwnedSemaphorePermit>)>,
+    pub connection_semaphore: Option<Arc<Semaphore>>,
     pub otel: OtelFactorState,
 }
 
@@ -32,6 +36,15 @@ impl InstanceState {
         &mut self,
         address: String,
     ) -> Result<Resource<v2::Connection>, v2::Error> {
+        let permit = match &self.connection_semaphore {
+            Some(sem) => Some(
+                Arc::clone(sem)
+                    .acquire_owned()
+                    .await
+                    .map_err(|_| v2::Error::TooManyConnections)?,
+            ),
+            None => None,
+        };
         let config = AsyncConnectionConfig::new()
             .set_dns_resolver(SpinDnsResolver(self.blocked_networks.clone()));
         let conn = redis::Client::open(address.as_str())
@@ -40,7 +53,7 @@ impl InstanceState {
             .await
             .map_err(other_error_v2)?;
         self.connections
-            .push(conn)
+            .push((conn, permit))
             .map(Resource::new_own)
             .map_err(|_| v2::Error::TooManyConnections)
     }
@@ -51,6 +64,7 @@ impl InstanceState {
     ) -> Result<&mut MultiplexedConnection, v2::Error> {
         self.connections
             .get_mut(connection.rep())
+            .map(|(conn, _permit)| conn)
             .ok_or(v2::Error::Other(
                 "could not find connection for resource".into(),
             ))
@@ -62,7 +76,7 @@ impl InstanceState {
     ) -> Result<MultiplexedConnection, v3::Error> {
         self.connections
             .get(connection.rep())
-            .cloned()
+            .map(|(conn, _permit)| conn.clone())
             .ok_or(v3::Error::Other(
                 "could not find connection for resource".into(),
             ))
@@ -229,14 +243,16 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         accessor: &Accessor<T, Self>,
         address: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
-        let (allowed_host_checker, blocked_networks) = accessor.with(|mut access| {
-            let host = access.get();
-            host.otel.reparent_tracing_span();
-            (
-                host.allowed_host_checker.clone(),
-                host.blocked_networks.clone(),
-            )
-        });
+        let (allowed_host_checker, blocked_networks, connection_semaphore) =
+            accessor.with(|mut access| {
+                let host = access.get();
+                host.otel.reparent_tracing_span();
+                (
+                    host.allowed_host_checker.clone(),
+                    host.blocked_networks.clone(),
+                    host.connection_semaphore.clone(),
+                )
+            });
 
         if !allowed_host_checker
             .is_address_allowed(&address)
@@ -245,6 +261,15 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         {
             return Err(v3::Error::InvalidAddress);
         }
+
+        let permit = match connection_semaphore {
+            Some(sem) => Some(
+                sem.acquire_owned()
+                    .await
+                    .map_err(|_| v3::Error::TooManyConnections)?,
+            ),
+            None => None,
+        };
 
         let config =
             AsyncConnectionConfig::new().set_dns_resolver(SpinDnsResolver(blocked_networks));
@@ -257,7 +282,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         accessor.with(|mut access| {
             let host = access.get();
             host.connections
-                .push(conn)
+                .push((conn, permit))
                 .map(Resource::new_own)
                 .map_err(|_| v3::Error::TooManyConnections)
         })
@@ -532,9 +557,14 @@ macro_rules! delegate {
             Ok(c) => c,
             Err(_) => return Err(v1::Error::Error),
         };
-        <Self as v2::HostConnection>::$name($self, connection, $($arg),*)
+        // v1 has no persistent connections, so remove the table entry immediately
+        // after the call to release the semaphore permit.
+        let rep = connection.rep();
+        let result = <Self as v2::HostConnection>::$name($self, connection, $($arg),*)
             .await
-            .map_err(|_| v1::Error::Error)
+            .map_err(|_| v1::Error::Error);
+        $self.connections.remove(rep);
+        result
     }};
 }
 
