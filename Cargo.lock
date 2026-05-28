@@ -9115,6 +9115,7 @@ version = "4.1.0-pre0"
 dependencies = [
  "anyhow",
  "redis",
+ "serde",
  "spin-core",
  "spin-factor-otel",
  "spin-factor-outbound-networking",
