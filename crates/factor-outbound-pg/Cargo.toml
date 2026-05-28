@@ -7,6 +7,7 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 bytes = {workspace = true }
+serde = { workspace = true }
 chrono = { workspace = true }
 deadpool-postgres = { version = "0.14", features = ["rt_tokio_1"] }
 futures = { workspace = true }
@@ -27,7 +28,7 @@ spin-resource-table = { path = "../table" }
 spin-telemetry = { path = "../telemetry" }
 spin-wasi-async = { path = "../wasi-async" }
 spin-world = { path = "../world" }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1", "with-uuid-1"] }
 tracing = { workspace = true }
 url = { workspace = true }
