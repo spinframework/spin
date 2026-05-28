@@ -7,7 +7,7 @@ use spin_factors::runtime_config::toml::GetTomlValue;
 /// Expects the table to be in the format:
 /// ```toml
 /// [outbound_mqtt]
-/// max_payload_size_bytes = 65536  # optional, defaults to 1 MiB
+/// max_payload_size_bytes = 65536  # optional, no limit by default
 /// ```
 pub fn config_from_table(
     table: &impl GetTomlValue,
@@ -18,9 +18,7 @@ pub fn config_from_table(
             .try_into::<OutboundMqttToml>()
             .context("failed to parse [outbound_mqtt] table")?;
         Ok(Some(super::RuntimeConfig {
-            max_payload_size_bytes: toml
-                .max_payload_size_bytes
-                .unwrap_or(super::DEFAULT_MAX_PAYLOAD_SIZE_BYTES),
+            max_payload_size_bytes: toml.max_payload_size_bytes,
         }))
     } else {
         Ok(None)

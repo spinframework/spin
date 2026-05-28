@@ -146,7 +146,7 @@ async fn oversized_payload_rejected() -> anyhow::Result<()> {
 
     let env = test_env().runtime_config(TestFactorsRuntimeConfig {
         mqtt: Some(spin_factor_outbound_mqtt::runtime_config::RuntimeConfig {
-            max_payload_size_bytes: LIMIT,
+            max_payload_size_bytes: Some(LIMIT),
         }),
         ..Default::default()
     })?;
@@ -184,7 +184,7 @@ async fn payload_at_limit_succeeds() -> anyhow::Result<()> {
 
     let env = test_env().runtime_config(TestFactorsRuntimeConfig {
         mqtt: Some(spin_factor_outbound_mqtt::runtime_config::RuntimeConfig {
-            max_payload_size_bytes: LIMIT,
+            max_payload_size_bytes: Some(LIMIT),
         }),
         ..Default::default()
     })?;
@@ -211,36 +211,6 @@ async fn payload_at_limit_succeeds() -> anyhow::Result<()> {
             v2::Qos::AtMostOnce,
         )
         .await?;
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn payload_over_default_limit_fails() -> anyhow::Result<()> {
-    use v2::HostConnection;
-
-    let mut state = test_env().build_instance_state().await?;
-
-    let conn = state
-        .mqtt
-        .open(
-            "mqtt://mqtt.test:1883".to_string(),
-            "username".to_string(),
-            "password".to_string(),
-            1,
-        )
-        .await?;
-
-    let oversized =
-        vec![0u8; spin_factor_outbound_mqtt::runtime_config::DEFAULT_MAX_PAYLOAD_SIZE_BYTES + 1];
-    let err = state
-        .mqtt
-        .publish(conn, "topic".to_string(), oversized, v2::Qos::AtMostOnce)
-        .await;
-    assert!(
-        matches!(err, Err(v2::Error::Other(_))),
-        "expected Other error for oversized payload, got {err:?}"
-    );
 
     Ok(())
 }

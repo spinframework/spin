@@ -32,7 +32,7 @@ impl OutboundMqttFactor {
 }
 
 pub struct AppState {
-    max_payload_size_bytes: usize,
+    max_payload_size_bytes: Option<usize>,
 }
 
 impl Factor for OutboundMqttFactor {
