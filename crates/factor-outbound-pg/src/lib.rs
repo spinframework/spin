@@ -1,25 +1,34 @@
 mod allowed_hosts;
 pub mod client;
 mod host;
+pub mod runtime_config;
 mod types;
 
 use std::{collections::HashMap, sync::Arc};
 
 use allowed_hosts::AllowedHostChecker;
 use client::ClientFactory;
+use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
     ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder, anyhow,
 };
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {
     _phantom: std::marker::PhantomData<CF>,
 }
 
+pub struct AppState<CF> {
+    pub client_factories: HashMap<String, Arc<CF>>,
+    /// A semaphore to limit the number of concurrent outbound PostgreSQL connections.
+    pub connection_semaphore: Option<Arc<Semaphore>>,
+}
+
 impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
-    type RuntimeConfig = ();
-    type AppState = HashMap<String, Arc<CF>>;
+    type RuntimeConfig = RuntimeConfig;
+    type AppState = AppState<CF>;
     type InstanceBuilder = InstanceState<CF>;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
@@ -36,13 +45,17 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        ctx: ConfigureAppContext<T, Self>,
+        mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
+        let config = ctx.take_runtime_config().unwrap_or_default();
         let mut client_factories = HashMap::new();
         for comp in ctx.app().components() {
             client_factories.insert(comp.id().to_string(), Arc::new(CF::default()));
         }
-        Ok(client_factories)
+        Ok(AppState {
+            client_factories,
+            connection_semaphore: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
+        })
     }
 
     fn prepare<T: RuntimeFactors>(
@@ -53,7 +66,11 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
             .instance_builder::<OutboundNetworkingFactor>()?
             .allowed_hosts();
         let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
-        let cf = ctx.app_state().get(ctx.app_component().id()).unwrap();
+        let cf = ctx
+            .app_state()
+            .client_factories
+            .get(ctx.app_component().id())
+            .unwrap();
 
         Ok(InstanceState {
             allowed_host_checker: AllowedHostChecker::new(allowed_hosts),
@@ -61,6 +78,7 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
             connections: Default::default(),
             otel,
             builders: Default::default(),
+            connection_semaphore: ctx.app_state().connection_semaphore.clone(),
         })
     }
 }
@@ -82,9 +100,10 @@ impl<C> OutboundPgFactor<C> {
 pub struct InstanceState<CF: ClientFactory> {
     allowed_host_checker: AllowedHostChecker,
     client_factory: Arc<CF>,
-    connections: spin_resource_table::Table<CF::Client>,
+    connections: spin_resource_table::Table<(CF::Client, Option<OwnedSemaphorePermit>)>,
     otel: OtelFactorState,
     builders: spin_resource_table::Table<host::ConnectionBuilder>,
+    pub connection_semaphore: Option<Arc<Semaphore>>,
 }
 
 impl<CF: ClientFactory> SelfInstanceBuilder for InstanceState<CF> {}
