@@ -275,18 +275,17 @@ impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutB
             Pin::new(body).poll_frame(cx)
         };
 
+        let mut record_body_size_once = |body_size: u64| {
+            if let Some(span) = me.span.take() {
+                // `http.response.body.size` is incubating (behind semconv_experimental)
+                // in opentelemetry-semantic-conventions 0.28. Leave as literal to avoid
+                // enabling the experimental feature.
+                span.record("http.response.body.size", body_size);
+            }
+        };
         match poll_result {
             Poll::Ready(value) => {
                 me.sleep.as_mut().set(None);
-
-                let mut record_body_size_once = |body_size: u64| {
-                    if let Some(span) = me.span.take() {
-                        // `http.response.body.size` is incubating (behind semconv_experimental)
-                        // in opentelemetry-semantic-conventions 0.28. Leave as literal to avoid
-                        // enabling the experimental feature.
-                        span.record("http.response.body.size", body_size);
-                    }
-                };
 
                 match &value {
                     Some(Ok(frame)) => {
@@ -313,9 +312,10 @@ impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutB
                 }
                 task::ready!(me.sleep.as_pin_mut().unwrap().poll(cx));
 
-                // Drop the inner body immediately to close the underlying TCP
-                // connection rather than waiting for the guest to release the resource.
+                // Drop the inner body immediately to free resources (like sockets)
+                // rather than waiting for the guest to release the resource.
                 *me.body = None;
+                record_body_size_once(*me.byte_count);
 
                 Poll::Ready(Some(Err(p3_types::ErrorCode::ConnectionReadTimeout)))
             }
@@ -323,7 +323,7 @@ impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutB
     }
 
     fn is_end_stream(&self) -> bool {
-        self.body.as_ref().is_some_and(|b| b.is_end_stream())
+        self.body.as_ref().is_none_or(|b| b.is_end_stream())
     }
 
     fn size_hint(&self) -> SizeHint {
