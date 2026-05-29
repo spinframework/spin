@@ -71,9 +71,7 @@ impl Factor for OutboundHttpFactor {
             );
         }
 
-        // Permit count is the max concurrent connections + 1.
-        // i.e., 0 concurrent connections means 1 total connection.
-        let factor_specific_limit = config.max_concurrent_connections.map(|n| n + 1);
+        let factor_specific_limit = config.max_concurrent_connections;
 
         Ok(AppState {
             wasi_http_clients: wasi::HttpClients::new(config.connection_pooling_enabled),
