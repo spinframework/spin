@@ -8795,6 +8795,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "spin-connection-semaphore"
+version = "4.1.0-pre0"
+dependencies = [
+ "anyhow",
+ "spin-telemetry",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "spin-core"
 version = "4.1.0-pre0"
 dependencies = [
@@ -9056,6 +9066,7 @@ dependencies = [
  "rustls-pki-types",
  "rustls-platform-verifier",
  "serde",
+ "spin-connection-semaphore",
  "spin-factor-variables",
  "spin-factor-wasi",
  "spin-factors",
@@ -9168,6 +9179,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "spin-common",
+ "spin-connection-semaphore",
  "spin-factors",
  "spin-factors-test",
  "tokio",

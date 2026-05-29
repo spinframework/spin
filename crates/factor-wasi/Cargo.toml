@@ -8,6 +8,7 @@ edition = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 spin-common = { path = "../common" }
+spin-connection-semaphore = { path = "../connection-semaphore" }
 spin-factors = { path = "../factors" }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }

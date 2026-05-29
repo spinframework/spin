@@ -73,7 +73,8 @@ impl SpinRuntimeConfig {
             blocked_ip_networks,
             block_private_networks,
             client_tls_configs: maybe_tls_configs.unwrap_or_default(),
-            max_sockets_per_app: outbound_networking.max_sockets,
+            max_socket_connections: outbound_networking.max_socket_connections,
+            max_total_connections: outbound_networking.max_total_connections,
         };
         Ok(Some(runtime_config))
     }
@@ -221,7 +222,8 @@ fn deserialize_hosts<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<S
 struct OutboundNetworkingToml {
     #[serde(default)]
     block_networks: Vec<CidrOrPrivate>,
-    max_sockets: Option<usize>,
+    max_socket_connections: Option<usize>,
+    max_total_connections: Option<usize>,
 }
 
 #[derive(Debug)]

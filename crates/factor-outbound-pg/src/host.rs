@@ -1,7 +1,5 @@
 #![allow(clippy::result_large_err)]
 
-use std::sync::Arc;
-
 use anyhow::Result;
 use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
 use spin_telemetry::traces::{self, Blame};
@@ -26,14 +24,11 @@ impl<CF: ClientFactory> InstanceState<CF> {
         address: &str,
         root_ca: Option<HashableCertificate>,
     ) -> Result<Resource<Conn>, v4::Error> {
-        let permit = match &self.connection_semaphore {
-            Some(sem) => Some(Arc::clone(sem).acquire_owned().await.map_err(|_| {
-                let err = v4::Error::ConnectionFailed("too many connections".into());
-                traces::mark_as_error(&err, Some(Blame::Guest));
-                err
-            })?),
-            None => None,
-        };
+        let permit = self.semaphore.acquire().await.map_err(|_| {
+            let err = v4::Error::ConnectionFailed("too many connections".into());
+            traces::mark_as_error(&err, Some(Blame::Guest));
+            err
+        })?;
         let client = self
             .client_factory
             .get_client(address, root_ca)
@@ -387,22 +382,16 @@ impl<CF: ClientFactory> crate::PgFactorData<CF> {
         address: &str,
         root_ca: Option<HashableCertificate>,
     ) -> Result<Resource<v4::Connection>, v4::Error> {
-        let (cf, connection_semaphore) = accessor.with(|mut access| {
+        let (cf, semaphore) = accessor.with(|mut access| {
             let host = access.get();
-            (
-                host.client_factory.clone(),
-                host.connection_semaphore.clone(),
-            )
+            (host.client_factory.clone(), host.semaphore.clone())
         });
 
-        let permit = match connection_semaphore {
-            Some(sem) => Some(sem.acquire_owned().await.map_err(|_| {
-                let err = v4::Error::ConnectionFailed("too many connections".into());
-                traces::mark_as_error(&err, Some(Blame::Guest));
-                err
-            })?),
-            None => None,
-        };
+        let permit = semaphore.acquire().await.map_err(|_| {
+            let err = v4::Error::ConnectionFailed("too many connections".into());
+            traces::mark_as_error(&err, Some(Blame::Guest));
+            err
+        })?;
 
         let client = cf.get_client(address, root_ca).await.map_err(|e| {
             let err = v4::Error::ConnectionFailed(format!("{e:?}"));
