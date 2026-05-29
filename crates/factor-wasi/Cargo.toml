@@ -9,7 +9,8 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 spin-common = { path = "../common" }
 spin-factors = { path = "../factors" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 

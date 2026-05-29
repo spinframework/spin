@@ -7,12 +7,13 @@ use std::{collections::HashMap, sync::Arc};
 use futures_util::FutureExt as _;
 use opentelemetry_semantic_conventions::attribute::SERVER_PORT;
 use spin_factor_variables::VariablesFactor;
-use spin_factor_wasi::{SocketAddrUse, WasiFactor};
+use spin_factor_wasi::{SocketAddrUse, SocketPermitState, WasiFactor};
 use spin_factors::{
     ConfigureAppContext, Error, Factor, FactorInstanceBuilder, PrepareContext, RuntimeFactors,
     anyhow::{self, Context},
 };
 use spin_outbound_networking_config::allowed_hosts::{DisallowedHostHandler, OutboundAllowedHosts};
+use tokio::sync::Semaphore;
 use url::Url;
 
 use crate::{
@@ -69,15 +70,18 @@ impl Factor for OutboundNetworkingFactor {
             client_tls_configs,
             blocked_ip_networks: block_networks,
             block_private_networks,
+            max_sockets_per_app,
         } = ctx.take_runtime_config().unwrap_or_default();
 
         let blocked_networks = BlockedNetworks::new(block_networks, block_private_networks);
         let tls_client_configs = TlsClientConfigs::new(client_tls_configs)?;
+        let socket_quota = max_sockets_per_app.map(|n| Arc::new(Semaphore::new(n)));
 
         Ok(AppState {
             component_allowed_hosts,
             blocked_networks,
             tls_client_configs,
+            socket_quota,
         })
     }
 
@@ -123,10 +127,18 @@ impl Factor for OutboundNetworkingFactor {
             self.disallowed_host_handler.clone(),
         );
         let blocked_networks = ctx.app_state().blocked_networks.clone();
+        let permit_state = ctx
+            .app_state()
+            .socket_quota
+            .as_ref()
+            .map(|sem| SocketPermitState::new(Arc::clone(sem)));
 
         match ctx.instance_builder::<WasiFactor>() {
             Ok(wasi_builder) => {
-                // Update Wasi socket allowed ports
+                if let Some(state) = permit_state {
+                    wasi_builder.set_socket_permit_state(state);
+                }
+
                 let allowed_hosts = allowed_hosts.clone();
                 wasi_builder.outbound_socket_addr_check(move |addr, addr_use| {
                     let allowed_hosts = allowed_hosts.clone();
@@ -185,6 +197,10 @@ pub struct AppState {
     blocked_networks: BlockedNetworks,
     /// TLS client configs
     tls_client_configs: TlsClientConfigs,
+    /// App-wide semaphore capping total concurrent outbound socket connections
+    ///
+    /// `None` means unlimited.
+    socket_quota: Option<Arc<Semaphore>>,
 }
 
 pub struct InstanceBuilder {

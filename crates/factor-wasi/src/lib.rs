@@ -1,4 +1,5 @@
 mod io;
+pub mod sockets;
 pub mod spin;
 mod wasi_2023_10_18;
 mod wasi_2023_11_10;
@@ -8,6 +9,7 @@ use std::{
     io::{Read, Write},
     net::SocketAddr,
     path::Path,
+    sync::Arc,
 };
 
 use io::{PipeReadStream, PipedWriteStream};
@@ -23,6 +25,7 @@ use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
 use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsCtxView};
 use wasmtime_wasi::{DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView};
 
+pub use sockets::{SocketPermitState, SpinSockets, SpinSocketsView};
 pub use wasmtime_wasi::sockets::SocketAddrUse;
 
 pub struct WasiFactor {
@@ -58,11 +61,14 @@ impl WasiFactor {
 
     pub fn get_sockets_impl(
         runtime_instance_state: &mut impl RuntimeFactorsInstanceState,
-    ) -> Option<WasiSocketsCtxView<'_>> {
+    ) -> Option<SpinSocketsView<'_>> {
         let (state, table) = runtime_instance_state.get_with_table::<WasiFactor>()?;
-        Some(WasiSocketsCtxView {
-            ctx: state.ctx.sockets(),
-            table,
+        Some(SpinSocketsView {
+            inner: WasiSocketsCtxView {
+                ctx: state.ctx.sockets(),
+                table,
+            },
+            permit_state: state.socket_permit_state.clone(),
         })
     }
 }
@@ -174,6 +180,27 @@ trait InitContextExt: InitContext<WasiFactor> {
         ) -> wasmtime::Result<()>,
     ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), &O::default(), Self::get_sockets)
+    }
+
+    fn get_spin_sockets(data: &mut Self::StoreData) -> SpinSocketsView<'_> {
+        let (state, table) = Self::get_data_with_table(data);
+        SpinSocketsView {
+            inner: WasiSocketsCtxView {
+                ctx: state.ctx.sockets(),
+                table,
+            },
+            permit_state: state.socket_permit_state.clone(),
+        }
+    }
+
+    fn link_spin_sockets_bindings(
+        &mut self,
+        add_to_linker: fn(
+            &mut wasmtime::component::Linker<Self::StoreData>,
+            fn(&mut Self::StoreData) -> SpinSocketsView<'_>,
+        ) -> wasmtime::Result<()>,
+    ) -> wasmtime::Result<()> {
+        add_to_linker(self.linker(), Self::get_spin_sockets)
     }
 
     fn link_io_bindings(
@@ -294,13 +321,17 @@ impl Factor for WasiFactor {
         ctx.link_cli_bindings(p3::bindings::cli::terminal_stdout::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p2::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p3::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
-        ctx.link_sockets_bindings(p2::bindings::sockets::tcp::add_to_linker::<_, WasiSockets>)?;
-        ctx.link_sockets_bindings(
-            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, WasiSockets>,
+        ctx.link_spin_sockets_bindings(
+            p2::bindings::sockets::tcp::add_to_linker::<_, SpinSockets>,
         )?;
-        ctx.link_sockets_bindings(p2::bindings::sockets::udp::add_to_linker::<_, WasiSockets>)?;
-        ctx.link_sockets_bindings(
-            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, WasiSockets>,
+        ctx.link_spin_sockets_bindings(
+            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, SpinSockets>,
+        )?;
+        ctx.link_spin_sockets_bindings(
+            p2::bindings::sockets::udp::add_to_linker::<_, SpinSockets>,
+        )?;
+        ctx.link_spin_sockets_bindings(
+            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, SpinSockets>,
         )?;
         ctx.link_sockets_bindings(
             p2::bindings::sockets::instance_network::add_to_linker::<_, WasiSockets>,
@@ -339,7 +370,10 @@ impl Factor for WasiFactor {
         self.files_mounter
             .mount_files(ctx.app_component(), mount_ctx)?;
 
-        let mut builder = InstanceBuilder { ctx: wasi_ctx };
+        let mut builder = InstanceBuilder {
+            ctx: wasi_ctx,
+            socket_permit_state: None,
+        };
 
         // Apply environment variables
         builder.env(ctx.app_component().environment());
@@ -396,6 +430,7 @@ impl MountFilesContext<'_> {
 
 pub struct InstanceBuilder {
     ctx: WasiCtxBuilder,
+    socket_permit_state: Option<Arc<SocketPermitState>>,
 }
 
 impl InstanceBuilder {
@@ -466,14 +501,23 @@ impl FactorInstanceBuilder for InstanceBuilder {
     type InstanceState = InstanceState;
 
     fn build(self) -> anyhow::Result<Self::InstanceState> {
-        let InstanceBuilder { ctx: mut wasi_ctx } = self;
+        let InstanceBuilder {
+            ctx: mut wasi_ctx,
+            socket_permit_state,
+        } = self;
         Ok(InstanceState {
             ctx: wasi_ctx.build(),
+            socket_permit_state,
         })
     }
 }
 
 impl InstanceBuilder {
+    /// Sets the socket permit state for per-connection quota tracking.
+    pub fn set_socket_permit_state(&mut self, state: Arc<SocketPermitState>) {
+        self.socket_permit_state = Some(state);
+    }
+
     pub fn outbound_socket_addr_check<F, Fut>(&mut self, check: F)
     where
         F: Fn(SocketAddr, SocketAddrUse) -> Fut + Send + Sync + Clone + 'static,
@@ -496,4 +540,5 @@ impl InstanceBuilder {
 
 pub struct InstanceState {
     ctx: WasiCtx,
+    socket_permit_state: Option<Arc<SocketPermitState>>,
 }
