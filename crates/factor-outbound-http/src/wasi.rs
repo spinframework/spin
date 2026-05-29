@@ -216,7 +216,7 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
                     }) => Ok((
                         resp.map(|body| {
                             BetweenBytesTimeoutBody {
-                                body,
+                                body: Some(body),
                                 sleep: None,
                                 timeout: between_bytes_timeout,
                                 byte_count: 0,
@@ -246,8 +246,8 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
 
 pin_project_lite::pin_project! {
     struct BetweenBytesTimeoutBody<B> {
-        #[pin]
-        body: B,
+        // Wrapping `body` in `Option` lets us take it out (dropping the underlying connection) when the timeout fires.
+        body: Option<B>,
         #[pin]
         sleep: Option<tokio::time::Sleep>,
         timeout: Duration,
@@ -256,7 +256,7 @@ pin_project_lite::pin_project! {
     }
 }
 
-impl<B: Body<Error = p2_types::ErrorCode>> Body for BetweenBytesTimeoutBody<B> {
+impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutBody<B> {
     type Data = B::Data;
     type Error = p3_types::ErrorCode;
 
@@ -265,25 +265,34 @@ impl<B: Body<Error = p2_types::ErrorCode>> Body for BetweenBytesTimeoutBody<B> {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let mut me = self.project();
-        match me.body.as_mut().poll_frame(cx) {
+
+        // Scope the mutable borrow so we can touch `me.body` again below.
+        let poll_result = {
+            let Some(body) = me.body.as_mut() else {
+                // Body already dropped by a previous timeout fire.
+                return Poll::Ready(None);
+            };
+            Pin::new(body).poll_frame(cx)
+        };
+
+        let mut record_body_size_once = |body_size: u64| {
+            if let Some(span) = me.span.take() {
+                // `http.response.body.size` is incubating (behind semconv_experimental)
+                // in opentelemetry-semantic-conventions 0.28. Leave as literal to avoid
+                // enabling the experimental feature.
+                span.record("http.response.body.size", body_size);
+            }
+        };
+        match poll_result {
             Poll::Ready(value) => {
                 me.sleep.as_mut().set(None);
-
-                let mut record_body_size_once = |body_size: u64| {
-                    if let Some(span) = me.span.take() {
-                        // `http.response.body.size` is incubating (behind semconv_experimental)
-                        // in opentelemetry-semantic-conventions 0.28. Leave as literal to avoid
-                        // enabling the experimental feature.
-                        span.record("http.response.body.size", body_size);
-                    }
-                };
 
                 match &value {
                     Some(Ok(frame)) => {
                         if let Some(data) = frame.data_ref() {
                             *me.byte_count += data.remaining() as u64;
                         }
-                        if me.body.as_ref().is_end_stream() {
+                        if me.body.as_ref().is_some_and(|b| b.is_end_stream()) {
                             record_body_size_once(*me.byte_count);
                         }
                     }
@@ -302,17 +311,26 @@ impl<B: Body<Error = p2_types::ErrorCode>> Body for BetweenBytesTimeoutBody<B> {
                     me.sleep.as_mut().set(Some(tokio::time::sleep(*me.timeout)));
                 }
                 task::ready!(me.sleep.as_pin_mut().unwrap().poll(cx));
+
+                // Drop the inner body immediately to free resources (like sockets)
+                // rather than waiting for the guest to release the resource.
+                *me.body = None;
+                record_body_size_once(*me.byte_count);
+
                 Poll::Ready(Some(Err(p3_types::ErrorCode::ConnectionReadTimeout)))
             }
         }
     }
 
     fn is_end_stream(&self) -> bool {
-        self.body.is_end_stream()
+        self.body.as_ref().is_none_or(|b| b.is_end_stream())
     }
 
     fn size_hint(&self) -> SizeHint {
-        self.body.size_hint()
+        self.body
+            .as_ref()
+            .map(|b| b.size_hint())
+            .unwrap_or_default()
     }
 }
 
