@@ -103,7 +103,7 @@ async fn socket_quota_blocks_excess_connections() -> anyhow::Result<()> {
         })
         .runtime_config(TestFactorsRuntimeConfig {
             networking: Some(RuntimeConfig {
-                max_sockets_per_app: Some(2),
+                max_socket_connections: Some(2),
                 ..Default::default()
             }),
             ..Default::default()
@@ -147,7 +147,7 @@ async fn socket_quota_releases_on_instance_drop() -> anyhow::Result<()> {
         })
         .runtime_config(TestFactorsRuntimeConfig {
             networking: Some(RuntimeConfig {
-                max_sockets_per_app: Some(1),
+                max_socket_connections: Some(1),
                 ..Default::default()
             }),
             ..Default::default()
@@ -232,7 +232,7 @@ async fn socket_quota_still_enforces_allowed_hosts() -> anyhow::Result<()> {
         })
         .runtime_config(TestFactorsRuntimeConfig {
             networking: Some(RuntimeConfig {
-                max_sockets_per_app: Some(10),
+                max_socket_connections: Some(10),
                 ..Default::default()
             }),
             ..Default::default()
@@ -274,7 +274,7 @@ async fn socket_quota_releases_on_socket_drop() -> anyhow::Result<()> {
         })
         .runtime_config(TestFactorsRuntimeConfig {
             networking: Some(RuntimeConfig {
-                max_sockets_per_app: Some(1),
+                max_socket_connections: Some(1),
                 ..Default::default()
             }),
             ..Default::default()
@@ -328,7 +328,7 @@ async fn socket_quota_blocks_excess_udp_sockets() -> anyhow::Result<()> {
         })
         .runtime_config(TestFactorsRuntimeConfig {
             networking: Some(RuntimeConfig {
-                max_sockets_per_app: Some(2),
+                max_socket_connections: Some(2),
                 ..Default::default()
             }),
             ..Default::default()
@@ -363,7 +363,7 @@ async fn socket_quota_shared_between_tcp_and_udp() -> anyhow::Result<()> {
         })
         .runtime_config(TestFactorsRuntimeConfig {
             networking: Some(RuntimeConfig {
-                max_sockets_per_app: Some(2),
+                max_socket_connections: Some(2),
                 ..Default::default()
             }),
             ..Default::default()

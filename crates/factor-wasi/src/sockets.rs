@@ -10,7 +10,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use spin_connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
 use wasmtime::component::{HasData, Resource};
 use wasmtime_wasi::p2::bindings::sockets::network::{
     ErrorCode as SocketErrorCode, Host as NetworkHost, Network,
@@ -26,15 +26,13 @@ use wasmtime_wasi::sockets::{TcpSocket, UdpSocket, WasiSocketsCtxView};
 /// acquired when a socket is allocated (at `start_connect` for TCP, at
 /// `create_udp_socket` for UDP) and released when the socket resource is dropped.
 pub struct SocketPermitState {
-    semaphore: Arc<Semaphore>,
-    /// Active permits keyed by socket resource rep.
-    ///
-    /// Permits are removed (and the permit released) when the WASI socket resource is dropped.
-    active: Mutex<HashMap<u32, OwnedSemaphorePermit>>,
+    semaphore: ConnectionSemaphore,
+    /// Active permits keyed by socket resource rep, released when the resource is dropped.
+    active: Mutex<HashMap<u32, ConnectionPermit>>,
 }
 
 impl SocketPermitState {
-    pub fn new(semaphore: Arc<Semaphore>) -> Arc<Self> {
+    pub fn new(semaphore: ConnectionSemaphore) -> Arc<Self> {
         Arc::new(Self {
             semaphore,
             active: Mutex::new(HashMap::new()),
@@ -98,17 +96,13 @@ impl p2_tcp::HostTcpSocket for SpinSocketsView<'_> {
             // Unlike outbound HTTP (which queues when its permit pool is exhausted),
             // sockets fail immediately. Waiting would risk deadlock if a component
             // holds sockets open across async yield points, and raw-socket callers
-            // are better positioned to implement their own retry logic. The two
-            // limits are also configured separately, so different semantics are fine.
-            let Ok(permit) = Arc::clone(&state.semaphore).try_acquire_owned() else {
-                tracing::warn!("TCP socket connection refused: socket quota exhausted");
-                // `new-socket-limit` maps to POSIX EMFILE/ENFILE: "a new socket
-                // resource could not be created because of a system limit."
+            // are better positioned to implement their own retry logic.
+            let Some(permit) = state.semaphore.try_acquire() else {
+                tracing::warn!("TCP socket connection refused: connection quota exhausted");
                 return Err(SocketErrorCode::NewSocketLimit.into());
             };
             p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address)
                 .await?;
-            // If the connection was successfully initiated, store the permit so it can be released when the socket is dropped.
             state
                 .active
                 .lock()
@@ -296,7 +290,7 @@ impl p2_tcp::HostTcpSocket for SpinSocketsView<'_> {
     }
 
     fn drop(&mut self, this: Resource<TcpSocket>) -> wasmtime::Result<()> {
-        // Release the permit before dropping the socket resource.
+        // Release both permits before dropping the socket resource.
         if let Some(state) = &self.permit_state {
             state
                 .active
@@ -443,7 +437,7 @@ impl p2_udp::HostUdpSocket for SpinSocketsView<'_> {
     }
 
     fn drop(&mut self, this: Resource<p2_udp::UdpSocket>) -> wasmtime::Result<()> {
-        // Release the permit before dropping the socket resource.
+        // Release both permits before dropping the socket resource.
         if let Some(state) = &self.permit_state {
             state
                 .active
@@ -513,16 +507,11 @@ impl p2_udp_create::Host for SpinSocketsView<'_> {
             let state = Arc::clone(state);
             // See the analogous comment in `start_connect` for why we fail
             // immediately rather than waiting (as outbound HTTP does).
-            let permit = Arc::clone(&state.semaphore)
-                .try_acquire_owned()
-                .map_err(|_| {
-                    tracing::warn!("UDP socket creation refused: socket quota exhausted");
-                    // `new-socket-limit` maps to POSIX EMFILE/ENFILE: "a new socket
-                    // resource could not be created because of a system limit."
-                    SocketErrorCode::NewSocketLimit
-                })?;
+            let Some(permit) = state.semaphore.try_acquire() else {
+                tracing::warn!("UDP socket creation refused: connection quota exhausted");
+                return Err(SocketErrorCode::NewSocketLimit.into());
+            };
             let sock = p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family)?;
-            // If the socket was successfully created, store the permit so it can be released when the socket is dropped.
             state
                 .active
                 .lock()

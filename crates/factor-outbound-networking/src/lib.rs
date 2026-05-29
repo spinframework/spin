@@ -1,4 +1,5 @@
 mod allowed_hosts;
+pub mod connection_semaphore;
 pub mod runtime_config;
 mod tls;
 
@@ -20,6 +21,7 @@ use crate::{
     allowed_hosts::allowed_outbound_hosts, runtime_config::RuntimeConfig, tls::TlsClientConfigs,
 };
 pub use allowed_hosts::validate_service_chaining_for_components;
+pub use connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
 
 pub use crate::tls::{ComponentTlsClientConfigs, TlsClientConfig};
 use config::allowed_hosts::AllowedHostsConfig;
@@ -70,18 +72,34 @@ impl Factor for OutboundNetworkingFactor {
             client_tls_configs,
             blocked_ip_networks: block_networks,
             block_private_networks,
-            max_sockets_per_app,
+            max_socket_connections,
+            max_total_connections,
         } = ctx.take_runtime_config().unwrap_or_default();
 
         let blocked_networks = BlockedNetworks::new(block_networks, block_private_networks);
         let tls_client_configs = TlsClientConfigs::new(client_tls_configs)?;
-        let socket_quota = max_sockets_per_app.map(|n| Arc::new(Semaphore::new(n)));
+        let socket_quota = max_socket_connections.map(|n| Arc::new(Semaphore::new(n)));
+        let global_connection_semaphore =
+            max_total_connections.map(|n| Arc::new(Semaphore::new(n)));
+
+        if let (Some(socket_cap), Some(global_cap)) =
+            (max_socket_connections, max_total_connections)
+            && socket_cap > global_cap
+        {
+            tracing::warn!(
+                "outbound_networking max_socket_connections ({socket_cap}) exceeds \
+                 max_total_connections ({global_cap}); the global limit will be the effective \
+                 cap for TCP/UDP sockets"
+            );
+        }
 
         Ok(AppState {
             component_allowed_hosts,
             blocked_networks,
             tls_client_configs,
             socket_quota,
+            global_connection_semaphore,
+            max_total_connections,
         })
     }
 
@@ -127,11 +145,15 @@ impl Factor for OutboundNetworkingFactor {
             self.disallowed_host_handler.clone(),
         );
         let blocked_networks = ctx.app_state().blocked_networks.clone();
-        let permit_state = ctx
-            .app_state()
-            .socket_quota
-            .as_ref()
-            .map(|sem| SocketPermitState::new(Arc::clone(sem)));
+        let global_semaphore = ctx.app_state().global_connection_semaphore.clone();
+        let socket_semaphore = ctx.app_state().socket_quota.clone();
+        let permit_state = if global_semaphore.is_some() || socket_semaphore.is_some() {
+            let sem =
+                ConnectionSemaphore::from_raw(global_semaphore, socket_semaphore, "wasi-sockets");
+            Some(SocketPermitState::new(sem))
+        } else {
+            None
+        };
 
         match ctx.instance_builder::<WasiFactor>() {
             Ok(wasi_builder) => {
@@ -197,10 +219,14 @@ pub struct AppState {
     blocked_networks: BlockedNetworks,
     /// TLS client configs
     tls_client_configs: TlsClientConfigs,
-    /// App-wide semaphore capping total concurrent outbound socket connections
-    ///
+    /// App-wide semaphore capping concurrent outbound TCP/UDP socket connections.
     /// `None` means unlimited.
     socket_quota: Option<Arc<Semaphore>>,
+    /// App-wide semaphore capping total concurrent outbound connections across ALL types.
+    /// `None` means unlimited.
+    pub global_connection_semaphore: Option<Arc<Semaphore>>,
+    /// The configured global connection limit (for warning comparisons in other factors).
+    pub max_total_connections: Option<usize>,
 }
 
 pub struct InstanceBuilder {

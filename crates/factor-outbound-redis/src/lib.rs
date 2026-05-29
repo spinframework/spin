@@ -2,18 +2,15 @@ mod allowed_hosts;
 mod host;
 pub mod runtime_config;
 
-use std::sync::Arc;
-
 use host::InstanceState;
 use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
-use spin_factor_outbound_networking::OutboundNetworkingFactor;
+use spin_factor_outbound_networking::{ConnectionSemaphore, OutboundNetworkingFactor};
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
     anyhow,
 };
 use spin_world::spin::redis::redis as v3;
-use tokio::sync::Semaphore;
 
 use crate::allowed_hosts::AllowedHostChecker;
 
@@ -30,8 +27,8 @@ impl OutboundRedisFactor {
 }
 
 pub struct AppState {
-    /// A semaphore to limit the number of concurrent outbound Redis connections.
-    pub connection_semaphore: Option<Arc<Semaphore>>,
+    /// Semaphore(s) to limit concurrent outbound Redis connections.
+    pub semaphore: ConnectionSemaphore,
 }
 
 impl Factor for OutboundRedisFactor {
@@ -51,8 +48,23 @@ impl Factor for OutboundRedisFactor {
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
+
+        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
+        let global = networking.and_then(|s| s.global_connection_semaphore.clone());
+        let global_total_limit = networking.and_then(|s| s.max_total_connections);
+
+        if let (Some(per_factor), Some(global_limit)) = (config.max_connections, global_total_limit)
+            && per_factor > global_limit
+        {
+            tracing::warn!(
+                "outbound_redis max_connections ({per_factor}) exceeds global \
+                 max_total_connections ({global_limit}); the global limit will be the \
+                 effective cap"
+            );
+        }
+
         Ok(AppState {
-            connection_semaphore: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
+            semaphore: ConnectionSemaphore::new(global, config.max_connections, "redis"),
         })
     }
 
@@ -67,7 +79,7 @@ impl Factor for OutboundRedisFactor {
             allowed_host_checker: AllowedHostChecker::new(outbound_networking.allowed_hosts()),
             blocked_networks: outbound_networking.blocked_networks(),
             connections: spin_resource_table::Table::new(1024),
-            connection_semaphore: ctx.app_state().connection_semaphore.clone(),
+            semaphore: ctx.app_state().semaphore.clone(),
             otel,
         })
     }
