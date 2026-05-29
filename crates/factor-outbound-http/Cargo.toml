@@ -22,6 +22,7 @@ spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
+terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["macros", "rt", "net"] }
 tokio-rustls = { workspace = true }
 tower-service = { workspace = true }

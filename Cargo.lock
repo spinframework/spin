@@ -8991,6 +8991,7 @@ dependencies = [
  "spin-factors-test",
  "spin-telemetry",
  "spin-world",
+ "terminal",
  "tokio",
  "tokio-rustls 0.26.4",
  "tower-service",

@@ -61,9 +61,7 @@ impl Factor for OutboundHttpFactor {
             connection_pooling_enabled: config.connection_pooling_enabled,
             concurrent_outbound_connections_semaphore: config
                 .max_concurrent_connections
-                // Permit count is the max concurrent connections + 1.
-                // i.e., 0 concurrent connections means 1 total connection.
-                .map(|n| Arc::new(Semaphore::new(n + 1))),
+                .map(|n| Arc::new(Semaphore::new(n))),
         })
     }
 
