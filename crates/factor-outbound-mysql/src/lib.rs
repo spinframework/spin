@@ -9,21 +9,22 @@ use mysql_async::Conn as MysqlClient;
 use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::{
-    OutboundNetworkingFactor, config::allowed_hosts::OutboundAllowedHosts,
+    ConnectionPermit, ConnectionSemaphore, OutboundNetworkingFactor,
+    config::allowed_hosts::OutboundAllowedHosts,
 };
 use spin_factors::{Factor, FactorData, InitContext, RuntimeFactors, SelfInstanceBuilder};
 use spin_world::spin::mysql::mysql as v3;
 use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql as v2;
-use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::Mutex;
 
 pub struct OutboundMysqlFactor<C = MysqlClient> {
     _phantom: std::marker::PhantomData<C>,
 }
 
 pub struct AppState {
-    /// A semaphore to limit the number of concurrent outbound MySQL connections.
-    pub connection_semaphore: Option<Arc<Semaphore>>,
+    /// Semaphore(s) to limit concurrent outbound MySQL connections.
+    pub semaphore: ConnectionSemaphore,
 }
 
 impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
@@ -43,8 +44,23 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
         mut ctx: spin_factors::ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
+
+        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
+        let global = networking.and_then(|s| s.global_connection_semaphore.clone());
+        let global_total_limit = networking.and_then(|s| s.max_total_connections);
+
+        if let (Some(per_factor), Some(global_limit)) = (config.max_connections, global_total_limit)
+            && per_factor > global_limit
+        {
+            tracing::warn!(
+                "outbound_mysql max_connections ({per_factor}) exceeds global \
+                 max_total_connections ({global_limit}); the global limit will be the \
+                 effective cap"
+            );
+        }
+
         Ok(AppState {
-            connection_semaphore: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
+            semaphore: ConnectionSemaphore::new(global, config.max_connections, "mysql"),
         })
     }
 
@@ -63,7 +79,7 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
                 connections: Default::default(),
                 otel,
             })),
-            connection_semaphore: ctx.app_state().connection_semaphore.clone(),
+            semaphore: ctx.app_state().semaphore.clone(),
         })
     }
 }
@@ -84,13 +100,13 @@ impl<C> OutboundMysqlFactor<C> {
 
 pub struct InstanceStateInner<C> {
     allowed_hosts: OutboundAllowedHosts,
-    connections: spin_resource_table::Table<(Arc<Mutex<C>>, Option<OwnedSemaphorePermit>)>,
+    connections: spin_resource_table::Table<(Arc<Mutex<C>>, ConnectionPermit)>,
     otel: OtelFactorState,
 }
 
 pub struct InstanceState<C> {
     pub(crate) inner: Arc<Mutex<InstanceStateInner<C>>>,
-    pub connection_semaphore: Option<Arc<Semaphore>>,
+    pub semaphore: ConnectionSemaphore,
 }
 
 impl<C: Send + 'static> SelfInstanceBuilder for InstanceState<C> {}

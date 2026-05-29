@@ -13,6 +13,7 @@ rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
 rustls-platform-verifier = { workspace = true }
 serde = { workspace = true }
+spin-connection-semaphore = { path = "../connection-semaphore" }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factor-wasi = { path = "../factor-wasi" }
 spin-factors = { path = "../factors" }
