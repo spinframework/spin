@@ -10,6 +10,7 @@ doctest = false
 [dependencies]
 anyhow = { workspace = true }
 futures = { workspace = true }
+serde = { workspace = true }
 # Removing default features for mysql_async to remove flate2/zlib feature
 mysql_async = { version = "0.35", default-features = false, features = [
   "minimal-rust",
@@ -23,7 +24,7 @@ spin-resource-table = { path = "../table" }
 spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 spin-wasi-async = { path = "../wasi-async" }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 tracing = { workspace = true }
 url = { workspace = true }
 

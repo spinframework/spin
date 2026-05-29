@@ -1,8 +1,12 @@
 pub mod client;
 mod host;
+pub mod runtime_config;
+
+use std::sync::Arc;
 
 use client::Client;
 use mysql_async::Conn as MysqlClient;
+use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::{
     OutboundNetworkingFactor, config::allowed_hosts::OutboundAllowedHosts,
@@ -11,16 +15,20 @@ use spin_factors::{Factor, FactorData, InitContext, RuntimeFactors, SelfInstance
 use spin_world::spin::mysql::mysql as v3;
 use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql as v2;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 pub struct OutboundMysqlFactor<C = MysqlClient> {
     _phantom: std::marker::PhantomData<C>,
 }
 
+pub struct AppState {
+    /// A semaphore to limit the number of concurrent outbound MySQL connections.
+    pub connection_semaphore: Option<Arc<Semaphore>>,
+}
+
 impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
-    type RuntimeConfig = ();
-    type AppState = ();
+    type RuntimeConfig = RuntimeConfig;
+    type AppState = AppState;
     type InstanceBuilder = InstanceState<C>;
 
     fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
@@ -32,9 +40,12 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        _ctx: spin_factors::ConfigureAppContext<T, Self>,
+        mut ctx: spin_factors::ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        Ok(())
+        let config = ctx.take_runtime_config().unwrap_or_default();
+        Ok(AppState {
+            connection_semaphore: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
+        })
     }
 
     fn prepare<T: spin_factors::RuntimeFactors>(
@@ -46,11 +57,14 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
             .allowed_hosts();
         let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
 
-        Ok(InstanceState(Arc::new(Mutex::new(InstanceStateInner {
-            allowed_hosts,
-            connections: Default::default(),
-            otel,
-        }))))
+        Ok(InstanceState {
+            inner: Arc::new(Mutex::new(InstanceStateInner {
+                allowed_hosts,
+                connections: Default::default(),
+                otel,
+            })),
+            connection_semaphore: ctx.app_state().connection_semaphore.clone(),
+        })
     }
 }
 
@@ -70,11 +84,14 @@ impl<C> OutboundMysqlFactor<C> {
 
 pub struct InstanceStateInner<C> {
     allowed_hosts: OutboundAllowedHosts,
-    connections: spin_resource_table::Table<Arc<Mutex<C>>>,
+    connections: spin_resource_table::Table<(Arc<Mutex<C>>, Option<OwnedSemaphorePermit>)>,
     otel: OtelFactorState,
 }
 
-pub struct InstanceState<C>(Arc<Mutex<InstanceStateInner<C>>>);
+pub struct InstanceState<C> {
+    pub(crate) inner: Arc<Mutex<InstanceStateInner<C>>>,
+    pub connection_semaphore: Option<Arc<Semaphore>>,
+}
 
 impl<C: Send + 'static> SelfInstanceBuilder for InstanceState<C> {}
 
