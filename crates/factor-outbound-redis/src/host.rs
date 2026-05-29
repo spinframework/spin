@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use anyhow::Result;
 use redis::AsyncConnectionConfig;
@@ -7,12 +6,12 @@ use redis::io::AsyncDNSResolver;
 use redis::{AsyncCommands, FromRedisValue, Value, aio::MultiplexedConnection};
 use spin_core::wasmtime::component::{Accessor, Resource};
 use spin_factor_otel::OtelFactorState;
+use spin_factor_outbound_networking::ConnectionSemaphore;
 use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
 use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::redis::redis as v3;
 use spin_world::v1::{redis as v1, redis_types};
 use spin_world::v2::redis as v2;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::field::Empty;
 use tracing::{Level, instrument};
 
@@ -21,9 +20,11 @@ use crate::allowed_hosts::AllowedHostChecker;
 pub struct InstanceState {
     pub(crate) allowed_host_checker: AllowedHostChecker,
     pub blocked_networks: BlockedNetworks,
-    pub connections:
-        spin_resource_table::Table<(MultiplexedConnection, Option<OwnedSemaphorePermit>)>,
-    pub connection_semaphore: Option<Arc<Semaphore>>,
+    pub connections: spin_resource_table::Table<(
+        MultiplexedConnection,
+        spin_factor_outbound_networking::ConnectionPermit,
+    )>,
+    pub semaphore: ConnectionSemaphore,
     pub otel: OtelFactorState,
 }
 
@@ -36,15 +37,11 @@ impl InstanceState {
         &mut self,
         address: String,
     ) -> Result<Resource<v2::Connection>, v2::Error> {
-        let permit = match &self.connection_semaphore {
-            Some(sem) => Some(
-                Arc::clone(sem)
-                    .acquire_owned()
-                    .await
-                    .map_err(|_| v2::Error::TooManyConnections)?,
-            ),
-            None => None,
-        };
+        let permit = self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| v2::Error::TooManyConnections)?;
         let config = AsyncConnectionConfig::new()
             .set_dns_resolver(SpinDnsResolver(self.blocked_networks.clone()));
         let conn = redis::Client::open(address.as_str())
@@ -243,16 +240,15 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         accessor: &Accessor<T, Self>,
         address: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
-        let (allowed_host_checker, blocked_networks, connection_semaphore) =
-            accessor.with(|mut access| {
-                let host = access.get();
-                host.otel.reparent_tracing_span();
-                (
-                    host.allowed_host_checker.clone(),
-                    host.blocked_networks.clone(),
-                    host.connection_semaphore.clone(),
-                )
-            });
+        let (allowed_host_checker, blocked_networks, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (
+                host.allowed_host_checker.clone(),
+                host.blocked_networks.clone(),
+                host.semaphore.clone(),
+            )
+        });
 
         if !allowed_host_checker
             .is_address_allowed(&address)
@@ -262,14 +258,10 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
             return Err(v3::Error::InvalidAddress);
         }
 
-        let permit = match connection_semaphore {
-            Some(sem) => Some(
-                sem.acquire_owned()
-                    .await
-                    .map_err(|_| v3::Error::TooManyConnections)?,
-            ),
-            None => None,
-        };
+        let permit = semaphore
+            .acquire()
+            .await
+            .map_err(|_| v3::Error::TooManyConnections)?;
 
         let config =
             AsyncConnectionConfig::new().set_dns_resolver(SpinDnsResolver(blocked_networks));

@@ -4,17 +4,17 @@ mod host;
 pub mod runtime_config;
 mod types;
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use allowed_hosts::AllowedHostChecker;
 use client::ClientFactory;
 use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
-use spin_factor_outbound_networking::OutboundNetworkingFactor;
+use spin_factor_outbound_networking::{ConnectionSemaphore, OutboundNetworkingFactor};
 use spin_factors::{
     ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder, anyhow,
 };
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {
     _phantom: std::marker::PhantomData<CF>,
@@ -22,8 +22,8 @@ pub struct OutboundPgFactor<CF = crate::client::PooledTokioClientFactory> {
 
 pub struct AppState<CF> {
     pub client_factories: HashMap<String, Arc<CF>>,
-    /// A semaphore to limit the number of concurrent outbound PostgreSQL connections.
-    pub connection_semaphore: Option<Arc<Semaphore>>,
+    /// Semaphore to limit concurrent outbound PostgreSQL connections.
+    pub semaphore: ConnectionSemaphore,
 }
 
 impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
@@ -52,9 +52,24 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
         for comp in ctx.app().components() {
             client_factories.insert(comp.id().to_string(), Arc::new(CF::default()));
         }
+
+        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
+        let global = networking.and_then(|s| s.global_connection_semaphore.clone());
+        let global_total_limit = networking.and_then(|s| s.max_total_connections);
+
+        if let (Some(per_factor), Some(global_limit)) = (config.max_connections, global_total_limit)
+            && per_factor > global_limit
+        {
+            tracing::warn!(
+                "outbound_pg max_connections ({per_factor}) exceeds global \
+                 max_total_connections ({global_limit}); the global limit will be the \
+                 effective cap"
+            );
+        }
+
         Ok(AppState {
             client_factories,
-            connection_semaphore: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
+            semaphore: ConnectionSemaphore::new(global, config.max_connections, "pg"),
         })
     }
 
@@ -78,7 +93,7 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
             connections: Default::default(),
             otel,
             builders: Default::default(),
-            connection_semaphore: ctx.app_state().connection_semaphore.clone(),
+            semaphore: ctx.app_state().semaphore.clone(),
         })
     }
 }
@@ -100,10 +115,13 @@ impl<C> OutboundPgFactor<C> {
 pub struct InstanceState<CF: ClientFactory> {
     allowed_host_checker: AllowedHostChecker,
     client_factory: Arc<CF>,
-    connections: spin_resource_table::Table<(CF::Client, Option<OwnedSemaphorePermit>)>,
+    connections: spin_resource_table::Table<(
+        CF::Client,
+        spin_factor_outbound_networking::ConnectionPermit,
+    )>,
     otel: OtelFactorState,
     builders: spin_resource_table::Table<host::ConnectionBuilder>,
-    pub connection_semaphore: Option<Arc<Semaphore>>,
+    pub semaphore: ConnectionSemaphore,
 }
 
 impl<CF: ClientFactory> SelfInstanceBuilder for InstanceState<CF> {}

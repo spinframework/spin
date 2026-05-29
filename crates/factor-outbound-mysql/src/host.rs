@@ -2,13 +2,14 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
+use spin_factor_outbound_networking::ConnectionPermit;
 use spin_telemetry::traces::{self, Blame};
 use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::mysql::mysql as v3;
 use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql as v2;
 use spin_world::v2::rdbms_types as v2_types;
-use tokio::sync::{Mutex, OwnedSemaphorePermit};
+use tokio::sync::Mutex;
 use tracing::field::Empty;
 use tracing::{Level, instrument};
 
@@ -19,7 +20,7 @@ impl<C: Client> InstanceStateInner<C> {
     async fn open_connection(
         &mut self,
         address: &str,
-        permit: Option<OwnedSemaphorePermit>,
+        permit: ConnectionPermit,
     ) -> Result<u32, v2::Error> {
         spin_factor_outbound_networking::record_address_fields(address);
 
@@ -98,16 +99,13 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
         accessor: &Accessor<T, Self>,
         address: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
-        let (state_arc, connection_semaphore) = accessor.with(|mut access| {
+        let (state_arc, semaphore) = accessor.with(|mut access| {
             let host = access.get();
-            (host.inner.clone(), host.connection_semaphore.clone())
+            (host.inner.clone(), host.semaphore.clone())
         });
-        let permit = match connection_semaphore {
-            Some(sem) => Some(sem.acquire_owned().await.map_err(|_| {
-                v3::Error::from(v2::Error::ConnectionFailed("too many connections".into()))
-            })?),
-            None => None,
-        };
+        let permit = semaphore.acquire().await.map_err(|_| {
+            v3::Error::from(v2::Error::ConnectionFailed("too many connections".into()))
+        })?;
         let mut state = state_arc.lock().await;
         state.otel.reparent_tracing_span();
         Ok(Resource::new_own(
@@ -180,15 +178,11 @@ impl<C: Client> v2::Host for InstanceState<C> {}
 impl<C: Client> v2::HostConnection for InstanceState<C> {
     #[instrument(name = "spin_outbound_mysql.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
-        let permit = match &self.connection_semaphore {
-            Some(sem) => Some(
-                Arc::clone(sem)
-                    .acquire_owned()
-                    .await
-                    .map_err(|_| v2::Error::ConnectionFailed("too many connections".into()))?,
-            ),
-            None => None,
-        };
+        let permit = self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| v2::Error::ConnectionFailed("too many connections".into()))?;
         let mut state = self.inner.lock().await;
         state.otel.reparent_tracing_span();
         state
@@ -249,15 +243,11 @@ impl<C: Send> v2_types::Host for InstanceState<C> {
 /// Delegate a function call to the v2::HostConnection implementation
 macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
-        let permit = match &$self.connection_semaphore {
-            Some(sem) => Some(
-                Arc::clone(sem)
-                    .acquire_owned()
-                    .await
-                    .map_err(|_| v2::Error::ConnectionFailed("too many connections".into()))?,
-            ),
-            None => None,
-        };
+        let permit = $self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| v2::Error::ConnectionFailed("too many connections".into()))?;
         let connection = {
             let mut state = $self.inner.lock().await;
             Resource::new_own(state.open_connection(&$address, permit).await?)

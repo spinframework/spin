@@ -79,6 +79,21 @@ impl<T> ResolvedRuntimeConfig<T> {
                 summaries.push(format!("[llm_compute: {ty}"));
             }
         }
+        // [outbound_networking: max_total_connections=N]
+        if let Some(table) = self
+            .toml
+            .get("outbound_networking")
+            .and_then(Value::as_table)
+        {
+            if let Some(max) = table
+                .get("max_total_connections")
+                .and_then(Value::as_integer)
+            {
+                summaries.push(format!(
+                    "[outbound_networking: max_total_connections={max}]"
+                ));
+            }
+        }
         // [outbound_redis: max_connections=N], [outbound_pg: max_connections=N], [outbound_mysql: max_connections=N]
         for key in ["outbound_redis", "outbound_pg", "outbound_mysql"] {
             if let Some(table) = self.toml.get(key).and_then(Value::as_table) {
