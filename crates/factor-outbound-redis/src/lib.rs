@@ -1,7 +1,11 @@
 mod allowed_hosts;
 mod host;
+pub mod runtime_config;
+
+use std::sync::Arc;
 
 use host::InstanceState;
+use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factors::{
@@ -9,6 +13,7 @@ use spin_factors::{
     anyhow,
 };
 use spin_world::spin::redis::redis as v3;
+use tokio::sync::Semaphore;
 
 use crate::allowed_hosts::AllowedHostChecker;
 
@@ -24,9 +29,14 @@ impl OutboundRedisFactor {
     }
 }
 
+pub struct AppState {
+    /// A semaphore to limit the number of concurrent outbound Redis connections.
+    pub connection_semaphore: Option<Arc<Semaphore>>,
+}
+
 impl Factor for OutboundRedisFactor {
-    type RuntimeConfig = ();
-    type AppState = ();
+    type RuntimeConfig = RuntimeConfig;
+    type AppState = AppState;
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
@@ -38,9 +48,12 @@ impl Factor for OutboundRedisFactor {
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        _ctx: ConfigureAppContext<T, Self>,
+        mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        Ok(())
+        let config = ctx.take_runtime_config().unwrap_or_default();
+        Ok(AppState {
+            connection_semaphore: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
+        })
     }
 
     fn prepare<T: RuntimeFactors>(
@@ -54,6 +67,7 @@ impl Factor for OutboundRedisFactor {
             allowed_host_checker: AllowedHostChecker::new(outbound_networking.allowed_hosts()),
             blocked_networks: outbound_networking.blocked_networks(),
             connections: spin_resource_table::Table::new(1024),
+            connection_semaphore: ctx.app_state().connection_semaphore.clone(),
             otel,
         })
     }
