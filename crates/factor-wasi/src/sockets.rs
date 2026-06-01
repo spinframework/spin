@@ -69,6 +69,46 @@ impl HasData for SpinSockets {
     type Data<'a> = SpinSocketsView<'a>;
 }
 
+impl SpinSocketsView<'_> {
+    /// Attempts to acquire a connection permit from the semaphore.
+    ///
+    /// Returns `Ok(None)` when no quota is configured, `Ok(Some(permit))` on
+    /// success, or `Err(())` when the quota is exhausted.
+    ///
+    /// The returned permit is unregistered — call [`Self::register_permit`] once
+    /// the socket resource rep is known to tie its lifetime to the socket.
+    pub(crate) fn try_acquire(&self) -> Result<Option<ConnectionPermit>, ()> {
+        let Some(state) = &self.permit_state else {
+            return Ok(None);
+        };
+        state.semaphore.try_acquire().map(Some).ok_or(())
+    }
+
+    /// Registers `permit` under `socket_rep` so it is held until the socket is
+    /// dropped. No-op when `permit` is `None` (no quota configured).
+    pub(crate) fn register_permit(&self, socket_rep: u32, permit: Option<ConnectionPermit>) {
+        let (Some(state), Some(permit)) = (&self.permit_state, permit) else {
+            return;
+        };
+        state
+            .active
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(socket_rep, permit);
+    }
+
+    /// Releases the connection permit for `socket_rep`, if any.
+    pub(crate) fn release_permit(&self, socket_rep: u32) {
+        if let Some(state) = &self.permit_state {
+            state
+                .active
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&socket_rep);
+        }
+    }
+}
+
 impl p2_tcp::Host for SpinSocketsView<'_> {}
 
 impl p2_tcp::HostTcpSocket for SpinSocketsView<'_> {
@@ -91,28 +131,23 @@ impl p2_tcp::HostTcpSocket for SpinSocketsView<'_> {
         network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> wasmtime_wasi::p2::SocketResult<()> {
-        if let Some(state) = &self.permit_state {
-            let socket_rep = this.rep();
-            // Unlike outbound HTTP (which queues when its permit pool is exhausted),
-            // sockets fail immediately. Waiting would risk deadlock if a component
-            // holds sockets open across async yield points, and raw-socket callers
-            // are better positioned to implement their own retry logic.
-            let Some(permit) = state.semaphore.try_acquire() else {
-                tracing::warn!("TCP socket connection refused: connection quota exhausted");
-                return Err(SocketErrorCode::NewSocketLimit.into());
-            };
+        let socket_rep = this.rep();
+        // Unlike outbound HTTP (which queues when its permit pool is exhausted),
+        // sockets fail immediately. Waiting would risk deadlock if a component
+        // holds sockets open across async yield points, and raw-socket callers
+        // are better positioned to implement their own retry logic.
+        let Ok(permit) = self.try_acquire() else {
+            tracing::warn!("TCP socket connection refused: connection quota exhausted");
+            return Err(SocketErrorCode::NewSocketLimit.into());
+        };
+        let result =
             p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address)
-                .await?;
-            state
-                .active
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .insert(socket_rep, permit);
-            Ok(())
-        } else {
-            p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address)
-                .await
+                .await;
+        if result.is_ok() {
+            self.register_permit(socket_rep, permit);
         }
+        // On error, `permit` is dropped here, automatically releasing the semaphore slot.
+        result
     }
 
     fn finish_connect(
@@ -290,14 +325,7 @@ impl p2_tcp::HostTcpSocket for SpinSocketsView<'_> {
     }
 
     fn drop(&mut self, this: Resource<TcpSocket>) -> wasmtime::Result<()> {
-        // Release both permits before dropping the socket resource.
-        if let Some(state) = &self.permit_state {
-            state
-                .active
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&this.rep());
-        }
+        self.release_permit(this.rep());
         p2_tcp::HostTcpSocket::drop(&mut self.inner, this)
     }
 }
@@ -437,14 +465,7 @@ impl p2_udp::HostUdpSocket for SpinSocketsView<'_> {
     }
 
     fn drop(&mut self, this: Resource<p2_udp::UdpSocket>) -> wasmtime::Result<()> {
-        // Release both permits before dropping the socket resource.
-        if let Some(state) = &self.permit_state {
-            state
-                .active
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&this.rep());
-        }
+        self.release_permit(this.rep());
         p2_udp::HostUdpSocket::drop(&mut self.inner, this)
     }
 }
@@ -503,23 +524,15 @@ impl p2_udp_create::Host for SpinSocketsView<'_> {
         &mut self,
         address_family: wasmtime_wasi::p2::bindings::sockets::network::IpAddressFamily,
     ) -> wasmtime_wasi::p2::SocketResult<Resource<UdpSocket>> {
-        if let Some(state) = &self.permit_state {
-            let state = Arc::clone(state);
-            // See the analogous comment in `start_connect` for why we fail
-            // immediately rather than waiting (as outbound HTTP does).
-            let Some(permit) = state.semaphore.try_acquire() else {
-                tracing::warn!("UDP socket creation refused: connection quota exhausted");
-                return Err(SocketErrorCode::NewSocketLimit.into());
-            };
-            let sock = p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family)?;
-            state
-                .active
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .insert(sock.rep(), permit);
-            Ok(sock)
-        } else {
-            p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family)
-        }
+        // Check quota before allocating the socket resource.
+        // See the analogous comment in `start_connect` for why we fail
+        // immediately rather than waiting (as outbound HTTP does).
+        let Ok(permit) = self.try_acquire() else {
+            tracing::warn!("UDP socket creation refused: connection quota exhausted");
+            return Err(SocketErrorCode::NewSocketLimit.into());
+        };
+        let sock = p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family)?;
+        self.register_permit(sock.rep(), permit);
+        Ok(sock)
     }
 }
