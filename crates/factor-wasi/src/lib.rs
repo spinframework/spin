@@ -235,7 +235,7 @@ trait InitContextExt: InitContext<WasiFactor> {
             fn(&mut Self::StoreData) -> WasiClocksCtxView<'_>,
             fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
             fn(&mut Self::StoreData) -> WasiFilesystemCtxView<'_>,
-            fn(&mut Self::StoreData) -> WasiSocketsCtxView<'_>,
+            fn(&mut Self::StoreData) -> SpinSocketsView<'_>,
         ) -> anyhow::Result<()>,
     ) -> anyhow::Result<()> {
         add_to_linker(
@@ -245,7 +245,7 @@ trait InitContextExt: InitContext<WasiFactor> {
             Self::get_clocks,
             Self::get_cli,
             Self::get_filesystem,
-            Self::get_sockets,
+            Self::get_spin_sockets,
         )
     }
 }
@@ -345,6 +345,7 @@ impl Factor for WasiFactor {
         ctx.link_sockets_bindings(
             p3::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>,
         )?;
+        // TODO(rylev): switch to SpinSockets once possible
         ctx.link_sockets_bindings(p3::bindings::sockets::types::add_to_linker::<_, WasiSockets>)?;
 
         ctx.link_all_bindings(wasi_2023_10_18::add_to_linker)?;
