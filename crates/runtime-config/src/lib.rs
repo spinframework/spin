@@ -94,8 +94,13 @@ impl<T> ResolvedRuntimeConfig<T> {
                 ));
             }
         }
-        // [outbound_redis: max_connections=N], [outbound_pg: max_connections=N], [outbound_mysql: max_connections=N]
-        for key in ["outbound_redis", "outbound_pg", "outbound_mysql"] {
+        // [outbound_redis: max_connections=N], [outbound_pg: max_connections=N], [outbound_mysql: max_connections=N], [outbound_mqtt: max_connections=N]
+        for key in [
+            "outbound_redis",
+            "outbound_pg",
+            "outbound_mysql",
+            "outbound_mqtt",
+        ] {
             if let Some(table) = self.toml.get(key).and_then(Value::as_table) {
                 if let Some(max) = table.get("max_connections").and_then(Value::as_integer) {
                     summaries.push(format!("[{key}: max_connections={max}]"));
@@ -417,8 +422,10 @@ impl FactorRuntimeConfigSource<OutboundHttpFactor> for TomlRuntimeConfigSource<'
 }
 
 impl FactorRuntimeConfigSource<OutboundMqttFactor> for TomlRuntimeConfigSource<'_, '_> {
-    fn get_runtime_config(&mut self) -> anyhow::Result<Option<()>> {
-        Ok(None)
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<<OutboundMqttFactor as spin_factors::Factor>::RuntimeConfig>> {
+        spin_factor_outbound_mqtt::runtime_config::spin::config_from_table(&self.toml.table)
     }
 }
 

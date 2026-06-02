@@ -23,7 +23,7 @@ pub struct OutboundMysqlFactor<C = MysqlClient> {
 }
 
 pub struct AppState {
-    /// Semaphore(s) to limit concurrent outbound MySQL connections.
+    /// Semaphore to limit concurrent outbound MySQL connections.
     pub semaphore: ConnectionSemaphore,
 }
 

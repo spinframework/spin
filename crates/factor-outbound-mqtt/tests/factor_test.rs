@@ -9,6 +9,7 @@ use spin_factor_variables::VariablesFactor;
 use spin_factors::{RuntimeFactors, anyhow};
 use spin_factors_test::{TestEnvironment, toml};
 use spin_world::spin::mqtt::mqtt::{Error, Qos};
+use spin_world::v2::mqtt as v2_mqtt;
 
 pub struct MockMqttClient {}
 
@@ -136,6 +137,68 @@ async fn exercise_publish() -> anyhow::Result<()> {
             v2::Qos::ExactlyOnce,
         )
         .await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn connection_limit_blocks_when_exhausted() -> anyhow::Result<()> {
+    use v2_mqtt::HostConnection;
+
+    let env = TestEnvironment::new(factors())
+        .extend_manifest(toml! {
+            [component.test-component]
+            source = "does-not-exist.wasm"
+            allowed_outbound_hosts = ["mqtt://*:*"]
+        })
+        .runtime_config(TestFactorsRuntimeConfig {
+            mqtt: Some(spin_factor_outbound_mqtt::runtime_config::RuntimeConfig {
+                max_connections: Some(1),
+            }),
+            ..Default::default()
+        })?;
+
+    let mut state = env.build_instance_state().await?;
+
+    // Open first connection - should succeed immediately.
+    let conn1 = state
+        .mqtt
+        .open(
+            "mqtt://mqtt.test:1883".to_string(),
+            "username".to_string(),
+            "password".to_string(),
+            1,
+        )
+        .await?;
+
+    // Second open should block (wait for a permit) since the limit is 1.
+    let timed_out = tokio::time::timeout(
+        Duration::from_millis(10),
+        state.mqtt.open(
+            "mqtt://mqtt.test:1883".to_string(),
+            "username".to_string(),
+            "password".to_string(),
+            1,
+        ),
+    )
+    .await
+    .is_err();
+    assert!(timed_out, "expected second open to block when limit is 1");
+
+    // Releasing the first connection returns its permit to the semaphore.
+    state.mqtt.drop(conn1).await?;
+
+    // Now a new connection should succeed.
+    let conn2 = state
+        .mqtt
+        .open(
+            "mqtt://mqtt.test:1883".to_string(),
+            "username".to_string(),
+            "password".to_string(),
+            1,
+        )
+        .await?;
+    state.mqtt.drop(conn2).await?;
 
     Ok(())
 }

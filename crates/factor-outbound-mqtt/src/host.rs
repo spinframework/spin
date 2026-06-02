@@ -7,6 +7,7 @@ use spin_core::{
 };
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
+use spin_factor_outbound_networking::{ConnectionPermit, ConnectionSemaphore};
 use spin_world::spin::mqtt::mqtt as v3;
 use spin_world::v2::mqtt as v2;
 use tracing::{Level, instrument};
@@ -15,8 +16,9 @@ use crate::{ClientCreator, allowed_hosts::AllowedHostChecker};
 
 pub struct InstanceState {
     allowed_hosts: AllowedHostChecker,
-    connections: spin_resource_table::Table<Arc<dyn MqttClient>>,
+    connections: spin_resource_table::Table<(Arc<dyn MqttClient>, ConnectionPermit)>,
     create_client: Arc<dyn ClientCreator>,
+    semaphore: ConnectionSemaphore,
     otel: OtelFactorState,
 }
 
@@ -24,12 +26,14 @@ impl InstanceState {
     pub fn new(
         allowed_hosts: OutboundAllowedHosts,
         create_client: Arc<dyn ClientCreator>,
+        semaphore: ConnectionSemaphore,
         otel: OtelFactorState,
     ) -> Self {
         Self {
             allowed_hosts: AllowedHostChecker::new(allowed_hosts),
             create_client,
             connections: spin_resource_table::Table::new(1024),
+            semaphore,
             otel,
         }
     }
@@ -57,8 +61,15 @@ impl InstanceState {
         password: String,
         keep_alive_interval: Duration,
     ) -> Result<Resource<v2::Connection>, v2::Error> {
+        let permit = self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| v2::Error::TooManyConnections)?;
+        let client =
+            (self.create_client).create(address, username, password, keep_alive_interval)?;
         self.connections
-            .push((self.create_client).create(address, username, password, keep_alive_interval)?)
+            .push((client, permit))
             .map(Resource::new_own)
             .map_err(|_| v2::Error::TooManyConnections)
     }
@@ -69,7 +80,7 @@ impl InstanceState {
             .ok_or(v2::Error::Other(
                 "could not find connection for resource".into(),
             ))
-            .map(|c| c.as_ref())
+            .map(|(c, _permit)| c.as_ref())
     }
 
     fn get_conn_v3(
@@ -78,7 +89,7 @@ impl InstanceState {
     ) -> Result<Arc<dyn MqttClient>, v3::Error> {
         self.connections
             .get(connection.rep())
-            .cloned()
+            .map(|(c, _permit)| c.clone())
             .ok_or(v3::Error::Other(
                 "could not find connection for resource".into(),
             ))
@@ -107,10 +118,14 @@ impl v3::HostConnectionWithStore for crate::MqttFactorData {
         password: String,
         keep_alive_interval_in_secs: u64,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
-        let (allowed_host_checker, create_client) = accessor.with(|mut access| {
+        let (allowed_host_checker, create_client, semaphore) = accessor.with(|mut access| {
             let host = access.get();
             host.otel.reparent_tracing_span();
-            (host.allowed_hosts.clone(), host.create_client.clone())
+            (
+                host.allowed_hosts.clone(),
+                host.create_client.clone(),
+                host.semaphore.clone(),
+            )
         });
 
         if !allowed_host_checker
@@ -123,19 +138,22 @@ impl v3::HostConnectionWithStore for crate::MqttFactorData {
             )));
         }
 
-        let client = create_client
-            .create(
-                address,
-                username,
-                password,
-                Duration::from_secs(keep_alive_interval_in_secs),
-            )
-            .unwrap();
+        let permit = semaphore
+            .acquire()
+            .await
+            .map_err(|_| v3::Error::TooManyConnections)?;
+
+        let client = create_client.create(
+            address,
+            username,
+            password,
+            Duration::from_secs(keep_alive_interval_in_secs),
+        )?;
 
         accessor.with(|mut access| {
             let host = access.get();
             host.connections
-                .push(client)
+                .push((client, permit))
                 .map(Resource::new_own)
                 .map_err(|_| v3::Error::TooManyConnections)
         })
