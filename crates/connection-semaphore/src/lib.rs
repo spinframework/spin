@@ -99,12 +99,12 @@ impl ConnectionSemaphore {
         if waited {
             spin_telemetry::histogram!(
                 outbound_connection_permit_wait_duration_ms = start.elapsed().as_millis() as f64,
-                factor = factor
+                kind = factor
             );
         }
         spin_telemetry::monotonic_counter!(
             outbound_connection_permits_acquired = 1,
-            factor = factor,
+            kind = factor,
             waited = waited
         );
 
@@ -124,7 +124,7 @@ impl ConnectionSemaphore {
             Ok(permit) => {
                 spin_telemetry::monotonic_counter!(
                     outbound_connection_permits_acquired = 1,
-                    factor = self.factor,
+                    kind = self.factor,
                     waited = false
                 );
                 Some(permit)
@@ -132,7 +132,7 @@ impl ConnectionSemaphore {
             Err(limit) => {
                 spin_telemetry::monotonic_counter!(
                     outbound_connection_permits_rejected = 1,
-                    factor = self.factor,
+                    kind = self.factor,
                     limit = limit
                 );
                 None
