@@ -94,8 +94,13 @@ impl<T> ResolvedRuntimeConfig<T> {
                 ));
             }
         }
-        // [outbound_redis: max_connections=N], [outbound_pg: max_connections=N], [outbound_mysql: max_connections=N]
-        for key in ["outbound_redis", "outbound_pg", "outbound_mysql"] {
+        // [outbound_redis: max_connections=N], [outbound_pg: max_connections=N], [outbound_mysql: max_connections=N], [outbound_mqtt: max_connections=N]
+        for key in [
+            "outbound_redis",
+            "outbound_pg",
+            "outbound_mysql",
+            "outbound_mqtt",
+        ] {
             if let Some(table) = self.toml.get(key).and_then(Value::as_table) {
                 if let Some(max) = table.get("max_connections").and_then(Value::as_integer) {
                     summaries.push(format!("[{key}: max_connections={max}]"));

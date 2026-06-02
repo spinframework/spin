@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::Context as _;
 use serde::Deserialize;
 use spin_factors::runtime_config::toml::GetTomlValue;
 
@@ -8,6 +8,7 @@ use spin_factors::runtime_config::toml::GetTomlValue;
 /// ```toml
 /// [outbound_mqtt]
 /// max_payload_size_bytes = 65536  # optional, no limit by default
+/// max_connections = 10 # optional, defaults to unlimited
 /// ```
 pub fn config_from_table(
     table: &impl GetTomlValue,
@@ -19,6 +20,7 @@ pub fn config_from_table(
             .context("failed to parse [outbound_mqtt] table")?;
         Ok(Some(super::RuntimeConfig {
             max_payload_size_bytes: toml.max_payload_size_bytes,
+            max_connections: toml.max_connections,
         }))
     } else {
         Ok(None)
@@ -28,6 +30,6 @@ pub fn config_from_table(
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct OutboundMqttToml {
-    #[serde(default)]
     max_payload_size_bytes: Option<usize>,
+    max_connections: Option<usize>,
 }
