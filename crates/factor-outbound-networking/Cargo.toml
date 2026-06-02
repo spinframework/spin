@@ -28,7 +28,10 @@ url = { workspace = true }
 webpki-root-certs = "1.0.7"
 
 [dev-dependencies]
+async-trait = { workspace = true }
+spin-factor-outbound-mqtt = { path = "../factor-outbound-mqtt" }
 spin-factors-test = { path = "../factors-test" }
+spin-world = { path = "../world" }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 toml = { workspace = true }
