@@ -1,3 +1,7 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use spin_factor_outbound_mqtt::{ClientCreator, MqttClient, OutboundMqttFactor};
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
 use spin_factor_outbound_networking::runtime_config::RuntimeConfig;
 use spin_factor_outbound_networking::runtime_config::spin::SpinRuntimeConfig;
@@ -6,12 +10,48 @@ use spin_factor_wasi::{DummyFilesMounter, WasiFactor};
 use spin_factors::anyhow::Context as _;
 use spin_factors::{App, RuntimeFactors, anyhow};
 use spin_factors_test::{TestEnvironment, toml};
+use spin_world::spin::mqtt::mqtt as v3_mqtt;
+use spin_world::v2::mqtt as v2_mqtt;
 use wasmtime_wasi::p2::bindings::sockets::instance_network::Host;
 use wasmtime_wasi::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily};
 use wasmtime_wasi::p2::bindings::sockets::tcp as p2_tcp;
 use wasmtime_wasi::p2::bindings::sockets::tcp_create_socket as p2_tcp_create;
 use wasmtime_wasi::p2::bindings::sockets::udp_create_socket as p2_udp_create;
 use wasmtime_wasi::sockets::SocketAddrUse;
+
+struct MockMqttClient;
+
+#[async_trait::async_trait]
+impl MqttClient for MockMqttClient {
+    async fn publish_bytes(
+        &self,
+        _topic: String,
+        _qos: v3_mqtt::Qos,
+        _payload: Vec<u8>,
+    ) -> anyhow::Result<(), v3_mqtt::Error> {
+        Ok(())
+    }
+}
+
+impl ClientCreator for MockMqttClient {
+    fn create(
+        &self,
+        _address: String,
+        _username: String,
+        _password: String,
+        _keep_alive_interval: Duration,
+    ) -> anyhow::Result<Arc<dyn MqttClient>, v3_mqtt::Error> {
+        Ok(Arc::new(MockMqttClient))
+    }
+}
+
+#[derive(RuntimeFactors)]
+struct TestFactorsWithMqtt {
+    wasi: WasiFactor,
+    variables: VariablesFactor,
+    networking: OutboundNetworkingFactor,
+    mqtt: OutboundMqttFactor,
+}
 
 #[derive(RuntimeFactors)]
 struct TestFactors {
@@ -393,5 +433,73 @@ async fn socket_quota_shared_between_tcp_and_udp() -> anyhow::Result<()> {
         .await
         .unwrap_err();
     assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
+    Ok(())
+}
+
+/// Verifies that the global connection limit is shared across factors: a permit
+/// held by an MQTT connection blocks a WASI TCP socket (and vice-versa).
+#[tokio::test]
+async fn global_connection_limit_enforced_across_factors() -> anyhow::Result<()> {
+    use v2_mqtt::HostConnection as _;
+
+    let factors = TestFactorsWithMqtt {
+        wasi: WasiFactor::new(DummyFilesMounter),
+        variables: VariablesFactor::default(),
+        networking: OutboundNetworkingFactor::new(),
+        mqtt: OutboundMqttFactor::new(Arc::new(MockMqttClient)),
+    };
+    let env = TestEnvironment::new(factors)
+        .extend_manifest(toml! {
+            [component.test-component]
+            source = "does-not-exist.wasm"
+            allowed_outbound_hosts = ["mqtt://*:*", "*://123.0.2.1:12345"]
+        })
+        .runtime_config(TestFactorsWithMqttRuntimeConfig {
+            networking: Some(RuntimeConfig {
+                max_total_connections: Some(1),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })?;
+
+    let mut state = env.build_instance_state().await?;
+
+    // Acquire the single global permit via an MQTT connection.
+    let conn = state
+        .mqtt
+        .open(
+            "mqtt://mqtt.test:1883".to_string(),
+            "username".to_string(),
+            "password".to_string(),
+            1,
+        )
+        .await?;
+
+    // With the global permit held by MQTT, a TCP socket start_connect must fail immediately.
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
+    let net = sockets.instance_network()?;
+    let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+    let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.downcast_ref(),
+        Some(&ErrorCode::NewSocketLimit),
+        "TCP socket should fail while global permit is held by MQTT"
+    );
+    drop(sockets);
+
+    // Releasing the MQTT connection returns the global permit.
+    state.mqtt.drop(conn).await?;
+
+    // Now the TCP socket start_connect must succeed.
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let net = sockets.instance_network()?;
+    let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into())
+        .await
+        .expect("TCP socket should succeed after MQTT connection is released");
+
     Ok(())
 }
