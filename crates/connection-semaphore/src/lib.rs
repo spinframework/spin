@@ -25,12 +25,8 @@ impl ConnectionSemaphore {
         }
     }
 
-    /// Creates a `ConnectionSemaphore` from pre-existing semaphore handles.
-    ///
-    /// This is intended for testing and internal use where an already-constructed
-    /// (and possibly partially acquired) semaphore must be used directly.
-    #[doc(hidden)]
-    pub fn from_raw(
+    #[cfg(test)]
+    pub(crate) fn from_raw(
         global: Option<Arc<Semaphore>>,
         factor_specific: Option<Arc<Semaphore>>,
         factor: &'static str,

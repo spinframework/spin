@@ -11,7 +11,9 @@ use allowed_hosts::AllowedHostChecker;
 use client::ClientFactory;
 use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
-use spin_factor_outbound_networking::{ConnectionSemaphore, OutboundNetworkingFactor};
+use spin_factor_outbound_networking::{
+    ConnectionSemaphore, OutboundNetworkingFactor, build_connection_semaphore,
+};
 use spin_factors::{
     ConfigureAppContext, Factor, PrepareContext, RuntimeFactors, SelfInstanceBuilder, anyhow,
 };
@@ -53,23 +55,13 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
             client_factories.insert(comp.id().to_string(), Arc::new(CF::default()));
         }
 
-        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
-        let global = networking.and_then(|s| s.global_connection_semaphore.clone());
-        let global_total_limit = networking.and_then(|s| s.max_total_connections);
-
-        if let (Some(per_factor), Some(global_limit)) = (config.max_connections, global_total_limit)
-            && per_factor > global_limit
-        {
-            tracing::warn!(
-                "outbound_pg max_connections ({per_factor}) exceeds global \
-                 max_total_connections ({global_limit}); the global limit will be the \
-                 effective cap"
-            );
-        }
-
         Ok(AppState {
             client_factories,
-            semaphore: ConnectionSemaphore::new(global, config.max_connections, "pg"),
+            semaphore: build_connection_semaphore(
+                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                "pg",
+                config.max_connections,
+            ),
         })
     }
 

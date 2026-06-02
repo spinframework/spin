@@ -1212,17 +1212,12 @@ mod tests {
     /// `ConnectionTimeout` within the configured deadline.
     #[tokio::test]
     async fn connect_timeout_applies_to_permit_acquisition() {
-        use std::sync::Arc;
-        use tokio::sync::Semaphore;
-
-        // Create a semaphore with exactly 1 permit and hold it immediately,
-        // leaving 0 permits available.  This simulates all outbound-connection
-        // slots being occupied.
-        let semaphore = Arc::new(Semaphore::new(1));
-        let _held = semaphore.clone().try_acquire_owned().unwrap();
-
-        // Build a ConnectionSemaphore with the exhausted semaphore as the factor-specific limit.
-        let conn_semaphore = ConnectionSemaphore::from_raw(None, Some(semaphore), "test");
+        // Create a semaphore with exactly 1 permit and immediately exhaust it, leaving
+        // 0 permits available.  This simulates all outbound-connection slots being occupied.
+        let conn_semaphore = ConnectionSemaphore::new(None, Some(1), "test");
+        let _held = conn_semaphore
+            .try_acquire()
+            .expect("exhausting the single permit");
 
         let options = ConnectOptions {
             // No blocked networks; we want the address to pass the filter.

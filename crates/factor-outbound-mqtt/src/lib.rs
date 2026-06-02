@@ -9,7 +9,9 @@ use host::InstanceState;
 use rumqttc::{AsyncClient, Event, Incoming, Outgoing, QoS};
 use spin_core::async_trait;
 use spin_factor_otel::OtelFactorState;
-use spin_factor_outbound_networking::{ConnectionSemaphore, OutboundNetworkingFactor};
+use spin_factor_outbound_networking::{
+    ConnectionSemaphore, OutboundNetworkingFactor, build_connection_semaphore,
+};
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
     anyhow,
@@ -55,22 +57,12 @@ impl Factor for OutboundMqttFactor {
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
 
-        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
-        let global = networking.and_then(|s| s.global_connection_semaphore.clone());
-        let global_total_limit = networking.and_then(|s| s.max_total_connections);
-
-        if let (Some(per_factor), Some(global_limit)) = (config.max_connections, global_total_limit)
-            && per_factor > global_limit
-        {
-            tracing::warn!(
-                "outbound_mqtt max_connections ({per_factor}) exceeds global \
-                 max_total_connections ({global_limit}); the global limit will be the \
-                 effective cap"
-            );
-        }
-
         Ok(AppState {
-            semaphore: ConnectionSemaphore::new(global, config.max_connections, "mqtt"),
+            semaphore: build_connection_semaphore(
+                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                "mqtt",
+                config.max_connections,
+            ),
         })
     }
 
