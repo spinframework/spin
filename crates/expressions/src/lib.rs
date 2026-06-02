@@ -132,6 +132,22 @@ pub struct Resolver {
     component_configs: HashMap<String, HashMap<String, Template>>,
 }
 
+impl SyncResolver for Resolver {
+    fn resolve_variable(&self, key: &str) -> Result<String> {
+        let var = self
+            .variables
+            .get(key)
+            // This should have been caught by validate_template
+            .ok_or_else(|| Error::InvalidName(key.to_string()))?;
+
+        var.default.clone().ok_or_else(|| {
+            Error::Provider(anyhow::anyhow!(
+                "no provider resolved required variable {key:?}"
+            ))
+        })
+    }
+}
+
 impl Resolver {
     /// Creates a Resolver for the given Tree.
     pub fn new(variables: impl IntoIterator<Item = (String, Variable)>) -> Result<Self> {
@@ -196,20 +212,6 @@ impl Resolver {
         Ok(template)
     }
 
-    fn resolve_variable(&self, key: &str) -> Result<String> {
-        let var = self
-            .variables
-            .get(key)
-            // This should have been caught by validate_template
-            .ok_or_else(|| Error::InvalidName(key.to_string()))?;
-
-        var.default.clone().ok_or_else(|| {
-            Error::Provider(anyhow::anyhow!(
-                "no provider resolved required variable {key:?}"
-            ))
-        })
-    }
-
     fn validate_template(&self, template: String) -> Result<Template> {
         let template = Template::new(template)?;
         // Validate template variables are valid
@@ -229,15 +231,16 @@ impl Resolver {
     }
 }
 
-/// A resolver who has resolved all variables.
-#[derive(Default)]
-pub struct PreparedResolver {
-    variables: HashMap<String, String>,
-}
-
-impl PreparedResolver {
-    /// Resolves a the given template.
-    pub fn resolve_template(&self, template: &Template) -> Result<String> {
+/// Resolves a template to a string.
+///
+/// Because this trait is synchronous, implementations should not
+/// perform I/O. Mostly this is an abstraction over PreparedResolver
+/// to allow tests to inject fakes.
+pub trait SyncResolver {
+    /// Resolves the given template.
+    ///
+    /// Do not override this implementation.
+    fn resolve_template(&self, template: &Template) -> Result<String> {
         let mut resolved_parts: Vec<Cow<str>> = Vec::with_capacity(template.parts().len());
         for part in template.parts() {
             resolved_parts.push(match part {
@@ -248,6 +251,20 @@ impl PreparedResolver {
         Ok(resolved_parts.concat())
     }
 
+    /// Resolves a variable to a string.
+    ///
+    /// This must be implemented, but consumers should not usually
+    /// call it directly: call `resolve_template` instead.
+    fn resolve_variable(&self, key: &str) -> Result<String>;
+}
+
+/// A resolver who has resolved all variables.
+#[derive(Default)]
+pub struct PreparedResolver {
+    variables: HashMap<String, String>,
+}
+
+impl SyncResolver for PreparedResolver {
     fn resolve_variable(&self, key: &str) -> Result<String> {
         self.variables
             .get(key)
