@@ -1325,7 +1325,7 @@ dependencies = [
  "metal 0.27.0",
  "num-traits",
  "num_cpus",
- "rand 0.9.1",
+ "rand 0.9.4",
  "rand_distr",
  "rayon",
  "safetensors 0.4.5",
@@ -1386,7 +1386,7 @@ dependencies = [
  "candle-nn",
  "fancy-regex",
  "num-traits",
- "rand 0.9.1",
+ "rand 0.9.4",
  "rayon",
  "serde",
  "serde_json",
@@ -3911,7 +3911,7 @@ dependencies = [
  "cfg-if",
  "crunchy",
  "num-traits",
- "rand 0.9.1",
+ "rand 0.9.4",
  "rand_distr",
 ]
 
@@ -7134,9 +7134,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.1"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97"
+checksum = "44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
@@ -7206,7 +7206,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a8615d50dcf34fa31f7ab52692afec947c4dd0ab803cc87cb3b0b4570ff7463"
 dependencies = [
  "num-traits",
- "rand 0.9.1",
+ "rand 0.9.4",
 ]
 
 [[package]]
@@ -8688,7 +8688,7 @@ dependencies = [
  "openssl",
  "path-absolutize",
  "pretty_assertions",
- "rand 0.9.1",
+ "rand 0.9.4",
  "redis",
  "regex",
  "reqwest 0.12.9",
@@ -8757,7 +8757,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "cap-std",
- "rand 0.9.1",
+ "rand 0.9.4",
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
  "serde",
@@ -9324,7 +9324,7 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "candle-transformers",
- "rand 0.9.1",
+ "rand 0.9.4",
  "safetensors 0.5.3",
  "serde",
  "serde_json",
@@ -9702,7 +9702,7 @@ dependencies = [
  "hyper-util",
  "opentelemetry-semantic-conventions",
  "pin-project-lite",
- "rand 0.9.1",
+ "rand 0.9.4",
  "rustls 0.23.37",
  "rustls-pki-types",
  "serde",
