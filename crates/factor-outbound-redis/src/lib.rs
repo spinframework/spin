@@ -27,7 +27,7 @@ impl OutboundRedisFactor {
 }
 
 pub struct AppState {
-    /// Semaphore(s) to limit concurrent outbound Redis connections.
+    /// Semaphore to limit concurrent outbound Redis connections.
     pub semaphore: ConnectionSemaphore,
 }
 

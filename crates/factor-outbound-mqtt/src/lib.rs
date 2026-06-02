@@ -9,9 +9,10 @@ use host::InstanceState;
 use rumqttc::{AsyncClient, Event, Incoming, Outgoing, QoS};
 use spin_core::async_trait;
 use spin_factor_otel::OtelFactorState;
-use spin_factor_outbound_networking::OutboundNetworkingFactor;
+use spin_factor_outbound_networking::{ConnectionSemaphore, OutboundNetworkingFactor};
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
+    anyhow,
 };
 use spin_world::spin::mqtt::mqtt as v3;
 use spin_world::v2::mqtt as v2;
@@ -20,6 +21,7 @@ use tokio::sync::Mutex;
 pub use host::MqttClient;
 
 use crate::host::other_error_v3;
+use crate::runtime_config::RuntimeConfig;
 
 pub struct OutboundMqttFactor {
     create_client: Arc<dyn ClientCreator>,
@@ -32,11 +34,14 @@ impl OutboundMqttFactor {
 }
 
 pub struct AppState {
+    /// Optional maximum payload size in bytes for MQTT messages. If `None`, no limit is enforced.
     max_payload_size_bytes: Option<usize>,
+    /// Semaphore to limit concurrent outbound MQTT connections.
+    pub semaphore: ConnectionSemaphore,
 }
 
 impl Factor for OutboundMqttFactor {
-    type RuntimeConfig = runtime_config::RuntimeConfig;
+    type RuntimeConfig = RuntimeConfig;
     type AppState = AppState;
     type InstanceBuilder = InstanceState;
 
@@ -51,7 +56,22 @@ impl Factor for OutboundMqttFactor {
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
+        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
+        let global = networking.and_then(|s| s.global_connection_semaphore.clone());
+        let global_total_limit = networking.and_then(|s| s.max_total_connections);
+
+        if let (Some(per_factor), Some(global_limit)) = (config.max_connections, global_total_limit)
+            && per_factor > global_limit
+        {
+            tracing::warn!(
+                "outbound_mqtt max_connections ({per_factor}) exceeds global \
+                 max_total_connections ({global_limit}); the global limit will be the \
+                 effective cap"
+            );
+        }
+
         Ok(AppState {
+            semaphore: ConnectionSemaphore::new(global, config.max_connections, "mqtt"),
             max_payload_size_bytes: config.max_payload_size_bytes,
         })
     }
@@ -68,6 +88,7 @@ impl Factor for OutboundMqttFactor {
         Ok(InstanceState::new(
             allowed_hosts,
             self.create_client.clone(),
+            ctx.app_state().semaphore.clone(),
             otel,
             ctx.app_state().max_payload_size_bytes,
         ))
