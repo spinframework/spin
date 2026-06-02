@@ -78,7 +78,6 @@ impl Factor for OutboundNetworkingFactor {
 
         let blocked_networks = BlockedNetworks::new(block_networks, block_private_networks);
         let tls_client_configs = TlsClientConfigs::new(client_tls_configs)?;
-        let socket_quota = max_socket_connections.map(|n| Arc::new(Semaphore::new(n)));
         let global_connection_semaphore =
             max_total_connections.map(|n| Arc::new(Semaphore::new(n)));
 
@@ -93,11 +92,22 @@ impl Factor for OutboundNetworkingFactor {
             );
         }
 
+        let socket_connection_semaphore =
+            if max_socket_connections.is_some() || global_connection_semaphore.is_some() {
+                Some(ConnectionSemaphore::new(
+                    global_connection_semaphore.clone(),
+                    max_socket_connections,
+                    "wasi-sockets",
+                ))
+            } else {
+                None
+            };
+
         Ok(AppState {
             component_allowed_hosts,
             blocked_networks,
             tls_client_configs,
-            socket_quota,
+            socket_connection_semaphore,
             global_connection_semaphore,
             max_total_connections,
         })
@@ -145,15 +155,11 @@ impl Factor for OutboundNetworkingFactor {
             self.disallowed_host_handler.clone(),
         );
         let blocked_networks = ctx.app_state().blocked_networks.clone();
-        let global_semaphore = ctx.app_state().global_connection_semaphore.clone();
-        let socket_semaphore = ctx.app_state().socket_quota.clone();
-        let permit_state = if global_semaphore.is_some() || socket_semaphore.is_some() {
-            let sem =
-                ConnectionSemaphore::from_raw(global_semaphore, socket_semaphore, "wasi-sockets");
-            Some(SocketPermitState::new(sem))
-        } else {
-            None
-        };
+        let permit_state = ctx
+            .app_state()
+            .socket_connection_semaphore
+            .clone()
+            .map(SocketPermitState::new);
 
         match ctx.instance_builder::<WasiFactor>() {
             Ok(wasi_builder) => {
@@ -219,14 +225,42 @@ pub struct AppState {
     blocked_networks: BlockedNetworks,
     /// TLS client configs
     tls_client_configs: TlsClientConfigs,
-    /// App-wide semaphore capping concurrent outbound TCP/UDP socket connections.
-    /// `None` means unlimited.
-    socket_quota: Option<Arc<Semaphore>>,
+    /// Pre-built semaphore for TCP/UDP socket quota enforcement (global + socket-specific).
+    /// `None` means no limits are configured.
+    socket_connection_semaphore: Option<ConnectionSemaphore>,
     /// App-wide semaphore capping total concurrent outbound connections across ALL types.
     /// `None` means unlimited.
-    pub global_connection_semaphore: Option<Arc<Semaphore>>,
+    global_connection_semaphore: Option<Arc<Semaphore>>,
     /// The configured global connection limit (for warning comparisons in other factors).
-    pub max_total_connections: Option<usize>,
+    max_total_connections: Option<usize>,
+}
+
+/// Builds a [`ConnectionSemaphore`] for an outbound factor, incorporating the optional global
+/// connection limit from the networking factor's app state.
+///
+/// Emits a warning when the per-factor limit exceeds the global cap (the global limit would
+/// be the effective ceiling in that case).
+pub fn build_connection_semaphore(
+    networking: Option<&AppState>,
+    factor: &'static str,
+    factor_limit: Option<usize>,
+) -> ConnectionSemaphore {
+    if let (Some(per_factor), Some(global_limit)) = (
+        factor_limit,
+        networking.and_then(|n| n.max_total_connections),
+    ) && per_factor > global_limit
+    {
+        tracing::warn!(
+            "outbound_{factor} max_connections ({per_factor}) exceeds global \
+             max_total_connections ({global_limit}); the global limit will be the \
+             effective cap"
+        );
+    }
+    ConnectionSemaphore::new(
+        networking.and_then(|n| n.global_connection_semaphore.clone()),
+        factor_limit,
+        factor,
+    )
 }
 
 pub struct InstanceBuilder {
