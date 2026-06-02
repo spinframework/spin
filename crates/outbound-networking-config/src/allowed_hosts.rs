@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, bail, ensure};
 use futures_util::future::{BoxFuture, Shared};
-use spin_expressions::Resolver;
+use spin_expressions::SyncResolver;
 use url::Host;
 
 /// The domain used for service chaining.
@@ -429,30 +429,47 @@ enum PartialAllowedHostConfig {
 
 impl PartialAllowedHostConfig {
     /// Returns this config, resolving any template with the given resolver.
-    fn resolve(
-        self,
-        resolver: &spin_expressions::PreparedResolver,
-    ) -> anyhow::Result<AllowedHostConfig> {
+    fn resolve(self, resolver: &impl SyncResolver) -> anyhow::Result<Option<AllowedHostConfig>> {
         match self {
-            Self::Exact(h) => Ok(h),
-            Self::Unresolved(t) => AllowedHostConfig::parse(resolver.resolve_template(&t)?),
+            Self::Exact(h) => Ok(Some(h)),
+            Self::Unresolved(t) => {
+                let resolved = resolver.resolve_template(&t)?;
+                Self::parse_or_skip(&resolved)
+            }
         }
     }
 
     /// Validates this config. Only templates that can be resolved with default
     /// values from the given resolver will be fully validated.
-    fn validate(&self, resolver: &Resolver) -> anyhow::Result<()> {
+    fn validate(&self, resolver: &impl SyncResolver) -> anyhow::Result<()> {
         if let Self::Unresolved(template) = self {
             let Ok(resolved) = resolver.resolve_template(template) else {
                 // We're missing a default value so we can't validate further
                 return Ok(());
             };
-            AllowedHostConfig::parse(&resolved).with_context(|| {
+
+            Self::parse_or_skip(&resolved).with_context(|| {
                 let template_str = template.to_string();
                 format!("using default variable value(s) with template {template_str:?} results in invalid config {resolved:?}")
             })?;
         }
         Ok(())
+    }
+
+    /// This should be used ONLY for resolutions involved variable
+    /// substitution (which is why it is here rather than on AllowedHostConfig).
+    /// An empty literal remains an error: this allows us to be forgiving if
+    /// an empty variable results in an empty resolution.
+    fn parse_or_skip(resolved: &str) -> anyhow::Result<Option<AllowedHostConfig>> {
+        // An empty variable could result in an empty host. We
+        // ignore these, so as to support an "optional endpoint"
+        // scenario.
+        // TODO: consider if we want other schemes too?
+        if resolved.is_empty() || resolved == "http://" || resolved == "https://" {
+            Ok(None)
+        } else {
+            AllowedHostConfig::parse(resolved).map(Some)
+        }
     }
 }
 
@@ -468,20 +485,23 @@ impl AllowedHostsConfig {
     /// with the given resolver.
     pub fn parse<S: AsRef<str>>(
         hosts: &[S],
-        resolver: &spin_expressions::PreparedResolver,
+        resolver: &impl SyncResolver,
         component_ids: &[String],
     ) -> anyhow::Result<AllowedHostsConfig> {
         let partial = Self::parse_partial(hosts)?;
         let allowed = partial
             .into_iter()
-            .map(|p| p.resolve(resolver))
+            .flat_map(|p| p.resolve(resolver).transpose())
             .collect::<anyhow::Result<Vec<_>>>()?;
         let allowed = Self::expand_wildcard_service_chaining(allowed, component_ids);
         Ok(Self::SpecificHosts(allowed))
     }
 
     /// Validates the given allowed_outbound_hosts values with the given resolver.
-    pub fn validate<S: AsRef<str>>(hosts: &[S], resolver: &Resolver) -> anyhow::Result<()> {
+    pub fn validate<S: AsRef<str>>(
+        hosts: &[S],
+        resolver: &impl SyncResolver,
+    ) -> anyhow::Result<()> {
         for partial in Self::parse_partial(hosts)? {
             partial.validate(resolver)?;
         }
@@ -697,8 +717,35 @@ mod test {
         }
     }
 
-    fn dummy_resolver() -> spin_expressions::PreparedResolver {
-        spin_expressions::PreparedResolver::default()
+    #[derive(Default)]
+    struct DummyResolver {
+        variables: std::collections::HashMap<String, String>,
+    }
+
+    impl SyncResolver for DummyResolver {
+        fn resolve_variable(&self, key: &str) -> spin_expressions::Result<String> {
+            self.variables
+                .get(key)
+                .cloned()
+                .ok_or(spin_expressions::Error::InvalidName(key.to_string()))
+        }
+    }
+
+    fn dummy_resolver() -> impl SyncResolver {
+        DummyResolver::default()
+    }
+
+    fn populated_resolver(values: &[(&str, &str)]) -> impl SyncResolver {
+        let variables = values
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        DummyResolver { variables }
+    }
+
+    fn empty_values_resolver() -> impl SyncResolver {
+        populated_resolver(&[("one", ""), ("two", "")])
     }
 
     use ip_network::{IpNetwork, Ipv4Network, Ipv6Network};
@@ -1101,5 +1148,66 @@ mod test {
         assert_eq!("second.spin.internal", exact_host(&allowed[2]));
         assert_eq!("third.spin.internal", exact_host(&allowed[3]));
         assert_eq!("spinframework.dev", exact_host(&allowed[4]));
+    }
+
+    #[test]
+    fn allowed_hosts_ignores_empty_due_to_empty_variables() {
+        let resolver = empty_values_resolver();
+        let hosts = &["https://{{ one }}", "{{ two }}", "https://three"];
+
+        let AllowedHostsConfig::SpecificHosts(allowed) =
+            AllowedHostsConfig::parse(hosts, &resolver, &[]).expect("parse should have succeeded")
+        else {
+            panic!("expanded AllowedHostsConfig should be specific hosts");
+        };
+
+        assert_eq!(1, allowed.len());
+        assert_eq!("three", exact_host(&allowed[0]));
+    }
+
+    #[test]
+    fn valid_hosts_are_valid() {
+        let resolver = dummy_resolver();
+        let hosts = &["http://x.y", "*://my.db:*"];
+        AllowedHostsConfig::validate(hosts, &resolver).expect("valid hosts should be valid");
+    }
+
+    #[test]
+    fn invalid_hosts_are_invalid() {
+        let resolver = dummy_resolver();
+        let hosts = &["http://x.y", "zootle! wurdl!", "}{ !!**"];
+        AllowedHostsConfig::validate(hosts, &resolver)
+            .expect_err("invalid hosts should be invalid");
+    }
+
+    #[test]
+    fn variables_make_hosts_valid() {
+        let resolver = populated_resolver(&[("dbhost", "example.com"), ("dbport", "1234")]);
+        let hosts = &["http://{{ dbhost }}", "http://{{ dbhost }}:{{ dbport }}"];
+        AllowedHostsConfig::validate(hosts, &resolver).expect("happy variables make hosts valid");
+    }
+
+    #[test]
+    fn bad_variables_make_hosts_invalid() {
+        let resolver = populated_resolver(&[("dbhost", "zoinks, Scooby!")]);
+        let hosts = &["http://{{ dbhost }}"];
+        AllowedHostsConfig::validate(hosts, &resolver)
+            .expect_err("bad variables make hosts invalid");
+    }
+
+    #[test]
+    fn missing_variables_ignored_when_checking_validity() {
+        let resolver = dummy_resolver();
+        let hosts = &["http://{{ dbhost }}"];
+        AllowedHostsConfig::validate(hosts, &resolver)
+            .expect("missing variables errors should be deferred");
+    }
+
+    #[test]
+    fn empty_resolutions_ignored_when_checking_validity() {
+        let resolver = empty_values_resolver();
+        let hosts = &["https://{{ one }}", "{{ two }}", "https://three"];
+        AllowedHostsConfig::validate(hosts, &resolver)
+            .expect("empty resolutions should ignored as valid");
     }
 }
