@@ -66,6 +66,7 @@ impl ConnectionSemaphore {
             }
         }
         let mut waited = false;
+        let start = std::time::Instant::now();
 
         let (global, factor_specific) = match (&self.global, &self.factor_specific) {
             (None, None) => (None, None),
@@ -95,6 +96,12 @@ impl ConnectionSemaphore {
         };
 
         let factor = self.factor;
+        if waited {
+            spin_telemetry::histogram!(
+                outbound_connection_permit_wait_duration_ms = start.elapsed().as_millis() as f64,
+                factor = factor
+            );
+        }
         spin_telemetry::monotonic_counter!(
             outbound_connection_permits_acquired = 1,
             factor = factor,
@@ -113,27 +120,50 @@ impl ConnectionSemaphore {
     /// If the global permit is acquired but the factor-specific permit is not
     /// available, the global permit is released before returning `None`.
     pub fn try_acquire(&self) -> Option<ConnectionPermit> {
-        // Acquire global first. If it fails, nothing is consumed — return None.
+        match self.try_acquire_permits() {
+            Ok(permit) => {
+                spin_telemetry::monotonic_counter!(
+                    outbound_connection_permits_acquired = 1,
+                    factor = self.factor,
+                    waited = false
+                );
+                Some(permit)
+            }
+            Err(limit) => {
+                spin_telemetry::monotonic_counter!(
+                    outbound_connection_permits_rejected = 1,
+                    factor = self.factor,
+                    limit = limit
+                );
+                None
+            }
+        }
+    }
+
+    /// Inner logic for [`Self::try_acquire`], separated so the caller can emit
+    /// telemetry based on whether a permit was obtained.
+    ///
+    /// Returns `Err("global")` or `Err("factor")` to indicate which limit was
+    /// exhausted, so the caller can tag the rejection metric accordingly.
+    fn try_acquire_permits(&self) -> Result<ConnectionPermit, &'static str> {
+        // Acquire global first. If it fails, nothing is consumed.
         let global = match &self.global {
-            Some(s) => Some(s.clone().try_acquire_owned().ok()?),
+            Some(s) => match s.clone().try_acquire_owned() {
+                Ok(p) => Some(p),
+                Err(_) => return Err("global"),
+            },
             None => None,
         };
         // Now attempt the factor-specific permit.
-        // If it fails, the global OwnedSemaphorePermit is dropped here, releasing
-        // the global slot before we return None.
+        // On failure, `global` is dropped here, releasing the global slot.
         let factor_specific = match &self.factor_specific {
-            Some(s) => Some(s.clone().try_acquire_owned().ok()?),
+            Some(s) => match s.clone().try_acquire_owned() {
+                Ok(p) => Some(p),
+                Err(_) => return Err("factor"),
+            },
             None => None,
         };
-
-        let factor = self.factor;
-        spin_telemetry::monotonic_counter!(
-            outbound_connection_permits_acquired = 1,
-            factor = factor,
-            waited = false
-        );
-
-        Some(ConnectionPermit {
+        Ok(ConnectionPermit {
             _global: global,
             _factor_specific: factor_specific,
         })
