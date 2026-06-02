@@ -17,6 +17,7 @@ use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::{
     ComponentTlsClientConfigs, ConnectionSemaphore, OutboundNetworkingFactor,
+    build_connection_semaphore,
     config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
 };
 use spin_factors::{
@@ -56,27 +57,14 @@ impl Factor for OutboundHttpFactor {
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
 
-        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
-        let global = networking.and_then(|s| s.global_connection_semaphore.clone());
-        let global_total_limit = networking.and_then(|s| s.max_total_connections);
-
-        if let (Some(per_factor), Some(global_limit)) =
-            (config.max_concurrent_connections, global_total_limit)
-            && per_factor > global_limit
-        {
-            tracing::warn!(
-                "outbound_http max_concurrent_requests ({per_factor}) exceeds global \
-                     max_total_connections ({global_limit}); the global limit will be the \
-                     effective cap"
-            );
-        }
-
-        let factor_specific_limit = config.max_concurrent_connections;
-
         Ok(AppState {
             wasi_http_clients: wasi::HttpClients::new(config.connection_pooling_enabled),
             connection_pooling_enabled: config.connection_pooling_enabled,
-            semaphore: ConnectionSemaphore::new(global, factor_specific_limit, "http"),
+            semaphore: build_connection_semaphore(
+                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                "http",
+                config.max_concurrent_connections,
+            ),
         })
     }
 
