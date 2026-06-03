@@ -288,13 +288,14 @@ fn format_target_result_error(
     report: &wac_types::TargetValidationReport,
 ) -> anyhow::Error {
     let mut error_string = format!(
-        "Component {} ({}) can't run in environment {} because world {} ...\n",
-        component_id, source_description, env_name, target_world_name
+        "Component {component_id} ({source_description}) can't run in environment {env_name} (world {target_world_name}).\n",
     );
 
     for (idx, import) in report.imports_not_in_target().enumerate() {
         if idx == 0 {
-            error_string.push_str("... requires imports named\n  - ");
+            error_string.push_str(
+                "The component requires the following imports, which the environment does not provide:\n  - ",
+            );
         } else {
             error_string.push_str("  - ");
         }
@@ -304,7 +305,9 @@ fn format_target_result_error(
 
     for (idx, (export, export_kind)) in report.missing_exports().enumerate() {
         if idx == 0 {
-            error_string.push_str("... requires exports named\n  - ");
+            error_string.push_str(
+                "The environment requires the following exports, which the component does not provide:\n  - ",
+            );
         } else {
             error_string.push_str("  - ");
         }
@@ -315,7 +318,7 @@ fn format_target_result_error(
     }
 
     for (name, extern_kind, error) in report.mismatched_types() {
-        error_string.push_str("... found a type mismatch for ");
+        error_string.push_str("Found a type mismatch for ");
         error_string.push_str(&format!("{extern_kind} {name}: {error}"));
     }
 
