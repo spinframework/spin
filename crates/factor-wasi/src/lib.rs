@@ -345,8 +345,9 @@ impl Factor for WasiFactor {
         ctx.link_sockets_bindings(
             p3::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>,
         )?;
-        // TODO(rylev): switch to SpinSockets once possible
-        ctx.link_sockets_bindings(p3::bindings::sockets::types::add_to_linker::<_, WasiSockets>)?;
+        ctx.link_spin_sockets_bindings(
+            p3::bindings::sockets::types::add_to_linker::<_, SpinSockets>,
+        )?;
 
         ctx.link_all_bindings(wasi_2023_10_18::add_to_linker)?;
         ctx.link_all_bindings(wasi_2023_11_10::add_to_linker)?;

@@ -1,0 +1,456 @@
+    Checking spin-factor-wasi v4.1.0-pre0 (/Users/rlevick/Code/spin/crates/factor-wasi)
+    Checking spin-factor-wasi v4.1.0-pre0 (/Users/rlevick/Code/spin/crates/factor-wasi)
+error[E0282]: type annotations needed
+   --> crates/factor-wasi/src/sockets.rs:829:48
+    |
+829 |         let Ok(permit) = store.with(|mut view| Ok(view.get().try_acquire()))? else {
+    |                                                ^^ cannot infer type of the type parameter `E` declared on the enum `Result`
+    |
+help: consider specifying the generic arguments
+    error[E0282]: type annotations needed
+   --> crates/factor-wasi/src/sockets.rs:829:48
+    |
+829 |         let Ok(permit) = store.with(|mut view| Ok(view.get().try_acquire()))? else {
+    |                                                ^^ cannot infer type of the type parameter `E` declared on the enum `Result`
+    |
+help: consider specifying the generic arguments
+    |
+829 |         let Ok(permit) = store.with(|mut view| Ok::<std::result::Result<std::option::Option<ConnectionPermit>, ()>, E>(view.get().try_acquire()))? else {
+    |                                                  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+|
+829 |         let Ok(permit) = store.with(|mut view| Ok::<std::result::Result<std::option::Option<ConnectionPermit>, ()>, E>(view.get().try_acquire()))? else {
+    |                                                  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0283]: type annotations needed
+   --> crates/factor-wasi/src/sockets.rs:829:48
+    |
+829 |         let Ok(permit) = store.with(|mut view| Ok(view.get().try_acquire()))? else {
+    |                                                ^^                           - type must be known at this pointerror[E0283]: type annotations needed
+   --> crates/factor-wasi/src/sockets.rs:829:48
+    |
+829 |         let Ok(permit) = store.with(|mut view| Ok(view.get().try_acquire()))? else {
+    |                                                ^^                           - type must be known at this point
+    |                                                |
+    |                                                cannot infer type of the type parameter `E` declared on the enum `Result`
+    |
+    = note: multiple `impl`s satisfying `TrappableError<wasmtime_wasi::p3::bindings::sockets::types::ErrorCode>: From<_>` found in the following crates: `core`, `wasmtime_wasi`:
+            - impl From<wasmtime_wasi::sockets::util::ErrorCode> for TrappableError<wasmtime_wasi::p3::bindings::sockets::types::ErrorCode>;
+            - impl<T> From<T> for T;
+            - impl<T> From<T> for TrappableError<T>
+              where T: StdError, T: std::marker::Send, T: Sync, T: 'static;
+help: consider specifying the generic arguments
+    |
+829 |         let Ok(permit) = store.with(|mut view| Ok::<std::result::Result<std::option::Option<ConnectionPermit>, ()>, E>(view.get().try_acquire()))? else {
+    |                                                  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+    |                                                |
+    |                                                cannot infer type of the type parameter `E` declared on the enum `Result`
+    |
+    = note: multiple `impl`s satisfying `TrappableError<wasmtime_wasi::p3::bindings::sockets::types::ErrorCode>: From<_>` found in the following crates: `core`, `wasmtime_wasi`:
+            - impl From<wasmtime_wasi::sockets::util::ErrorCode> for TrappableError<wasmtime_wasi::p3::bindings::sockets::types::ErrorCode>;
+            - impl<T> From<T> for T;
+            - impl<T> From<T> for TrappableError<T>
+              where T: StdError, T: std::marker::Send, T: Sync, T: 'static;
+help: consider specifying the generic arguments
+    |
+829 |         let Ok(permit) = store.with(|mut view| Ok::<std::result::Result<std::option::Option<ConnectionPermit>, ()>, E>(view.get().try_acquire()))? else {
+    |                                                  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0283]: type annotations needed
+   --> crates/factor-wasi/src/sockets.rs:836:35
+    |
+836 |             store.with(|mut view| Ok(view.get().register_permit(socket_rep, permit)))?;
+    |                                   ^^                                                 - type must be known at this pointerror[E0283]: type annotations needed
+   --> crates/factor-wasi/src/sockets.rs:836:35
+    |
+836 |             store.with(|mut view| Ok(view.get().register_permit(socket_rep, permit)))?;
+    |                                   ^^                                                 - type must be known at this point
+    |                                   |
+    |                                   cannot infer type of the type parameter `E` declared on the enum `Result`
+    |
+    = note: multiple `impl`s satisfying `TrappableError<wasmtime_wasi::p3::bindings::sockets::types::ErrorCode>: From<_>` found in the following crates: `core`, `wasmtime_wasi`:
+            - impl From<wasmtime_wasi::sockets::util::ErrorCode> for TrappableError<wasmtime_wasi::p3::bindings::sockets::types::ErrorCode>;
+            - impl<T> From<T> for T;
+            - impl<T> From<T> for TrappableError<T>
+              where T: StdError, T: std::marker::Send, T: Sync, T: 'static;
+help: consider specifying the generic arguments
+    |
+836 |             store.with(|mut view| Ok::<(), E>(view.get().register_permit(socket_rep, permit)))?;
+    |                                     +++++++++
+
+
+    |                                   |
+    |                                   cannot infer type of the type parameter `E` declared on the enum `Result`
+    |
+    = note: multiple `impl`s satisfying `TrappableError<wasmtime_wasi::p3::bindings::sockets::types::ErrorCode>: From<_>` found in the following crates: `core`, `wasmtime_wasi`:
+            - impl From<wasmtime_wasi::sockets::util::ErrorCode> for TrappableError<wasmtime_wasi::p3::bindings::sockets::types::ErrorCode>;
+            - impl<T> From<T> for T;
+            - impl<T> From<T> for TrappableError<T>
+              where T: StdError, T: std::marker::Send, T: Sync, T: 'static;
+help: consider specifying the generic arguments
+    |
+836 |             store.with(|mut view| Ok::<(), E>(view.get().register_permit(socket_rep, permit)))?;
+    |                                     +++++++++
+
+warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:889:61
+    |
+889 |         let wasi_accessor: Accessor<T, WasiSockets> = store.with_getter(todo!());
+    |                                                             ^^^^^^^^^^^ -------warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:889:61
+    |
+889 |         let wasi_accessor: Accessor<T, WasiSockets> = store.with_getter(todo!());
+    |                                                             ^^^^^^^^^^^ ------- any code following this expression is unreachable
+    |                                                             |
+    |                                                             unreachable call
+    |
+    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+ any code following this expression is unreachable
+    |                                                             |
+    |                                                             unreachable call
+    |
+    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: `T` cannot be sent between threads safely
+   --> crates/factor-wasi/src/sockets.rs:890:27
+    |
+890 |         WasiSockets::send(&wasi_accessor, socket, data, remote_address).await
+    |         ----------------- ^^^^^^^^^^^^^^ error[E0277]: `T` cannot be sent between threads safely
+   --> crates/factor-wasi/src/sockets.rs:890:27
+    |
+890 |         WasiSockets::send(&wasi_accessor, socket, data, remote_address).await
+    |         ----------------- ^^^^^^^^^^^^^^ `T` cannot be sent between threads safely
+    |         |
+    |         required by a bound introduced by this call
+    |
+note: required by a bound in `wasmtime_wasi::p3::bindings::sockets::types::HostUdpSocketWithStore::send`
+   --> /Users/rlevick/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-44.0.0/src/p3/bindings.rs:77:5
+    |
+ 77 | /     wasmtime::component::bindgen!({
+ 78 | |         path: "src/p3/wit",
+ 79 | |         world: "wasi:cli/command",
+ 80 | |         imports: {
+...   |
+107 | |         },
+108 | |     });
+    | |______^ required by this bound in `HostUdpSocketWithStore::send`
+    = note: this error originates in the macro `wasmtime::component::bindgen` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+    |
+882 |     async fn send<T: std::marker::Send>(
+    |                    +++++++++++++++++++
+`T` cannot be sent between threads safely
+    |         |
+    |         required by a bound introduced by this call
+    |
+note: required by a bound in `wasmtime_wasi::p3::bindings::sockets::types::HostUdpSocketWithStore::send`
+   --> /Users/rlevick/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-44.0.0/src/p3/bindings.rs:77:5
+    |
+ 77 | /     wasmtime::component::bindgen!({
+ 78 | |         path: "src/p3/wit",
+ 79 | |         world: "wasi:cli/command",
+ 80 | |         imports: {
+...   |
+107 | |         },
+108 | |     });
+    | |______^ required by this bound in `HostUdpSocketWithStore::send`
+    = note: this error originates in the macro `wasmtime::component::bindgen` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+    |
+882 |     async fn send<T: std::marker::Send>(
+    |                    +++++++++++++++++++
+
+
+error[E0277]: `T` cannot be sent between threads safely
+   --> crates/factor-wasi/src/sockets.rs:890:9
+    |
+890 |         WasiSockets::send(&wasi_accessor, socket, data, remote_address).await
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `T` cannot be sent between threads safely
+    |
+note: required by a bound in `wasmtime_wasi::p3::bindings::sockets::types::HostUdpSocketWithStore::send::{anon_assoc#0}`
+   --> /Users/rlevick/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-44.0.0/src/p3/bindings.rs:77:5
+    |
+ 77 | error[E0277]: `T` cannot be sent between threads safely
+   --> crates/factor-wasi/src/sockets.rs:890:9
+    |
+890 |         WasiSockets::send(&wasi_accessor, socket, data, remote_address).await
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `T` cannot be sent between threads safely
+    |
+note: required by a bound in `wasmtime_wasi::p3::bindings::sockets::types::HostUdpSocketWithStore::send::{anon_assoc#0}`
+   --> /Users/rlevick/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-44.0.0/src/p3/bindings.rs:77:5
+    |
+ 77 | /     wasmtime::component::bindgen!({
+ 78 | |         path: "src/p3/wit",
+ 79 | |         world: "wasi:cli/command",
+ 80 | |         imports: {
+...   |
+107 | |         },
+108 | |     });
+    | |______^ required by this bound in `HostUdpSocketWithStore::send::{anon_assoc#0}`
+    = /     wasmtime::component::bindgen!({
+ 78 | |         path: "src/p3/wit",
+ 79 | |         world: "wasi:cli/command",
+ 80 | |         imports: {
+...   |
+107 | |         },
+108 | |     });
+    | |______^ required by this bound in `HostUdpSocketWithStore::send::{anon_assoc#0}`
+    = note: this error originates in the macro `wasmtime::component::bindgen` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+    |
+882 |     async fn send<T: std::marker::Send>(
+    |                    +++++++++++++++++++
+
+note: this error originates in the macro `wasmtime::component::bindgen` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+    |
+882 |     async fn send<T: std::marker::Send>(
+    |                    +++++++++++++++++++
+
+warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:898:61
+    |
+898 |         let wasi_accessor: Accessor<T, WasiSockets> = store.with_getter(todo!());
+    |                                                             ^^^^^^^^^^^ -------warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:898:61
+    |
+898 |         let wasi_accessor: Accessor<T, WasiSockets> = store.with_getter(todo!());
+    |                                                             ^^^^^^^^^^^ ------- any code following this expression is unreachable
+    |                                                             |
+    |                                                             unreachable call
+
+ any code following this expression is unreachable
+    |                                                             |
+    |                                                             unreachable call
+
+error[E0277]: `T` cannot be sent between threads safely
+   --> crates/factor-wasi/src/sockets.rs:899:30
+    |
+899 |         WasiSockets::receive(&wasi_accessor, socket).await
+    |         -------------------- error[E0277]: `T` cannot be sent between threads safely
+   --> crates/factor-wasi/src/sockets.rs:899:30
+    |
+899 |         WasiSockets::receive(&wasi_accessor, socket).await
+    |         -------------------- ^^^^^^^^^^^^^^ `T` cannot be sent between threads safely
+    |         |
+    |         required by a bound introduced by this call
+    |
+note: required by a bound in `wasmtime_wasi::p3::bindings::sockets::types::HostUdpSocketWithStore::receive`
+   --> /Users/rlevick/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-44.0.0/src/p3/bindings.rs:77:5
+    |
+ 77 | /     wasmtime::component::bindgen!({
+ 78 | |         path: "src/p3/wit",
+ 79^^^^^^^^^^^^^^ `T` cannot be sent between threads safely
+    |         |
+    |         required by a bound introduced by this call
+    |
+note: required by a bound in `wasmtime_wasi::p3::bindings::sockets::types::HostUdpSocketWithStore::receive`
+   --> /Users/rlevick/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-44.0.0/src/p3/bindings.rs:77:5
+    |
+ 77 | /     wasmtime::component::bindgen!({
+ 78 | |         path: "src/p3/wit",
+ 79 | |         world: "wasi:cli/command",
+ 80 | |         imports: {
+...   |
+107 | |         },
+108 | |     });
+     | |         world: "wasi:cli/command",
+ 80 | |         imports: {
+...   |
+107 | |         },
+108 | |     });
+    | |______^ required by this bound in `HostUdpSocketWithStore::receive`
+    = note: this error originates in the macro `wasmtime::component::bindgen` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+    |
+893 |     async fn receive<T: std::marker::Send>(
+    |                       +++++++++++++++++++
+
+| |______^ required by this bound in `HostUdpSocketWithStore::receive`
+    = note: this error originates in the macro `wasmtime::component::bindgen` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+    |
+893 |     async fn receive<T: std::marker::Send>(
+    |                       +++++++++++++++++++
+
+error[E0277]: `T` cannot be sent between threads safely
+   --> crates/factor-wasi/src/sockets.rs:899:9
+    |
+899 |         WasiSockets::receive(&wasi_accessor, socket).await
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ error[E0277]: `T` cannot be sent between threads safely
+   --> crates/factor-wasi/src/sockets.rs:899:9
+    |
+899 |         WasiSockets::receive(&wasi_accessor, socket).await
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `T` cannot be sent between threads safely
+    |
+note: required by a bound in `wasmtime_wasi::p3::bindings::sockets::types::HostUdpSocketWithStore::receive::{anon_assoc#0}`
+   --> /Users/rlevick/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-44.0.0/src/p3/bindings.rs:77:5
+    |
+ 77 | /     wasmtime::component::bindgen!({
+ 78 | |         path: "src/p3/wit",
+ 79 | |         world: "wasi:cli/command",
+ 80 | |         imports: {
+...   |
+107 `T` cannot be sent between threads safely
+    |
+note: required by a bound in `wasmtime_wasi::p3::bindings::sockets::types::HostUdpSocketWithStore::receive::{anon_assoc#0}`
+   --> /Users/rlevick/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-44.0.0/src/p3/bindings.rs:77:5
+    |
+ 77 | /     wasmtime::component::bindgen!({
+ 78 | |         path: "src/p3/wit",
+ 79 | |         world: "wasi:cli/command",
+ 80 | |         imports: {
+...   |
+107 | |         },
+108 | |     });
+    | |______^ required by this bound in `HostUdpSocketWithStore::receive::{anon_assoc#0}`
+    = note: this error originates in the macro `wasmtime::component::bindgen` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+    |
+893 |     async fn receive<T: std::marker::Send>(
+    |                       +++++++++++++++++++
+
+| |         },
+108 | |     });
+    | |______^ required by this bound in `HostUdpSocketWithStore::receive::{anon_assoc#0}`
+    = note: this error originates in the macro `wasmtime::component::bindgen` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider restricting type parameter `T` with trait `Send`
+    |
+893 |     async fn receive<T: std::marker::Send>(
+    |                       +++++++++++++++++++
+
+warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:850:13
+    |
+850 |             Access::new(store.as_context_mut(), todo!());
+    |             ^^^^^^^^^^^ unreachable call        warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:850:13
+    |
+850 |             Access::new(store.as_context_mut(), todo!());
+    |             ^^^^^^^^^^^ unreachable call        ------- any code following this expression is unreachable
+
+------- any code following this expression is unreachable
+
+warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:862:13
+    warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:862:13
+    |
+862 |             Access::new(store.as_context_mut(), todo!());
+    |             ^^^^^^^^^^^ unreachable call        ------- any code following this expression is unreachable
+
+|
+862 |             Access::new(store.as_context_mut(), todo!());
+    |             ^^^^^^^^^^^ unreachable call        ------- any code following this expression is unreachable
+
+warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:876:13
+    |
+warning: unreachable call
+   --> crates/factor-wasi/src/sockets.rs:876:13
+    |
+876 |             Access::new(store.as_context_mut(), todo!());
+    |             ^^^^^^^^^^^ unreachable call        ------- any code following this expression is unreachable
+
+876 |             Access::new(store.as_context_mut(), todo!());
+    |             ^^^^^^^^^^^ unreachable call        ------- any code following this expression is unreachable
+
+warning: unused variable: `socket`
+   --> crates/factor-wasi/src/sockets.rs:843:9
+    |
+843 |         socket: Resource<TcpSocket>,
+    |         ^^^^^^ warning: unused variable: `socket`
+   --> crates/factor-wasi/src/sockets.rs:843:9
+    |
+843 |         socket: Resource<TcpSocket>,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_socket`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+help: if this is intentional, prefix it with an underscore: `_socket`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `wasi_store`
+   --> crates/factor-wasi/src/sockets.rs:849:13
+    |
+849 |         let wasi_store: Access<'_, T, WasiSockets> =
+    |             ^^^^^^^^^^warning: unused variable: `wasi_store`
+   --> crates/factor-wasi/src/sockets.rs:849:13
+    |
+849 |         let wasi_store: Access<'_, T, WasiSockets> =
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wasi_store`
+
+ help: if this is intentional, prefix it with an underscore: `_wasi_store`
+
+warning: unused variable: `socket`
+   --> crates/factor-wasi/src/sockets.rs:856:9
+    |
+856 |         socket: Resource<TcpSocket>,
+    |         ^^^^^^warning: unused variable: `socket`
+   --> crates/factor-wasi/src/sockets.rs:856:9
+    |
+856 |         socket: Resource<TcpSocket>,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_socket`
+
+ help: if this is intentional, prefix it with an underscore: `_socket`
+
+warning: unused variable: `data`
+   --> crates/factor-wasi/src/sockets.rs:857:9
+    |
+857 |         data: StreamReader<u8>,
+    |         ^^^^warning: unused variable: `data`
+   --> crates/factor-wasi/src/sockets.rs:857:9
+    |
+857 |         data: StreamReader<u8>,
+    |         ^^^^ help: if this is intentional, prefix it with an underscore: `_data`
+
+ help: if this is intentional, prefix it with an underscore: `_data`
+
+warning: unused variable: `wasi_store`
+   --> crates/factor-wasi/src/sockets.rs:861:13
+    |
+861 |         let wasi_store: Access<'_, T, WasiSockets> =
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wasi_store`
+
+warning: unused variable: `wasi_store`
+   --> crates/factor-wasi/src/sockets.rs:861:13
+    |
+861 |         let wasi_store: Access<'_, T, WasiSockets> =
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wasi_store`
+
+warning: unused variable: `socket`
+   --> crates/factor-wasi/src/sockets.rs:868:9
+    |
+868 |         socket: Resource<TcpSocket>,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_socket`warning: unused variable: `socket`
+   --> crates/factor-wasi/src/sockets.rs:868:9
+    |
+868 |         socket: Resource<TcpSocket>,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_socket`
+
+
+
+warning: unused variable: `wasi_store`
+   --> crates/factor-wasi/src/sockets.rs:875:13
+    |
+875warning: unused variable: `wasi_store`
+   --> crates/factor-wasi/src/sockets.rs:875:13
+    |
+875 |         let wasi_store: Access<'_, T, WasiSockets> =
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wasi_store`
+
+ |         let wasi_store: Access<'_, T, WasiSockets> =
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_wasi_store`
+
+Some errors have detailed explanations: E0277, E0282, E0283.
+For more information about an error, try `rustc --explain E0277`.
+Some errors have detailed explanations: E0277, E0282, E0283.
+For more information about an error, try `rustc --explain E0277`.
+warning: `spin-factor-wasi` (lib) generated 12 warnings
+warning: `spin-factor-wasi` (lib) generated 12 warnings
+error: could not compile `spin-factor-wasi` (lib) due to 7 previous errors; 12 warnings emitted
+error: could not compile `spin-factor-wasi` (lib) due to 7 previous errors; 12 warnings emitted
