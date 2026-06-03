@@ -42,8 +42,8 @@ impl ConnectionSemaphore {
     /// them until dropped.
     ///
     /// When both a global and a factor-specific semaphore are configured, this
-    /// method never holds one permit while blocking on the other, preventing global
-    /// permits from being tied up while waiting on a factor-specific backlog.
+    /// method acquires factor-specific first, then global, ensuring the global
+    /// permit is never held while blocking on a factor-specific backlog.
     pub async fn acquire(&self) -> anyhow::Result<ConnectionPermit> {
         /// Acquires a single permit from `sem`, trying non-blocking first.
         ///
@@ -68,31 +68,17 @@ impl ConnectionSemaphore {
         let mut waited = false;
         let start = std::time::Instant::now();
 
-        let (global, factor_specific) = match (&self.global, &self.factor_specific) {
-            (None, None) => (None, None),
-            (Some(g), None) => (Some(acquire_one(g, &mut waited, "global").await?), None),
-            (None, Some(f)) => (None, Some(acquire_one(f, &mut waited, "factor").await?)),
-            // Loop until we acquire both. We have to be careful to avoid holding one permit while waiting for the other.
-            (Some(g), Some(f)) => loop {
-                let global = acquire_one(g, &mut waited, "global").await?;
-                match f.clone().try_acquire_owned() {
-                    Ok(factor) => break (Some(global), Some(factor)),
-                    Err(TryAcquireError::NoPermits) => {}
-                    Err(_) => anyhow::bail!("factor connection semaphore closed"),
-                }
-                // Factor specific has no free permits: release global so other connection types aren't blocked,
-                // then wait for factor-specific before trying global again.
-                drop(global);
-                waited = true;
-                let factor = acquire_one(f, &mut waited, "factor").await?;
-                match g.clone().try_acquire_owned() {
-                    Ok(global) => break (Some(global), Some(factor)),
-                    Err(TryAcquireError::NoPermits) => {}
-                    Err(_) => anyhow::bail!("global connection semaphore closed"),
-                }
-                // Global has no free permits: release factor specific and retry from the top of the loop.
-                drop(factor);
-            },
+        // Acquire factor-specific first, then global. This ensures we never hold
+        // the global permit while blocking on factor-specific backlog.
+        let factor_specific = match &self.factor_specific {
+            Some(f) => Some(acquire_one(f, &mut waited, "factor").await?),
+            None => None,
+        };
+        // It's fine to hold the factor-specific permit while waiting for the global slot, since
+        // other consumers of the factor-specific would also end up waiting for the same global slot.
+        let global = match &self.global {
+            Some(g) => Some(acquire_one(g, &mut waited, "global").await?),
+            None => None,
         };
 
         let factor = self.factor;
