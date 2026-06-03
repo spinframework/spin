@@ -589,7 +589,9 @@ mod tests {
 
         assert!(err.contains("can't run in environment wasi-minimal"));
         assert!(err.contains("world wasi:cli/command@0.2.0"));
-        assert!(err.contains("requires imports named"));
+        assert!(
+            err.contains("requires the following imports, which the environment does not provide")
+        );
         assert!(err.contains("wasi:cli/stdout"));
     }
 
