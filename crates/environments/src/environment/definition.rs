@@ -77,6 +77,10 @@ pub enum WorldRef {
         registry: String,
         world: WorldName,
     },
+    OciRegistry {
+        reference: String,
+        world: WorldName,
+    },
     WitDirectory {
         path: std::path::PathBuf,
         world: WorldName,

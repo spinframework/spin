@@ -257,6 +257,9 @@ async fn load_world(
         WorldRef::Registry { registry, world } => {
             load_world_from_registry(registry, world, cache, lockfile).await
         }
+        WorldRef::OciRegistry { reference, world } => {
+            load_world_from_oci_ref(reference, world, cache, lockfile).await
+        }
         WorldRef::WitDirectory { path, world } => {
             let path = match relative_to_dir {
                 Some(dir) => dir.join(path),
@@ -343,6 +346,62 @@ async fn load_world_from_registry(
         .write()
         .await
         .set_package_digest(registry, world_name.package(), &digest);
+
+    CandidateWorld::from_package_bytes(world_name, bytes)
+}
+
+/// Loads the given `TargetEnvironment` from the given registry, or
+/// from cache if available. If the environment is not in cache, the
+/// encoded WIT will be cached, and the in-memory lockfile object
+/// updated.
+async fn load_world_from_oci_ref(
+    reference: &str,
+    world_name: &WorldName,
+    cache: &spin_loader::cache::Cache,
+    lockfile: &std::sync::Arc<tokio::sync::RwLock<TargetEnvironmentLockfile>>,
+) -> anyhow::Result<CandidateWorld> {
+    if let Some(digest) = lockfile
+        .read()
+        .await
+        .package_digest(reference, world_name.package())
+        && let Ok(cache_file) = cache.wasm_file(digest)
+        && let Ok(bytes) = tokio::fs::read(&cache_file).await
+    {
+        return CandidateWorld::from_package_bytes(world_name, bytes);
+    }
+
+    let oci_client = oci_client::Client::new(oci_client::client::ClientConfig {
+        protocol: oci_client::client::ClientProtocol::Https,
+        ..Default::default()
+    });
+    let client = oci_wasm::WasmClient::new(oci_client);
+
+    let oci_reference = reference.parse().with_context(|| {
+        format!("Target environment contains invalid OCI reference {reference}")
+    })?;
+    let data = client
+        .pull(
+            &oci_reference,
+            &oci_client::secrets::RegistryAuth::Anonymous,
+        )
+        .await
+        .with_context(|| format!("Failed to get {reference} from registry"))?;
+
+    let bytes = data
+        .layers
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("No layers found in target environment {reference}"))?
+        .data
+        .to_vec();
+
+    if let Some(digest) = data.digest {
+        _ = cache.write_wasm(&bytes, &digest).await; // Failure to cache is not fatal
+        lockfile
+            .write()
+            .await
+            .set_package_digest(reference, world_name.package(), &digest);
+    }
 
     CandidateWorld::from_package_bytes(world_name, bytes)
 }
