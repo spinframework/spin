@@ -474,7 +474,7 @@ mod test {
             "unexpected error {err}"
         );
         assert!(
-            err.contains("requires imports named"),
+            err.contains("requires the following imports, which the environment does not provide"),
             "unexpected error {err}"
         );
         assert!(
@@ -583,7 +583,7 @@ mod test {
             "unexpected error {err}"
         );
         assert!(
-            err.contains("requires imports named"),
+            err.contains("requires the following imports, which the environment does not provide"),
             "unexpected error {err}"
         );
         assert!(
