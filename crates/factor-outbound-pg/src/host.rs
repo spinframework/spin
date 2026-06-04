@@ -92,7 +92,8 @@ fn v3_params_to_v4(params: Vec<v3::ParameterValue>) -> Vec<v4::ParameterValue> {
 }
 
 impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
-    #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v3::Connection>, v3::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
@@ -106,7 +107,8 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
             .map_err(v3::Error::from)
     }
 
-    #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn execute(
         &mut self,
         connection: Resource<v3::Connection>,
@@ -122,7 +124,8 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
             .map_err(track_db_error_on_span_v3)
     }
 
-    #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn query(
         &mut self,
         connection: Resource<v3::Connection>,
@@ -199,7 +202,8 @@ impl<CF: ClientFactory> v4::HostConnectionBuilder for InstanceState<CF> {
 }
 
 impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
-    #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v4::Connection>, v4::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
@@ -210,7 +214,8 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
         self.open_connection(&address, None).await
     }
 
-    #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn execute(
         &mut self,
         connection: Resource<v4::Connection>,
@@ -224,7 +229,8 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
             .map_err(track_db_error_on_span_v4)
     }
 
-    #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn query(
         &mut self,
         connection: Resource<v4::Connection>,
@@ -247,7 +253,8 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
 impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectionWithStore
     for crate::PgFactorData<CF>
 {
-    #[instrument(name = "spin_outbound_pg.open_async", skip(accessor, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    #[instrument(name = "spin_outbound_pg.open_async", skip(accessor, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
     async fn open_async<T>(
         accessor: &Accessor<T, Self>,
         address: String,
@@ -260,7 +267,8 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
         Self::open_connection_async(accessor, &address, None).await
     }
 
-    #[instrument(name = "spin_outbound_pg.execute", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_pg.execute", skip(accessor, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn execute_async<T>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v4::Connection>,
@@ -282,7 +290,8 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
     }
 
     #[allow(clippy::type_complexity)] // blame bindgen, clippy, blame bindgen
-    #[instrument(name = "spin_outbound_pg.query_async", skip(accessor, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_pg.query_async", skip(accessor, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn query_async<T>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v4::Connection>,
@@ -472,7 +481,8 @@ macro_rules! delegate {
 impl<CF: ClientFactory> v2::Host for InstanceState<CF> {}
 
 impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
-    #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
         self.otel.reparent_tracing_span();
         spin_factor_outbound_networking::record_address_fields(&address);
@@ -486,7 +496,8 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
             .map_err(v2::Error::from)
     }
 
-    #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn execute(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -506,7 +517,8 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
             .map_err(track_db_error_on_span_v2)
     }
 
-    #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn query(
         &mut self,
         connection: Resource<v2::Connection>,

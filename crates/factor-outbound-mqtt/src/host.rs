@@ -163,8 +163,13 @@ impl v3::HostConnectionWithStore for crate::MqttFactorData {
     }
 
     #[instrument(name = "spin_outbound_mqtt.publish", skip(accessor, connection, payload), err(level = Level::INFO),
-        fields(otel.kind = "producer", otel.name = format!("{} publish", topic), messaging.operation = "publish",
-        messaging.system = "mqtt"))]
+        fields(
+            otel.kind = "producer",
+            otel.name = "publish",
+            messaging.operation = "publish",
+            messaging.system = "mqtt",
+            messaging.destination.name = topic,
+        ))]
     async fn publish<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -236,8 +241,13 @@ impl v2::HostConnection for InstanceState {
     /// current trace context into the payload yourself.
     /// https://w3c.github.io/trace-context-mqtt/#mqtt-v3-recommendation.
     #[instrument(name = "spin_outbound_mqtt.publish", skip(self, connection, payload), err(level = Level::INFO),
-        fields(otel.kind = "producer", otel.name = format!("{} publish", topic), messaging.operation = "publish",
-        messaging.system = "mqtt"))]
+        fields(
+            otel.kind = "producer",
+            otel.name = "publish",
+            messaging.operation = "publish",
+            messaging.system = "mqtt",
+            messaging.destination.name = topic,
+        ))]
     async fn publish(
         &mut self,
         connection: Resource<v2::Connection>,
