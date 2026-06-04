@@ -234,9 +234,9 @@ impl crate::RedisFactorData {
     }
 }
 
-impl v3::HostConnectionWithStore for crate::RedisFactorData {
+impl<T> v3::HostConnectionWithStore<T> for crate::RedisFactorData {
     #[instrument(name = "spin_outbound_redis.open_connection", skip(accessor, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", db.address = Empty, server.port = Empty, db.namespace = Empty))]
-    async fn open<T: Send>(
+    async fn open(
         accessor: &Accessor<T, Self>,
         address: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
@@ -281,7 +281,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.publish", skip(accessor, connection, payload), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("PUBLISH {}", channel)))]
-    async fn publish<T: Send>(
+    async fn publish(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         channel: String,
@@ -292,7 +292,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.get", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("GET {}", key)))]
-    async fn get<T: Send>(
+    async fn get(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         key: String,
@@ -302,7 +302,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.set", skip(accessor, connection, value), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("SET {}", key)))]
-    async fn set<T: Send>(
+    async fn set(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         key: String,
@@ -313,7 +313,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.incr", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("INCRBY {} 1", key)))]
-    async fn incr<T: Send>(
+    async fn incr(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         key: String,
@@ -323,7 +323,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.del", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("DEL {}", keys.join(" "))))]
-    async fn del<T: Send>(
+    async fn del(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         keys: Vec<String>,
@@ -333,7 +333,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.sadd", skip(accessor, connection, values), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("SADD {} {}", key, values.join(" "))))]
-    async fn sadd<T: Send>(
+    async fn sadd(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         key: String,
@@ -344,7 +344,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.smembers", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("SMEMBERS {}", key)))]
-    async fn smembers<T: Send>(
+    async fn smembers(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         key: String,
@@ -354,7 +354,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.srem", skip(accessor, connection, values), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("SREM {} {}", key, values.join(" "))))]
-    async fn srem<T: Send>(
+    async fn srem(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         key: String,
@@ -365,7 +365,7 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.execute", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", db.system = "redis", otel.name = format!("{}", command)))]
-    async fn execute<T: Send>(
+    async fn execute(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         command: String,

@@ -149,8 +149,8 @@ impl v3::HostConnection for InstanceState {
     }
 }
 
-impl v3::HostConnectionWithStore for crate::SqliteFactorData {
-    async fn open_async<T>(
+impl<T> v3::HostConnectionWithStore<T> for crate::SqliteFactorData {
+    async fn open_async(
         accessor: &Accessor<T, Self>,
         database: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
@@ -183,7 +183,7 @@ impl v3::HostConnectionWithStore for crate::SqliteFactorData {
         })
     }
 
-    async fn execute_async<T>(
+    async fn execute_async(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         query: String,
@@ -226,7 +226,7 @@ impl v3::HostConnectionWithStore for crate::SqliteFactorData {
         Ok((columns, sr, efr))
     }
 
-    async fn changes_async<T>(
+    async fn changes_async(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
     ) -> anyhow::Result<u64> {
@@ -246,7 +246,7 @@ impl v3::HostConnectionWithStore for crate::SqliteFactorData {
         conn.changes().await.map_err(|e| e.into())
     }
 
-    async fn last_insert_rowid_async<T>(
+    async fn last_insert_rowid_async(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
     ) -> anyhow::Result<i64> {

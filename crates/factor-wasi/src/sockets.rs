@@ -20,7 +20,7 @@ use wasmtime_wasi::p2::bindings::sockets::tcp_create_socket as p2_tcp_create;
 use wasmtime_wasi::p2::bindings::sockets::udp as p2_udp;
 use wasmtime_wasi::p2::bindings::sockets::udp_create_socket as p2_udp_create;
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
-use wasmtime_wasi::sockets::{TcpSocket, UdpSocket, WasiSocketsCtxView};
+use wasmtime_wasi::sockets::{TcpSocket, UdpSocket, WasiSockets, WasiSocketsCtxView};
 
 /// Shared state for tracking per-socket semaphore permits. Permits are
 /// acquired when a socket is allocated (at `start_connect` for TCP, at
@@ -67,6 +67,13 @@ pub struct SpinSockets;
 
 impl HasData for SpinSockets {
     type Data<'a> = SpinSocketsView<'a>;
+}
+
+impl<'a> SpinSocketsView<'a> {
+    /// Consumes this view and returns the inner [`WasiSocketsCtxView`].
+    pub fn into_wasi(self) -> WasiSocketsCtxView<'a> {
+        self.inner
+    }
 }
 
 impl SpinSocketsView<'_> {
@@ -534,5 +541,385 @@ impl p2_udp_create::Host for SpinSocketsView<'_> {
         let sock = p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family)?;
         self.register_permit(sock.rep(), permit);
         Ok(sock)
+    }
+}
+
+// ===== p3 impls =====
+
+use wasmtime::AsContextMut as _;
+use wasmtime::component::{Access, Accessor};
+use wasmtime_wasi::p3::bindings::sockets::types::{
+    self as p3_types, Duration as p3_Duration, ErrorCode as p3_ErrorCode, Host as p3_Host,
+    HostTcpSocket as p3_HostTcpSocket, HostTcpSocketWithStore, HostUdpSocket as p3_HostUdpSocket,
+    HostUdpSocketWithStore, IpAddressFamily as p3_IpAddressFamily,
+    IpSocketAddress as p3_IpSocketAddress,
+};
+use wasmtime_wasi::p3::sockets::SocketResult as P3SocketResult;
+use wasmtime_wasi::sockets::WasiSocketsView;
+
+impl p3_Host for SpinSocketsView<'_> {
+    fn convert_error_code(
+        &mut self,
+        error: wasmtime_wasi::p3::sockets::SocketError,
+    ) -> wasmtime::Result<p3_ErrorCode> {
+        p3_Host::convert_error_code(&mut self.inner, error)
+    }
+}
+
+impl p3_HostTcpSocket for SpinSocketsView<'_> {
+    async fn bind(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        local_address: p3_IpSocketAddress,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::bind(&mut self.inner, socket, local_address).await
+    }
+
+    fn create(
+        &mut self,
+        address_family: p3_IpAddressFamily,
+    ) -> P3SocketResult<Resource<p3_types::TcpSocket>> {
+        p3_HostTcpSocket::create(&mut self.inner, address_family)
+    }
+
+    fn get_local_address(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<p3_IpSocketAddress> {
+        p3_HostTcpSocket::get_local_address(&mut self.inner, socket)
+    }
+
+    fn get_remote_address(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<p3_IpSocketAddress> {
+        p3_HostTcpSocket::get_remote_address(&mut self.inner, socket)
+    }
+
+    fn get_is_listening(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> wasmtime::Result<bool> {
+        p3_HostTcpSocket::get_is_listening(&mut self.inner, socket)
+    }
+
+    fn get_address_family(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> wasmtime::Result<p3_IpAddressFamily> {
+        p3_HostTcpSocket::get_address_family(&mut self.inner, socket)
+    }
+
+    fn set_listen_backlog_size(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        value: u64,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::set_listen_backlog_size(&mut self.inner, socket, value)
+    }
+
+    fn get_keep_alive_enabled(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<bool> {
+        p3_HostTcpSocket::get_keep_alive_enabled(&mut self.inner, socket)
+    }
+
+    fn set_keep_alive_enabled(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        value: bool,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::set_keep_alive_enabled(&mut self.inner, socket, value)
+    }
+
+    fn get_keep_alive_idle_time(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<p3_Duration> {
+        p3_HostTcpSocket::get_keep_alive_idle_time(&mut self.inner, socket)
+    }
+
+    fn set_keep_alive_idle_time(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        value: p3_Duration,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::set_keep_alive_idle_time(&mut self.inner, socket, value)
+    }
+
+    fn get_keep_alive_interval(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<p3_Duration> {
+        p3_HostTcpSocket::get_keep_alive_interval(&mut self.inner, socket)
+    }
+
+    fn set_keep_alive_interval(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        value: p3_Duration,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::set_keep_alive_interval(&mut self.inner, socket, value)
+    }
+
+    fn get_keep_alive_count(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<u32> {
+        p3_HostTcpSocket::get_keep_alive_count(&mut self.inner, socket)
+    }
+
+    fn set_keep_alive_count(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        value: u32,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::set_keep_alive_count(&mut self.inner, socket, value)
+    }
+
+    fn get_hop_limit(&mut self, socket: Resource<p3_types::TcpSocket>) -> P3SocketResult<u8> {
+        p3_HostTcpSocket::get_hop_limit(&mut self.inner, socket)
+    }
+
+    fn set_hop_limit(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        value: u8,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::set_hop_limit(&mut self.inner, socket, value)
+    }
+
+    fn get_receive_buffer_size(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<u64> {
+        p3_HostTcpSocket::get_receive_buffer_size(&mut self.inner, socket)
+    }
+
+    fn set_receive_buffer_size(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        value: u64,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::set_receive_buffer_size(&mut self.inner, socket, value)
+    }
+
+    fn get_send_buffer_size(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<u64> {
+        p3_HostTcpSocket::get_send_buffer_size(&mut self.inner, socket)
+    }
+
+    fn set_send_buffer_size(
+        &mut self,
+        socket: Resource<p3_types::TcpSocket>,
+        value: u64,
+    ) -> P3SocketResult<()> {
+        p3_HostTcpSocket::set_send_buffer_size(&mut self.inner, socket, value)
+    }
+
+    fn drop(&mut self, sock: Resource<p3_types::TcpSocket>) -> wasmtime::Result<()> {
+        self.release_permit(sock.rep());
+        p3_HostTcpSocket::drop(&mut self.inner, sock)
+    }
+}
+
+impl p3_HostUdpSocket for SpinSocketsView<'_> {
+    async fn bind(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+        local_address: p3_IpSocketAddress,
+    ) -> P3SocketResult<()> {
+        p3_HostUdpSocket::bind(&mut self.inner, socket, local_address).await
+    }
+
+    async fn connect(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+        remote_address: p3_IpSocketAddress,
+    ) -> P3SocketResult<()> {
+        p3_HostUdpSocket::connect(&mut self.inner, socket, remote_address).await
+    }
+
+    fn create(
+        &mut self,
+        address_family: p3_IpAddressFamily,
+    ) -> P3SocketResult<Resource<p3_types::UdpSocket>> {
+        // Check quota before allocating the socket resource.
+        // See the analogous comment in `start_connect` for why we fail
+        // immediately rather than waiting (as outbound HTTP does).
+        let Ok(permit) = self.try_acquire() else {
+            tracing::warn!("UDP socket creation refused: connection quota exhausted");
+            return Err(p3_ErrorCode::Other(Some("connection quota exhausted".into())).into());
+        };
+        let sock = p3_HostUdpSocket::create(&mut self.inner, address_family)?;
+        self.register_permit(sock.rep(), permit);
+        Ok(sock)
+    }
+
+    fn disconnect(&mut self, socket: Resource<p3_types::UdpSocket>) -> P3SocketResult<()> {
+        p3_HostUdpSocket::disconnect(&mut self.inner, socket)
+    }
+
+    fn get_local_address(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+    ) -> P3SocketResult<p3_IpSocketAddress> {
+        p3_HostUdpSocket::get_local_address(&mut self.inner, socket)
+    }
+
+    fn get_remote_address(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+    ) -> P3SocketResult<p3_IpSocketAddress> {
+        p3_HostUdpSocket::get_remote_address(&mut self.inner, socket)
+    }
+
+    fn get_address_family(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+    ) -> wasmtime::Result<p3_IpAddressFamily> {
+        p3_HostUdpSocket::get_address_family(&mut self.inner, socket)
+    }
+
+    fn get_unicast_hop_limit(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+    ) -> P3SocketResult<u8> {
+        p3_HostUdpSocket::get_unicast_hop_limit(&mut self.inner, socket)
+    }
+
+    fn set_unicast_hop_limit(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+        value: u8,
+    ) -> P3SocketResult<()> {
+        p3_HostUdpSocket::set_unicast_hop_limit(&mut self.inner, socket, value)
+    }
+
+    fn get_receive_buffer_size(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+    ) -> P3SocketResult<u64> {
+        p3_HostUdpSocket::get_receive_buffer_size(&mut self.inner, socket)
+    }
+
+    fn set_receive_buffer_size(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+        value: u64,
+    ) -> P3SocketResult<()> {
+        p3_HostUdpSocket::set_receive_buffer_size(&mut self.inner, socket, value)
+    }
+
+    fn get_send_buffer_size(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+    ) -> P3SocketResult<u64> {
+        p3_HostUdpSocket::get_send_buffer_size(&mut self.inner, socket)
+    }
+
+    fn set_send_buffer_size(
+        &mut self,
+        socket: Resource<p3_types::UdpSocket>,
+        value: u64,
+    ) -> P3SocketResult<()> {
+        p3_HostUdpSocket::set_send_buffer_size(&mut self.inner, socket, value)
+    }
+
+    fn drop(&mut self, sock: Resource<p3_types::UdpSocket>) -> wasmtime::Result<()> {
+        self.release_permit(sock.rep());
+        p3_HostUdpSocket::drop(&mut self.inner, sock)
+    }
+}
+
+impl<T: WasiSocketsView + 'static> HostTcpSocketWithStore<T> for SpinSockets {
+    async fn connect(
+        store: &Accessor<T, Self>,
+        socket: Resource<p3_types::TcpSocket>,
+        remote_address: p3_IpSocketAddress,
+    ) -> P3SocketResult<()> {
+        let socket_rep = socket.rep();
+        // Unlike outbound HTTP (which queues when its permit pool is exhausted),
+        // sockets fail immediately. See p2 `start_connect` for rationale.
+        let permit = match store.with(|mut access| access.get().try_acquire()) {
+            Ok(p) => p,
+            Err(()) => {
+                tracing::warn!("TCP socket connection refused: connection quota exhausted");
+                return Err(p3_ErrorCode::Other(Some("connection quota exhausted".into())).into());
+            }
+        };
+        let wasi_accessor = store.with_getter::<WasiSockets>(<T as WasiSocketsView>::sockets);
+        let result: P3SocketResult<()> = <WasiSockets as HostTcpSocketWithStore<T>>::connect(
+            &wasi_accessor,
+            socket,
+            remote_address,
+        )
+        .await;
+        if result.is_ok() {
+            store.with(|mut access| {
+                access.get().register_permit(socket_rep, permit);
+            });
+        }
+        result
+    }
+
+    fn listen(
+        mut store: Access<'_, T, Self>,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> P3SocketResult<wasmtime::component::StreamReader<Resource<p3_types::TcpSocket>>> {
+        let wasi_store =
+            Access::<T, WasiSockets>::new(store.as_context_mut(), <T as WasiSocketsView>::sockets);
+        <WasiSockets as HostTcpSocketWithStore<T>>::listen(wasi_store, socket)
+    }
+
+    fn send(
+        mut store: Access<'_, T, Self>,
+        socket: Resource<p3_types::TcpSocket>,
+        data: wasmtime::component::StreamReader<u8>,
+    ) -> wasmtime::Result<wasmtime::component::FutureReader<Result<(), p3_ErrorCode>>> {
+        let wasi_store =
+            Access::<T, WasiSockets>::new(store.as_context_mut(), <T as WasiSocketsView>::sockets);
+        <WasiSockets as HostTcpSocketWithStore<T>>::send(wasi_store, socket, data)
+    }
+
+    fn receive(
+        mut store: Access<'_, T, Self>,
+        socket: Resource<p3_types::TcpSocket>,
+    ) -> wasmtime::Result<(
+        wasmtime::component::StreamReader<u8>,
+        wasmtime::component::FutureReader<Result<(), p3_ErrorCode>>,
+    )> {
+        let wasi_store =
+            Access::<T, WasiSockets>::new(store.as_context_mut(), <T as WasiSocketsView>::sockets);
+        <WasiSockets as HostTcpSocketWithStore<T>>::receive(wasi_store, socket)
+    }
+}
+
+impl<T: WasiSocketsView + 'static> HostUdpSocketWithStore<T> for SpinSockets {
+    async fn send(
+        store: &Accessor<T, Self>,
+        socket: Resource<p3_types::UdpSocket>,
+        data: Vec<u8>,
+        remote_address: Option<p3_IpSocketAddress>,
+    ) -> P3SocketResult<()> {
+        let wasi_accessor = store.with_getter::<WasiSockets>(<T as WasiSocketsView>::sockets);
+        <WasiSockets as HostUdpSocketWithStore<T>>::send(
+            &wasi_accessor,
+            socket,
+            data,
+            remote_address,
+        )
+        .await
+    }
+
+    async fn receive(
+        store: &Accessor<T, Self>,
+        socket: Resource<p3_types::UdpSocket>,
+    ) -> P3SocketResult<(Vec<u8>, p3_IpSocketAddress)> {
+        let wasi_accessor = store.with_getter::<WasiSockets>(<T as WasiSocketsView>::sockets);
+        <WasiSockets as HostUdpSocketWithStore<T>>::receive(&wasi_accessor, socket).await
     }
 }

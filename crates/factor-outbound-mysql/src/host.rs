@@ -93,9 +93,9 @@ type QueryTuple = (
     FutureReader<Result<(), v3::Error>>,
 );
 
-impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
+impl<C: Client, T> v3::HostConnectionWithStore<T> for MysqlFactorData<C> {
     #[instrument(name = "spin_outbound_mysql.open", skip(accessor, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
-    async fn open<T>(
+    async fn open(
         accessor: &Accessor<T, Self>,
         address: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
@@ -114,7 +114,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
     }
 
     #[instrument(name = "spin_outbound_mysql.execute", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", otel.name = statement))]
-    async fn execute<T>(
+    async fn execute(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         statement: String,
@@ -136,7 +136,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
     }
 
     #[instrument(name = "spin_outbound_mysql.query", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", otel.name = statement))]
-    async fn query<T>(
+    async fn query(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         statement: String,

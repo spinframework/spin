@@ -1,21 +1,21 @@
 use super::{Context, TestConfig};
 use anyhow::{Result, ensure};
 use rand_chacha::ChaCha12Core;
-use rand_core::{
-    SeedableRng,
-    block::{BlockRng, BlockRngCore},
-};
+use rand_core::{SeedableRng, TryRng, block::BlockRng};
 use serde::Serialize;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
 use std::{
     collections::HashSet,
     fs::File,
     io::Write,
     ops::Deref,
     time::{Duration, SystemTime},
+};
+use std::{
+    convert::Infallible,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 use wasmtime::{Engine, component::InstancePre};
 use wasmtime_wasi::{
@@ -150,26 +150,38 @@ pub(crate) async fn test(
         random: {
             #[derive(Clone)]
             struct MyRngCore {
-                cha_cha_12: ChaCha12Core,
+                cha_cha_12: BlockRng<ChaCha12Core>,
                 called: Arc<AtomicBool>,
             }
 
-            impl BlockRngCore for MyRngCore {
-                type Item = <ChaCha12Core as BlockRngCore>::Item;
-                type Results = <ChaCha12Core as BlockRngCore>::Results;
+            impl TryRng for MyRngCore {
+                type Error = Infallible;
 
-                fn generate(&mut self, results: &mut Self::Results) {
+                #[inline]
+                fn try_next_u32(&mut self) -> Result<u32, Infallible> {
                     self.called.store(true, Ordering::Relaxed);
-                    self.cha_cha_12.generate(results)
+                    Ok(self.cha_cha_12.next_word())
+                }
+
+                #[inline]
+                fn try_next_u64(&mut self) -> Result<u64, Infallible> {
+                    self.called.store(true, Ordering::Relaxed);
+                    Ok(self.cha_cha_12.next_u64_from_u32())
+                }
+
+                #[inline]
+                fn try_fill_bytes(&mut self, bytes: &mut [u8]) -> Result<(), Infallible> {
+                    self.called.store(true, Ordering::Relaxed);
+                    Ok(self.cha_cha_12.fill_bytes(bytes))
                 }
             }
 
             let called = Arc::new(AtomicBool::default());
             let mut store = super::create_store_with_wasi(engine, test_config.clone(), |wasi| {
-                wasi.insecure_random(Box::new(BlockRng::new(MyRngCore {
-                    cha_cha_12: ChaCha12Core::seed_from_u64(42),
+                wasi.insecure_random(MyRngCore {
+                    cha_cha_12: BlockRng::new(ChaCha12Core::seed_from_u64(42)),
                     called: called.clone(),
-                })));
+                });
             });
 
             super::run_command(&mut store, pre, &["wasi-random"], move |_| {
