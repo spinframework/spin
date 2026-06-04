@@ -2,12 +2,15 @@ use std::{
     collections::HashMap,
     future::Future,
     io::{ErrorKind, IsTerminal},
+    marker::PhantomData,
     net::SocketAddr,
+    pin::Pin,
     sync::{Arc, OnceLock},
-    time::Duration,
+    task::{Context, Poll},
+    time::{Duration, Instant},
 };
 
-use anyhow::{Context, bail};
+use anyhow::{Context as _, bail};
 use http::{
     Request, Response, StatusCode, Uri,
     uri::{Authority, Scheme},
@@ -21,7 +24,8 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
 };
-use rand::Rng;
+use pin_project_lite::pin_project;
+use rand::RngExt;
 use spin_app::{APP_DESCRIPTION_KEY, APP_NAME_KEY};
 use spin_factor_outbound_http::{OutboundHttpFactor, SelfRequestOrigin};
 use spin_factors::RuntimeFactors;
@@ -39,10 +43,14 @@ use tokio::{
     task,
 };
 use tracing::Instrument;
-use wasmtime::ToWasmtimeResult;
+use wasmtime::{Store, StoreContextMut, ToWasmtimeResult, component::GuestTaskId};
 use wasmtime_wasi::p2::bindings::CommandIndices;
-use wasmtime_wasi_http::handler::{HandlerState, StoreBundle};
+use wasmtime_wasi_http::handler::{
+    HandlerState, Instance, Proxy, ShouldAccept, ViewFn, WorkerExpiration, WorkerState,
+    WorkerStatus,
+};
 use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
+use wasmtime_wasi_http::p3::bindings::Service;
 
 use crate::{
     Body, InstanceReuseConfig, NotFoundRouteKind, OutputFormat, TlsConfig, TriggerApp,
@@ -419,7 +427,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                         .execute(instance_builder, &route_match, req, client_addr)
                         .await
                 }
-                HandlerType::Wasi0_3(_, handler) => {
+                HandlerType::Wasi0_3(handler) => {
                     Wasip3HttpExecutor(handler)
                         .execute(&route_match, req, client_addr)
                         .await
@@ -699,6 +707,83 @@ pub(crate) trait HttpExecutor {
     ) -> impl Future<Output = anyhow::Result<Response<Body>>>;
 }
 
+pin_project! {
+    pub(crate) struct HttpWorkerExpiration {
+        idle_timeout: Duration,
+        request_timeout: Duration,
+        #[pin]
+        sleep: tokio::time::Sleep,
+    }
+}
+
+impl WorkerExpiration for HttpWorkerExpiration {
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        status: WorkerStatus,
+        start: Instant,
+    ) -> Poll<()> {
+        let mut me = self.project();
+
+        let timeout = match status {
+            WorkerStatus::Idle => *me.idle_timeout,
+            // TODO: add a dedicated `post_return_timeout` config setting
+            // instead of reusing `request_timeout` for
+            // `WorkerStatus::PostReturn` here
+            WorkerStatus::Requests | WorkerStatus::PostReturn => *me.request_timeout,
+        };
+
+        if let Some(deadline) = start.checked_add(timeout) {
+            let deadline = deadline.into();
+            if deadline != me.sleep.deadline() {
+                me.sleep.as_mut().reset(deadline);
+            }
+            me.sleep.poll(cx)
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+pub(crate) struct HttpWorkerState<F: RuntimeFactors> {
+    request_timeout: Duration,
+    max_instance_reuse_count: usize,
+    max_instance_concurrent_reuse_count: usize,
+    _phantom: PhantomData<F>,
+}
+
+impl<F: RuntimeFactors> WorkerState for HttpWorkerState<F> {
+    type StoreData = InstanceState<F::InstanceState, ()>;
+    type RequestId = ();
+
+    fn should_accept_request(&self, concurrent_count: usize, total_count: usize) -> ShouldAccept {
+        if total_count >= self.max_instance_reuse_count {
+            ShouldAccept::Never
+        } else if concurrent_count >= self.max_instance_concurrent_reuse_count {
+            ShouldAccept::No
+        } else {
+            ShouldAccept::Yes
+        }
+    }
+
+    fn on_request_start(
+        &self,
+        _: StoreContextMut<'_, Self::StoreData>,
+        _: Self::RequestId,
+        _: GuestTaskId,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>> {
+        Box::pin(tokio::time::sleep(self.request_timeout))
+    }
+
+    fn drop(&self, store: Store<Self::StoreData>, result: Result<(), wasmtime::Error>) {
+        if let Err(error) = result {
+            eprintln!("worker failed: {error:?}");
+        }
+
+        drop(store);
+    }
+}
+
 pub(crate) struct HttpHandlerState<F: RuntimeFactors> {
     trigger_app: Arc<TriggerApp<F>>,
     component_id: String,
@@ -707,40 +792,53 @@ pub(crate) struct HttpHandlerState<F: RuntimeFactors> {
 
 impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
     type StoreData = InstanceState<F::InstanceState, ()>;
+    type WorkerExpiration = HttpWorkerExpiration;
+    type WorkerState = HttpWorkerState<F>;
 
-    fn new_store(&self, _req_id: Option<u64>) -> wasmtime::Result<StoreBundle<Self::StoreData>> {
-        Ok(StoreBundle {
-            store: self
-                .trigger_app
-                .prepare(&self.component_id)
-                .to_wasmtime_result()?
-                .instantiate_store(())
-                .to_wasmtime_result()?
-                .into_inner(),
-            write_profile: Box::new(|_| ()),
-        })
-    }
+    async fn instantiate(
+        &self,
+    ) -> wasmtime::Result<Instance<Self::StoreData, Self::WorkerExpiration, Self::WorkerState>>
+    {
+        let (instance, store) = self
+            .trigger_app
+            .prepare(&self.component_id)
+            .to_wasmtime_result()?
+            .instantiate(())
+            .await
+            .to_wasmtime_result()?;
 
-    fn request_timeout(&self) -> Duration {
-        self.reuse_config
+        let mut store = store.into_inner();
+
+        let proxy = Proxy::P3(Service::new(&mut store, &instance).unwrap());
+
+        let request_timeout = self
+            .reuse_config
             .request_timeout
             .map(|range| rand::rng().random_range(range))
-            .unwrap_or(Duration::MAX)
-    }
+            .unwrap_or(Duration::MAX);
 
-    fn idle_instance_timeout(&self) -> Duration {
-        rand::rng().random_range(self.reuse_config.idle_instance_timeout)
-    }
-
-    fn max_instance_reuse_count(&self) -> usize {
-        rand::rng().random_range(self.reuse_config.max_instance_reuse_count)
-    }
-
-    fn max_instance_concurrent_reuse_count(&self) -> usize {
-        rand::rng().random_range(self.reuse_config.max_instance_concurrent_reuse_count)
-    }
-
-    fn handle_worker_error(&self, error: wasmtime::Error) {
-        tracing::warn!("worker error: {error:?}")
+        Ok(Instance {
+            store,
+            proxy,
+            view: ViewFn::P3(|data| {
+                spin_factor_outbound_http::OutboundHttpFactor::get_wasi_p3_http_impl(
+                    data.factors_instance_state_mut(),
+                )
+                .unwrap()
+            }),
+            expiration: HttpWorkerExpiration {
+                idle_timeout: rand::rng().random_range(self.reuse_config.idle_instance_timeout),
+                request_timeout,
+                sleep: tokio::time::sleep(Duration::MAX),
+            },
+            state: HttpWorkerState {
+                request_timeout,
+                max_instance_reuse_count: rand::rng()
+                    .random_range(self.reuse_config.max_instance_reuse_count),
+                max_instance_concurrent_reuse_count: rand::rng()
+                    .random_range(self.reuse_config.max_instance_concurrent_reuse_count),
+                _phantom: PhantomData,
+            },
+        })
     }
 }

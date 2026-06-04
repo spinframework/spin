@@ -24,8 +24,8 @@ use std::{
 use anyhow::{Context, bail};
 use clap::Args;
 use rand::{
-    RngCore,
     distr::uniform::{SampleRange, SampleUniform},
+    rand_core::Rng,
 };
 use serde::Deserialize;
 use spin_app::App;
@@ -168,10 +168,7 @@ impl<T> Range<T> {
 }
 
 impl<T: SampleUniform + PartialOrd> SampleRange<T> for Range<T> {
-    fn sample_single<R: RngCore + ?Sized>(
-        self,
-        rng: &mut R,
-    ) -> Result<T, rand::distr::uniform::Error> {
+    fn sample_single<R: Rng + ?Sized>(self, rng: &mut R) -> Result<T, rand::distr::uniform::Error> {
         match self {
             Self::Value(v) => Ok(v),
             Self::Bounds(a, b) => (a..b).sample_single(rng),

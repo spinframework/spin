@@ -8,9 +8,9 @@ use tracing::instrument;
 
 use crate::{InstanceState, VariablesFactorData};
 
-impl v3::HostWithStore for VariablesFactorData {
+impl<T: Send> v3::HostWithStore<T> for VariablesFactorData {
     #[instrument(name = "spin_variables.get", skip(accessor), fields(otel.kind = "client"))]
-    async fn get<T: Send>(accessor: &Accessor<T, Self>, key: String) -> Result<String, v3::Error> {
+    async fn get(accessor: &Accessor<T, Self>, key: String) -> Result<String, v3::Error> {
         let (resolver, component_id) = accessor.with(|mut access| {
             let host = access.get();
             host.otel.reparent_tracing_span();

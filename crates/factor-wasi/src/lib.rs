@@ -59,9 +59,10 @@ impl WasiFactor {
         })
     }
 
-    pub fn get_sockets_impl(
+    pub fn get_sockets_impl<T>(
         runtime_instance_state: &mut impl RuntimeFactorsInstanceState,
-    ) -> Option<SpinSocketsView<'_>> {
+        getter: fn(&mut T) -> WasiSocketsCtxView<'_>,
+    ) -> Option<SpinSocketsView<'_, T>> {
         let (state, table) = runtime_instance_state.get_with_table::<WasiFactor>()?;
         Some(SpinSocketsView {
             inner: WasiSocketsCtxView {
@@ -69,6 +70,7 @@ impl WasiFactor {
                 table,
             },
             permit_state: state.socket_permit_state.clone(),
+            getter,
         })
     }
 }
@@ -124,17 +126,6 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker(self.linker(), Self::get_cli)
     }
 
-    fn link_cli_default_bindings<O: Default>(
-        &mut self,
-        add_to_linker: fn(
-            &mut wasmtime::component::Linker<Self::StoreData>,
-            &O,
-            fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
-        ) -> wasmtime::Result<()>,
-    ) -> wasmtime::Result<()> {
-        add_to_linker(self.linker(), &O::default(), Self::get_cli)
-    }
-
     fn get_filesystem(data: &mut Self::StoreData) -> WasiFilesystemCtxView<'_> {
         let (state, table) = Self::get_data_with_table(data);
         WasiFilesystemCtxView {
@@ -182,7 +173,7 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker(self.linker(), &O::default(), Self::get_sockets)
     }
 
-    fn get_spin_sockets(data: &mut Self::StoreData) -> SpinSocketsView<'_> {
+    fn get_spin_sockets(data: &mut Self::StoreData) -> SpinSocketsView<'_, Self::StoreData> {
         let (state, table) = Self::get_data_with_table(data);
         SpinSocketsView {
             inner: WasiSocketsCtxView {
@@ -190,6 +181,15 @@ trait InitContextExt: InitContext<WasiFactor> {
                 table,
             },
             permit_state: state.socket_permit_state.clone(),
+            getter: Self::get_wasi_sockets,
+        }
+    }
+
+    fn get_wasi_sockets(data: &mut Self::StoreData) -> WasiSocketsCtxView<'_> {
+        let (state, table) = Self::get_data_with_table(data);
+        WasiSocketsCtxView {
+            ctx: state.ctx.sockets(),
+            table,
         }
     }
 
@@ -197,7 +197,7 @@ trait InitContextExt: InitContext<WasiFactor> {
         &mut self,
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
-            fn(&mut Self::StoreData) -> SpinSocketsView<'_>,
+            fn(&mut Self::StoreData) -> SpinSocketsView<'_, Self::StoreData>,
         ) -> wasmtime::Result<()>,
     ) -> wasmtime::Result<()> {
         add_to_linker(self.linker(), Self::get_spin_sockets)
@@ -235,7 +235,7 @@ trait InitContextExt: InitContext<WasiFactor> {
             fn(&mut Self::StoreData) -> WasiClocksCtxView<'_>,
             fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
             fn(&mut Self::StoreData) -> WasiFilesystemCtxView<'_>,
-            fn(&mut Self::StoreData) -> SpinSocketsView<'_>,
+            fn(&mut Self::StoreData) -> SpinSocketsView<'_, Self::StoreData>,
         ) -> anyhow::Result<()>,
     ) -> anyhow::Result<()> {
         add_to_linker(
@@ -263,7 +263,7 @@ impl Factor for WasiFactor {
     type AppState = ();
     type InstanceBuilder = InstanceBuilder;
 
-    fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
+    fn init<T: InitContext<Self>>(&mut self, ctx: &mut T) -> anyhow::Result<()> {
         use wasmtime_wasi::{p2, p3};
 
         ctx.link_clocks_bindings(p2::bindings::clocks::wall_clock::add_to_linker::<_, WasiClocks>)?;
@@ -301,8 +301,8 @@ impl Factor for WasiFactor {
         ctx.link_random_bindings(
             p3::bindings::random::insecure_seed::add_to_linker::<_, WasiRandom>,
         )?;
-        ctx.link_cli_default_bindings(p2::bindings::cli::exit::add_to_linker::<_, WasiCli>)?;
-        ctx.link_cli_default_bindings(p3::bindings::cli::exit::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p2::bindings::cli::exit::add_to_linker::<_, WasiCli>)?;
+        ctx.link_cli_bindings(p3::bindings::cli::exit::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p2::bindings::cli::environment::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p3::bindings::cli::environment::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p2::bindings::cli::stdin::add_to_linker::<_, WasiCli>)?;
@@ -322,16 +322,16 @@ impl Factor for WasiFactor {
         ctx.link_cli_bindings(p2::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
         ctx.link_cli_bindings(p3::bindings::cli::terminal_stderr::add_to_linker::<_, WasiCli>)?;
         ctx.link_spin_sockets_bindings(
-            p2::bindings::sockets::tcp::add_to_linker::<_, SpinSockets>,
+            p2::bindings::sockets::tcp::add_to_linker::<_, SpinSockets<T::StoreData>>,
         )?;
         ctx.link_spin_sockets_bindings(
-            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, SpinSockets>,
+            p2::bindings::sockets::tcp_create_socket::add_to_linker::<_, SpinSockets<T::StoreData>>,
         )?;
         ctx.link_spin_sockets_bindings(
-            p2::bindings::sockets::udp::add_to_linker::<_, SpinSockets>,
+            p2::bindings::sockets::udp::add_to_linker::<_, SpinSockets<T::StoreData>>,
         )?;
         ctx.link_spin_sockets_bindings(
-            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, SpinSockets>,
+            p2::bindings::sockets::udp_create_socket::add_to_linker::<_, SpinSockets<T::StoreData>>,
         )?;
         ctx.link_sockets_bindings(
             p2::bindings::sockets::instance_network::add_to_linker::<_, WasiSockets>,
@@ -345,8 +345,9 @@ impl Factor for WasiFactor {
         ctx.link_sockets_bindings(
             p3::bindings::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>,
         )?;
-        // TODO(rylev): switch to SpinSockets once possible
-        ctx.link_sockets_bindings(p3::bindings::sockets::types::add_to_linker::<_, WasiSockets>)?;
+        ctx.link_spin_sockets_bindings(
+            p3::bindings::sockets::types::add_to_linker::<_, SpinSockets<T::StoreData>>,
+        )?;
 
         ctx.link_all_bindings(wasi_2023_10_18::add_to_linker)?;
         ctx.link_all_bindings(wasi_2023_11_10::add_to_linker)?;
@@ -542,4 +543,10 @@ impl InstanceBuilder {
 pub struct InstanceState {
     ctx: WasiCtx,
     socket_permit_state: Option<Arc<SocketPermitState>>,
+}
+
+impl InstanceState {
+    pub fn ctx(&mut self) -> &mut WasiCtx {
+        &mut self.ctx
+    }
 }

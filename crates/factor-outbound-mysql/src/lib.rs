@@ -32,7 +32,7 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
     type AppState = AppState;
     type InstanceBuilder = InstanceState<C>;
 
-    fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
+    fn init<T: InitContext<Self>>(&mut self, ctx: &mut T) -> anyhow::Result<()> {
         ctx.link_bindings(v1::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(v2::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(v3::add_to_linker::<_, MysqlFactorData<C>>)?;

@@ -248,8 +248,8 @@ impl v3::HostStore for KeyValueDispatch {
     }
 }
 
-impl v3::HostStoreWithStore for crate::KeyValueFactorData {
-    async fn open<T>(
+impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
+    async fn open(
         accessor: &Accessor<T, Self>,
         label: String,
     ) -> Result<Resource<v3::Store>, v3::Error> {
@@ -275,7 +275,7 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
         })
     }
 
-    async fn get<T>(
+    async fn get(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
         key: String,
@@ -294,7 +294,7 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
             .map_err(track_error_on_span_v3)
     }
 
-    async fn set<T>(
+    async fn set(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
         key: String,
@@ -314,7 +314,7 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
             .map_err(track_error_on_span_v3)
     }
 
-    async fn delete<T>(
+    async fn delete(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
         key: String,
@@ -333,7 +333,7 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
             .map_err(track_error_on_span_v3)
     }
 
-    async fn exists<T>(
+    async fn exists(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
         key: String,
@@ -352,7 +352,7 @@ impl v3::HostStoreWithStore for crate::KeyValueFactorData {
             .map_err(track_error_on_span_v3)
     }
 
-    async fn get_keys<T>(
+    async fn get_keys(
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
     ) -> Result<(StreamReader<String>, FutureReader<Result<(), v3::Error>>)> {

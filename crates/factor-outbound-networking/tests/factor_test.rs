@@ -17,7 +17,7 @@ use wasmtime_wasi::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily};
 use wasmtime_wasi::p2::bindings::sockets::tcp as p2_tcp;
 use wasmtime_wasi::p2::bindings::sockets::tcp_create_socket as p2_tcp_create;
 use wasmtime_wasi::p2::bindings::sockets::udp_create_socket as p2_udp_create;
-use wasmtime_wasi::sockets::SocketAddrUse;
+use wasmtime_wasi::sockets::{SocketAddrUse, WasiSocketsCtxView};
 
 struct MockMqttClient;
 
@@ -53,11 +53,27 @@ struct TestFactorsWithMqtt {
     mqtt: OutboundMqttFactor,
 }
 
+fn get_sockets_view_with_mqtt(
+    state: &mut TestFactorsWithMqttInstanceState,
+) -> WasiSocketsCtxView<'_> {
+    WasiSocketsCtxView {
+        ctx: state.wasi.ctx().sockets(),
+        table: &mut state.__table,
+    }
+}
+
 #[derive(RuntimeFactors)]
 struct TestFactors {
     wasi: WasiFactor,
     variables: VariablesFactor,
     networking: OutboundNetworkingFactor,
+}
+
+fn get_sockets_view(state: &mut TestFactorsInstanceState) -> WasiSocketsCtxView<'_> {
+    WasiSocketsCtxView {
+        ctx: state.wasi.ctx().sockets(),
+        table: &mut state.__table,
+    }
 }
 
 #[tokio::test]
@@ -81,7 +97,7 @@ async fn configures_wasi_socket_addr_check() -> anyhow::Result<()> {
             ..Default::default()
         })?;
     let mut state = env.build_instance_state().await?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
 
     let network_resource = sockets.instance_network()?;
     let network = sockets.table.get(&network_resource)?;
@@ -150,7 +166,7 @@ async fn socket_quota_blocks_excess_connections() -> anyhow::Result<()> {
         })?;
 
     let mut state = env.build_instance_state().await?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
     let addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
 
     // First two connections should be accepted (non-blocking connect initiated)
@@ -215,7 +231,7 @@ async fn socket_quota_releases_on_instance_drop() -> anyhow::Result<()> {
     {
         let builders = factors.prepare(&configured_app, &component_id)?;
         let mut state = factors.build_instance_state(builders)?;
-        let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+        let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
         let net = sockets.instance_network()?;
         let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
         p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into()).await?;
@@ -225,7 +241,7 @@ async fn socket_quota_releases_on_instance_drop() -> anyhow::Result<()> {
     // Second instance: quota should be fully available again
     let builders = factors.prepare(&configured_app, &component_id)?;
     let mut state = factors.build_instance_state(builders)?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
     let net = sockets.instance_network()?;
     let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
     p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into()).await?;
@@ -246,7 +262,7 @@ async fn no_socket_quota_allows_unlimited() -> anyhow::Result<()> {
     });
 
     let mut state = env.build_instance_state().await?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
     let addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
 
     for _ in 0..10 {
@@ -279,7 +295,7 @@ async fn socket_quota_still_enforces_allowed_hosts() -> anyhow::Result<()> {
         })?;
 
     let mut state = env.build_instance_state().await?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
 
     // Allowed host succeeds
     let net = sockets.instance_network()?;
@@ -321,7 +337,7 @@ async fn socket_quota_releases_on_socket_drop() -> anyhow::Result<()> {
         })?;
 
     let mut state = env.build_instance_state().await?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
     let addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
 
     // Acquire the only permit via start_connect. Save the rep so we can reconstruct
@@ -375,7 +391,7 @@ async fn socket_quota_blocks_excess_udp_sockets() -> anyhow::Result<()> {
         })?;
 
     let mut state = env.build_instance_state().await?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
 
     // First two UDP socket creations should succeed.
     p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
@@ -410,7 +426,7 @@ async fn socket_quota_shared_between_tcp_and_udp() -> anyhow::Result<()> {
         })?;
 
     let mut state = env.build_instance_state().await?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
     let addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
 
     // Consume one permit with a TCP connection.
@@ -476,7 +492,7 @@ async fn global_connection_limit_enforced_across_factors() -> anyhow::Result<()>
         .await?;
 
     // With the global permit held by MQTT, a TCP socket start_connect must fail immediately.
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view_with_mqtt).unwrap();
     let addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
     let net = sockets.instance_network()?;
     let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
@@ -494,7 +510,7 @@ async fn global_connection_limit_enforced_across_factors() -> anyhow::Result<()>
     state.mqtt.drop(conn).await?;
 
     // Now the TCP socket start_connect must succeed.
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state).unwrap();
+    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view_with_mqtt).unwrap();
     let net = sockets.instance_network()?;
     let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
     p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into())

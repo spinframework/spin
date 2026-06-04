@@ -3,15 +3,13 @@ use std::{
     future::Future,
     io::IoSlice,
     net::SocketAddr,
-    ops::DerefMut,
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::Arc,
     task::{self, Context, Poll},
     time::Duration,
 };
 
 use bytes::{Buf, Bytes};
-use futures::channel::oneshot;
 use http::{
     HeaderMap, Uri,
     header::{CONTENT_LENGTH, HOST},
@@ -64,67 +62,6 @@ use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(600);
 
-pub struct MutexBody<T>(Mutex<T>);
-
-impl<T> MutexBody<T> {
-    pub fn new(body: T) -> Self {
-        Self(Mutex::new(body))
-    }
-}
-
-impl<T: Body + Unpin> Body for MutexBody<T> {
-    type Data = T::Data;
-    type Error = T::Error;
-
-    fn poll_frame(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        Pin::new(self.0.lock().unwrap().deref_mut()).poll_frame(cx)
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.0.lock().unwrap().is_end_stream()
-    }
-
-    fn size_hint(&self) -> SizeHint {
-        self.0.lock().unwrap().size_hint()
-    }
-}
-
-/// Body which, when dropped, will notify the receiver corresponding to the
-/// specified sender.
-pub struct NotifyOnDropBody<B> {
-    body: B,
-    _tx: oneshot::Sender<()>,
-}
-
-impl<B> NotifyOnDropBody<B> {
-    pub fn new(body: B, tx: oneshot::Sender<()>) -> Self {
-        Self { body, _tx: tx }
-    }
-}
-
-impl<B: Body + Unpin> Body for NotifyOnDropBody<B> {
-    type Data = B::Data;
-    type Error = B::Error;
-
-    fn poll_frame(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        Pin::new(&mut self.body).poll_frame(cx)
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.body.is_end_stream()
-    }
-
-    fn size_hint(&self) -> SizeHint {
-        self.body.size_hint()
-    }
-}
-
 pub(crate) struct HasHttp;
 
 impl HasData for HasHttp {
@@ -175,8 +112,6 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
         // connection).
         _ = fut;
 
-        let request = request.map(|body| MutexBody::new(body).boxed());
-
         let request_sender = RequestSender {
             allowed_hosts: self.allowed_hosts.clone(),
             component_tls_configs: self.component_tls_configs.clone(),
@@ -202,7 +137,7 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
             async {
                 match request_sender
                     .send(
-                        request.map(|body| body.map_err(p3_to_p2_error_code).boxed_unsync()),
+                        request.map(|body| body.map_err(p2_types::ErrorCode::from).boxed_unsync()),
                         config,
                     )
                     .await
@@ -231,7 +166,7 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
                     )),
                     Err(http_error) => match http_error.downcast() {
                         Ok(error_code) => {
-                            Err(TrappableError::from(p2_to_p3_error_code(error_code)))
+                            Err(TrappableError::from(p3_types::ErrorCode::from(error_code)))
                         }
                         Err(trap) => Err(TrappableError::trap(trap)),
                     },
@@ -299,7 +234,7 @@ impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutB
                     }
                 }
 
-                Poll::Ready(value.map(|v| v.map_err(p2_to_p3_error_code)))
+                Poll::Ready(value.map(|v| v.map_err(p3_types::ErrorCode::from)))
             }
             Poll::Pending => {
                 if me.sleep.is_none() {
@@ -984,210 +919,6 @@ fn dns_error(rcode: String, info_code: u16) -> ErrorCode {
             info_code: Some(info_code),
         },
     )
-}
-
-// TODO: Remove this (and uses of it) once
-// https://github.com/spinframework/spin/issues/3274 has been addressed.
-pub fn p2_to_p3_error_code(code: p2_types::ErrorCode) -> p3_types::ErrorCode {
-    match code {
-        p2_types::ErrorCode::DnsTimeout => p3_types::ErrorCode::DnsTimeout,
-        p2_types::ErrorCode::DnsError(payload) => {
-            p3_types::ErrorCode::DnsError(p3_types::DnsErrorPayload {
-                rcode: payload.rcode,
-                info_code: payload.info_code,
-            })
-        }
-        p2_types::ErrorCode::DestinationNotFound => p3_types::ErrorCode::DestinationNotFound,
-        p2_types::ErrorCode::DestinationUnavailable => p3_types::ErrorCode::DestinationUnavailable,
-        p2_types::ErrorCode::DestinationIpProhibited => {
-            p3_types::ErrorCode::DestinationIpProhibited
-        }
-        p2_types::ErrorCode::DestinationIpUnroutable => {
-            p3_types::ErrorCode::DestinationIpUnroutable
-        }
-        p2_types::ErrorCode::ConnectionRefused => p3_types::ErrorCode::ConnectionRefused,
-        p2_types::ErrorCode::ConnectionTerminated => p3_types::ErrorCode::ConnectionTerminated,
-        p2_types::ErrorCode::ConnectionTimeout => p3_types::ErrorCode::ConnectionTimeout,
-        p2_types::ErrorCode::ConnectionReadTimeout => p3_types::ErrorCode::ConnectionReadTimeout,
-        p2_types::ErrorCode::ConnectionWriteTimeout => p3_types::ErrorCode::ConnectionWriteTimeout,
-        p2_types::ErrorCode::ConnectionLimitReached => p3_types::ErrorCode::ConnectionLimitReached,
-        p2_types::ErrorCode::TlsProtocolError => p3_types::ErrorCode::TlsProtocolError,
-        p2_types::ErrorCode::TlsCertificateError => p3_types::ErrorCode::TlsCertificateError,
-        p2_types::ErrorCode::TlsAlertReceived(payload) => {
-            p3_types::ErrorCode::TlsAlertReceived(p3_types::TlsAlertReceivedPayload {
-                alert_id: payload.alert_id,
-                alert_message: payload.alert_message,
-            })
-        }
-        p2_types::ErrorCode::HttpRequestDenied => p3_types::ErrorCode::HttpRequestDenied,
-        p2_types::ErrorCode::HttpRequestLengthRequired => {
-            p3_types::ErrorCode::HttpRequestLengthRequired
-        }
-        p2_types::ErrorCode::HttpRequestBodySize(payload) => {
-            p3_types::ErrorCode::HttpRequestBodySize(payload)
-        }
-        p2_types::ErrorCode::HttpRequestMethodInvalid => {
-            p3_types::ErrorCode::HttpRequestMethodInvalid
-        }
-        p2_types::ErrorCode::HttpRequestUriInvalid => p3_types::ErrorCode::HttpRequestUriInvalid,
-        p2_types::ErrorCode::HttpRequestUriTooLong => p3_types::ErrorCode::HttpRequestUriTooLong,
-        p2_types::ErrorCode::HttpRequestHeaderSectionSize(payload) => {
-            p3_types::ErrorCode::HttpRequestHeaderSectionSize(payload)
-        }
-        p2_types::ErrorCode::HttpRequestHeaderSize(payload) => {
-            p3_types::ErrorCode::HttpRequestHeaderSize(payload.map(|payload| {
-                p3_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                }
-            }))
-        }
-        p2_types::ErrorCode::HttpRequestTrailerSectionSize(payload) => {
-            p3_types::ErrorCode::HttpRequestTrailerSectionSize(payload)
-        }
-        p2_types::ErrorCode::HttpRequestTrailerSize(payload) => {
-            p3_types::ErrorCode::HttpRequestTrailerSize(p3_types::FieldSizePayload {
-                field_name: payload.field_name,
-                field_size: payload.field_size,
-            })
-        }
-        p2_types::ErrorCode::HttpResponseIncomplete => p3_types::ErrorCode::HttpResponseIncomplete,
-        p2_types::ErrorCode::HttpResponseHeaderSectionSize(payload) => {
-            p3_types::ErrorCode::HttpResponseHeaderSectionSize(payload)
-        }
-        p2_types::ErrorCode::HttpResponseHeaderSize(payload) => {
-            p3_types::ErrorCode::HttpResponseHeaderSize(p3_types::FieldSizePayload {
-                field_name: payload.field_name,
-                field_size: payload.field_size,
-            })
-        }
-        p2_types::ErrorCode::HttpResponseBodySize(payload) => {
-            p3_types::ErrorCode::HttpResponseBodySize(payload)
-        }
-        p2_types::ErrorCode::HttpResponseTrailerSectionSize(payload) => {
-            p3_types::ErrorCode::HttpResponseTrailerSectionSize(payload)
-        }
-        p2_types::ErrorCode::HttpResponseTrailerSize(payload) => {
-            p3_types::ErrorCode::HttpResponseTrailerSize(p3_types::FieldSizePayload {
-                field_name: payload.field_name,
-                field_size: payload.field_size,
-            })
-        }
-        p2_types::ErrorCode::HttpResponseTransferCoding(payload) => {
-            p3_types::ErrorCode::HttpResponseTransferCoding(payload)
-        }
-        p2_types::ErrorCode::HttpResponseContentCoding(payload) => {
-            p3_types::ErrorCode::HttpResponseContentCoding(payload)
-        }
-        p2_types::ErrorCode::HttpResponseTimeout => p3_types::ErrorCode::HttpResponseTimeout,
-        p2_types::ErrorCode::HttpUpgradeFailed => p3_types::ErrorCode::HttpUpgradeFailed,
-        p2_types::ErrorCode::HttpProtocolError => p3_types::ErrorCode::HttpProtocolError,
-        p2_types::ErrorCode::LoopDetected => p3_types::ErrorCode::LoopDetected,
-        p2_types::ErrorCode::ConfigurationError => p3_types::ErrorCode::ConfigurationError,
-        p2_types::ErrorCode::InternalError(payload) => p3_types::ErrorCode::InternalError(payload),
-    }
-}
-
-// TODO: Remove this (and uses of it) once
-// https://github.com/spinframework/spin/issues/3274 has been addressed.
-pub fn p3_to_p2_error_code(code: p3_types::ErrorCode) -> p2_types::ErrorCode {
-    match code {
-        p3_types::ErrorCode::DnsTimeout => p2_types::ErrorCode::DnsTimeout,
-        p3_types::ErrorCode::DnsError(payload) => {
-            p2_types::ErrorCode::DnsError(p2_types::DnsErrorPayload {
-                rcode: payload.rcode,
-                info_code: payload.info_code,
-            })
-        }
-        p3_types::ErrorCode::DestinationNotFound => p2_types::ErrorCode::DestinationNotFound,
-        p3_types::ErrorCode::DestinationUnavailable => p2_types::ErrorCode::DestinationUnavailable,
-        p3_types::ErrorCode::DestinationIpProhibited => {
-            p2_types::ErrorCode::DestinationIpProhibited
-        }
-        p3_types::ErrorCode::DestinationIpUnroutable => {
-            p2_types::ErrorCode::DestinationIpUnroutable
-        }
-        p3_types::ErrorCode::ConnectionRefused => p2_types::ErrorCode::ConnectionRefused,
-        p3_types::ErrorCode::ConnectionTerminated => p2_types::ErrorCode::ConnectionTerminated,
-        p3_types::ErrorCode::ConnectionTimeout => p2_types::ErrorCode::ConnectionTimeout,
-        p3_types::ErrorCode::ConnectionReadTimeout => p2_types::ErrorCode::ConnectionReadTimeout,
-        p3_types::ErrorCode::ConnectionWriteTimeout => p2_types::ErrorCode::ConnectionWriteTimeout,
-        p3_types::ErrorCode::ConnectionLimitReached => p2_types::ErrorCode::ConnectionLimitReached,
-        p3_types::ErrorCode::TlsProtocolError => p2_types::ErrorCode::TlsProtocolError,
-        p3_types::ErrorCode::TlsCertificateError => p2_types::ErrorCode::TlsCertificateError,
-        p3_types::ErrorCode::TlsAlertReceived(payload) => {
-            p2_types::ErrorCode::TlsAlertReceived(p2_types::TlsAlertReceivedPayload {
-                alert_id: payload.alert_id,
-                alert_message: payload.alert_message,
-            })
-        }
-        p3_types::ErrorCode::HttpRequestDenied => p2_types::ErrorCode::HttpRequestDenied,
-        p3_types::ErrorCode::HttpRequestLengthRequired => {
-            p2_types::ErrorCode::HttpRequestLengthRequired
-        }
-        p3_types::ErrorCode::HttpRequestBodySize(payload) => {
-            p2_types::ErrorCode::HttpRequestBodySize(payload)
-        }
-        p3_types::ErrorCode::HttpRequestMethodInvalid => {
-            p2_types::ErrorCode::HttpRequestMethodInvalid
-        }
-        p3_types::ErrorCode::HttpRequestUriInvalid => p2_types::ErrorCode::HttpRequestUriInvalid,
-        p3_types::ErrorCode::HttpRequestUriTooLong => p2_types::ErrorCode::HttpRequestUriTooLong,
-        p3_types::ErrorCode::HttpRequestHeaderSectionSize(payload) => {
-            p2_types::ErrorCode::HttpRequestHeaderSectionSize(payload)
-        }
-        p3_types::ErrorCode::HttpRequestHeaderSize(payload) => {
-            p2_types::ErrorCode::HttpRequestHeaderSize(payload.map(|payload| {
-                p2_types::FieldSizePayload {
-                    field_name: payload.field_name,
-                    field_size: payload.field_size,
-                }
-            }))
-        }
-        p3_types::ErrorCode::HttpRequestTrailerSectionSize(payload) => {
-            p2_types::ErrorCode::HttpRequestTrailerSectionSize(payload)
-        }
-        p3_types::ErrorCode::HttpRequestTrailerSize(payload) => {
-            p2_types::ErrorCode::HttpRequestTrailerSize(p2_types::FieldSizePayload {
-                field_name: payload.field_name,
-                field_size: payload.field_size,
-            })
-        }
-        p3_types::ErrorCode::HttpResponseIncomplete => p2_types::ErrorCode::HttpResponseIncomplete,
-        p3_types::ErrorCode::HttpResponseHeaderSectionSize(payload) => {
-            p2_types::ErrorCode::HttpResponseHeaderSectionSize(payload)
-        }
-        p3_types::ErrorCode::HttpResponseHeaderSize(payload) => {
-            p2_types::ErrorCode::HttpResponseHeaderSize(p2_types::FieldSizePayload {
-                field_name: payload.field_name,
-                field_size: payload.field_size,
-            })
-        }
-        p3_types::ErrorCode::HttpResponseBodySize(payload) => {
-            p2_types::ErrorCode::HttpResponseBodySize(payload)
-        }
-        p3_types::ErrorCode::HttpResponseTrailerSectionSize(payload) => {
-            p2_types::ErrorCode::HttpResponseTrailerSectionSize(payload)
-        }
-        p3_types::ErrorCode::HttpResponseTrailerSize(payload) => {
-            p2_types::ErrorCode::HttpResponseTrailerSize(p2_types::FieldSizePayload {
-                field_name: payload.field_name,
-                field_size: payload.field_size,
-            })
-        }
-        p3_types::ErrorCode::HttpResponseTransferCoding(payload) => {
-            p2_types::ErrorCode::HttpResponseTransferCoding(payload)
-        }
-        p3_types::ErrorCode::HttpResponseContentCoding(payload) => {
-            p2_types::ErrorCode::HttpResponseContentCoding(payload)
-        }
-        p3_types::ErrorCode::HttpResponseTimeout => p2_types::ErrorCode::HttpResponseTimeout,
-        p3_types::ErrorCode::HttpUpgradeFailed => p2_types::ErrorCode::HttpUpgradeFailed,
-        p3_types::ErrorCode::HttpProtocolError => p2_types::ErrorCode::HttpProtocolError,
-        p3_types::ErrorCode::LoopDetected => p2_types::ErrorCode::LoopDetected,
-        p3_types::ErrorCode::ConfigurationError => p2_types::ErrorCode::ConfigurationError,
-        p3_types::ErrorCode::InternalError(payload) => p2_types::ErrorCode::InternalError(payload),
-    }
 }
 
 fn record_content_length_header(span: &Span, headers: &HeaderMap, attr_name: &'static str) {

@@ -6,7 +6,7 @@ use candle_transformers::{
     generation::{LogitsProcessor, Sampling},
     models::llama::{self, Cache, Config, Llama, LlamaConfig},
 };
-use rand::{RngCore, SeedableRng};
+use rand::{SeedableRng, rand_core::Rng};
 use spin_core::async_trait;
 use spin_world::v2::llm::{self as wasi_llm, InferencingUsage};
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
@@ -100,7 +100,7 @@ impl InferencingModel for LlamaModels {
             .map_err(|e| anyhow!(e.to_string()))?
             .get_ids()
             .to_vec();
-        let mut rng = rand::rngs::StdRng::from_os_rng();
+        let mut rng = rand::rngs::StdRng::try_from_rng(&mut rand::rngs::SysRng).unwrap();
 
         let mut logits_processor = {
             let temperature = params.temperature;

@@ -21,8 +21,8 @@ wit-parser = { workspace = true }
 async-trait = { workspace = true }
 cap-std = "3"
 rand = { workspace = true }
-rand_chacha = "0.3"
-rand_core = "0.6"
+rand_chacha = "0.10.0"
+rand_core = "0.10.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
