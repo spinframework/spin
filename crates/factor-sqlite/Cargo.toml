@@ -15,6 +15,7 @@ spin-factor-otel = { path = "../factor-otel" }
 spin-factors = { path = "../factors" }
 spin-locked-app = { path = "../locked-app" }
 spin-resource-table = { path = "../table" }
+spin-telemetry = { path = "../telemetry" }
 spin-wasi-async = { path = "../wasi-async" }
 spin-world = { path = "../world" }
 tokio = { workspace = true }

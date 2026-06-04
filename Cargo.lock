@@ -9137,6 +9137,7 @@ dependencies = [
  "spin-factors-test",
  "spin-locked-app",
  "spin-resource-table",
+ "spin-telemetry",
  "spin-wasi-async",
  "spin-world",
  "tokio",

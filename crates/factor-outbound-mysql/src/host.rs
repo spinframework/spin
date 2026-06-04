@@ -159,14 +159,16 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
 impl<C: Client> v2::Host for InstanceState<C> {}
 
 impl<C: Client> v2::HostConnection for InstanceState<C> {
-    #[instrument(name = "spin_outbound_mysql.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
+    #[instrument(name = "spin_outbound_mysql.open", skip(self, address), err(level = Level::INFO),
+        fields(otel.kind = "client", db.system = "mysql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
         let mut state = self.0.lock().await;
         state.otel.reparent_tracing_span();
         state.open_connection(&address).await.map(Resource::new_own)
     }
 
-    #[instrument(name = "spin_outbound_mysql.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_mysql.execute", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", db.system = "mysql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn execute(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -184,7 +186,8 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
             .map_err(track_db_error_on_span)
     }
 
-    #[instrument(name = "spin_outbound_mysql.query", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_mysql.query", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", db.system = "mysql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
     async fn query(
         &mut self,
         connection: Resource<v2::Connection>,
