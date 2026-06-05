@@ -701,7 +701,7 @@ impl Client {
         username: impl AsRef<str>,
         password: impl AsRef<str>,
     ) -> Result<()> {
-        let client = dkregistry::v2::Client::configure()
+        let client = docker_registry::v2::Client::configure()
             .registry(server.as_ref())
             .insecure_registry(false)
             .username(Some(username.as_ref().into()))
