@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use azure_core::credentials::{Secret, TokenCredential};
+use azure_core::credentials::Secret;
 use azure_data_cosmos::query::FeedScope;
 use azure_data_cosmos::{AccountReference, PatchInstructions, PatchOperation};
 use azure_data_cosmos::{
@@ -13,6 +13,8 @@ use spin_factor_key_value::{
     Cas, Error, Store, StoreManager, SwapError, log_error, log_error_v3, v3,
 };
 use std::sync::{Arc, Mutex};
+
+use crate::auth::KeyValueAzureCosmosAuthOptions;
 
 pub struct KeyValueAzureCosmos {
     /// Parameters for initializing the Cosmos DB client
@@ -30,30 +32,6 @@ pub struct KeyValueAzureCosmos {
     /// partition key of `/$app_id/$store_name`, otherwise there will be one container
     /// per store, and the partition key will be `/id`.
     app_id: Option<String>,
-}
-
-/// Azure Cosmos Key / Value runtime config literal options for authentication
-#[derive(Clone, Debug)]
-pub struct KeyValueAzureCosmosRuntimeConfigOptions {
-    key: String,
-}
-
-impl KeyValueAzureCosmosRuntimeConfigOptions {
-    pub fn new(key: String) -> Self {
-        Self { key }
-    }
-}
-
-/// Azure Cosmos Key / Value enumeration for the possible authentication options
-#[derive(Clone, Debug)]
-pub enum KeyValueAzureCosmosAuthOptions {
-    /// Runtime Config values indicates the account and key have been specified directly
-    RuntimeConfigValues(KeyValueAzureCosmosRuntimeConfigOptions),
-    /// Uses DeveloperToolsCredential when the runtime config omits `key`.
-    ///
-    /// Athenticated via developer tools only: Azure CLI (`az login`),
-    /// then Azure Developer CLI (`azd auth login`).
-    DeveloperTools,
 }
 
 impl KeyValueAzureCosmos {
@@ -91,9 +69,8 @@ async fn build_cosmos_client(
         KeyValueAzureCosmosAuthOptions::RuntimeConfigValues(config) => {
             AccountReference::with_authentication_key(endpoint, Secret::from(config.key.clone()))
         }
-        KeyValueAzureCosmosAuthOptions::DeveloperTools => {
-            let credential: Arc<dyn TokenCredential> =
-                azure_identity::DeveloperToolsCredential::new(None).map_err(log_error)?;
+        KeyValueAzureCosmosAuthOptions::AadCredential(kind) => {
+            let credential = kind.credential().map_err(log_error)?;
             AccountReference::with_credential(endpoint, credential)
         }
     };
