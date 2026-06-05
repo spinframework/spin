@@ -1,5 +1,6 @@
 mod store;
 
+use azure_data_cosmos::Region;
 use serde::Deserialize;
 use spin_factor_key_value::runtime_config::spin::MakeKeyValueStore;
 
@@ -32,8 +33,15 @@ pub struct AzureCosmosKeyValueRuntimeConfig {
     /// The Azure Cosmos DB database.
     database: String,
     /// The Azure Cosmos DB container where data is stored.
-    /// The CosmosDB container must be created with the default partition key, /id
+    /// The CosmosDB container must be created with the default partition
+    /// key path, /id
     container: String,
+
+    /// Optional. The Azure region the spin application is running in (or the
+    /// closest Azure region to it), used as the proximity-sorting anchor
+    /// for the Azure SDK's region selection. When omitted, defaults to
+    /// East US.
+    region: Option<String>,
 }
 
 impl MakeKeyValueStore for AzureKeyValueStore {
@@ -51,13 +59,18 @@ impl MakeKeyValueStore for AzureKeyValueStore {
             Some(key) => KeyValueAzureCosmosAuthOptions::RuntimeConfigValues(
                 KeyValueAzureCosmosRuntimeConfigOptions::new(key),
             ),
-            None => KeyValueAzureCosmosAuthOptions::Environmental,
+            None => KeyValueAzureCosmosAuthOptions::DeveloperTools,
         };
+        let region = runtime_config
+            .region
+            .map(Region::from)
+            .unwrap_or(Region::EAST_US);
         KeyValueAzureCosmos::new(
             runtime_config.account,
             runtime_config.database,
             runtime_config.container,
             auth_options,
+            region,
             self.app_id.clone(),
         )
     }
