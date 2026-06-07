@@ -132,20 +132,18 @@ struct AzureCosmosStore {
 #[async_trait]
 impl Store for AzureCosmosStore {
     async fn get(&self, key: &str, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
-        let value = self
-            .query_one::<Pair>(self.get_query(key))
-            .await?
-            .map(|p| p.value);
+        let partition_key = partition_key(self.store_id.as_deref(), key);
+        let value = match self.client.read_item(partition_key, key, None).await {
+            Ok(response) => Some(response.into_model::<Pair>().map_err(log_error)?.value),
+            Err(e) if e.status().is_not_found() => None,
+            Err(e) => return Err(log_error(e)),
+        };
 
-        // Currently there's no way to stream a single query result using the
-        // `azure_data_cosmos` crate without buffering, so the damage (in terms
-        // of host memory usage) is already done, but we can still enforce the
-        // limit:
-        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(Vec::len).unwrap_or(0)
             > max_result_bytes
         {
             Err(Error::Other(format!(
-                "query result exceeds limit of {max_result_bytes} bytes"
+                "read result exceeds limit of {max_result_bytes} bytes"
             )))
         } else {
             Ok(value)
@@ -187,10 +185,16 @@ impl Store for AzureCosmosStore {
     }
 
     async fn exists(&self, key: &str) -> Result<bool, Error> {
-        Ok(self
-            .query_one::<Key>(self.get_id_query(key))
-            .await?
-            .is_some())
+        let mut stream = self
+            .client
+            .query_items::<Key>(
+                Query::from(self.get_id_query(key)),
+                FeedScope::partition(partition_key(self.store_id.as_deref(), key)),
+                None,
+            )
+            .await
+            .map_err(log_error)?;
+        Ok(stream.try_next().await.map_err(log_error)?.is_some())
     }
 
     async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
@@ -437,24 +441,6 @@ impl Cas for CompareAndSwap {
 }
 
 impl AzureCosmosStore {
-    async fn query_one<T>(&self, query: String) -> Result<Option<T>, Error>
-    where
-        T: serde::de::DeserializeOwned + Send + 'static,
-    {
-        let mut stream = self
-            .client
-            .query_items(Query::from(query), FeedScope::full_container(), None)
-            .await
-            .map_err(log_error)?;
-        stream.try_next().await.map_err(log_error)
-    }
-
-    fn get_query(&self, key: &str) -> String {
-        let mut query = format!("SELECT * FROM c WHERE c.id='{key}'");
-        append_store_id_condition(&mut query, self.store_id.as_deref(), true);
-        query
-    }
-
     fn get_id_query(&self, key: &str) -> String {
         let mut query = format!("SELECT c.id, c.store_id FROM c WHERE c.id='{key}'");
         append_store_id_condition(&mut query, self.store_id.as_deref(), true);
