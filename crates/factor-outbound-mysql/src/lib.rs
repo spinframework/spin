@@ -8,8 +8,11 @@ use spin_factor_outbound_networking::{
     OutboundNetworkingFactor, config::allowed_hosts::OutboundAllowedHosts,
 };
 use spin_factors::{Factor, FactorData, InitContext, RuntimeFactors, SelfInstanceBuilder};
+use spin_world::spin::mysql::mysql as v3;
 use spin_world::v1::mysql as v1;
-use spin_world::v2::mysql::{self as v2};
+use spin_world::v2::mysql as v2;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct OutboundMysqlFactor<C = MysqlClient> {
     _phantom: std::marker::PhantomData<C>,
@@ -23,6 +26,7 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
     fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
         ctx.link_bindings(v1::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(v2::add_to_linker::<_, FactorData<Self>>)?;
+        ctx.link_bindings(v3::add_to_linker::<_, MysqlFactorData<C>>)?;
         Ok(())
     }
 
@@ -42,11 +46,11 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
             .allowed_hosts();
         let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
 
-        Ok(InstanceState {
+        Ok(InstanceState(Arc::new(Mutex::new(InstanceStateInner {
             allowed_hosts,
             connections: Default::default(),
             otel,
-        })
+        }))))
     }
 }
 
@@ -64,10 +68,22 @@ impl<C> OutboundMysqlFactor<C> {
     }
 }
 
-pub struct InstanceState<C> {
+pub struct InstanceStateInner<C> {
     allowed_hosts: OutboundAllowedHosts,
-    connections: spin_resource_table::Table<C>,
+    connections: spin_resource_table::Table<Arc<Mutex<C>>>,
     otel: OtelFactorState,
 }
 
+pub struct InstanceState<C>(Arc<Mutex<InstanceStateInner<C>>>);
+
 impl<C: Send + 'static> SelfInstanceBuilder for InstanceState<C> {}
+
+pub struct MysqlFactorData<C: Client>(OutboundMysqlFactor<C>);
+
+impl<C: Client> spin_core::wasmtime::component::HasData for MysqlFactorData<C> {
+    type Data<'a> = &'a mut InstanceState<C>;
+}
+
+impl<C: Client> spin_core::wasmtime::component::HasData for InstanceState<C> {
+    type Data<'a> = &'a mut InstanceState<C>;
+}

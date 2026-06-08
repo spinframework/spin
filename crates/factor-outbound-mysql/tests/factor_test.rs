@@ -6,9 +6,12 @@ use spin_factor_variables::VariablesFactor;
 use spin_factors::{RuntimeFactors, anyhow};
 use spin_factors_test::{TestEnvironment, toml};
 use spin_world::async_trait;
+use spin_world::spin::mysql::mysql as v3;
 use spin_world::v2::mysql::HostConnection;
 use spin_world::v2::mysql::{self as v2};
 use spin_world::v2::rdbms_types::{ParameterValue, RowSet};
+use std::sync::Arc;
+use tokio::sync::{Mutex, mpsc, oneshot};
 
 #[derive(RuntimeFactors)]
 struct TestFactors {
@@ -132,5 +135,24 @@ impl Client for MockClient {
             columns: vec![],
             rows: vec![],
         })
+    }
+
+    async fn query_async(
+        _client: Arc<Mutex<Self>>,
+        _statement: String,
+        _params: Vec<v3::ParameterValue>,
+        _max_result_bytes: usize,
+    ) -> Result<
+        (
+            Vec<v3::Column>,
+            mpsc::Receiver<v3::Row>,
+            oneshot::Receiver<Result<(), v3::Error>>,
+        ),
+        v3::Error,
+    > {
+        let (_, rows_rx) = mpsc::channel(4);
+        let (err_tx, err_rx) = oneshot::channel();
+        _ = err_tx.send(Ok(()));
+        Ok((Vec::new(), rows_rx, err_rx))
     }
 }

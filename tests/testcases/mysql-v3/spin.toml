@@ -1,0 +1,19 @@
+spin_manifest_version = 2
+
+[application]
+authors = ["Spin Framework Contributors"]
+description = "An application that tests outbound MySQL support."
+name = "spin-mysql-v3"
+version = "1.0.0"
+
+[[trigger.http]]
+route = "/..."
+component = "mysql"
+
+[component.mysql]
+source = "%{source=mysql-v3}"
+allowed_outbound_hosts = ["mysql://localhost:%{port=3306}"]
+environment = { DB_URL = "mysql://spin:spin@localhost:%{port=3306}/spin_dev" }
+[component.mysql.build]
+command = "cargo build --target wasm32-wasip1 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]

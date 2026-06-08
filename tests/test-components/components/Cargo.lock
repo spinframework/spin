@@ -783,6 +783,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mysql-v3"
+version = "0.1.0"
+dependencies = [
+ "helper",
+ "wit-bindgen 0.54.0",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
