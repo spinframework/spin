@@ -1,5 +1,4 @@
 mod allowed_hosts;
-pub mod connection_semaphore;
 pub mod runtime_config;
 mod tls;
 
@@ -21,7 +20,7 @@ use crate::{
     allowed_hosts::allowed_outbound_hosts, runtime_config::RuntimeConfig, tls::TlsClientConfigs,
 };
 pub use allowed_hosts::validate_service_chaining_for_components;
-pub use connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
+pub use spin_connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
 
 pub use crate::tls::{ComponentTlsClientConfigs, TlsClientConfig};
 use config::allowed_hosts::AllowedHostsConfig;
