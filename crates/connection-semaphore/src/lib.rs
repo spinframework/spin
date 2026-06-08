@@ -60,6 +60,16 @@ impl ConnectionSemaphore {
     /// If `wait_timeout` is configured and the permits cannot be acquired within
     /// that duration, an error is returned.
     pub async fn acquire(&self) -> anyhow::Result<ConnectionPermit> {
+        // Fast path: all required permits are already available
+        if let Ok(permit) = self.try_acquire_permits() {
+            spin_telemetry::monotonic_counter!(
+                outbound_connection_permits_acquired = 1,
+                kind = self.factor,
+                waited = false
+            );
+            return Ok(permit);
+        }
+
         match self.wait_timeout {
             Some(timeout) => time::timeout(timeout, self.acquire_inner())
                 .await
@@ -293,8 +303,8 @@ mod tests {
         handle.await.expect("task should complete");
     }
 
-    /// Verifies that when factor-specific is exhausted, acquire() releases
-    /// the global permit while waiting — so other connection types aren't blocked.
+    /// Verifies that when factor-specific is exhausted, acquire() doesn't hold
+    /// a global permit while waiting — so other connection types aren't blocked.
     #[tokio::test]
     async fn acquire_releases_global_while_waiting_for_factor() {
         let global = Arc::new(Semaphore::new(1));
