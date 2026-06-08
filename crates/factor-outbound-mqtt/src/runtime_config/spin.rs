@@ -21,6 +21,7 @@ pub fn config_from_table(
         Ok(Some(super::RuntimeConfig {
             max_payload_size_bytes: toml.max_payload_size_bytes,
             max_connections: toml.max_connections,
+            wait_timeout: None,
         }))
     } else {
         Ok(None)

@@ -15,6 +15,7 @@ pub fn config_from_table(
         let toml = outbound_pg.clone().try_into::<OutboundPgToml>()?;
         Ok(Some(super::RuntimeConfig {
             max_connections: toml.max_connections,
+            wait_timeout: None,
         }))
     } else {
         Ok(None)

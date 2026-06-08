@@ -73,6 +73,7 @@ impl Factor for OutboundNetworkingFactor {
             block_private_networks,
             max_socket_connections,
             max_total_connections,
+            wait_timeout,
         } = ctx.take_runtime_config().unwrap_or_default();
 
         let blocked_networks = BlockedNetworks::new(block_networks, block_private_networks);
@@ -97,6 +98,7 @@ impl Factor for OutboundNetworkingFactor {
                     global_connection_semaphore.clone(),
                     max_socket_connections,
                     "wasi-sockets",
+                    wait_timeout,
                 ))
             } else {
                 None
@@ -243,6 +245,7 @@ pub fn build_connection_semaphore(
     networking: Option<&AppState>,
     factor: &'static str,
     factor_limit: Option<usize>,
+    wait_timeout: Option<std::time::Duration>,
 ) -> ConnectionSemaphore {
     if let (Some(per_factor), Some(global_limit)) = (
         factor_limit,
@@ -259,6 +262,7 @@ pub fn build_connection_semaphore(
         networking.and_then(|n| n.global_connection_semaphore.clone()),
         factor_limit,
         factor,
+        wait_timeout,
     )
 }
 

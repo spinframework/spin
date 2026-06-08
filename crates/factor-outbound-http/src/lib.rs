@@ -64,6 +64,7 @@ impl Factor for OutboundHttpFactor {
                 ctx.app_state::<OutboundNetworkingFactor>().ok(),
                 "http",
                 config.max_concurrent_connections,
+                config.wait_timeout,
             ),
         })
     }

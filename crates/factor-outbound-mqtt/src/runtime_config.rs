@@ -14,4 +14,6 @@ pub struct RuntimeConfig {
     /// When `None` (the default), no limit is enforced. Operators in multi-tenant deployments
     /// should set this to prevent tenants from exhausting connection resources.
     pub max_connections: Option<usize>,
+    /// If set, limits how long `acquire` will wait for a connection permit.
+    pub wait_timeout: Option<std::time::Duration>,
 }

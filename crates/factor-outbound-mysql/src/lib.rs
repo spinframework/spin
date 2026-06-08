@@ -50,6 +50,7 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
                 ctx.app_state::<OutboundNetworkingFactor>().ok(),
                 "mysql",
                 config.max_connections,
+                config.wait_timeout,
             ),
         })
     }

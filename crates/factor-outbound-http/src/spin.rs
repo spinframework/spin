@@ -117,7 +117,7 @@ impl spin_http::Host for crate::InstanceState {
             .semaphore
             .acquire()
             .await
-            .map_err(|_| HttpError::RuntimeError)?;
+            .map_err(|_| HttpError::TooManyRequests)?;
         let resp = client.execute(req).await.map_err(log_reqwest_error)?;
         drop(permit);
 

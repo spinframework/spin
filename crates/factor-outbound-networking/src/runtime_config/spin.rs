@@ -75,6 +75,7 @@ impl SpinRuntimeConfig {
             client_tls_configs: maybe_tls_configs.unwrap_or_default(),
             max_socket_connections: outbound_networking.max_socket_connections,
             max_total_connections: outbound_networking.max_total_connections,
+            wait_timeout: None,
         };
         Ok(Some(runtime_config))
     }

@@ -61,6 +61,7 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
                 ctx.app_state::<OutboundNetworkingFactor>().ok(),
                 "pg",
                 config.max_connections,
+                config.wait_timeout,
             ),
         })
     }

@@ -56,6 +56,7 @@ impl Factor for OutboundRedisFactor {
                 ctx.app_state::<OutboundNetworkingFactor>().ok(),
                 "redis",
                 config.max_connections,
+                config.wait_timeout,
             ),
         })
     }

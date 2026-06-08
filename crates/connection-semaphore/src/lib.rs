@@ -1,7 +1,9 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
+use tokio::time;
 
 /// Wraps an optional global and an optional factor-specific semaphore.
 #[derive(Clone)]
@@ -9,19 +11,27 @@ pub struct ConnectionSemaphore {
     global: Option<Arc<Semaphore>>,
     factor_specific: Option<Arc<Semaphore>>,
     factor: &'static str,
+    wait_timeout: Option<Duration>,
 }
 
 impl ConnectionSemaphore {
     /// Creates a new `ConnectionSemaphore`.
+    ///
+    /// `global` is an optional semaphore shared across factors; `factor_specific_limit`
+    /// is an optional permit limit for this specific factor. If either is `None`, that level of
+    /// limiting is disabled. `factor` is a label used in emitted telemetry, and `wait_timeout` is
+    /// an optional duration to wait for a permit before giving up and returning an error.
     pub fn new(
         global: Option<Arc<Semaphore>>,
         factor_specific_limit: Option<usize>,
         factor: &'static str,
+        wait_timeout: Option<Duration>,
     ) -> Self {
         Self {
             global,
             factor_specific: factor_specific_limit.map(|n| Arc::new(Semaphore::new(n))),
             factor,
+            wait_timeout,
         }
     }
 
@@ -30,11 +40,13 @@ impl ConnectionSemaphore {
         global: Option<Arc<Semaphore>>,
         factor_specific: Option<Arc<Semaphore>>,
         factor: &'static str,
+        wait_timeout: Option<Duration>,
     ) -> Self {
         Self {
             global,
             factor_specific,
             factor,
+            wait_timeout,
         }
     }
 
@@ -44,7 +56,20 @@ impl ConnectionSemaphore {
     /// When both a global and a factor-specific semaphore are configured, this
     /// method acquires factor-specific first, then global, ensuring the global
     /// permit is never held while blocking on a factor-specific backlog.
+    ///
+    /// If `wait_timeout` is configured and the permits cannot be acquired within
+    /// that duration, an error is returned.
     pub async fn acquire(&self) -> anyhow::Result<ConnectionPermit> {
+        match self.wait_timeout {
+            Some(timeout) => time::timeout(timeout, self.acquire_inner())
+                .await
+                .map_err(|_| anyhow!("connection semaphore timed out after {timeout:?}"))?,
+            None => self.acquire_inner().await,
+        }
+    }
+
+    /// Inner logic for [`Self::acquire`], separated so the caller can apply a timeout.
+    async fn acquire_inner(&self) -> anyhow::Result<ConnectionPermit> {
         /// Acquires a single permit from `sem`, trying non-blocking first.
         ///
         /// Sets `*waited = true` if a blocking wait was required.
@@ -161,6 +186,7 @@ impl ConnectionSemaphore {
 /// All-`None` fields are valid and represent the no-limits case.
 ///
 /// Fields are intentionally prefixed with `_` — they exist solely to be dropped.
+#[derive(Debug)]
 pub struct ConnectionPermit {
     _global: Option<OwnedSemaphorePermit>,
     _factor_specific: Option<OwnedSemaphorePermit>,
@@ -172,7 +198,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_limits_acquire_always_succeeds() {
-        let sem = ConnectionSemaphore::new(None, None, "test");
+        let sem = ConnectionSemaphore::new(None, None, "test", None);
         let permit = sem.acquire().await.expect("should succeed");
         drop(permit);
         let _permit2 = sem.acquire().await.expect("should succeed again");
@@ -180,7 +206,7 @@ mod tests {
 
     #[test]
     fn no_limits_try_acquire_always_succeeds() {
-        let sem = ConnectionSemaphore::new(None, None, "test");
+        let sem = ConnectionSemaphore::new(None, None, "test", None);
         let permit = sem.try_acquire().expect("should succeed");
         drop(permit);
         let _permit2 = sem.try_acquire().expect("should succeed again");
@@ -189,7 +215,7 @@ mod tests {
     #[test]
     fn global_limit_only_exhausted() {
         let global = Arc::new(Semaphore::new(1));
-        let sem = ConnectionSemaphore::new(Some(global.clone()), None, "test");
+        let sem = ConnectionSemaphore::new(Some(global.clone()), None, "test", None);
         let permit1 = sem.try_acquire().expect("first should succeed");
         assert!(
             sem.try_acquire().is_none(),
@@ -202,7 +228,7 @@ mod tests {
 
     #[test]
     fn factor_limit_only_exhausted() {
-        let sem = ConnectionSemaphore::new(None, Some(1), "test");
+        let sem = ConnectionSemaphore::new(None, Some(1), "test", None);
         let permit1 = sem.try_acquire().expect("first should succeed");
         assert!(
             sem.try_acquire().is_none(),
@@ -216,7 +242,8 @@ mod tests {
     fn both_limits_global_exhausted_first() {
         let global = Arc::new(Semaphore::new(1));
         let factor = Arc::new(Semaphore::new(2));
-        let sem = ConnectionSemaphore::from_raw(Some(global.clone()), Some(factor.clone()), "test");
+        let sem =
+            ConnectionSemaphore::from_raw(Some(global.clone()), Some(factor.clone()), "test", None);
 
         let permit1 = sem.try_acquire().expect("first should succeed");
         // After permit1: global=0, factor=1
@@ -237,7 +264,8 @@ mod tests {
     fn both_limits_factor_exhausted_global_released() {
         let global = Arc::new(Semaphore::new(2));
         let factor = Arc::new(Semaphore::new(1));
-        let sem = ConnectionSemaphore::from_raw(Some(global.clone()), Some(factor.clone()), "test");
+        let sem =
+            ConnectionSemaphore::from_raw(Some(global.clone()), Some(factor.clone()), "test", None);
 
         let permit1 = sem.try_acquire().expect("first should succeed");
         // Global still has 1, factor exhausted
@@ -252,7 +280,7 @@ mod tests {
     #[tokio::test]
     async fn acquire_waits_for_release() {
         let global = Arc::new(Semaphore::new(1));
-        let sem = ConnectionSemaphore::new(Some(global.clone()), None, "test");
+        let sem = ConnectionSemaphore::new(Some(global.clone()), None, "test", None);
 
         let permit = sem.try_acquire().expect("first should succeed");
 
@@ -271,7 +299,8 @@ mod tests {
     async fn acquire_releases_global_while_waiting_for_factor() {
         let global = Arc::new(Semaphore::new(1));
         let factor = Arc::new(Semaphore::new(1));
-        let sem = ConnectionSemaphore::from_raw(Some(global.clone()), Some(factor.clone()), "test");
+        let sem =
+            ConnectionSemaphore::from_raw(Some(global.clone()), Some(factor.clone()), "test", None);
 
         // Exhaust factor-specific from outside.
         let _factor_hold = factor.clone().acquire_owned().await.unwrap();
@@ -298,5 +327,24 @@ mod tests {
 
         drop(_factor_hold);
         handle.await.expect("task should complete");
+    }
+
+    #[tokio::test]
+    async fn acquire_times_out_when_semaphore_exhausted() {
+        let global = Arc::new(Semaphore::new(1));
+        let sem = ConnectionSemaphore::new(
+            Some(global.clone()),
+            None,
+            "test",
+            Some(Duration::from_millis(10)),
+        );
+
+        let _permit = sem.try_acquire().expect("first should succeed");
+
+        let err = sem.acquire().await.expect_err("should time out");
+        assert!(
+            err.to_string().contains("timed out"),
+            "error message should mention timed out: {err}"
+        );
     }
 }

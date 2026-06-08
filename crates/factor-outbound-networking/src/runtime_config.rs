@@ -18,6 +18,8 @@ pub struct RuntimeConfig {
     /// Maximum number of outbound connections across ALL connection types (global cap).
     /// `None` means unlimited (default).
     pub max_total_connections: Option<usize>,
+    /// If set, limits how long `acquire` will wait for a socket connection permit.
+    pub wait_timeout: Option<std::time::Duration>,
 }
 
 /// TLS configuration for one or more component(s) and host(s).

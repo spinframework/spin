@@ -103,9 +103,10 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
             let host = access.get();
             (host.inner.clone(), host.semaphore.clone())
         });
-        let permit = semaphore.acquire().await.map_err(|_| {
-            v3::Error::from(v2::Error::ConnectionFailed("too many connections".into()))
-        })?;
+        let permit = semaphore
+            .acquire()
+            .await
+            .map_err(|_| v3::Error::ConnectionFailed("too many connections".into()))?;
         let mut state = state_arc.lock().await;
         state.otel.reparent_tracing_span();
         Ok(Resource::new_own(

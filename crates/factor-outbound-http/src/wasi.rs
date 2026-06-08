@@ -763,7 +763,7 @@ impl ConnectOptions {
         let (stream, permit) = timeout(self.connect_timeout, connect)
             .await
             .map_err(|_| ErrorCode::ConnectionTimeout)?;
-        let permit = permit.map_err(|_| ErrorCode::ConnectionRefused)?;
+        let permit = permit.map_err(|_| ErrorCode::ConnectionLimitReached)?;
         let stream = stream.map_err(|err| match err.kind() {
             std::io::ErrorKind::AddrNotAvailable => dns_error("address not available".into(), 0),
             _ => ErrorCode::ConnectionRefused,
@@ -1214,7 +1214,7 @@ mod tests {
     async fn connect_timeout_applies_to_permit_acquisition() {
         // Create a semaphore with exactly 1 permit and immediately exhaust it, leaving
         // 0 permits available.  This simulates all outbound-connection slots being occupied.
-        let conn_semaphore = ConnectionSemaphore::new(None, Some(1), "test");
+        let conn_semaphore = ConnectionSemaphore::new(None, Some(1), "test", None);
         let _held = conn_semaphore
             .try_acquire()
             .expect("exhausting the single permit");

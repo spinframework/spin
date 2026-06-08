@@ -8,6 +8,8 @@ pub struct RuntimeConfig {
     pub connection_pooling_enabled: bool,
     /// If set, limits the number of concurrent outbound connections.
     pub max_concurrent_connections: Option<usize>,
+    /// If set, limits how long `acquire` will wait for a connection permit.
+    pub wait_timeout: Option<std::time::Duration>,
 }
 
 impl Default for RuntimeConfig {
@@ -15,6 +17,7 @@ impl Default for RuntimeConfig {
         Self {
             connection_pooling_enabled: true,
             max_concurrent_connections: None,
+            wait_timeout: None,
         }
     }
 }

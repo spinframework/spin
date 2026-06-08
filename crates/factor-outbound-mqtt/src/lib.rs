@@ -64,6 +64,7 @@ impl Factor for OutboundMqttFactor {
                 ctx.app_state::<OutboundNetworkingFactor>().ok(),
                 "mqtt",
                 config.max_connections,
+                config.wait_timeout,
             ),
             max_payload_size_bytes: config.max_payload_size_bytes,
         })
