@@ -6,7 +6,7 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [workspace.package]
-version = "4.0.0"
+version = "4.0.1"
 authors = ["Spin Framework Contributors"]
 edition = "2024"
 license = "Apache-2.0 WITH LLVM-exception"
