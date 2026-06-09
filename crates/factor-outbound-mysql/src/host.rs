@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
+use spin_factor_outbound_networking::ConnectionPermit;
 use spin_telemetry::traces::{self, Blame};
 use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::mysql::mysql as v3;
 use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql as v2;
 use spin_world::v2::rdbms_types as v2_types;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::field::Empty;
 use tracing::{Level, instrument};
@@ -15,7 +17,11 @@ use crate::client::Client;
 use crate::{InstanceState, InstanceStateInner, MysqlFactorData};
 
 impl<C: Client> InstanceStateInner<C> {
-    async fn open_connection(&mut self, address: &str) -> Result<u32, v2::Error> {
+    async fn open_connection(
+        &mut self,
+        address: &str,
+        permit: ConnectionPermit,
+    ) -> Result<u32, v2::Error> {
         spin_factor_outbound_networking::record_address_fields(address);
 
         if !self.is_address_allowed(address).await.map_err(|e| {
@@ -40,7 +46,7 @@ impl<C: Client> InstanceStateInner<C> {
             err
         })?;
         self.connections
-            .push(Arc::new(Mutex::new(client)))
+            .push((Arc::new(Mutex::new(client)), permit))
             .map_err(|_| {
                 // The guest exceeded the host-imposed connection limit.
                 let err = v2::Error::ConnectionFailed("too many connections".into());
@@ -50,13 +56,16 @@ impl<C: Client> InstanceStateInner<C> {
     }
 
     fn get_client(&mut self, connection: u32) -> Result<Arc<Mutex<C>>, v2::Error> {
-        self.connections.get(connection).cloned().ok_or_else(|| {
-            // The connection table is managed entirely by the host, so a
-            // missing handle indicates a host-side bug, not a guest mistake.
-            let err = v2::Error::ConnectionFailed("no connection found".into());
-            traces::mark_as_error(&err, Some(Blame::Host));
-            err
-        })
+        self.connections
+            .get(connection)
+            .map(|(conn, _permit)| conn.clone())
+            .ok_or_else(|| {
+                // The connection table is managed entirely by the host, so a
+                // missing handle indicates a host-side bug, not a guest mistake.
+                let err = v2::Error::ConnectionFailed("no connection found".into());
+                traces::mark_as_error(&err, Some(Blame::Host));
+                err
+            })
     }
 
     async fn is_address_allowed(&self, address: &str) -> Result<bool> {
@@ -72,7 +81,7 @@ impl<C: Client> v3::Host for InstanceState<C> {
 
 impl<C: Client> v3::HostConnection for InstanceState<C> {
     async fn drop(&mut self, connection: Resource<v3::Connection>) -> Result<()> {
-        let mut state = self.0.lock().await;
+        let mut state = self.inner.lock().await;
         state.connections.remove(connection.rep());
         Ok(())
     }
@@ -90,10 +99,19 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
         accessor: &Accessor<T, Self>,
         address: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
-        let state = accessor.with(|mut access| access.get().0.clone());
-        let mut state = state.lock().await;
+        let (state_arc, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            (host.inner.clone(), host.semaphore.clone())
+        });
+        let permit = semaphore
+            .acquire()
+            .await
+            .map_err(|_| v3::Error::ConnectionFailed("too many connections".into()))?;
+        let mut state = state_arc.lock().await;
         state.otel.reparent_tracing_span();
-        Ok(Resource::new_own(state.open_connection(&address).await?))
+        Ok(Resource::new_own(
+            state.open_connection(&address, permit).await?,
+        ))
     }
 
     #[instrument(name = "spin_outbound_mysql.execute", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", otel.name = statement))]
@@ -103,7 +121,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
         statement: String,
         params: Vec<v3::ParameterValue>,
     ) -> Result<(), v3::Error> {
-        let state = accessor.with(|mut access| access.get().0.clone());
+        let state = accessor.with(|mut access| access.get().inner.clone());
         let client = {
             let mut state = state.lock().await;
             state.otel.reparent_tracing_span();
@@ -125,7 +143,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
         statement: String,
         params: Vec<v3::ParameterValue>,
     ) -> Result<QueryTuple, v3::Error> {
-        let state = accessor.with(|mut access| access.get().0.clone());
+        let state = accessor.with(|mut access| access.get().inner.clone());
         let client = {
             let mut state = state.lock().await;
             state.otel.reparent_tracing_span();
@@ -161,9 +179,17 @@ impl<C: Client> v2::Host for InstanceState<C> {}
 impl<C: Client> v2::HostConnection for InstanceState<C> {
     #[instrument(name = "spin_outbound_mysql.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", db.address = Empty, server.port = Empty, db.namespace = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
-        let mut state = self.0.lock().await;
+        let permit = self
+            .semaphore
+            .acquire()
+            .await
+            .map_err(|_| v2::Error::ConnectionFailed("too many connections".into()))?;
+        let mut state = self.inner.lock().await;
         state.otel.reparent_tracing_span();
-        state.open_connection(&address).await.map(Resource::new_own)
+        state
+            .open_connection(&address, permit)
+            .await
+            .map(Resource::new_own)
     }
 
     #[instrument(name = "spin_outbound_mysql.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", db.system = "mysql", otel.name = statement))]
@@ -173,7 +199,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
         statement: String,
         params: Vec<v2_types::ParameterValue>,
     ) -> Result<(), v2::Error> {
-        let mut state = self.0.lock().await;
+        let mut state = self.inner.lock().await;
         state.otel.reparent_tracing_span();
         state
             .get_client(connection.rep())?
@@ -191,7 +217,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
         statement: String,
         params: Vec<v2_types::ParameterValue>,
     ) -> Result<v2_types::RowSet, v2::Error> {
-        let mut state = self.0.lock().await;
+        let mut state = self.inner.lock().await;
         state.otel.reparent_tracing_span();
         state
             .get_client(connection.rep())?
@@ -203,7 +229,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
     }
 
     async fn drop(&mut self, connection: Resource<v2::Connection>) -> Result<()> {
-        let mut state = self.0.lock().await;
+        let mut state = self.inner.lock().await;
         state.connections.remove(connection.rep());
         Ok(())
     }
@@ -218,13 +244,23 @@ impl<C: Send> v2_types::Host for InstanceState<C> {
 /// Delegate a function call to the v2::HostConnection implementation
 macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
-        let connection = {
-            let mut state = $self.0.lock().await;
-            Resource::new_own(state.open_connection(&$address).await?)
-        };
-        <Self as v2::HostConnection>::$name($self, connection, $($arg),*)
+        let permit = $self
+            .semaphore
+            .acquire()
             .await
-            .map_err(Into::into)
+            .map_err(|_| v2::Error::ConnectionFailed("too many connections".into()))?;
+        let connection = {
+            let mut state = $self.inner.lock().await;
+            Resource::new_own(state.open_connection(&$address, permit).await?)
+        };
+        // v1 has no persistent connections, so remove the table entry immediately
+        // after the call to release the semaphore permit.
+        let rep = connection.rep();
+        let result = <Self as v2::HostConnection>::$name($self, connection, $($arg),*)
+            .await
+            .map_err(Into::into);
+        $self.inner.lock().await.connections.remove(rep);
+        result
     }};
 }
 

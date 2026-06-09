@@ -79,6 +79,46 @@ impl<T> ResolvedRuntimeConfig<T> {
                 summaries.push(format!("[llm_compute: {ty}"));
             }
         }
+        // [outbound_networking: max_total_connections=N]
+        if let Some(table) = self
+            .toml
+            .get("outbound_networking")
+            .and_then(Value::as_table)
+        {
+            if let Some(max) = table
+                .get("max_total_connections")
+                .and_then(Value::as_integer)
+            {
+                summaries.push(format!(
+                    "[outbound_networking: max_total_connections={max}]"
+                ));
+            }
+        }
+        // [outbound_redis: max_connections=N], [outbound_pg: max_connections=N], [outbound_mysql: max_connections=N], [outbound_mqtt: max_connections=N], [outbound_http: max_connections=N]
+        for key in [
+            "outbound_redis",
+            "outbound_pg",
+            "outbound_mysql",
+            "outbound_mqtt",
+            "outbound_http",
+        ] {
+            if let Some(table) = self.toml.get(key).and_then(Value::as_table) {
+                if let Some(max) = table.get("max_connections").and_then(Value::as_integer) {
+                    summaries.push(format!("[{key}: max_connections={max}]"));
+                }
+            }
+        }
+        // [outbound_http: max_concurrent_requests=N (deprecated)]
+        if let Some(table) = self.toml.get("outbound_http").and_then(Value::as_table) {
+            if let Some(max) = table
+                .get("max_concurrent_requests")
+                .and_then(Value::as_integer)
+            {
+                summaries.push(format!(
+                    "[outbound_http: max_concurrent_requests={max} (deprecated, use max_connections)]"
+                ));
+            }
+        }
         if !summaries.is_empty() {
             let summaries = summaries.join(", ");
             let from_path = runtime_config_path
@@ -350,14 +390,18 @@ impl FactorRuntimeConfigSource<VariablesFactor> for TomlRuntimeConfigSource<'_, 
 }
 
 impl FactorRuntimeConfigSource<OutboundPgFactor> for TomlRuntimeConfigSource<'_, '_> {
-    fn get_runtime_config(&mut self) -> anyhow::Result<Option<()>> {
-        Ok(None)
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<<OutboundPgFactor as spin_factors::Factor>::RuntimeConfig>> {
+        spin_factor_outbound_pg::runtime_config::spin::config_from_table(&self.toml.table)
     }
 }
 
 impl FactorRuntimeConfigSource<OutboundMysqlFactor> for TomlRuntimeConfigSource<'_, '_> {
-    fn get_runtime_config(&mut self) -> anyhow::Result<Option<()>> {
-        Ok(None)
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<<OutboundMysqlFactor as spin_factors::Factor>::RuntimeConfig>> {
+        spin_factor_outbound_mysql::runtime_config::spin::config_from_table(&self.toml.table)
     }
 }
 
@@ -368,8 +412,10 @@ impl FactorRuntimeConfigSource<LlmFactor> for TomlRuntimeConfigSource<'_, '_> {
 }
 
 impl FactorRuntimeConfigSource<OutboundRedisFactor> for TomlRuntimeConfigSource<'_, '_> {
-    fn get_runtime_config(&mut self) -> anyhow::Result<Option<()>> {
-        Ok(None)
+    fn get_runtime_config(
+        &mut self,
+    ) -> anyhow::Result<Option<<OutboundRedisFactor as spin_factors::Factor>::RuntimeConfig>> {
+        spin_factor_outbound_redis::runtime_config::spin::config_from_table(&self.toml.table)
     }
 }
 

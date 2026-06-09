@@ -12,6 +12,14 @@ pub struct RuntimeConfig {
     pub block_private_networks: bool,
     /// TLS client configs
     pub client_tls_configs: Vec<ClientTlsRuntimeConfig>,
+    /// Maximum number of outbound TCP/UDP socket connections across all instances of this app.
+    /// `None` means unlimited (default).
+    pub max_socket_connections: Option<usize>,
+    /// Maximum number of outbound connections across ALL connection types (global cap).
+    /// `None` means unlimited (default).
+    pub max_total_connections: Option<usize>,
+    /// If set, limits how long `acquire` will wait for a socket connection permit.
+    pub wait_timeout: Option<std::time::Duration>,
 }
 
 /// TLS configuration for one or more component(s) and host(s).

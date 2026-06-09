@@ -13,6 +13,7 @@ rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
 rustls-platform-verifier = { workspace = true }
 serde = { workspace = true }
+spin-connection-semaphore = { path = "../connection-semaphore" }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factor-wasi = { path = "../factor-wasi" }
 spin-factors = { path = "../factors" }
@@ -20,16 +21,21 @@ spin-locked-app = { path = "../locked-app" }
 spin-manifest = { path = "../manifest" }
 spin-outbound-networking-config = { path = "../outbound-networking-config" }
 spin-serde = { path = "../serde" }
+tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 url = { workspace = true }
 webpki-root-certs = "1.0.7"
 
 [dev-dependencies]
+async-trait = { workspace = true }
+spin-factor-outbound-mqtt = { path = "../factor-outbound-mqtt" }
 spin-factors-test = { path = "../factors-test" }
+spin-world = { path = "../world" }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 toml = { workspace = true }
+wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 
 [features]

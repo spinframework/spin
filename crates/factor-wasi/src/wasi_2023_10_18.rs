@@ -1,3 +1,4 @@
+use crate::sockets::{SpinSockets, SpinSocketsView};
 use spin_factors::anyhow::Result;
 use std::mem;
 use wasmtime::component::{Linker, Resource, ResourceTable};
@@ -6,8 +7,8 @@ use wasmtime_wasi::cli::{WasiCli, WasiCliCtxView};
 use wasmtime_wasi::clocks::{WasiClocks, WasiClocksCtxView};
 use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemCtxView};
 use wasmtime_wasi::p2::DynPollable;
+use wasmtime_wasi::p2::bindings::sockets::udp_create_socket as p2_udp_create;
 use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
-use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsCtxView};
 
 mod latest {
     pub use wasmtime_wasi::p2::bindings::*;
@@ -126,7 +127,7 @@ pub fn add_to_linker<T>(
     clocks_closure: fn(&mut T) -> WasiClocksCtxView<'_>,
     cli_closure: fn(&mut T) -> WasiCliCtxView<'_>,
     filesystem_closure: fn(&mut T) -> WasiFilesystemCtxView<'_>,
-    sockets_closure: fn(&mut T) -> WasiSocketsCtxView<'_>,
+    sockets_closure: fn(&mut T) -> SpinSocketsView<'_>,
 ) -> Result<()>
 where
     T: Send + 'static,
@@ -150,13 +151,13 @@ where
     wasi::cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
     wasi::cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
     wasi::cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
-    wasi::sockets::tcp::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
-    wasi::sockets::tcp_create_socket::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
-    wasi::sockets::udp::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
-    wasi::sockets::udp_create_socket::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
-    wasi::sockets::instance_network::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
-    wasi::sockets::network::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
-    wasi::sockets::ip_name_lookup::add_to_linker::<_, WasiSockets>(linker, sockets_closure)?;
+    wasi::sockets::tcp::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
+    wasi::sockets::tcp_create_socket::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
+    wasi::sockets::udp::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
+    wasi::sockets::udp_create_socket::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
+    wasi::sockets::instance_network::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
+    wasi::sockets::network::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
+    wasi::sockets::ip_name_lookup::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
     Ok(())
 }
 
@@ -900,9 +901,9 @@ impl wasi::cli::terminal_output::HostTerminalOutput for WasiCliCtxView<'_> {
     }
 }
 
-impl wasi::sockets::tcp::Host for WasiSocketsCtxView<'_> {}
+impl wasi::sockets::tcp::Host for SpinSocketsView<'_> {}
 
-impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
+impl wasi::sockets::tcp::HostTcpSocket for SpinSocketsView<'_> {
     async fn start_bind(
         &mut self,
         self_: Resource<TcpSocket>,
@@ -935,6 +936,10 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
         network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
+        // Delegate to the P2 SpinSocketsView impl (passing `self`, not `&mut self.inner`).
+        // This snapshot uses the raw P2 TcpSocket type — the resource rep is the same at
+        // start_connect and drop time — so the P2 impl's quota acquire/register/release
+        // logic round-trips correctly without any wrapper-level bookkeeping here.
         convert_result(
             latest::sockets::tcp::HostTcpSocket::start_connect(
                 self,
@@ -1147,7 +1152,7 @@ impl wasi::sockets::tcp::HostTcpSocket for WasiSocketsCtxView<'_> {
     }
 }
 
-impl wasi::sockets::tcp_create_socket::Host for WasiSocketsCtxView<'_> {
+impl wasi::sockets::tcp_create_socket::Host for SpinSocketsView<'_> {
     fn create_tcp_socket(
         &mut self,
         address_family: IpAddressFamily,
@@ -1159,7 +1164,7 @@ impl wasi::sockets::tcp_create_socket::Host for WasiSocketsCtxView<'_> {
     }
 }
 
-impl wasi::sockets::udp::Host for WasiSocketsCtxView<'_> {}
+impl wasi::sockets::udp::Host for SpinSocketsView<'_> {}
 
 /// Between the snapshot of WASI that this file is implementing and the current
 /// implementation of WASI UDP sockets were redesigned slightly to deal with
@@ -1180,7 +1185,7 @@ pub enum UdpSocket {
 
 impl UdpSocket {
     async fn finish_connect(
-        table: &mut WasiSocketsCtxView<'_>,
+        table: &mut SpinSocketsView<'_>,
         socket: &Resource<UdpSocket>,
         explicit: bool,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
@@ -1197,8 +1202,12 @@ impl UdpSocket {
         };
         let borrow = Resource::new_borrow(new_socket.rep());
         let result = convert_result(
-            latest::sockets::udp::HostUdpSocket::stream(table, borrow, addr.map(|a| a.into()))
-                .await,
+            latest::sockets::udp::HostUdpSocket::stream(
+                &mut table.inner,
+                borrow,
+                addr.map(|a| a.into()),
+            )
+            .await,
         )?;
         let (incoming, outgoing) = match result {
             Ok(pair) => pair,
@@ -1223,7 +1232,7 @@ impl UdpSocket {
     }
 }
 
-impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
+impl wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_> {
     async fn start_bind(
         &mut self,
         self_: Resource<UdpSocket>,
@@ -1233,7 +1242,7 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(
             latest::sockets::udp::HostUdpSocket::start_bind(
-                self,
+                &mut self.inner,
                 socket,
                 network,
                 local_address.into(),
@@ -1248,7 +1257,8 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(latest::sockets::udp::HostUdpSocket::finish_bind(
-            self, socket,
+            &mut self.inner,
+            socket,
         ))
     }
 
@@ -1358,7 +1368,8 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<IpSocketAddress, SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(latest::sockets::udp::HostUdpSocket::local_address(
-            self, socket,
+            &mut self.inner,
+            socket,
         ))
     }
 
@@ -1368,13 +1379,15 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<IpSocketAddress, SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(latest::sockets::udp::HostUdpSocket::remote_address(
-            self, socket,
+            &mut self.inner,
+            socket,
         ))
     }
 
     fn address_family(&mut self, self_: Resource<UdpSocket>) -> wasmtime::Result<IpAddressFamily> {
         let socket = self.table.get(&self_)?.inner()?;
-        latest::sockets::udp::HostUdpSocket::address_family(self, socket).map(|e| e.into())
+        latest::sockets::udp::HostUdpSocket::address_family(&mut self.inner, socket)
+            .map(|e| e.into())
     }
 
     fn ipv6_only(
@@ -1398,7 +1411,8 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<u8, SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(latest::sockets::udp::HostUdpSocket::unicast_hop_limit(
-            self, socket,
+            &mut self.inner,
+            socket,
         ))
     }
 
@@ -1409,7 +1423,9 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(latest::sockets::udp::HostUdpSocket::set_unicast_hop_limit(
-            self, socket, value,
+            &mut self.inner,
+            socket,
+            value,
         ))
     }
 
@@ -1419,7 +1435,8 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<u64, SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(latest::sockets::udp::HostUdpSocket::receive_buffer_size(
-            self, socket,
+            &mut self.inner,
+            socket,
         ))
     }
 
@@ -1430,7 +1447,11 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(
-            latest::sockets::udp::HostUdpSocket::set_receive_buffer_size(self, socket, value),
+            latest::sockets::udp::HostUdpSocket::set_receive_buffer_size(
+                &mut self.inner,
+                socket,
+                value,
+            ),
         )
     }
 
@@ -1440,7 +1461,8 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<u64, SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(latest::sockets::udp::HostUdpSocket::send_buffer_size(
-            self, socket,
+            &mut self.inner,
+            socket,
         ))
     }
 
@@ -1451,17 +1473,25 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
         let socket = self.table.get(&self_)?.inner()?;
         convert_result(latest::sockets::udp::HostUdpSocket::set_send_buffer_size(
-            self, socket, value,
+            &mut self.inner,
+            socket,
+            value,
         ))
     }
 
     fn subscribe(&mut self, self_: Resource<UdpSocket>) -> wasmtime::Result<Resource<DynPollable>> {
         let socket = self.table.get(&self_)?.inner()?;
-        latest::sockets::udp::HostUdpSocket::subscribe(self, socket)
+        latest::sockets::udp::HostUdpSocket::subscribe(&mut self.inner, socket)
     }
 
     fn drop(&mut self, rep: Resource<UdpSocket>) -> wasmtime::Result<()> {
+        let socket_rep = rep.rep();
+        // Delete before releasing: the only error case that matters is `HasChildren`,
+        // where the socket still exists and the permit must stay held. `NotPresent`
+        // (double-drop) is unreachable from a guest, and `release_permit` is idempotent
+        // anyway since `HashMap::remove` is a no-op for absent keys.
         let me = self.table.delete(rep)?;
+        self.release_permit(socket_rep);
         let socket = match me {
             UdpSocket::Initial(s) => s,
             UdpSocket::Connecting(s, _) => s,
@@ -1470,49 +1500,63 @@ impl wasi::sockets::udp::HostUdpSocket for WasiSocketsCtxView<'_> {
                 incoming,
                 outgoing,
             } => {
-                latest::sockets::udp::HostIncomingDatagramStream::drop(self, incoming)?;
-                latest::sockets::udp::HostOutgoingDatagramStream::drop(self, outgoing)?;
+                latest::sockets::udp::HostIncomingDatagramStream::drop(&mut self.inner, incoming)?;
+                latest::sockets::udp::HostOutgoingDatagramStream::drop(&mut self.inner, outgoing)?;
                 socket
             }
             UdpSocket::Dummy => return Ok(()),
         };
-        latest::sockets::udp::HostUdpSocket::drop(self, socket)
+        // Drop the inner P2 socket directly, bypassing quota tracking for rep R.
+        latest::sockets::udp::HostUdpSocket::drop(&mut self.inner, socket)
     }
 }
 
-impl wasi::sockets::udp_create_socket::Host for WasiSocketsCtxView<'_> {
+impl wasi::sockets::udp_create_socket::Host for SpinSocketsView<'_> {
     fn create_udp_socket(
         &mut self,
         address_family: IpAddressFamily,
     ) -> wasmtime::Result<Result<Resource<UdpSocket>, SocketErrorCode>> {
-        let result = convert_result(latest::sockets::udp_create_socket::Host::create_udp_socket(
-            self,
+        // Cannot delegate to the P2 SpinSocketsView impl here (unlike TCP). This snapshot
+        // wraps the P2 UdpSocket in a custom UdpSocket enum stored in a separate resource
+        // table, so the outer wrapper rep (used at drop time) differs from the inner P2
+        // socket rep (which the P2 impl would register the permit under). Delegating would
+        // cause release_permit at drop time to look up the wrong rep and silently leak the
+        // semaphore slot. Instead, quota is checked explicitly here and the permit is
+        // registered under the wrapper rep.
+        let Ok(permit) = self.try_acquire() else {
+            tracing::warn!("UDP socket creation refused: connection quota exhausted");
+            return Ok(Err(SocketErrorCode::NewSocketLimit));
+        };
+        // Create the inner P2 socket via self.inner to avoid charging quota at the P2 level.
+        let result = convert_result(p2_udp_create::Host::create_udp_socket(
+            &mut self.inner,
             address_family.into(),
         ))?;
         let socket = match result {
             Ok(socket) => socket,
             Err(e) => return Ok(Err(e)),
         };
-        let socket = self.table.push(UdpSocket::Initial(socket))?;
-        Ok(Ok(socket))
+        let wrapped = self.table.push(UdpSocket::Initial(socket))?;
+        self.register_permit(wrapped.rep(), permit);
+        Ok(Ok(wrapped))
     }
 }
 
-impl wasi::sockets::instance_network::Host for WasiSocketsCtxView<'_> {
+impl wasi::sockets::instance_network::Host for SpinSocketsView<'_> {
     fn instance_network(&mut self) -> wasmtime::Result<Resource<Network>> {
-        latest::sockets::instance_network::Host::instance_network(self)
+        latest::sockets::instance_network::Host::instance_network(&mut self.inner)
     }
 }
 
-impl wasi::sockets::network::Host for WasiSocketsCtxView<'_> {}
+impl wasi::sockets::network::Host for SpinSocketsView<'_> {}
 
-impl wasi::sockets::network::HostNetwork for WasiSocketsCtxView<'_> {
+impl wasi::sockets::network::HostNetwork for SpinSocketsView<'_> {
     fn drop(&mut self, rep: Resource<Network>) -> wasmtime::Result<()> {
-        latest::sockets::network::HostNetwork::drop(self, rep)
+        latest::sockets::network::HostNetwork::drop(&mut self.inner, rep)
     }
 }
 
-impl wasi::sockets::ip_name_lookup::Host for WasiSocketsCtxView<'_> {
+impl wasi::sockets::ip_name_lookup::Host for SpinSocketsView<'_> {
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
@@ -1521,19 +1565,22 @@ impl wasi::sockets::ip_name_lookup::Host for WasiSocketsCtxView<'_> {
         _include_unavailable: bool,
     ) -> wasmtime::Result<Result<Resource<ResolveAddressStream>, SocketErrorCode>> {
         convert_result(latest::sockets::ip_name_lookup::Host::resolve_addresses(
-            self, network, name,
+            &mut self.inner,
+            network,
+            name,
         ))
     }
 }
 
-impl wasi::sockets::ip_name_lookup::HostResolveAddressStream for WasiSocketsCtxView<'_> {
+impl wasi::sockets::ip_name_lookup::HostResolveAddressStream for SpinSocketsView<'_> {
     fn resolve_next_address(
         &mut self,
         self_: Resource<ResolveAddressStream>,
     ) -> wasmtime::Result<Result<Option<IpAddress>, SocketErrorCode>> {
         convert_result(
             latest::sockets::ip_name_lookup::HostResolveAddressStream::resolve_next_address(
-                self, self_,
+                &mut self.inner,
+                self_,
             )
             .map(|e| e.map(|e| e.into())),
         )
@@ -1543,11 +1590,11 @@ impl wasi::sockets::ip_name_lookup::HostResolveAddressStream for WasiSocketsCtxV
         &mut self,
         self_: Resource<ResolveAddressStream>,
     ) -> wasmtime::Result<Resource<DynPollable>> {
-        latest::sockets::ip_name_lookup::HostResolveAddressStream::subscribe(self, self_)
+        latest::sockets::ip_name_lookup::HostResolveAddressStream::subscribe(&mut self.inner, self_)
     }
 
     fn drop(&mut self, rep: Resource<ResolveAddressStream>) -> wasmtime::Result<()> {
-        latest::sockets::ip_name_lookup::HostResolveAddressStream::drop(self, rep)
+        latest::sockets::ip_name_lookup::HostResolveAddressStream::drop(&mut self.inner, rep)
     }
 }
 

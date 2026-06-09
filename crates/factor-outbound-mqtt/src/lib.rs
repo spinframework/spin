@@ -9,9 +9,12 @@ use host::InstanceState;
 use rumqttc::{AsyncClient, Event, Incoming, Outgoing, QoS};
 use spin_core::async_trait;
 use spin_factor_otel::OtelFactorState;
-use spin_factor_outbound_networking::OutboundNetworkingFactor;
+use spin_factor_outbound_networking::{
+    ConnectionSemaphore, OutboundNetworkingFactor, build_connection_semaphore,
+};
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
+    anyhow,
 };
 use spin_world::spin::mqtt::mqtt as v3;
 use spin_world::v2::mqtt as v2;
@@ -20,6 +23,7 @@ use tokio::sync::Mutex;
 pub use host::MqttClient;
 
 use crate::host::other_error_v3;
+use crate::runtime_config::RuntimeConfig;
 
 pub struct OutboundMqttFactor {
     create_client: Arc<dyn ClientCreator>,
@@ -32,11 +36,14 @@ impl OutboundMqttFactor {
 }
 
 pub struct AppState {
+    /// Optional maximum payload size in bytes for MQTT messages. If `None`, no limit is enforced.
     max_payload_size_bytes: Option<usize>,
+    /// Semaphore to limit concurrent outbound MQTT connections.
+    pub semaphore: ConnectionSemaphore,
 }
 
 impl Factor for OutboundMqttFactor {
-    type RuntimeConfig = runtime_config::RuntimeConfig;
+    type RuntimeConfig = RuntimeConfig;
     type AppState = AppState;
     type InstanceBuilder = InstanceState;
 
@@ -51,7 +58,14 @@ impl Factor for OutboundMqttFactor {
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
+
         Ok(AppState {
+            semaphore: build_connection_semaphore(
+                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                "mqtt",
+                config.max_connections,
+                config.wait_timeout,
+            ),
             max_payload_size_bytes: config.max_payload_size_bytes,
         })
     }
@@ -68,6 +82,7 @@ impl Factor for OutboundMqttFactor {
         Ok(InstanceState::new(
             allowed_hosts,
             self.create_client.clone(),
+            ctx.app_state().semaphore.clone(),
             otel,
             ctx.app_state().max_payload_size_bytes,
         ))

@@ -35,7 +35,6 @@ use spin_factors::RuntimeFactorsInstanceState;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::TcpStream,
-    sync::{OwnedSemaphorePermit, Semaphore},
     time::timeout,
 };
 use tokio_rustls::client::TlsStream;
@@ -52,6 +51,8 @@ use wasmtime_wasi_http::{
     },
     p3::{self, bindings::http::types as p3_types},
 };
+
+use spin_factor_outbound_networking::{ConnectionPermit, ConnectionSemaphore};
 
 use crate::{
     InstanceHttpHooks, OutboundHttpFactor, SelfRequestOrigin,
@@ -184,9 +185,7 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
             self_request_origin: self.self_request_origin.clone(),
             blocked_networks: self.blocked_networks.clone(),
             http_clients: self.wasi_http_clients.clone(),
-            concurrent_outbound_connections_semaphore: self
-                .concurrent_outbound_connections_semaphore
-                .clone(),
+            semaphore: self.semaphore.clone(),
         };
         let config = OutgoingRequestConfig {
             use_tls: request.uri().scheme() == Some(&Scheme::HTTPS),
@@ -442,9 +441,7 @@ impl p2::WasiHttpHooks for InstanceHttpHooks {
             self_request_origin: self.self_request_origin.clone(),
             blocked_networks: self.blocked_networks.clone(),
             http_clients: self.wasi_http_clients.clone(),
-            concurrent_outbound_connections_semaphore: self
-                .concurrent_outbound_connections_semaphore
-                .clone(),
+            semaphore: self.semaphore.clone(),
         };
         Ok(HostFutureIncomingResponse::Pending(
             wasmtime_wasi::runtime::spawn(
@@ -470,7 +467,7 @@ struct RequestSender {
     self_request_origin: Option<SelfRequestOrigin>,
     request_interceptor: Option<Arc<dyn OutboundHttpInterceptor>>,
     http_clients: HttpClients,
-    concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
+    semaphore: ConnectionSemaphore,
 }
 
 impl RequestSender {
@@ -624,8 +621,7 @@ impl RequestSender {
                 connect_timeout,
                 tls_client_config,
                 override_connect_addr,
-                concurrent_outbound_connections_semaphore: self
-                    .concurrent_outbound_connections_semaphore,
+                semaphore: self.semaphore,
             },
             async move {
                 if use_tls {
@@ -719,8 +715,8 @@ struct ConnectOptions {
     tls_client_config: Option<TlsClientConfig>,
     /// If set, override the address to connect to instead of using the given `uri`'s authority.
     override_connect_addr: Option<SocketAddr>,
-    /// A semaphore to limit the number of concurrent outbound connections.
-    concurrent_outbound_connections_semaphore: Option<Arc<Semaphore>>,
+    /// Semaphore to limit concurrent outbound connections.
+    semaphore: ConnectionSemaphore,
 }
 
 impl ConnectOptions {
@@ -758,11 +754,7 @@ impl ConnectOptions {
 
         let connect = async {
             // If we're limiting concurrent outbound requests, acquire a permit
-            let permit = crate::concurrent_outbound_connections::acquire_owned_semaphore(
-                "wasi",
-                &self.concurrent_outbound_connections_semaphore,
-            )
-            .await;
+            let permit = self.semaphore.acquire().await;
             (TcpStream::connect(&*socket_addrs).await, permit)
         };
 
@@ -771,6 +763,7 @@ impl ConnectOptions {
         let (stream, permit) = timeout(self.connect_timeout, connect)
             .await
             .map_err(|_| ErrorCode::ConnectionTimeout)?;
+        let permit = permit.map_err(|_| ErrorCode::ConnectionLimitReached)?;
         let stream = stream.map_err(|err| match err.kind() {
             std::io::ErrorKind::AddrNotAvailable => dns_error("address not available".into(), 0),
             _ => ErrorCode::ConnectionRefused,
@@ -912,7 +905,7 @@ impl AsyncWrite for RustlsStream {
     }
 }
 
-/// A TCP stream that holds an optional permit indicating that it is allowed to exist.
+/// A TCP stream that holds a permit indicating that it is allowed to exist.
 struct PermittedTcpStream {
     /// The wrapped TCP stream.
     inner: TcpStream,
@@ -920,7 +913,7 @@ struct PermittedTcpStream {
     ///
     /// When this stream is dropped, the permit is also dropped, allowing another
     /// connection to be established.
-    _permit: Option<OwnedSemaphorePermit>,
+    _permit: ConnectionPermit,
 }
 
 impl Connection for PermittedTcpStream {
@@ -1219,11 +1212,12 @@ mod tests {
     /// `ConnectionTimeout` within the configured deadline.
     #[tokio::test]
     async fn connect_timeout_applies_to_permit_acquisition() {
-        // Create a semaphore with exactly 1 permit and hold it immediately,
-        // leaving 0 permits available.  This simulates all outbound-connection
-        // slots being occupied.
-        let semaphore = Arc::new(Semaphore::new(1));
-        let _held = semaphore.clone().try_acquire_owned().unwrap();
+        // Create a semaphore with exactly 1 permit and immediately exhaust it, leaving
+        // 0 permits available.  This simulates all outbound-connection slots being occupied.
+        let conn_semaphore = ConnectionSemaphore::new(None, Some(1), "test", None);
+        let _held = conn_semaphore
+            .try_acquire()
+            .expect("exhausting the single permit");
 
         let options = ConnectOptions {
             // No blocked networks; we want the address to pass the filter.
@@ -1233,7 +1227,7 @@ mod tests {
             tls_client_config: None,
             // Skip DNS by supplying the address directly.
             override_connect_addr: Some("127.0.0.1:1".parse().unwrap()),
-            concurrent_outbound_connections_semaphore: Some(semaphore),
+            semaphore: conn_semaphore,
         };
 
         // `connect_tcp` must time out while waiting for a permit rather than

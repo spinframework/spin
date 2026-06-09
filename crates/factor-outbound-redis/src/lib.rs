@@ -1,9 +1,13 @@
 mod allowed_hosts;
 mod host;
+pub mod runtime_config;
 
 use host::InstanceState;
+use runtime_config::RuntimeConfig;
 use spin_factor_otel::OtelFactorState;
-use spin_factor_outbound_networking::OutboundNetworkingFactor;
+use spin_factor_outbound_networking::{
+    ConnectionSemaphore, OutboundNetworkingFactor, build_connection_semaphore,
+};
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, PrepareContext, RuntimeFactors, SelfInstanceBuilder,
     anyhow,
@@ -24,9 +28,14 @@ impl OutboundRedisFactor {
     }
 }
 
+pub struct AppState {
+    /// Semaphore to limit concurrent outbound Redis connections.
+    pub semaphore: ConnectionSemaphore,
+}
+
 impl Factor for OutboundRedisFactor {
-    type RuntimeConfig = ();
-    type AppState = ();
+    type RuntimeConfig = RuntimeConfig;
+    type AppState = AppState;
     type InstanceBuilder = InstanceState;
 
     fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
@@ -38,9 +47,18 @@ impl Factor for OutboundRedisFactor {
 
     fn configure_app<T: RuntimeFactors>(
         &self,
-        _ctx: ConfigureAppContext<T, Self>,
+        mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        Ok(())
+        let config = ctx.take_runtime_config().unwrap_or_default();
+
+        Ok(AppState {
+            semaphore: build_connection_semaphore(
+                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                "redis",
+                config.max_connections,
+                config.wait_timeout,
+            ),
+        })
     }
 
     fn prepare<T: RuntimeFactors>(
@@ -54,6 +72,7 @@ impl Factor for OutboundRedisFactor {
             allowed_host_checker: AllowedHostChecker::new(outbound_networking.allowed_hosts()),
             blocked_networks: outbound_networking.blocked_networks(),
             connections: spin_resource_table::Table::new(1024),
+            semaphore: ctx.app_state().semaphore.clone(),
             otel,
         })
     }

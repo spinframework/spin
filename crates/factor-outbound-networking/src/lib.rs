@@ -7,18 +7,20 @@ use std::{collections::HashMap, sync::Arc};
 use futures_util::FutureExt as _;
 use opentelemetry_semantic_conventions::attribute::SERVER_PORT;
 use spin_factor_variables::VariablesFactor;
-use spin_factor_wasi::{SocketAddrUse, WasiFactor};
+use spin_factor_wasi::{SocketAddrUse, SocketPermitState, WasiFactor};
 use spin_factors::{
     ConfigureAppContext, Error, Factor, FactorInstanceBuilder, PrepareContext, RuntimeFactors,
     anyhow::{self, Context},
 };
 use spin_outbound_networking_config::allowed_hosts::{DisallowedHostHandler, OutboundAllowedHosts};
+use tokio::sync::Semaphore;
 use url::Url;
 
 use crate::{
     allowed_hosts::allowed_outbound_hosts, runtime_config::RuntimeConfig, tls::TlsClientConfigs,
 };
 pub use allowed_hosts::validate_service_chaining_for_components;
+pub use spin_connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
 
 pub use crate::tls::{ComponentTlsClientConfigs, TlsClientConfig};
 use config::allowed_hosts::AllowedHostsConfig;
@@ -69,15 +71,46 @@ impl Factor for OutboundNetworkingFactor {
             client_tls_configs,
             blocked_ip_networks: block_networks,
             block_private_networks,
+            max_socket_connections,
+            max_total_connections,
+            wait_timeout,
         } = ctx.take_runtime_config().unwrap_or_default();
 
         let blocked_networks = BlockedNetworks::new(block_networks, block_private_networks);
         let tls_client_configs = TlsClientConfigs::new(client_tls_configs)?;
+        let global_connection_semaphore =
+            max_total_connections.map(|n| Arc::new(Semaphore::new(n)));
+
+        if let (Some(socket_cap), Some(global_cap)) =
+            (max_socket_connections, max_total_connections)
+            && socket_cap > global_cap
+        {
+            tracing::warn!(
+                "outbound_networking max_socket_connections ({socket_cap}) exceeds \
+                 max_total_connections ({global_cap}); the global limit will be the effective \
+                 cap for TCP/UDP sockets"
+            );
+        }
+
+        let socket_connection_semaphore =
+            if max_socket_connections.is_some() || global_connection_semaphore.is_some() {
+                Some(ConnectionSemaphore::new(
+                    global_connection_semaphore.clone(),
+                    max_socket_connections,
+                    "wasi-sockets",
+                    wait_timeout,
+                ))
+            } else {
+                None
+            };
 
         Ok(AppState {
             component_allowed_hosts,
             blocked_networks,
             tls_client_configs,
+            socket_connection_semaphore,
+            global_connection_semaphore,
+            max_total_connections,
         })
     }
 
@@ -123,10 +156,18 @@ impl Factor for OutboundNetworkingFactor {
             self.disallowed_host_handler.clone(),
         );
         let blocked_networks = ctx.app_state().blocked_networks.clone();
+        let permit_state = ctx
+            .app_state()
+            .socket_connection_semaphore
+            .clone()
+            .map(SocketPermitState::new);
 
         match ctx.instance_builder::<WasiFactor>() {
             Ok(wasi_builder) => {
-                // Update Wasi socket allowed ports
+                if let Some(state) = permit_state {
+                    wasi_builder.set_socket_permit_state(state);
+                }
+
                 let allowed_hosts = allowed_hosts.clone();
                 wasi_builder.outbound_socket_addr_check(move |addr, addr_use| {
                     let allowed_hosts = allowed_hosts.clone();
@@ -185,6 +226,44 @@ pub struct AppState {
     blocked_networks: BlockedNetworks,
     /// TLS client configs
     tls_client_configs: TlsClientConfigs,
+    /// Pre-built semaphore for TCP/UDP socket quota enforcement (global + socket-specific).
+    /// `None` means no limits are configured.
+    socket_connection_semaphore: Option<ConnectionSemaphore>,
+    /// App-wide semaphore capping total concurrent outbound connections across ALL types.
+    /// `None` means unlimited.
+    global_connection_semaphore: Option<Arc<Semaphore>>,
+    /// The configured global connection limit (for warning comparisons in other factors).
+    max_total_connections: Option<usize>,
+}
+
+/// Builds a [`ConnectionSemaphore`] for an outbound factor, incorporating the optional global
+/// connection limit from the networking factor's app state.
+///
+/// Emits a warning when the per-factor limit exceeds the global cap (the global limit would
+/// be the effective ceiling in that case).
+pub fn build_connection_semaphore(
+    networking: Option<&AppState>,
+    factor: &'static str,
+    factor_limit: Option<usize>,
+    wait_timeout: Option<std::time::Duration>,
+) -> ConnectionSemaphore {
+    if let (Some(per_factor), Some(global_limit)) = (
+        factor_limit,
+        networking.and_then(|n| n.max_total_connections),
+    ) && per_factor > global_limit
+    {
+        tracing::warn!(
+            "outbound_{factor} max_connections ({per_factor}) exceeds global \
+             max_total_connections ({global_limit}); the global limit will be the \
+             effective cap"
+        );
+    }
+    ConnectionSemaphore::new(
+        networking.and_then(|n| n.global_connection_semaphore.clone()),
+        factor_limit,
+        factor,
+        wait_timeout,
+    )
 }
 
 pub struct InstanceBuilder {
