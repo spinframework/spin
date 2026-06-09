@@ -168,7 +168,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
     }
 
     #[instrument(name = "spin_outbound_mysql.execute", skip(self, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", db.system = "mysql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", db.system = "mysql"))]
     async fn execute(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -187,7 +187,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
     }
 
     #[instrument(name = "spin_outbound_mysql.query", skip(self, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", db.system = "mysql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", db.system = "mysql"))]
     async fn query(
         &mut self,
         connection: Resource<v2::Connection>,

@@ -108,10 +108,7 @@ impl v3::HostConnection for InstanceState {
     }
 
     #[instrument(name = "spin_sqlite.execute", skip(self, connection, parameters), err(level = Level::INFO),
-        fields(
-            otel.kind = "client", db.system = "sqlite",
-            otel.name = spin_telemetry::db::sql_span_name(&query), sqlite.backend = Empty,
-        ))]
+        fields(otel.kind = "client", db.system = "sqlite", sqlite.backend = Empty))]
     async fn execute(
         &mut self,
         connection: Resource<v3::Connection>,
@@ -287,12 +284,7 @@ impl v2::HostConnection for InstanceState {
     }
 
     #[instrument(name = "spin_sqlite.execute", skip(self, connection, parameters), err(level = Level::INFO),
-        fields(
-            otel.kind = "client",
-            db.system = "sqlite",
-            otel.name = spin_telemetry::db::sql_span_name(&query),
-            sqlite.backend = Empty,
-        ))]
+        fields(otel.kind = "client", db.system = "sqlite", sqlite.backend = Empty))]
     async fn execute(
         &mut self,
         connection: Resource<v2::Connection>,

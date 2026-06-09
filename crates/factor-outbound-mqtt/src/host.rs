@@ -147,7 +147,6 @@ impl v3::HostConnectionWithStore for crate::MqttFactorData {
     #[instrument(name = "spin_outbound_mqtt.publish", skip(accessor, connection, payload), err(level = Level::INFO),
         fields(
             otel.kind = "producer",
-            otel.name = "publish",
             messaging.operation = "publish",
             messaging.system = "mqtt",
             messaging.destination.name = topic,
@@ -225,7 +224,6 @@ impl v2::HostConnection for InstanceState {
     #[instrument(name = "spin_outbound_mqtt.publish", skip(self, connection, payload), err(level = Level::INFO),
         fields(
             otel.kind = "producer",
-            otel.name = "publish",
             messaging.operation = "publish",
             messaging.system = "mqtt",
             messaging.destination.name = topic,
