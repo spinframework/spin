@@ -108,7 +108,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
     async fn execute(
         &mut self,
         connection: Resource<v3::Connection>,
@@ -125,7 +125,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
     }
 
     #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
     async fn query(
         &mut self,
         connection: Resource<v3::Connection>,
@@ -215,7 +215,7 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
     async fn execute(
         &mut self,
         connection: Resource<v4::Connection>,
@@ -230,7 +230,7 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     }
 
     #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
     async fn query(
         &mut self,
         connection: Resource<v4::Connection>,
@@ -268,7 +268,7 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(accessor, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
     async fn execute_async<T>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v4::Connection>,
@@ -291,7 +291,7 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
 
     #[allow(clippy::type_complexity)] // blame bindgen, clippy, blame bindgen
     #[instrument(name = "spin_outbound_pg.query_async", skip(accessor, params), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
     async fn query_async<T>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v4::Connection>,
@@ -497,7 +497,7 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
     async fn execute(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -518,7 +518,7 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
     }
 
     #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = spin_telemetry::db::sql_span_name(&statement)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
     async fn query(
         &mut self,
         connection: Resource<v2::Connection>,
