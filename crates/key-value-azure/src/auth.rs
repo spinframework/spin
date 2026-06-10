@@ -54,7 +54,8 @@ pub enum AzureCredentialKind {
     /// Service principal authenticated with a client secret. Reads
     /// `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` from the
     /// environment — the same variables the legacy SDK's `EnvironmentCredential`
-    /// used, so existing deployments keep working without config changes.
+    /// used, so the environment carries over once `auth_type = "service_principal"`
+    /// is set.
     ServicePrincipal,
 }
 
@@ -93,7 +94,7 @@ impl AzureCredentialKind {
     ///
     /// This runs the credential's own setup (which may fail — e.g. if the
     /// environment for workload identity or service principal is absent), so it
-    /// is called lazily when the Cosmos client is first built.
+    /// is called at store construction, failing `spin up` on misconfiguration.
     pub(crate) fn credential(&self) -> azure_core::Result<Arc<dyn TokenCredential>> {
         match self {
             Self::DeveloperTools => Ok(azure_identity::DeveloperToolsCredential::new(None)?),
@@ -116,7 +117,7 @@ impl AzureCredentialKind {
                 // azure_identity 1.0 removed the env-driven `EnvironmentCredential`,
                 // so read the same variables it used and pass them to
                 // `ClientSecretCredential` explicitly. A missing variable surfaces
-                // here (lazily, when the client is first built) as a clear error.
+                // here (at store construction, during `spin up`) as a clear error.
                 let tenant_id = service_principal_env("AZURE_TENANT_ID")?;
                 let client_id = service_principal_env("AZURE_CLIENT_ID")?;
                 let secret = service_principal_env("AZURE_CLIENT_SECRET")?;

@@ -18,10 +18,10 @@ use crate::auth::KeyValueAzureCosmosAuthOptions;
 
 pub struct KeyValueAzureCosmos {
     /// Parameters for initializing the Cosmos DB client
-    account: String,
+    account_ref: AccountReference,
+
     database: String,
     container: String,
-    auth_options: KeyValueAzureCosmosAuthOptions,
     region: Region,
 
     /// The Cosmos DB client
@@ -43,44 +43,33 @@ impl KeyValueAzureCosmos {
         region: Region,
         app_id: Option<String>,
     ) -> Result<Self> {
+        let endpoint: azure_data_cosmos::AccountEndpoint =
+            format!("https://{account}.documents.azure.com/")
+                .parse()
+                .map_err(log_error)?;
+
+        let account_ref = match auth_options {
+            KeyValueAzureCosmosAuthOptions::RuntimeConfigValues(config) => {
+                AccountReference::with_authentication_key(
+                    endpoint,
+                    Secret::from(config.key.clone()),
+                )
+            }
+            KeyValueAzureCosmosAuthOptions::AadCredential(kind) => {
+                let credential = kind.credential().map_err(log_error)?;
+                AccountReference::with_credential(endpoint, credential)
+            }
+        };
+
         Ok(Self {
-            account,
+            account_ref,
             database,
             container,
-            auth_options,
             region,
             client: tokio::sync::OnceCell::new(),
             app_id,
         })
     }
-}
-
-async fn build_cosmos_client(
-    account: &str,
-    auth_options: &KeyValueAzureCosmosAuthOptions,
-    region: &Region,
-) -> Result<CosmosClient, Error> {
-    let endpoint: azure_data_cosmos::AccountEndpoint =
-        format!("https://{account}.documents.azure.com/")
-            .parse()
-            .map_err(log_error)?;
-
-    let account_ref = match auth_options {
-        KeyValueAzureCosmosAuthOptions::RuntimeConfigValues(config) => {
-            AccountReference::with_authentication_key(endpoint, Secret::from(config.key.clone()))
-        }
-        KeyValueAzureCosmosAuthOptions::AadCredential(kind) => {
-            let credential = kind.credential().map_err(log_error)?;
-            AccountReference::with_credential(endpoint, credential)
-        }
-    };
-
-    let routing_strategy = RoutingStrategy::ProximityTo(region.clone());
-
-    CosmosClient::builder()
-        .build(account_ref, routing_strategy)
-        .await
-        .map_err(log_error)
 }
 
 #[async_trait]
@@ -89,8 +78,13 @@ impl StoreManager for KeyValueAzureCosmos {
         let client = self
             .client
             .get_or_try_init(|| async {
-                return build_cosmos_client(&self.account, &self.auth_options, &self.region)
-                    .await?
+                return CosmosClient::builder()
+                    .build(
+                        self.account_ref.clone(),
+                        RoutingStrategy::ProximityTo(self.region.clone()),
+                    )
+                    .await
+                    .map_err(log_error)?
                     .database_client(&self.database)
                     .container_client(&self.container)
                     .await
