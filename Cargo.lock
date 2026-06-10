@@ -9407,6 +9407,7 @@ dependencies = [
  "itertools 0.14.0",
  "oci-distribution 0.11.0 (git+https://github.com/fermyon/oci-distribution?rev=7b291a39f74d1a3c9499d934a56cae6580fc8e37)",
  "reqwest 0.12.9",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "spin-common",

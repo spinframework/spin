@@ -12,6 +12,11 @@ chrono = { workspace = true }
 dirs = { workspace = true }
 docker_credential = "1"
 docker-registry = { version = "0.9", default-features = false }
+# Force a TLS feature on docker-registry's reqwest 0.13. Building `-p spin-oci` in
+# isolation doesn't pull in `oci-client` (which is what activates `reqwest/native-tls`
+# on 0.13 during a workspace build), so without this docker-registry fails to compile
+# because items it uses are gated behind reqwest's `__tls` cfg.
+reqwest_0_13 = { package = "reqwest", version = "0.13", default-features = false, features = ["native-tls"] }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
 itertools = { workspace = true }
