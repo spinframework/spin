@@ -309,24 +309,44 @@ async fn env_templates_and_plugins(
                     .await?;
             let env_name = loaded_env.name;
             let env_def = loaded_env.env_def;
-            //   - create a TM for it
+
+            // Create a TemplateManager for this environment's templates
             let template_manager = TemplateManager::for_environment(&env_name)?;
-            //   - install the templates to that TM
+
+            // If the env has templates, install the templates to that TemplateManager.
+            // If this fails, fall back to already installed templates for that env,
+            // or bail if we don't have env templates already installed.
             let env_templates = env_def.templates();
             if let Some(env_templates) = env_templates {
                 let source = spin_templates::TemplateSource::try_from_git(
                     env_templates.url(),
                     env_templates.tag(),
                     crate::build_info::SPIN_VERSION,
-                )?;
-                template_manager
+                )
+                .with_context(|| format!("Invalid templates URL in environment '{env_ref}'"))?;
+                if let Err(e) = template_manager
                     .install(
                         &source,
                         &spin_templates::InstallOptions::default().update(true),
                         &DiscardingReporter,
                     )
-                    .await?;
+                    .await
+                {
+                    // Couldn't fetch templates, and we don't already have them from a previous use.
+                    if is_empty(&template_manager).await {
+                        return Err(e).with_context(|| {
+                            format!("Cannot install templates for '{env_ref}' environment")
+                        });
+                    }
+                    // Couldn't fetch templates, but we do have some existing ones
+                    terminal::warn!(
+                        "Cannot check for updated templates for '{env_ref}' environment"
+                    );
+                    eprintln!("Using your existing templates");
+                    eprintln!();
+                }
             }
+
             if is_empty(&template_manager).await {
                 match variant {
                     TemplateVariantInfo::NewApplication => {
