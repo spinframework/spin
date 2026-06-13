@@ -1223,8 +1223,12 @@ route = "/..."
         impl Drop for Uninstaller<'_> {
             fn drop(&mut self) {
                 let mut uninstall = std::process::Command::new(spin_binary());
-                uninstall.args(["plugins", "uninstall", "example"]);
-                self.0.run_in(&mut uninstall).unwrap();
+                uninstall
+                    .args(["plugins", "uninstall", "example"])
+                    .env("SPIN_DATA_DIR", "./plugins");
+                self.0
+                    .run_in(&mut uninstall)
+                    .expect("failed to uninstall test plugin");
             }
         }
         let _u = Uninstaller(&env);
