@@ -12,7 +12,7 @@ rust-version.workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 azure_core = { version = "1.0", default-features = false }
-azure_data_cosmos = { version = "0.34", features = ["key_auth"] }
+azure_data_cosmos = { version = "0.35", features = ["key_auth"] }
 azure_identity = "1.0"
 futures = { workspace = true }
 serde = { workspace = true }
