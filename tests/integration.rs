@@ -1362,7 +1362,7 @@ route = "/..."
     #[test]
     fn test_wasi_http_p3_double_echo() -> anyhow::Result<()> {
         wasi_http_echo(
-            "wasi-http-p2-streaming",
+            "wasi-http-p3-streaming",
             "double-echo".into(),
             Some("echo".into()),
         )
