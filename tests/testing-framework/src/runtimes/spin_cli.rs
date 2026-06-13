@@ -56,13 +56,15 @@ impl SpinCli {
         spin_config: SpinConfig,
         env: &mut TestEnvironment<R>,
     ) -> anyhow::Result<Self> {
-        let port = get_random_port()?;
         let mut spin_cmd = Command::new(spin_config.binary_path);
         let child = spin_cmd
             .envs(env.env_vars())
             .arg("up")
             .current_dir(env.path())
-            .args(["--listen", &format!("127.0.0.1:{port}")])
+            // Bind an OS-assigned free port on Spin's own listener and read the actual
+            // port back from its startup output. Pre-allocating a port here is racy
+            // because parallel tests can claim it before `spin up` binds.
+            .args(["--listen", "127.0.0.1:0"])
             .args(spin_config.spin_up_args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -72,24 +74,31 @@ impl SpinCli {
         let mut child = child.spawn()?;
         let stdout = OutputStream::new(child.stdout.take().unwrap());
         let stderr = OutputStream::new(child.stderr.take().unwrap());
-        log::debug!("Awaiting spin binary to start up on port {port}...");
+        log::debug!("Awaiting spin binary to report its listening port...");
         let mut spin = Self {
             process: child,
             stdout,
             stderr,
-            io_mode: IoMode::Http(port),
+            io_mode: IoMode::None,
         };
         let start = std::time::Instant::now();
         loop {
-            match std::net::TcpStream::connect(format!("127.0.0.1:{port}")) {
-                Ok(_) => {
-                    log::debug!("Spin started on port {port}.");
-                    return Ok(spin);
-                }
-                Err(e) => {
-                    let stderr = spin.stderr.output_as_str().unwrap_or("<non-utf8>");
-                    log::trace!("Checking that the Spin server started returned an error: {e}");
-                    log::trace!("Current spin stderr = '{stderr}'");
+            // `spin up` prints its base URL once the listener is bound and the app is
+            // loaded. Observing it confirms readiness and tells us the real port the OS
+            // assigned to this Spin instance.
+            let found_port = spin.stdout.output_as_str().and_then(parse_serving_port);
+            if let Some(port) = found_port {
+                match std::net::TcpStream::connect(("127.0.0.1", port)) {
+                    Ok(_) => {
+                        log::debug!("Spin started on port {port}.");
+                        spin.io_mode = IoMode::Http(port);
+                        return Ok(spin);
+                    }
+                    Err(e) => {
+                        log::trace!(
+                            "Spin reported port {port}, but it is not accepting connections yet: {e}"
+                        );
+                    }
                 }
             }
             if let Some(status) = spin.try_wait()? {
@@ -107,7 +116,8 @@ impl SpinCli {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         anyhow::bail!(
-            "`spin up` did not start server or error after two minutes. stderr:\n\t{}",
+            "`spin up` did not report a listening port within two minutes.\nstdout:\n\t{}\nstderr:\n\t{}",
+            spin.stdout.output_as_str().unwrap_or("<non-utf8>"),
             spin.stderr.output_as_str().unwrap_or("<non-utf8>")
         )
     }
@@ -278,9 +288,25 @@ enum IoMode {
     None,
 }
 
-/// Uses a track to ge a random unused port
-fn get_random_port() -> anyhow::Result<u16> {
-    Ok(std::net::TcpListener::bind("localhost:0")?
-        .local_addr()?
-        .port())
+fn parse_serving_port(output: &str) -> Option<u16> {
+    parse_plain_serving_port(output).or_else(|| parse_json_serving_port(output))
+}
+
+fn parse_plain_serving_port(output: &str) -> Option<u16> {
+    output
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("Serving "))
+        .find_map(parse_base_url_port)
+}
+
+fn parse_json_serving_port(output: &str) -> Option<u16> {
+    let output: serde_json::Value = serde_json::from_str(output).ok()?;
+    output
+        .get("base_url")
+        .and_then(serde_json::Value::as_str)
+        .and_then(parse_base_url_port)
+}
+
+fn parse_base_url_port(base_url: &str) -> Option<u16> {
+    url::Url::parse(base_url).ok()?.port_or_known_default()
 }
