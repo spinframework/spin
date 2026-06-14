@@ -131,8 +131,17 @@ impl Guest for Component {
                         let method = request.get_method();
                         let (rx, trailers) =
                             Request::consume_body(request, wit_future::new(|| Ok(())).1);
+                        // Forward content-type so the echoed response carries it back
+                        // (matches what /echo round-trips).
+                        let outgoing_headers = Fields::from_list(
+                            &headers
+                                .into_iter()
+                                .filter(|(k, _)| k == "content-type")
+                                .collect::<Vec<_>>(),
+                        )
+                        .unwrap();
                         let outgoing_request =
-                            Request::new(Fields::new(), Some(rx), trailers, None).0;
+                            Request::new(outgoing_headers, Some(rx), trailers, None).0;
                         outgoing_request.set_method(&method).unwrap();
                         outgoing_request
                             .set_path_with_query(Some(url.path()))
