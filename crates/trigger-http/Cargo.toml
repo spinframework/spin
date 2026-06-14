@@ -15,7 +15,7 @@ http = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
-hyper-util = { workspace = true }
+hyper-util = { workspace = true, features = ["server-auto"] }
 pin-project-lite = { workspace = true }
 rand.workspace = true
 rustls = { workspace = true }

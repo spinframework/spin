@@ -16,6 +16,7 @@ mysql_async = { version = "0.35", default-features = false, features = [
   "minimal-rust",
   "native-tls-tls",
 ] }
+opentelemetry-semantic-conventions = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }

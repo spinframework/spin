@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
 spin-core = { path = "../core" }
 spin-factor-otel = { path = "../factor-otel" }
 spin-factors = { path = "../factors" }

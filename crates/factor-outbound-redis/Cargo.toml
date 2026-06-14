@@ -6,6 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+opentelemetry-semantic-conventions = { workspace = true }
 redis = { workspace = true , features = ["tokio-comp", "tokio-native-tls-comp", "aio"] }
 serde = { workspace = true }
 spin-core = { path = "../core" }

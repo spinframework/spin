@@ -5,6 +5,7 @@ use opentelemetry_sdk::{
     Resource,
     resource::{EnvResourceDetector, ResourceDetector},
 };
+use opentelemetry_semantic_conventions::attribute as otel_attribute;
 
 const OTEL_SERVICE_NAME: &str = "OTEL_SERVICE_NAME";
 
@@ -36,13 +37,13 @@ impl ResourceDetector for SpinResourceDetector {
             .or_else(|| {
                 EnvResourceDetector::new()
                     .detect()
-                    .get(&Key::new("service.name"))
+                    .get(&Key::new(otel_attribute::SERVICE_NAME))
             })
             .unwrap_or_else(|| "spin".into());
         Resource::builder()
             .with_attributes(vec![
-                KeyValue::new("service.name", service_name),
-                KeyValue::new("service.version", self.spin_version.clone()),
+                KeyValue::new(otel_attribute::SERVICE_NAME, service_name),
+                KeyValue::new(otel_attribute::SERVICE_VERSION, self.spin_version.clone()),
             ])
             .build()
     }

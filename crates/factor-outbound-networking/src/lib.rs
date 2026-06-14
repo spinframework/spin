@@ -5,7 +5,7 @@ mod tls;
 use std::{collections::HashMap, sync::Arc};
 
 use futures_util::FutureExt as _;
-use opentelemetry_semantic_conventions::attribute::SERVER_PORT;
+use opentelemetry_semantic_conventions::attribute as otel_attribute;
 use spin_factor_variables::VariablesFactor;
 use spin_factor_wasi::{SocketAddrUse, SocketPermitState, WasiFactor};
 use spin_factors::{
@@ -301,16 +301,21 @@ impl FactorInstanceBuilder for InstanceBuilder {
 /// The following fields must be pre-declared as empty on the span or they will not show up.
 /// ```
 /// use tracing::field::Empty;
-/// #[tracing::instrument(fields(db.address = Empty, server.port = Empty, db.namespace = Empty))]
+/// use opentelemetry_semantic_conventions::attribute as otel_attribute;
+/// #[tracing::instrument(fields({otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
 /// fn open() {}
 /// ```
 pub fn record_address_fields(address: &str) {
     if let Ok(url) = Url::parse(address) {
         let span = tracing::Span::current();
-        // `db.address` and `db.namespace` are incubating in opentelemetry-semantic-conventions 0.28.
-        // Leaving as string literals to avoid enabling the semconv_experimental feature.
-        span.record("db.address", url.host_str().unwrap_or_default());
-        span.record(SERVER_PORT, url.port().unwrap_or_default());
-        span.record("db.namespace", url.path().trim_start_matches('/'));
+        span.record(
+            otel_attribute::SERVER_ADDRESS,
+            url.host_str().unwrap_or_default(),
+        );
+        span.record(otel_attribute::SERVER_PORT, url.port().unwrap_or_default());
+        span.record(
+            otel_attribute::DB_NAMESPACE,
+            url.path().trim_start_matches('/'),
+        );
     }
 }

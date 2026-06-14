@@ -159,7 +159,7 @@ impl OtelFactor {
                 OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
             };
 
-            let log_processor = BatchLogProcessor::builder(log_exporter, Tokio).build();
+            let mut log_processor = BatchLogProcessor::builder(log_exporter, Tokio).build();
             log_processor.set_resource(&resource);
             Some(Arc::new(log_processor))
         } else {
