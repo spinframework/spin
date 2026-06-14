@@ -12,8 +12,11 @@ rust-version.workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 azure_core = { version = "1.0", default-features = false }
-azure_data_cosmos = { version = "0.35", features = ["key_auth"] }
-azure_identity = "1.0"
+# Use native-tls (OpenSSL) rather than the SDK-default rustls. The default
+# `rustls` feature drags in reqwest's aws-lc-rs provider, which collides with
+# Spin's workspace-pinned `ring` provider and panics at runtime.
+azure_data_cosmos = { version = "0.35", default-features = false, features = ["key_auth", "native_tls", "hmac_rust"] }
+azure_identity = { version = "1.0", default-features = false, features = ["tokio"] }
 futures = { workspace = true }
 serde = { workspace = true }
 spin-factor-key-value = { path = "../factor-key-value" }
