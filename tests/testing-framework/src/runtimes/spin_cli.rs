@@ -257,15 +257,36 @@ pub struct SpinConfig {
 }
 
 fn kill_process(process: &mut std::process::Child) {
-    #[cfg(windows)]
-    {
-        let _ = process.kill();
+    match process.try_wait() {
+        Ok(Some(_)) => return,
+        Ok(None) => {}
+        Err(e) => {
+            log::warn!("failed to check Spin process status before cleanup: {e}");
+            return;
+        }
     }
+
     #[cfg(not(windows))]
     {
         let pid = nix::unistd::Pid::from_raw(process.id() as i32);
         let _ = nix::sys::signal::kill(pid, nix::sys::signal::SIGTERM);
+        for _ in 0..100 {
+            match process.try_wait() {
+                Ok(Some(_)) => return, // already reaped — skip the wait below
+                Ok(None) => std::thread::sleep(std::time::Duration::from_millis(50)),
+                Err(e) => {
+                    log::warn!("failed to check Spin process status after SIGTERM: {e}");
+                    return;
+                }
+            }
+        }
+        log::warn!("Spin did not exit within ~5s of SIGTERM; escalating to SIGKILL");
     }
+    // Hard-kill the process. On Windows this is the only termination
+    // (TerminateProcess); on Unix it's the SIGKILL
+    let _ = process.kill();
+
+    let _ = process.wait();
 }
 
 /// How this Spin instance is communicating with the outside world
