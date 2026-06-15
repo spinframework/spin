@@ -16,7 +16,6 @@ futures-util = "0.3"
 id-arena = "2"
 indexmap = "2"
 oci-client = { version = "0.16", default-features = false, features = ["native-tls"] }
-oci-distribution = { git = "https://github.com/fermyon/oci-distribution", rev = "7e4ce9be9bcd22e78a28f06204931f10c44402ba" }
 oci-wasm = "0.4"
 reqwest = { workspace = true }
 semver = "1"

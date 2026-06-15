@@ -20,7 +20,8 @@ reqwest_0_13 = { package = "reqwest", version = "0.13", default-features = false
 flate2 = { workspace = true }
 futures-util = { workspace = true }
 itertools = { workspace = true }
-oci-distribution = { git = "https://github.com/fermyon/oci-distribution", rev = "7b291a39f74d1a3c9499d934a56cae6580fc8e37" }
+# TODO: can align on semver here and in crates/environments when the next, post-0.17.0 release is available
+oci-client = { git = "https://github.com/oras-project/rust-oci-client", rev = "49c409df9a544f2d02ae4ae6a5fd8510ec74f438", default-features = false, features = ["native-tls"] }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

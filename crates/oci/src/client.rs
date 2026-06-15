@@ -8,7 +8,7 @@ use docker_credential::DockerCredential;
 use futures_util::future;
 use futures_util::stream::{self, StreamExt, TryStreamExt};
 use itertools::Itertools;
-use oci_distribution::{
+use oci_client::{
     Reference, RegistryOperation, client::ImageLayer, config::ConfigFile,
     manifest::OciImageManifest, secrets::RegistryAuth, token_cache::RegistryTokenType,
 };
@@ -86,7 +86,7 @@ pub struct Client {
     /// Global cache for the metadata, Wasm modules, and static assets pulled from OCI registries.
     pub cache: Cache,
     /// Underlying OCI client.
-    oci: oci_distribution::Client,
+    oci: oci_client::Client,
     /// Client options
     pub opts: ClientOpts,
 }
@@ -112,7 +112,7 @@ pub enum InferPredefinedAnnotations {
 impl Client {
     /// Create a new instance of an OCI client for distributing Spin applications.
     pub async fn new(insecure: bool, cache_root: Option<PathBuf>) -> Result<Self> {
-        let client = oci_distribution::Client::new(Self::build_config(insecure));
+        let client = oci_client::Client::new(Self::build_config(insecure));
         let cache = Cache::new(cache_root).await?;
         let opts = ClientOpts {
             content_ref_inline_max_size: DEFAULT_CONTENT_REF_INLINE_MAX_SIZE,
@@ -243,7 +243,7 @@ impl Client {
             "com.fermyon.spin.lockedAppDigest".to_string(),
             config_layer_digest,
         );
-        let cfg = oci_distribution::config::Config {
+        let cfg = oci_client::config::Config {
             labels: Some(labels),
             ..Default::default()
         };
@@ -253,8 +253,8 @@ impl Client {
         // (See https://github.com/opencontainers/image-spec/blob/main/config.md)
         // TODO: Explore adding data applicable to the Spin app being published.
         let oci_config_file = ConfigFile {
-            architecture: oci_distribution::config::Architecture::Wasm,
-            os: oci_distribution::config::Os::Wasip1,
+            architecture: oci_client::config::Architecture::Wasm,
+            os: oci_client::config::Os::Other("Wasip1".to_string()),
             // We need to ensure that the image config for different content is updated.
             // Without referencing the digest of the locked application in the OCI image config,
             // all Spin applications would get the same image config digest, resulting in the same
@@ -263,7 +263,7 @@ impl Client {
             ..Default::default()
         };
         let oci_config =
-            oci_distribution::client::Config::oci_v1_from_config_file(oci_config_file, None)?;
+            oci_client::client::Config::oci_v1_from_config_file(oci_config_file, None)?;
         let manifest = OciImageManifest::build(&layers, &oci_config, annotations);
 
         let response = self
@@ -758,14 +758,14 @@ impl Client {
     }
 
     /// Build the OCI client configuration given the insecure option.
-    fn build_config(insecure: bool) -> oci_distribution::client::ClientConfig {
+    fn build_config(insecure: bool) -> oci_client::client::ClientConfig {
         let protocol = if insecure {
-            oci_distribution::client::ClientProtocol::Http
+            oci_client::client::ClientProtocol::Http
         } else {
-            oci_distribution::client::ClientProtocol::Https
+            oci_client::client::ClientProtocol::Https
         };
 
-        oci_distribution::client::ClientConfig {
+        oci_client::client::ClientConfig {
             protocol,
             default_token_expiration_secs: DEFAULT_TOKEN_EXPIRATION_SECS,
             ..Default::default()
@@ -863,7 +863,7 @@ fn all_annotations(
         let authors = authors.join(", ");
         add_inferred(
             &mut current,
-            oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS,
+            oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS,
             Some(authors),
         );
     }
@@ -871,7 +871,7 @@ fn all_annotations(
     let name = locked_app.get_metadata(APP_NAME_KEY).unwrap_or_default();
     add_inferred(
         &mut current,
-        oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_TITLE,
+        oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_TITLE,
         name,
     );
 
@@ -880,21 +880,21 @@ fn all_annotations(
         .unwrap_or_default();
     add_inferred(
         &mut current,
-        oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_DESCRIPTION,
+        oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_DESCRIPTION,
         description,
     );
 
     let version = locked_app.get_metadata(APP_VERSION_KEY).unwrap_or_default();
     add_inferred(
         &mut current,
-        oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_VERSION,
+        oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_VERSION,
         version,
     );
 
     let created = chrono::Utc::now().to_rfc3339();
     add_inferred(
         &mut current,
-        oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_CREATED,
+        oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_CREATED,
         Some(created),
     );
 
@@ -1423,29 +1423,28 @@ mod test {
         assert_eq!(
             "Marty DiBergi, Artie Fufkin",
             annotations
-                .get(oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS)
+                .get(oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS)
                 .expect("should have authors annotation")
         );
         assert_eq!(
             "this-is-spinal-tap",
             annotations
-                .get(oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_TITLE)
+                .get(oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_TITLE)
                 .expect("should have title annotation")
         );
         assert_eq!(
             "11.11.11",
             annotations
-                .get(oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_VERSION)
+                .get(oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_VERSION)
                 .expect("should have version annotation")
         );
         assert!(
             !annotations
-                .contains_key(oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_DESCRIPTION),
+                .contains_key(oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_DESCRIPTION),
             "empty description should not have generated annotation"
         );
         assert!(
-            annotations
-                .contains_key(oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_CREATED),
+            annotations.contains_key(oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_CREATED),
             "creation annotation should have been generated"
         );
     }
@@ -1468,7 +1467,7 @@ mod test {
         assert_eq!(
             "Marty DiBergi, Artie Fufkin",
             annotations
-                .get(oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS)
+                .get(oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS)
                 .expect("should have authors annotation")
         );
     }
@@ -1479,7 +1478,7 @@ mod test {
         let explicit = as_annotations(&[
             ("volume", "11"),
             (
-                oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS,
+                oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS,
                 "David St Hubbins, Nigel Tufnel",
             ),
         ]);
@@ -1501,7 +1500,7 @@ mod test {
         assert_eq!(
             "David St Hubbins, Nigel Tufnel",
             annotations
-                .get(oci_distribution::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS)
+                .get(oci_client::annotations::ORG_OPENCONTAINERS_IMAGE_AUTHORS)
                 .expect("should have authors annotation"),
             "explicit authors should have taken precedence"
         );
