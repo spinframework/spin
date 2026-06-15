@@ -285,8 +285,6 @@ fn kill_process(process: &mut std::process::Child) {
     // Hard-kill the process. On Windows this is the only termination
     // (TerminateProcess); on Unix it's the SIGKILL
     let _ = process.kill();
-
-    let _ = process.wait();
 }
 
 /// How this Spin instance is communicating with the outside world
