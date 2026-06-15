@@ -140,8 +140,7 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
             {otel_attribute::URL_FULL} = Empty,
             {otel_attribute::HTTP_REQUEST_METHOD} = %request.method(),
             otel.name = %request.method(),
-            // Incubating convention; not yet a stable `opentelemetry_semantic_conventions` constant.
-            http.response.body.size = Empty,
+            {otel_attribute::HTTP_RESPONSE_BODY_SIZE} = Empty,
             {otel_attribute::HTTP_RESPONSE_STATUS_CODE} = Empty,
             {otel_attribute::SERVER_ADDRESS} = Empty,
             {otel_attribute::SERVER_PORT} = Empty,
@@ -276,10 +275,7 @@ impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutB
 
         let mut record_body_size_once = |body_size: u64| {
             if let Some(span) = me.span.take() {
-                // `http.response.body.size` is incubating (behind semconv_experimental)
-                // in opentelemetry-semantic-conventions 0.28. Leave as literal to avoid
-                // enabling the experimental feature.
-                span.record("http.response.body.size", body_size);
+                span.record(otel_attribute::HTTP_RESPONSE_BODY_SIZE, body_size);
             }
         };
         match poll_result {
