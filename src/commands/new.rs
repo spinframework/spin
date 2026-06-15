@@ -80,7 +80,7 @@ pub struct TemplateNewCommandCore {
 pub struct NewCommand {
     /// The Spin platform or runtime for which you want to develop the application.
     /// If present, Spin will offer only templates tailored for that environment.
-    #[clap(long, short = 'E')]
+    #[clap(long, short = 'E', env = "SPIN_NEW_DEFAULT_ENVIRONMENT")]
     #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::environments))]
     target_environment: Option<String>,
 
