@@ -724,29 +724,29 @@ mod integration_tests {
 
     #[test]
     #[cfg(feature = "extern-dependencies-tests")]
-    #[ignore = "https://github.com/spinframework/spin/issues/2457"]
-    // TODO: Check why python is not picking up the spin_sdk from site_packages
-    // Currently installing to the local directory to get around it.
     fn http_python_template_smoke_test() -> anyhow::Result<()> {
         let prebuild = |env: &mut test_environment::TestEnvironment<_>| {
-            let mut tidy = std::process::Command::new("pip3");
-            tidy.args(["install", "-r", "requirements.txt", "-t", "."]);
-            env.run_in(&mut tidy)?;
+            let mut install_reqs = std::process::Command::new("pip3");
+            install_reqs.args([
+                "install",
+                "--verbose",
+                "--timeout",
+                "60",
+                "-r",
+                "requirements.txt",
+            ]);
+            env.run_in(&mut install_reqs)?;
             Ok(())
         };
-        let env_vars = HashMap::from([
-            ("PATH".to_owned(), "./bin/".to_owned()),
-            ("PYTHONPATH".to_owned(), ".".to_owned()),
-        ]);
         http_smoke_test_template(
             "http-py",
             Some(crate::testcases::TemplateSource::Url {
                 repo: "https://github.com/spinframework/spin-python-sdk",
-                branch: Some("v2.0"),
+                branch: Some("v4.0.0"),
             }),
             &[],
             prebuild,
-            env_vars,
+            HashMap::default(),
             "Hello from Python!",
         )
     }
