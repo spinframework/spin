@@ -10111,6 +10111,7 @@ dependencies = [
  "log",
  "nix 0.29.0",
  "reqwest 0.12.9",
+ "serde_json",
  "spin-app",
  "spin-http",
  "spin-loader",
@@ -10119,6 +10120,7 @@ dependencies = [
  "spin-trigger-http",
  "test-environment",
  "tokio",
+ "url",
 ]
 
 [[package]]
