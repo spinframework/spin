@@ -3,7 +3,7 @@ use std::{
     future::Future,
     io::{ErrorKind, IsTerminal},
     net::SocketAddr,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 
@@ -60,8 +60,14 @@ pub const MAX_RETRIES: u16 = 10;
 
 /// An HTTP server which runs Spin apps.
 pub struct HttpServer<F: RuntimeFactors> {
-    /// The address the server is listening on.
+    /// The address the server was configured to listen on (the `--listen` value).
     listen_addr: SocketAddr,
+    /// The address the server is actually bound to, captured once after binding.
+    ///
+    /// This can differ from `listen_addr` when the OS assigns the port — e.g.
+    /// `--listen 127.0.0.1:0` or `--find-free-port`. Self-request origins must use
+    /// this real address rather than the configured one.
+    local_addr: OnceLock<SocketAddr>,
     /// The TLS configuration for the server.
     tls_config: Option<TlsConfig>,
     /// The maximum buffer size for an HTTP1 connection.
@@ -151,6 +157,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
             .collect::<anyhow::Result<_>>()?;
         Ok(Self {
             listen_addr,
+            local_addr: OnceLock::new(),
             tls_config,
             find_free_port,
             router,
@@ -206,6 +213,8 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 }
             })?
         };
+
+        let _ = self.local_addr.set(listener.local_addr()?);
 
         if let Some(tls_config) = self.tls_config.clone() {
             self.serve_https(listener, tls_config).await?;
@@ -366,6 +375,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
         }
     }
 
+    fn get_local_addr(&self) -> SocketAddr {
+        self.local_addr.get().copied().unwrap_or(self.listen_addr)
+    }
+
     async fn respond_wasm_component(
         self: &Arc<Self>,
         req: Request<Body>,
@@ -386,7 +399,9 @@ impl<F: RuntimeFactors> HttpServer<F> {
             .context(
             "The wasi HTTP trigger was configured without the required wasi outbound http support",
         )?;
-        let origin = SelfRequestOrigin::create(server_scheme, &self.listen_addr.to_string())?;
+
+        let self_addr = self.get_local_addr();
+        let origin = SelfRequestOrigin::create(server_scheme, &self_addr.to_string())?;
         outbound_http.set_self_request_origin(origin);
         outbound_http.set_request_interceptor(OutboundHttpInterceptor::new(self.clone()))?;
 
