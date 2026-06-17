@@ -16,8 +16,9 @@ _Listed in alphabetical order by first name_
 | Radu Matei | radu-matei |
 | Rajat Jindal | rajatjindal |
 | Ryan Levick | rylev |
-| Vaughn Dice | vdice |
 
 ## Emeritus Maintainers
 
-None
+| Name | GitHub Username |
+| --- | --- |
+| Vaughn Dice | vdice |
