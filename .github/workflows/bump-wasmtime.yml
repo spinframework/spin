@@ -29,12 +29,25 @@ jobs:
           sed -i -E "s/wasmtime-wasi-http = \{ version = \"[0-9]+[0-9.]*\"/wasmtime-wasi-http = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
           cargo update
 
+      # Import GPG key for signing commits
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
       - name: Create Spin PR
         uses: peter-evans/create-pull-request@v8
         with:
+          token: ${{ secrets.SPIN_RUST_SDK_RELEASE_PAT }}
           branch: bump-wasmtime/prerelease-${{ steps.wasmtime-release.outputs.last_wasmtime }}
           commit-message: Bump Wasmtime to v${{ steps.wasmtime-release.outputs.last_wasmtime }} prerelease
           title: Bump Wasmtime to v${{ steps.wasmtime-release.outputs.last_wasmtime }} prerelease
           body: Bumps Wasmtime to v${{ steps.wasmtime-release.outputs.last_wasmtime }} prerelease
+          committer: spinframeworkbot <202838904+spinframeworkbot@users.noreply.github.com>
+          author: spinframeworkbot <202838904+spinframeworkbot@users.noreply.github.com>
           signoff: true
           draft: true
+          delete-branch: true
