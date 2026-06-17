@@ -1201,6 +1201,7 @@ fn record_content_length_header(span: &Span, headers: &HeaderMap, attr_name: &'s
 #[cfg(test)]
 mod tests {
     use super::*;
+    use spin_factor_outbound_networking::LimitedSemaphore;
 
     /// Regression test: the connect timeout must cover permit acquisition, not
     /// just the TCP handshake.  Before the fix, a fully-saturated semaphore
@@ -1210,7 +1211,13 @@ mod tests {
     async fn connect_timeout_applies_to_permit_acquisition() {
         // Create a semaphore with exactly 1 permit and immediately exhaust it, leaving
         // 0 permits available.  This simulates all outbound-connection slots being occupied.
-        let conn_semaphore = ConnectionSemaphore::new(None, Some(1), "test", None);
+        let conn_semaphore = ConnectionSemaphore::new(
+            None,
+            Some(LimitedSemaphore::new(1)),
+            "test",
+            "app-id".into(),
+            None,
+        );
         let _held = conn_semaphore
             .try_acquire()
             .expect("exhausting the single permit");

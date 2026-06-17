@@ -56,12 +56,13 @@ impl Factor for OutboundHttpFactor {
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
+        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
 
         Ok(AppState {
             wasi_http_clients: wasi::HttpClients::new(config.connection_pooling_enabled),
             connection_pooling_enabled: config.connection_pooling_enabled,
             semaphore: build_connection_semaphore(
-                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                networking,
                 "http",
                 config.max_concurrent_connections,
                 config.wait_timeout,

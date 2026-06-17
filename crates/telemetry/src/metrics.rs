@@ -3,7 +3,10 @@ use opentelemetry::global;
 use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry_sdk::{
     Resource,
-    metrics::{SdkMeterProvider, periodic_reader_with_async_runtime::PeriodicReader},
+    metrics::{
+        Aggregation, Instrument, SdkMeterProvider, Stream, new_view,
+        periodic_reader_with_async_runtime::PeriodicReader,
+    },
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,
 };
@@ -13,6 +16,20 @@ use tracing_subscriber::{Layer, registry::LookupSpan};
 
 use crate::{detector::SpinResourceDetector, env::OtlpProtocol};
 
+/// A custom histogram bucketing for a named metric.
+///
+/// OTel's default histogram boundaries are tuned for millisecond-scale durations (they top out at
+/// 10000). Metrics recorded on a different scale (e.g. a 0.0..=1.0 ratio) need their own
+/// boundaries, or every sample collapses into a single bucket. Callers describe such metrics with
+/// this type and hand them to [`crate::init`]; this crate has no built-in knowledge of which
+/// metrics need it.
+pub struct HistogramBuckets {
+    /// The instrument (metric) name these boundaries apply to.
+    pub metric_name: &'static str,
+    /// Explicit upper bounds for the histogram buckets.
+    pub boundaries: Vec<f64>,
+}
+
 /// Constructs a layer for the tracing subscriber that sends metrics to an OTEL collector.
 ///
 /// It pulls OTEL configuration from the environment based on the variables defined
@@ -20,6 +37,7 @@ use crate::{detector::SpinResourceDetector, env::OtlpProtocol};
 /// [here](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration).
 pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
     spin_version: String,
+    histogram_buckets: Vec<HistogramBuckets>,
 ) -> Result<impl Layer<S>> {
     let resource = Resource::builder()
         .with_detectors(&[
@@ -49,10 +67,21 @@ pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
     };
 
     let reader = PeriodicReader::builder(exporter, Tokio).build();
-    let meter_provider = SdkMeterProvider::builder()
+    let mut provider_builder = SdkMeterProvider::builder()
         .with_reader(reader)
-        .with_resource(resource)
-        .build();
+        .with_resource(resource);
+    // Apply any caller-supplied histogram bucket overrides as views. This crate stays agnostic
+    // about which metrics need custom boundaries — the owning crate describes them.
+    for buckets in histogram_buckets {
+        provider_builder = provider_builder.with_view(new_view(
+            Instrument::new().name(buckets.metric_name),
+            Stream::new().aggregation(Aggregation::ExplicitBucketHistogram {
+                boundaries: buckets.boundaries,
+                record_min_max: true,
+            }),
+        )?);
+    }
+    let meter_provider = provider_builder.build();
 
     global::set_meter_provider(meter_provider.clone());
 

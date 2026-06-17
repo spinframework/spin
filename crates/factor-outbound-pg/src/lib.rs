@@ -54,11 +54,12 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
         for comp in ctx.app().components() {
             client_factories.insert(comp.id().to_string(), Arc::new(CF::default()));
         }
+        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
 
         Ok(AppState {
             client_factories,
             semaphore: build_connection_semaphore(
-                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                networking,
                 "pg",
                 config.max_connections,
                 config.wait_timeout,

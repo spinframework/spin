@@ -58,10 +58,11 @@ impl Factor for OutboundMqttFactor {
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
+        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
 
         Ok(AppState {
             semaphore: build_connection_semaphore(
-                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                networking,
                 "mqtt",
                 config.max_connections,
                 config.wait_timeout,

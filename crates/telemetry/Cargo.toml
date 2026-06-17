@@ -13,7 +13,7 @@ opentelemetry-appender-tracing = "0.29"
 opentelemetry-otlp = { workspace = true, features = ["grpc-tonic"] }
 opentelemetry-semantic-conventions = { workspace = true }
 reqwest = { workspace = true }
-opentelemetry_sdk = { workspace = true, features = ["rt-tokio", "spec_unstable_logs_enabled", "metrics"] }
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio", "spec_unstable_logs_enabled", "spec_unstable_metrics_views", "metrics"] }
 terminal = { path = "../terminal" }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
