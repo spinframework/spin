@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Bump wasmtime (prerelease)
+on:
+  schedule:
+    - cron: 0 0 9 * *
+  workflow_dispatch:
+
+jobs:
+  bump-wasmtime:
+    name: Bump Wasmtime to prerelease
+    runs-on: "ubuntu-22.04"
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get latest Wasmtime release
+        id: wasmtime-release
+        run: |
+          LAST_WASMTIME=$(git ls-remote https://github.com/bytecodealliance/wasmtime 'refs/heads/release-*' | awk '{print $2}' | sed -e "s/^refs\/heads\/release-//" | sort -V | tail -n1)
+          echo "last_wasmtime=$LAST_WASMTIME" >>$GITHUB_OUTPUT
+
+      - name: Bump Spin to latest Wasmtime release
+        run: |
+          sed -i "s/wasmtime = { version = \"\d+[0-9.]*\"/wasmtime = { git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
+          sed -i "s/wasmtime-wasi = { version = \"\d+[0-9.]*\"/wasmtime-wasi = { git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
+          sed -i "s/wasmtime-wasi-http = { version = \"\d+[0-9.]*\"/wasmtime-wasi-http = { git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
+          cargo update
+
+      - name: Create Spin PR
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: bump-wasmtime/prerelease-${{ steps.wasmtime-release.outputs.last_wasmtime }}
+          commit-message: Bump Wasmtime to v${{ steps.wasmtime-release.outputs.last_wasmtime }} prerelease
+          title: Bump Wasmtime to v${{ steps.wasmtime-release.outputs.last_wasmtime }} prerelease
+          body: Bumps Wasmtime to v${{ steps.wasmtime-release.outputs.last_wasmtime }} prerelease
+          signoff: true
+          draft: true
