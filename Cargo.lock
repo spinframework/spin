@@ -8591,6 +8591,7 @@ dependencies = [
  "spin-app",
  "spin-build",
  "spin-common",
+ "spin-connection-semaphore",
  "spin-dependency-wit",
  "spin-doctor",
  "spin-environments",
@@ -8691,6 +8692,7 @@ dependencies = [
  "spin-telemetry",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

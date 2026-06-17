@@ -44,10 +44,11 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
         mut ctx: spin_factors::ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
         let config = ctx.take_runtime_config().unwrap_or_default();
+        let networking = ctx.app_state::<OutboundNetworkingFactor>().ok();
 
         Ok(AppState {
             semaphore: build_connection_semaphore(
-                ctx.app_state::<OutboundNetworkingFactor>().ok(),
+                networking,
                 "mysql",
                 config.max_connections,
                 config.wait_timeout,

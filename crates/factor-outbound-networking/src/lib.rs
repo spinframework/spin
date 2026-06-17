@@ -12,15 +12,15 @@ use spin_factors::{
     ConfigureAppContext, Error, Factor, FactorInstanceBuilder, PrepareContext, RuntimeFactors,
     anyhow::{self, Context},
 };
+use spin_locked_app::APP_NAME_KEY;
 use spin_outbound_networking_config::allowed_hosts::{DisallowedHostHandler, OutboundAllowedHosts};
-use tokio::sync::Semaphore;
 use url::Url;
 
 use crate::{
     allowed_hosts::allowed_outbound_hosts, runtime_config::RuntimeConfig, tls::TlsClientConfigs,
 };
 pub use allowed_hosts::validate_service_chaining_for_components;
-pub use spin_connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
+pub use spin_connection_semaphore::{ConnectionPermit, ConnectionSemaphore, LimitedSemaphore};
 
 pub use crate::tls::{ComponentTlsClientConfigs, TlsClientConfig};
 use config::allowed_hosts::AllowedHostsConfig;
@@ -78,8 +78,9 @@ impl Factor for OutboundNetworkingFactor {
 
         let blocked_networks = BlockedNetworks::new(block_networks, block_private_networks);
         let tls_client_configs = TlsClientConfigs::new(client_tls_configs)?;
-        let global_connection_semaphore =
-            max_total_connections.map(|n| Arc::new(Semaphore::new(n)));
+        // Build the shared global semaphore from its limit, so the two are bound together from
+        // creation as the pair is plumbed into per-factor `ConnectionSemaphore`s.
+        let global_connection_semaphore = max_total_connections.map(LimitedSemaphore::new);
 
         if let (Some(socket_cap), Some(global_cap)) =
             (max_socket_connections, max_total_connections)
@@ -92,12 +93,19 @@ impl Factor for OutboundNetworkingFactor {
             );
         }
 
+        let app_id: Arc<str> = ctx
+            .app()
+            .get_metadata(APP_NAME_KEY)?
+            .unwrap_or_else(|| "<unnamed>".into())
+            .into();
+
         let socket_connection_semaphore =
             if max_socket_connections.is_some() || global_connection_semaphore.is_some() {
                 Some(ConnectionSemaphore::new(
                     global_connection_semaphore.clone(),
-                    max_socket_connections,
+                    max_socket_connections.map(LimitedSemaphore::new),
                     "wasi-sockets",
+                    app_id.clone(),
                     wait_timeout,
                 ))
             } else {
@@ -110,7 +118,7 @@ impl Factor for OutboundNetworkingFactor {
             tls_client_configs,
             socket_connection_semaphore,
             global_connection_semaphore,
-            max_total_connections,
+            app_id,
         })
     }
 
@@ -229,11 +237,21 @@ pub struct AppState {
     /// Pre-built semaphore for TCP/UDP socket quota enforcement (global + socket-specific).
     /// `None` means no limits are configured.
     socket_connection_semaphore: Option<ConnectionSemaphore>,
-    /// App-wide semaphore capping total concurrent outbound connections across ALL types.
-    /// `None` means unlimited.
-    global_connection_semaphore: Option<Arc<Semaphore>>,
-    /// The configured global connection limit (for warning comparisons in other factors).
-    max_total_connections: Option<usize>,
+    /// App-wide semaphore capping total concurrent outbound connections across ALL types,
+    /// paired with its configured limit (the latter is used for warning comparisons in other
+    /// factors). `None` means unlimited.
+    global_connection_semaphore: Option<LimitedSemaphore>,
+    /// Identifier of this app, used for tenant attribution on tracing events emitted by
+    /// outbound factors' connection semaphores. Resolved once at configure-app time.
+    app_id: Arc<str>,
+}
+
+impl AppState {
+    /// Returns the app identifier, used by outbound factors when building per-factor
+    /// connection semaphores so rejection tracing events carry tenant attribution.
+    pub fn app_id(&self) -> Arc<str> {
+        self.app_id.clone()
+    }
 }
 
 /// Builds a [`ConnectionSemaphore`] for an outbound factor, incorporating the optional global
@@ -241,16 +259,23 @@ pub struct AppState {
 ///
 /// Emits a warning when the per-factor limit exceeds the global cap (the global limit would
 /// be the effective ceiling in that case).
+///
+/// The app identifier is taken from the networking app state (or `<unnamed>` when networking is
+/// absent) and plumbed through to the semaphore so that rejection tracing events can carry tenant
+/// attribution without app identity appearing on metric labels.
 pub fn build_connection_semaphore(
     networking: Option<&AppState>,
     factor: &'static str,
     factor_limit: Option<usize>,
     wait_timeout: Option<std::time::Duration>,
 ) -> ConnectionSemaphore {
-    if let (Some(per_factor), Some(global_limit)) = (
-        factor_limit,
-        networking.and_then(|n| n.max_total_connections),
-    ) && per_factor > global_limit
+    let app_id = networking
+        .map(|n| n.app_id())
+        .unwrap_or_else(|| Arc::from("<unnamed>"));
+    let global = networking.and_then(|n| n.global_connection_semaphore.clone());
+    if let (Some(per_factor), Some(global_limit)) =
+        (factor_limit, global.as_ref().map(LimitedSemaphore::limit))
+        && per_factor > global_limit
     {
         tracing::warn!(
             "outbound_{factor} max_connections ({per_factor}) exceeds global \
@@ -259,9 +284,10 @@ pub fn build_connection_semaphore(
         );
     }
     ConnectionSemaphore::new(
-        networking.and_then(|n| n.global_connection_semaphore.clone()),
-        factor_limit,
+        global,
+        factor_limit.map(LimitedSemaphore::new),
         factor,
+        app_id,
         wait_timeout,
     )
 }

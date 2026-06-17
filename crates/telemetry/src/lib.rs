@@ -18,6 +18,7 @@ pub mod traces;
 #[cfg(feature = "testing")]
 pub mod testing;
 
+pub use metrics::HistogramBuckets;
 pub use propagation::extract_trace_context;
 pub use propagation::inject_trace_context;
 
@@ -52,7 +53,11 @@ pub use propagation::inject_trace_context;
 /// ```no_run
 /// spin_telemetry::metrics::monotonic_counter!(spin.metric_name = 1, metric_attribute = "value");
 /// ```
-pub fn init(spin_version: String) -> anyhow::Result<()> {
+///
+/// `histogram_buckets` lets callers override the OTel default histogram boundaries for specific
+/// metrics (e.g. those recorded on a 0.0..=1.0 scale rather than millisecond durations). Pass an
+/// empty `Vec` to use the defaults for everything.
+pub fn init(spin_version: String, histogram_buckets: Vec<HistogramBuckets>) -> anyhow::Result<()> {
     // This layer will print all tracing library log messages to stderr.
     let fmt_layer = fmt::layer()
         .with_writer(std::io::stderr)
@@ -80,7 +85,7 @@ pub fn init(spin_version: String) -> anyhow::Result<()> {
 
     let otel_metrics_layer = if otel_metrics_enabled() {
         Some(
-            metrics::otel_metrics_layer(spin_version.clone())
+            metrics::otel_metrics_layer(spin_version.clone(), histogram_buckets)
                 .context("failed to initialize otel metrics")?,
         )
     } else {

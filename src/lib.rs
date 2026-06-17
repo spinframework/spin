@@ -37,7 +37,11 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     let version = build_info();
-    spin_telemetry::init(version.clone()).context("Failed to initialize telemetry")?;
+    spin_telemetry::init(
+        version.clone(),
+        spin_connection_semaphore::metric_histogram_buckets(),
+    )
+    .context("Failed to initialize telemetry")?;
 
     let plugin_help_entries = plugin_help_entries();
 
