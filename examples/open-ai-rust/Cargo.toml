@@ -3,7 +3,7 @@ name = "open-ai-rust"
 authors = ["Spin Framework Contributors"]
 description = "Example showing using openAI with Spin"
 version = "0.1.0"
-rust-version = "1.93"
+rust-version = "1.94"
 edition = "2024"
 
 [lib]
