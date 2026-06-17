@@ -94,9 +94,9 @@ type QueryTuple = (
     FutureReader<Result<(), v3::Error>>,
 );
 
-impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
+impl<T, C: Client> v3::HostConnectionWithStore<T> for MysqlFactorData<C> {
     #[instrument(name = "spin_outbound_mysql.open", skip(accessor, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
-    async fn open<T>(
+    async fn open(
         accessor: &Accessor<T, Self>,
         address: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
@@ -116,7 +116,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
     }
 
     #[instrument(name = "spin_outbound_mysql.execute", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", otel.name = statement))]
-    async fn execute<T>(
+    async fn execute(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         statement: String,
@@ -138,7 +138,7 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
     }
 
     #[instrument(name = "spin_outbound_mysql.query", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", otel.name = statement))]
-    async fn query<T>(
+    async fn query(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         statement: String,

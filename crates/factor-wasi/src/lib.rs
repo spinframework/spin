@@ -124,15 +124,16 @@ trait InitContextExt: InitContext<WasiFactor> {
         add_to_linker(self.linker(), Self::get_cli)
     }
 
-    fn link_cli_default_bindings<O: Default>(
+    // fn(&mut wasmtime::component::Linker<_>, fn(&mut _) -> <_ as HasData>::Data<'_>) -> Result<(), wasmtime::Error> = p2::bindings::cli::exit::add_to_linker;
+
+    fn link_cli_default_bindings(
         &mut self,
         add_to_linker: fn(
             &mut wasmtime::component::Linker<Self::StoreData>,
-            &O,
             fn(&mut Self::StoreData) -> WasiCliCtxView<'_>,
         ) -> wasmtime::Result<()>,
     ) -> wasmtime::Result<()> {
-        add_to_linker(self.linker(), &O::default(), Self::get_cli)
+        add_to_linker(self.linker(), Self::get_cli)
     }
 
     fn get_filesystem(data: &mut Self::StoreData) -> WasiFilesystemCtxView<'_> {

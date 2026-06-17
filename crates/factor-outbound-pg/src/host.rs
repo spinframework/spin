@@ -244,11 +244,11 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     }
 }
 
-impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectionWithStore
+impl<T, CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectionWithStore<T>
     for crate::PgFactorData<CF>
 {
     #[instrument(name = "spin_outbound_pg.open_async", skip(accessor, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
-    async fn open_async<T>(
+    async fn open_async(
         accessor: &Accessor<T, Self>,
         address: String,
     ) -> Result<Resource<v4::Connection>, v4::Error> {
@@ -261,7 +261,7 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
     }
 
     #[instrument(name = "spin_outbound_pg.execute", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
-    async fn execute_async<T>(
+    async fn execute_async(
         accessor: &Accessor<T, Self>,
         connection: Resource<v4::Connection>,
         statement: String,
@@ -283,7 +283,7 @@ impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectio
 
     #[allow(clippy::type_complexity)] // blame bindgen, clippy, blame bindgen
     #[instrument(name = "spin_outbound_pg.query_async", skip(accessor, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", otel.name = statement))]
-    async fn query_async<T>(
+    async fn query_async(
         accessor: &Accessor<T, Self>,
         connection: Resource<v4::Connection>,
         statement: String,
@@ -414,10 +414,10 @@ impl<CF: ClientFactory> crate::PgFactorData<CF> {
     }
 }
 
-impl<CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectionBuilderWithStore
+impl<T, CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnectionBuilderWithStore<T>
     for crate::PgFactorData<CF>
 {
-    async fn build_async<T>(
+    async fn build_async(
         accessor: &Accessor<T, Self>,
         builder: Resource<v4::ConnectionBuilder>,
     ) -> Result<Resource<v4::Connection>, v4::Error> {
