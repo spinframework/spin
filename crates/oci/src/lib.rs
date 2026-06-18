@@ -31,7 +31,7 @@ pub fn is_probably_oci_reference(maybe_oci: &str) -> bool {
     // exist are A MILLION TO ONE...
 
     // If it doesn't parse as a reference, it isn't a reference
-    let Ok(reference) = oci_distribution::Reference::try_from(maybe_oci) else {
+    let Ok(reference) = oci_client::Reference::try_from(maybe_oci) else {
         return false;
     };
     // If it has an explicit tag, its probably a reference

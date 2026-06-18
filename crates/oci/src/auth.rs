@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use oci_distribution::secrets::RegistryAuth;
+use oci_client::secrets::RegistryAuth;
 use serde::{Deserialize, Serialize};
 use spin_common::ui::quoted_path;
 

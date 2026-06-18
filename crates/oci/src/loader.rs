@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, ensure};
-use oci_distribution::Reference;
+use oci_client::Reference;
 use reqwest::Url;
 use spin_common::ui::quoted_path;
 use spin_loader::cache::Cache;
@@ -53,7 +53,7 @@ impl OciLoader {
     /// Loads an OCI Artifact from the given cache and returns a LockedApp with the given reference
     pub async fn load_from_cache(
         &self,
-        manifest: oci_distribution::manifest::OciImageManifest,
+        manifest: oci_client::manifest::OciImageManifest,
         lockfile_path: PathBuf,
         reference: &str,
         cache: &Cache,
