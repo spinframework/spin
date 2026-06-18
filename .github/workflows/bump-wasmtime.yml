@@ -41,7 +41,7 @@ jobs:
       - name: Create Spin PR
         uses: peter-evans/create-pull-request@v8
         with:
-          token: ${{ secrets.SPIN_RUST_SDK_RELEASE_PAT }}
+          token: ${{ secrets.SPINFRAMEWORKBOT_PR_PAT }}
           branch: bump-wasmtime/prerelease-${{ steps.wasmtime-release.outputs.last_wasmtime }}
           commit-message: Bump Wasmtime to v${{ steps.wasmtime-release.outputs.last_wasmtime }} prerelease
           title: Bump Wasmtime to v${{ steps.wasmtime-release.outputs.last_wasmtime }} prerelease
