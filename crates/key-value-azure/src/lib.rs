@@ -1,7 +1,7 @@
 mod auth;
 mod store;
 
-use azure_data_cosmos::Region;
+use azure_data_cosmos::options::Region;
 use serde::Deserialize;
 use spin_factor_key_value::runtime_config::spin::MakeKeyValueStore;
 
