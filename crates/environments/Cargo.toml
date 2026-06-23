@@ -31,8 +31,8 @@ toml = { workspace = true }
 tokio = { version = "1.23", features = ["fs"] }
 tracing = { workspace = true }
 url = { workspace = true }
-wac-graph = "0.8"
-wac-types = "0.8"
+wac-graph = { workspace = true }
+wac-types = { workspace = true }
 wasm-pkg-client = { workspace = true }
 wasmparser = { workspace = true }
 wit-component = { workspace = true }
