@@ -15,7 +15,7 @@ azure_core = { version = "1.0", default-features = false }
 # Use native-tls (OpenSSL) rather than the SDK-default rustls. The default
 # `rustls` feature drags in reqwest's aws-lc-rs provider, which collides with
 # Spin's workspace-pinned `ring` provider and panics at runtime.
-azure_data_cosmos = { version = "0.35", default-features = false, features = ["key_auth", "native_tls", "hmac_rust"] }
+azure_data_cosmos = { version = "0.36", default-features = false, features = ["key_auth", "native_tls", "hmac_rust"] }
 azure_identity = { version = "1.0", default-features = false, features = ["tokio"] }
 futures = { workspace = true }
 serde = { workspace = true }

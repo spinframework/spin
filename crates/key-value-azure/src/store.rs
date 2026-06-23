@@ -1,11 +1,11 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use azure_core::credentials::Secret;
-use azure_data_cosmos::query::FeedScope;
-use azure_data_cosmos::{AccountReference, PatchInstructions, PatchOperation};
+use azure_core::http::Etag;
+use azure_data_cosmos::models::{PatchInstructions, PatchOperation};
+use azure_data_cosmos::options::{ItemWriteOptions, Precondition, Region};
 use azure_data_cosmos::{
-    CosmosClient, Precondition, Query, Region, RoutingStrategy, clients::ContainerClient,
-    options::ItemWriteOptions,
+    AccountReference, ContainerClient, CosmosClient, FeedScope, Query, RoutingStrategy,
 };
 use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
@@ -358,7 +358,7 @@ struct CompareAndSwap {
     key: String,
     client: ContainerClient,
     bucket_rep: u32,
-    etag: Mutex<Option<azure_data_cosmos::ETag>>,
+    etag: Mutex<Option<Etag>>,
     store_id: Option<String>,
 }
 
