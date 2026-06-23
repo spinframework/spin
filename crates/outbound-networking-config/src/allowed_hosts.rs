@@ -126,15 +126,25 @@ impl AllowedHostConfig {
                 ),
             }
         };
-        let (host, rest) = rest.rsplit_once(':').unwrap_or((rest, ""));
-        let port = match rest.split_once('/') {
-            Some((port, path)) => {
-                if !path.is_empty() {
-                    bail!("{url:?} has a path but is not allowed to");
+        let (host, port) = match rest.rsplit_once(':') {
+            None => (rest, ""),
+            Some((h, "")) => (h, ""),
+            Some((h, tail)) => {
+                if HostConfig::parse(rest).is_ok() {
+                    (rest, "")
+                } else {
+                    let port = match tail.split_once('/') {
+                        Some((port, path)) => {
+                            if !path.is_empty() {
+                                bail!("{url:?} has a path but is not allowed to");
+                            }
+                            port
+                        }
+                        None => tail,
+                    };
+                    (h, port)
                 }
-                port
             }
-            None => rest,
         };
 
         let port = PortConfig::parse(port, scheme)
@@ -267,7 +277,7 @@ impl HostConfig {
             return Ok(Self::Cidr(net));
         }
 
-        host = host.trim_end_matches('/');
+        host = host.strip_suffix('/').unwrap_or(host);
         if host.contains('/') {
             bail!("must not include a path");
         }
@@ -276,6 +286,11 @@ impl HostConfig {
             if domain.contains('*') {
                 bail!("wildcards are allowed only as prefixes");
             }
+            let domain = Host::parse(domain)
+                .with_context(|| format!("invalid wildcard host \"*.{domain}\""))?;
+            let Host::Domain(domain) = domain else {
+                bail!("wildcard suffix must be a domain");
+            };
             return Ok(Self::AnySubdomain(format!(".{domain}")));
         }
 
@@ -938,7 +953,14 @@ mod test {
             AllowedHostConfig::parse("http://[::1]:8001").unwrap()
         );
 
-        assert!(AllowedHostConfig::parse("http://[::1]").is_err())
+        assert_eq!(
+            AllowedHostConfig::new(
+                SchemeConfig::new("http"),
+                HostConfig::literal("[::1]").unwrap(),
+                PortConfig::new(80)
+            ),
+            AllowedHostConfig::parse("http://[::1]").unwrap()
+        );
     }
 
     #[test]
@@ -1209,5 +1231,230 @@ mod test {
         let hosts = &["https://{{ one }}", "{{ two }}", "https://three"];
         AllowedHostsConfig::validate(hosts, &resolver)
             .expect("empty resolutions should ignored as valid");
+    }
+
+    #[test]
+    fn ipv6_literal_without_port_uses_scheme_default() {
+        for (input, host, port) in [
+            ("http://[::1]", "[::1]", 80),
+            ("https://[::1]", "[::1]", 443),
+            ("http://[2001:db8::1]", "[2001:db8::1]", 80),
+        ] {
+            let scheme = input.split_once("://").unwrap().0;
+            assert_eq!(
+                AllowedHostConfig::new(
+                    SchemeConfig::new(scheme),
+                    HostConfig::literal(host).unwrap(),
+                    PortConfig::new(port),
+                ),
+                AllowedHostConfig::parse(input).unwrap_or_else(|e| panic!("{input}: {e:?}")),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_literal_with_explicit_port_still_parses() {
+        assert_eq!(
+            AllowedHostConfig::new(
+                SchemeConfig::new("http"),
+                HostConfig::literal("[2001:db8::1]").unwrap(),
+                PortConfig::new(443),
+            ),
+            AllowedHostConfig::parse("http://[2001:db8::1]:443").unwrap()
+        );
+        assert_eq!(
+            AllowedHostConfig::new(
+                SchemeConfig::new("http"),
+                HostConfig::literal("[::1]").unwrap(),
+                PortConfig::Any,
+            ),
+            AllowedHostConfig::parse("http://[::1]:*").unwrap()
+        );
+        assert_eq!(
+            AllowedHostConfig::new(
+                SchemeConfig::new("http"),
+                HostConfig::literal("[::1]").unwrap(),
+                PortConfig::range(8000..9000),
+            ),
+            AllowedHostConfig::parse("http://[::1]:8000..9000").unwrap()
+        );
+        assert_eq!(
+            AllowedHostConfig::new(
+                SchemeConfig::Any,
+                HostConfig::literal("[::1]").unwrap(),
+                PortConfig::new(80),
+            ),
+            AllowedHostConfig::parse("*://[::1]:80").unwrap()
+        );
+        assert_eq!(
+            AllowedHostConfig::new(
+                SchemeConfig::new("http"),
+                HostConfig::literal("[::1]").unwrap(),
+                PortConfig::new(8080),
+            ),
+            AllowedHostConfig::parse("http://[::1]:8080/").unwrap()
+        );
+    }
+
+    #[test]
+    fn cidr_without_port_uses_scheme_default() {
+        for (input, cidr, port) in [
+            ("http://ff00::/8", "ff00::/8", 80),
+            ("https://2001:db8::/32", "2001:db8::/32", 443),
+            ("http://::1/128", "::1/128", 80),
+            ("http://10.0.0.0/8", "10.0.0.0/8", 80),
+        ] {
+            let scheme = input.split_once("://").unwrap().0;
+            assert_eq!(
+                AllowedHostConfig::new(
+                    SchemeConfig::new(scheme),
+                    HostConfig::Cidr(IpNetwork::from_str_truncate(cidr).unwrap()),
+                    PortConfig::new(port),
+                ),
+                AllowedHostConfig::parse(input).unwrap_or_else(|e| panic!("{input}: {e:?}")),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_cidr_with_explicit_port_still_parses() {
+        assert_eq!(
+            AllowedHostConfig::new(
+                SchemeConfig::new("http"),
+                HostConfig::Cidr(IpNetwork::from_str_truncate("2001:db8::/32").unwrap()),
+                PortConfig::new(443),
+            ),
+            AllowedHostConfig::parse("http://2001:db8::/32:443").unwrap()
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_ipv6_allowed_hosts() {
+        for bad in [
+            "http://[::1]/foo",
+            "http://ff00::/8/extra",
+            "http://[::1",
+            "http://[::1]junk",
+            "http://[::1]::80",
+            "http://[v1.]",
+            "[::1]",
+            "[::1]:8080",
+        ] {
+            assert!(
+                AllowedHostConfig::parse(bad).is_err(),
+                "expected {bad:?} to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn ipv6_literal_allows_and_denies_requests() {
+        let allowed = AllowedHostsConfig::parse(&["http://[::1]"], &dummy_resolver(), &[]).unwrap();
+        assert!(allowed.allows(&OutboundUrl::parse("http://[::1]", "http").unwrap()));
+        assert!(allowed.allows(&OutboundUrl::parse("http://[::1]/some/path", "http").unwrap()));
+        assert!(allowed.allows(&OutboundUrl::parse("http://[::1]:80", "http").unwrap()));
+        assert!(!allowed.allows(&OutboundUrl::parse("http://[::2]", "http").unwrap()));
+        assert!(!allowed.allows(&OutboundUrl::parse("http://[::1]:81", "http").unwrap()));
+    }
+
+    #[test]
+    fn ipv6_cidr_allows_addresses_in_range() {
+        let allowed =
+            AllowedHostsConfig::parse(&["http://2001:db8::/32"], &dummy_resolver(), &[]).unwrap();
+        assert!(allowed.allows(&OutboundUrl::parse("http://[2001:db8::1]", "http").unwrap()));
+        assert!(
+            allowed.allows(&OutboundUrl::parse("http://[2001:db8:abcd::1]/x", "http").unwrap())
+        );
+        assert!(!allowed.allows(&OutboundUrl::parse("http://[2001:db9::1]", "http").unwrap()));
+    }
+
+    #[test]
+    fn wildcard_subdomain_is_case_insensitive() {
+        let allowed =
+            AllowedHostsConfig::parse(&["http://*.Example.COM"], &dummy_resolver(), &[]).unwrap();
+        assert!(allowed.allows(&OutboundUrl::parse("http://foo.example.com", "http").unwrap()));
+        assert!(allowed.allows(&OutboundUrl::parse("http://a.b.example.com/x", "http").unwrap()));
+        assert!(!allowed.allows(&OutboundUrl::parse("http://example.com", "http").unwrap()));
+    }
+
+    #[test]
+    fn rejects_invalid_allowed_host_entries() {
+        for bad in [
+            "http://example.com:notaport",
+            "http://example.com:8080..70000",
+            "http://self:notaport",
+            "http://self.alt:notaport",
+            "http://*:notaport",
+            "http://127.0.0.1:notaport",
+            "http://[::1]:notaport",
+            "http://*.example.com:notaport",
+            "http://*.example.com:8080..",
+            "http://*.example.com:8O8O",
+            "http://example.com:8080/p",
+            "http://*.example.com:8080/p",
+            "http://*.example.com/p",
+            "http://127.0.0.0/24/p",
+            "http://[::1junk",
+            "http://*.",
+            "http://*.:8080",
+            "example.com:8080",
+            "http://example%.com",
+            "http://example%2.com",
+            "http://example%GG.com",
+            "http://exa[mple.com",
+            r"http://exa\mple.com",
+            "http://example.com:80:90",
+            "http://[vG.example]",
+        ] {
+            assert!(
+                AllowedHostConfig::parse(bad).is_err(),
+                "expected {bad:?} to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_explicit_port_reports_port_error() {
+        for bad in [
+            "http://example.com:99999",
+            "http://[::1]:99999",
+            "http://ff00::/8:99999",
+            "http://*.example.com:99999",
+        ] {
+            let err = AllowedHostConfig::parse(bad).unwrap_err();
+            assert_eq!(err.to_string(), "Invalid allowed host port \"99999\"");
+        }
+    }
+
+    #[test]
+    fn rejects_double_slash_paths() {
+        for bad in [
+            "http://example.com//",
+            "http://*.example.com//",
+            "http://self//",
+            "http://[::1]//",
+        ] {
+            assert!(
+                AllowedHostConfig::parse(bad).is_err(),
+                "expected {bad:?} to be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_wildcard_non_domain_suffixes() {
+        for bad in [
+            "http://*.127.0.0.1",
+            "http://*.192.168.001.001",
+            "http://*.[::1]",
+            "http://*.[2001:db8::1]",
+        ] {
+            assert!(
+                AllowedHostConfig::parse(bad).is_err(),
+                "expected {bad:?} to be rejected"
+            );
+        }
     }
 }
