@@ -196,6 +196,7 @@ url = "2.5.7"
 tracing-opentelemetry = { version = "0.29", default-features = false, features = ["metrics"] }
 walkdir = "2"
 wac-graph = "0.10.0"
+wac-types = "0.10.0"
 wasm-encoder = "0.247.0"
 wasm-metadata = "0.247.0"
 wasm-pkg-client = "0.11"
