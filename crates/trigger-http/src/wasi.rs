@@ -87,15 +87,16 @@ impl<S: HandlerState> WasiHttpExecutor<'_, S> {
         }
 
         let handler = match self.handler_type {
-            HandlerType::Wasi2023_10_18(indices) => {
-                let guest = indices.load(&mut store, &instance)?;
-                Handler::Handler2023_10_18(guest)
-            }
+            HandlerType::Wasi0_2(indices) => Handler::Latest(indices.load(&mut store, &instance)?),
             HandlerType::Wasi2023_11_10(indices) => {
                 let guest = indices.load(&mut store, &instance)?;
                 Handler::Handler2023_11_10(guest)
             }
-            HandlerType::Wasi0_2(indices) => Handler::Latest(indices.load(&mut store, &instance)?),
+            HandlerType::Wasi2023_10_18(indices) => {
+                let guest = indices.load(&mut store, &instance)?;
+                Handler::Handler2023_10_18(guest)
+            }
+
             HandlerType::Wasi0_3(_, _) => unreachable!("should have used Wasip3HttpExecutor"),
             HandlerType::Spin => unreachable!("should have used SpinHttpExecutor"),
             HandlerType::Wagi(_) => unreachable!("should have used WagiExecutor instead"),

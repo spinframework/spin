@@ -20,23 +20,25 @@ pub fn default_base() -> String {
 }
 
 /// The type of http handler export used by a component.
+// Note: These are ordered by descending newness, reflecting the selection order
+// in from_instance_pre below.
 pub enum HandlerType<S: HandlerState> {
-    Spin,
-    Wagi(CommandIndices),
-    Wasi0_2(ProxyIndices),
     Wasi0_3(ServiceIndices, ProxyHandler<S>),
+    Wasi0_2(ProxyIndices),
     Wasi2023_11_10(ProxyIndices2023_11_10),
     Wasi2023_10_18(ProxyIndices2023_10_18),
+    Spin,
+    Wagi(CommandIndices),
 }
 
-/// The `incoming-handler` export for `wasi:http` version rc-2023-10-18
-const WASI_HTTP_EXPORT_2023_10_18: &str = "wasi:http/incoming-handler@0.2.0-rc-2023-10-18";
-/// The `incoming-handler` export for `wasi:http` version rc-2023-11-10
-const WASI_HTTP_EXPORT_2023_11_10: &str = "wasi:http/incoming-handler@0.2.0-rc-2023-11-10";
-/// The `incoming-handler` export prefix for all `wasi:http` 0.2 versions
-const WASI_HTTP_EXPORT_0_2_PREFIX: &str = "wasi:http/incoming-handler@0.2";
 /// The `handler` export `wasi:http` version 0.3.0-rc-2025-08-15
 const WASI_HTTP_EXPORT_0_3_0_RC_03_15: &str = "wasi:http/handler@0.3.0-rc-2026-03-15";
+/// The `incoming-handler` export prefix for all `wasi:http` 0.2 versions
+const WASI_HTTP_EXPORT_0_2_PREFIX: &str = "wasi:http/incoming-handler@0.2";
+/// The `incoming-handler` export for `wasi:http` version rc-2023-11-10
+const WASI_HTTP_EXPORT_2023_11_10: &str = "wasi:http/incoming-handler@0.2.0-rc-2023-11-10";
+/// The `incoming-handler` export for `wasi:http` version rc-2023-10-18
+const WASI_HTTP_EXPORT_2023_10_18: &str = "wasi:http/incoming-handler@0.2.0-rc-2023-10-18";
 /// The `inbound-http` export for `fermyon:spin`
 const SPIN_HTTP_EXPORT: &str = "fermyon:spin/inbound-http";
 
@@ -44,9 +46,6 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
     /// Determine the handler type from the exports of a component.
     pub fn from_instance_pre(pre: &InstancePre<T>, handler_state: S) -> anyhow::Result<Self> {
         let mut candidates = Vec::new();
-        if let Ok(indices) = ProxyIndices::new(pre) {
-            candidates.push(HandlerType::Wasi0_2(indices));
-        }
         if let Ok(pre) = ServicePre::new(pre.clone()) {
             candidates.push(HandlerType::Wasi0_3(
                 // We `.unwrap()` here because the `Ok(_)` result from
@@ -56,11 +55,14 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
                 ProxyHandler::new(handler_state, ProxyPre::P3(pre)),
             ));
         }
-        if let Ok(indices) = ProxyIndices2023_10_18::new(pre) {
-            candidates.push(HandlerType::Wasi2023_10_18(indices));
+        if let Ok(indices) = ProxyIndices::new(pre) {
+            candidates.push(HandlerType::Wasi0_2(indices));
         }
         if let Ok(indices) = ProxyIndices2023_11_10::new(pre) {
             candidates.push(HandlerType::Wasi2023_11_10(indices));
+        }
+        if let Ok(indices) = ProxyIndices2023_10_18::new(pre) {
+            candidates.push(HandlerType::Wasi2023_10_18(indices));
         }
         if pre
             .component()

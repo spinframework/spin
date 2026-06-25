@@ -395,11 +395,6 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
         let res = match executor {
             HttpExecutorType::Http => match handler_type {
-                HandlerType::Spin => {
-                    SpinHttpExecutor
-                        .execute(self, &route_match, req, client_addr, component_id)
-                        .await
-                }
                 HandlerType::Wasi0_3(_, handler) => {
                     Wasip3HttpExecutor(handler)
                         .execute(self, &route_match, req, client_addr)
@@ -409,6 +404,11 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 | HandlerType::Wasi2023_11_10(_)
                 | HandlerType::Wasi2023_10_18(_) => {
                     WasiHttpExecutor { handler_type }
+                        .execute(self, &route_match, req, client_addr, component_id)
+                        .await
+                }
+                HandlerType::Spin => {
+                    SpinHttpExecutor
                         .execute(self, &route_match, req, client_addr, component_id)
                         .await
                 }
