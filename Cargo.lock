@@ -9756,6 +9756,7 @@ dependencies = [
  "ctrlc",
  "futures",
  "heck 0.5.0",
+ "rustls 0.23.37",
  "sanitize-filename",
  "serde",
  "serde_json",

@@ -18,6 +18,7 @@ experimental-wasm-features = []
 
 [dependencies]
 anyhow = { workspace = true }
+rustls = { workspace = true }
 clap = { workspace = true, features = ["derive", "env", "wrap_help"] }
 ctrlc = { workspace = true }
 futures = { workspace = true }

@@ -2,6 +2,7 @@ use spin_cli::subprocess::ExitStatusError;
 
 #[tokio::main]
 async fn main() {
+    spin_trigger::crypto::install_default_crypto_provider();
     if let Err(err) = spin_cli::run().await {
         let code = match err.downcast_ref::<ExitStatusError>() {
             // If we encounter an `ExitStatusError` it means a subprocess has already
