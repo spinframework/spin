@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    future::Future,
     io::{ErrorKind, IsTerminal},
     net::SocketAddr,
     sync::{Arc, OnceLock},
@@ -46,7 +45,6 @@ use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
 
 use crate::{
     Body, InstanceReuseConfig, NotFoundRouteKind, OutputFormat, TlsConfig, TriggerApp,
-    TriggerInstanceBuilder,
     headers::strip_forbidden_headers,
     instrument::{MatchedRoute, finalize_http_span, http_span, instrument_error},
     outbound_http::OutboundHttpInterceptor,
@@ -686,17 +684,6 @@ fn set_req_uri(req: &mut Request<Body>, scheme: Scheme) -> anyhow::Result<()> {
     parts.authority = Some(authority);
     *req.uri_mut() = Uri::from_parts(parts).unwrap();
     Ok(())
-}
-
-/// An HTTP executor.
-pub(crate) trait HttpExecutor {
-    fn execute<F: RuntimeFactors>(
-        &self,
-        instance_builder: TriggerInstanceBuilder<F>,
-        route_match: &RouteMatch<'_, '_>,
-        req: Request<Body>,
-        client_addr: SocketAddr,
-    ) -> impl Future<Output = anyhow::Result<Response<Body>>>;
 }
 
 pub(crate) struct HttpHandlerState<F: RuntimeFactors> {
