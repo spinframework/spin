@@ -1,4 +1,4 @@
-use std::{io::Cursor, net::SocketAddr, time::Duration};
+use std::{io::Cursor, net::SocketAddr, sync::Arc};
 
 use anyhow::{Context, Result, ensure};
 use http_body_util::BodyExt;
@@ -11,7 +11,7 @@ use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi_http::p2::body::HyperIncomingBody as Body;
 
-use crate::{TriggerInstanceBuilder, headers::compute_default_headers, server::set_request_deadline};
+use crate::{HttpServer, headers::compute_default_headers, server::set_request_deadline};
 
 pub struct WagiHttpExecutor<'a> {
     pub wagi_config: &'a WagiTriggerConfig,
@@ -22,21 +22,13 @@ impl WagiHttpExecutor<'_> {
     #[instrument(name = "spin_trigger_http.execute_wagi", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wagi_component {}", route_match.lookup_key().to_string())))]
     pub async fn execute<F: RuntimeFactors>(
         &self,
-        mut instance_builder: TriggerInstanceBuilder<'_, F>,
+        server: &Arc<HttpServer<F>>,
         route_match: &RouteMatch<'_, '_>,
         req: Request<Body>,
         client_addr: SocketAddr,
-        request_deadline: Option<Duration>,
+        component_id: &str,
     ) -> Result<Response<Body>> {
-        let spin_http::routes::TriggerLookupKey::Component(component) = route_match.lookup_key()
-        else {
-            unreachable!()
-        };
-
-        tracing::trace!(
-            "Executing request using the Wagi executor for component {}",
-            component
-        );
+        tracing::trace!("Executing request using the Wagi executor for component {component_id}");
 
         let uri_path = req.uri().path();
 
@@ -80,6 +72,8 @@ impl WagiHttpExecutor<'_> {
 
         let stdout = MemoryOutputPipe::new(usize::MAX);
 
+        let mut instance_builder =
+            server.trigger_instance_builder(component_id, parts.uri.scheme())?;
         let wasi_builder = instance_builder
             .factor_builder::<WasiFactor>()
             .context("The wagi HTTP trigger was configured without the required wasi support")?;
@@ -91,7 +85,7 @@ impl WagiHttpExecutor<'_> {
         wasi_builder.stdout(stdout.clone());
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
-        set_request_deadline(&mut store, request_deadline);
+        set_request_deadline(&mut store, server.request_deadline());
 
         let command = self.indices.load(&mut store, &instance)?;
 
@@ -112,7 +106,7 @@ impl WagiHttpExecutor<'_> {
         let stdout = stdout.try_into_inner().unwrap();
         ensure!(
             !stdout.is_empty(),
-            "The {component:?} component is configured to use the WAGI executor \
+            "The {component_id:?} component is configured to use the WAGI executor \
              but did not write to stdout. Check the `executor` in spin.toml."
         );
 

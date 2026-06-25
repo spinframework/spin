@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use http_body_util::BodyExt;
@@ -10,7 +10,7 @@ use spin_world::v1::http_types;
 use tracing::{Level, instrument};
 
 use crate::{
-    Body, TriggerInstanceBuilder,
+    Body, HttpServer,
     headers::{append_headers, prepare_request_headers},
     server::set_request_deadline,
 };
@@ -23,21 +23,19 @@ impl SpinHttpExecutor {
     #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.lookup_key().to_string())))]
     pub async fn execute<F: RuntimeFactors>(
         &self,
-        instance_builder: TriggerInstanceBuilder<'_, F>,
+        server: &Arc<HttpServer<F>>,
         route_match: &RouteMatch<'_, '_>,
         req: Request<Body>,
         client_addr: SocketAddr,
-        request_deadline: Option<Duration>,
+        component_id: &str,
     ) -> Result<Response<Body>> {
-        let spin_http::routes::TriggerLookupKey::Component(component_id) = route_match.lookup_key()
-        else {
-            unreachable!()
-        };
-
         tracing::trace!("Executing request using the Spin executor for component {component_id}");
 
-        let (instance, mut store) = instance_builder.instantiate(()).await?;
-        set_request_deadline(&mut store, request_deadline);
+        let (instance, mut store) = server
+            .trigger_instance_builder(component_id, req.uri().scheme())?
+            .instantiate(())
+            .await?;
+        set_request_deadline(&mut store, server.request_deadline());
 
         let headers = prepare_request_headers(&req, route_match, client_addr)?;
         // Expects here are safe since we have already checked that this

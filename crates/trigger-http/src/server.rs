@@ -53,6 +53,7 @@ use wasmtime_wasi_http::p3::bindings::Service;
 
 use crate::{
     Body, InstanceReuseConfig, NotFoundRouteKind, OutputFormat, TlsConfig, TriggerApp,
+    TriggerInstanceBuilder,
     headers::strip_forbidden_headers,
     instrument::{MatchedRoute, finalize_http_span, http_span, instrument_error},
     outbound_http::OutboundHttpInterceptor,
@@ -198,9 +199,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
             None | Some(HttpExecutorType::Http) => HandlerType::from_instance_pre(
                 pre,
                 HttpHandlerState {
-                    trigger_app: trigger_app.clone(),
                     component_id: component_id.into(),
                     reuse_config,
+                    server: Default::default(),
+                    self_scheme: Default::default(),
                 },
             )?,
             Some(HttpExecutorType::Wagi(wagi_config)) => {
@@ -347,7 +349,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         server_scheme: Scheme,
         client_addr: SocketAddr,
     ) -> anyhow::Result<Response<Body>> {
-        set_req_uri(&mut req, server_scheme.clone())?;
+        set_req_uri(&mut req, server_scheme)?;
         let app_id = self
             .trigger_app
             .app()
@@ -373,7 +375,6 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 self.respond_wasm_component(
                     req,
                     route_match,
-                    server_scheme,
                     client_addr,
                     component,
                     &trigger_config.executor,
@@ -401,28 +402,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
         self: &Arc<Self>,
         req: Request<Body>,
         route_match: RouteMatch<'_, '_>,
-        server_scheme: Scheme,
         client_addr: SocketAddr,
         component_id: &str,
         executor: &Option<HttpExecutorType>,
     ) -> anyhow::Result<Response<Body>> {
-        let mut instance_builder = self.trigger_app.prepare(component_id)?;
-
-        // Set up outbound HTTP request origin and service chaining
-        // The outbound HTTP factor is required since both inbound and outbound wasi HTTP
-        // implementations assume they use the same underlying wasmtime resource storage.
-        // Eventually, we may be able to factor this out to a separate factor.
-        let outbound_http = instance_builder
-            .factor_builder::<OutboundHttpFactor>()
-            .context(
-            "The wasi HTTP trigger was configured without the required wasi outbound http support",
-        )?;
-
-        let self_addr = self.get_local_addr();
-        let origin = SelfRequestOrigin::create(server_scheme, &self_addr.to_string())?;
-        outbound_http.set_self_request_origin(origin);
-        outbound_http.set_request_interceptor(OutboundHttpInterceptor::new(self.clone()))?;
-
         // Prepare HTTP executor
         let handler_type = self
             .component_handler_types
@@ -434,18 +417,12 @@ impl<F: RuntimeFactors> HttpServer<F> {
             HttpExecutorType::Http => match handler_type {
                 HandlerType::Spin => {
                     SpinHttpExecutor
-                        .execute(
-                            instance_builder,
-                            &route_match,
-                            req,
-                            client_addr,
-                            self.request_deadline,
-                        )
+                        .execute(self, &route_match, req, client_addr, component_id)
                         .await
                 }
                 HandlerType::Wasi0_3(handler) => {
                     Wasip3HttpExecutor(handler)
-                        .execute(&route_match, req, client_addr)
+                        .execute(self, &route_match, req, client_addr)
                         .await
                 }
                 HandlerType::Wasi0_2(_)
@@ -453,13 +430,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 | HandlerType::Wasi2023_10_18(_)
                 | HandlerType::Wasi2026_03_15(_) => {
                     WasiHttpExecutor { handler_type }
-                        .execute(
-                            instance_builder,
-                            &route_match,
-                            req,
-                            client_addr,
-                            self.request_deadline,
-                        )
+                        .execute(self, &route_match, req, client_addr, component_id)
                         .await
                 }
                 HandlerType::Wagi(_) => unreachable!(),
@@ -474,13 +445,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
                     indices,
                 };
                 executor
-                    .execute(
-                        instance_builder,
-                        &route_match,
-                        req,
-                        client_addr,
-                        self.request_deadline,
-                    )
+                    .execute(self, &route_match, req, client_addr, component_id)
                     .await
             }
         };
@@ -495,6 +460,31 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 Self::internal_error(None, route_match.raw_route())
             }
         }
+    }
+
+    pub(crate) fn trigger_instance_builder(
+        self: &'_ Arc<Self>,
+        component_id: &str,
+        self_scheme: Option<&Scheme>,
+    ) -> anyhow::Result<TriggerInstanceBuilder<'_, F>> {
+        let mut instance_builder = self.trigger_app.prepare(component_id)?;
+
+        // Set up outbound HTTP request origin and service chaining
+        // The outbound HTTP factor is required since both inbound and outbound wasi HTTP
+        // implementations assume they use the same underlying wasmtime resource storage.
+        // Eventually, we may be able to factor this out to a separate factor.
+        let outbound_http = instance_builder
+            .factor_builder::<OutboundHttpFactor>()
+            .context(
+            "The wasi HTTP trigger was configured without the required wasi outbound http support",
+        )?;
+
+        let self_scheme = self_scheme.cloned().unwrap_or(Scheme::HTTPS);
+        let self_addr = self.get_local_addr();
+        let origin = SelfRequestOrigin::create(self_scheme, &self_addr.to_string())?;
+        outbound_http.set_self_request_origin(origin);
+        outbound_http.set_request_interceptor(OutboundHttpInterceptor::new(self.clone()))?;
+        Ok(instance_builder)
     }
 
     fn respond_static_response(
@@ -681,6 +671,10 @@ impl<F: RuntimeFactors> HttpServer<F> {
         }
         Ok(())
     }
+
+    pub(crate) fn request_deadline(&self) -> Option<Duration> {
+        self.request_deadline
+    }
 }
 
 /// The incoming request's scheme and authority
@@ -803,9 +797,19 @@ impl<F: RuntimeFactors> WorkerState for HttpWorkerState<F> {
 }
 
 pub(crate) struct HttpHandlerState<F: RuntimeFactors> {
-    trigger_app: Arc<TriggerApp<F>>,
     component_id: String,
     reuse_config: InstanceReuseConfig,
+    server: OnceLock<Arc<HttpServer<F>>>,
+    self_scheme: OnceLock<Scheme>,
+}
+
+impl<F: RuntimeFactors> HttpHandlerState<F> {
+    pub(crate) fn init_once(&self, server: &Arc<HttpServer<F>>, first_uri: &Uri) {
+        self.server.get_or_init(|| server.clone());
+        if let Some(scheme) = first_uri.scheme() {
+            self.self_scheme.get_or_init(|| scheme.clone());
+        }
+    }
 }
 
 impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
@@ -818,8 +822,10 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
     ) -> wasmtime::Result<Instance<Self::StoreData, Self::WorkerExpiration, Self::WorkerState>>
     {
         let (instance, mut store) = self
-            .trigger_app
-            .prepare(&self.component_id)
+            .server
+            .get()
+            .expect("server should have been set")
+            .trigger_instance_builder(&self.component_id, self.self_scheme.get())
             .to_wasmtime_result()?
             .instantiate(())
             .await
