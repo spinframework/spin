@@ -1,5 +1,6 @@
 use std::io::IsTerminal;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow};
 use futures::TryFutureExt;
@@ -16,7 +17,8 @@ use wasmtime_wasi_http::handler::HandlerState;
 use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
 use wasmtime_wasi_http::p2::{bindings::Proxy, body::HyperIncomingBody as Body};
 
-use crate::{TriggerInstanceBuilder, headers::prepare_request_headers};
+use crate::HttpServer;
+use crate::headers::prepare_request_headers;
 
 pub(super) fn prepare_request(
     route_match: &RouteMatch<'_, '_>,
@@ -55,14 +57,18 @@ impl<S: HandlerState> WasiHttpExecutor<'_, S> {
     #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.lookup_key().to_string())))]
     pub async fn execute<F: RuntimeFactors>(
         &self,
-        instance_builder: TriggerInstanceBuilder<'_, F>,
+        server: &Arc<HttpServer<F>>,
         route_match: &RouteMatch<'_, '_>,
         mut req: Request<Body>,
         client_addr: SocketAddr,
+        component_id: &str,
     ) -> Result<Response<Body>> {
         prepare_request(route_match, &mut req, client_addr)?;
 
-        let (instance, mut store) = instance_builder.instantiate(()).await?;
+        let (instance, mut store) = server
+            .trigger_instance_builder(component_id, req.uri().scheme())?
+            .instantiate(())
+            .await?;
 
         let mut wasi_http = spin_factor_outbound_http::OutboundHttpFactor::get_wasi_http_impl(
             store.data_mut().factors_instance_state_mut(),
