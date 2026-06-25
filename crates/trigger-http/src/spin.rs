@@ -12,16 +12,16 @@ use tracing::{Level, instrument};
 use crate::{
     Body, TriggerInstanceBuilder,
     headers::{append_headers, prepare_request_headers},
-    server::{HttpExecutor, set_request_deadline},
+    server::set_request_deadline,
 };
 
 /// An [`HttpExecutor`] that uses the `fermyon:spin/inbound-http` interface.
 #[derive(Clone)]
 pub struct SpinHttpExecutor;
 
-impl HttpExecutor for SpinHttpExecutor {
+impl SpinHttpExecutor {
     #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.lookup_key().to_string())))]
-    async fn execute<F: RuntimeFactors>(
+    pub async fn execute<F: RuntimeFactors>(
         &self,
         instance_builder: TriggerInstanceBuilder<'_, F>,
         route_match: &RouteMatch<'_, '_>,

@@ -11,20 +11,16 @@ use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi_http::p2::body::HyperIncomingBody as Body;
 
-use crate::{
-    TriggerInstanceBuilder,
-    headers::compute_default_headers,
-    server::{HttpExecutor, set_request_deadline},
-};
+use crate::{TriggerInstanceBuilder, headers::compute_default_headers, server::set_request_deadline};
 
 pub struct WagiHttpExecutor<'a> {
     pub wagi_config: &'a WagiTriggerConfig,
     pub indices: &'a CommandIndices,
 }
 
-impl HttpExecutor for WagiHttpExecutor<'_> {
+impl WagiHttpExecutor<'_> {
     #[instrument(name = "spin_trigger_http.execute_wagi", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wagi_component {}", route_match.lookup_key().to_string())))]
-    async fn execute<F: RuntimeFactors>(
+    pub async fn execute<F: RuntimeFactors>(
         &self,
         mut instance_builder: TriggerInstanceBuilder<'_, F>,
         route_match: &RouteMatch<'_, '_>,
