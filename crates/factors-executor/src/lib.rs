@@ -203,12 +203,12 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutorApp<T, U> {
 ///
 /// It is generic over the executor's [`RuntimeFactors`] and any ad-hoc additional
 /// per-instance state needed by the caller.
-pub struct FactorsInstanceBuilder<'a, F: RuntimeFactors, U: 'static> {
+pub struct FactorsInstanceBuilder<'a, T: RuntimeFactors, U: 'static> {
     app_component: AppComponent<'a>,
     store_builder: spin_core::StoreBuilder,
-    factor_builders: F::InstanceBuilders,
-    instance_pre: &'a InstancePre<F, U>,
-    factors: &'a F,
+    factor_builders: T::InstanceBuilders,
+    instance_pre: &'a InstancePre<T, U>,
+    factors: &'a T,
 }
 
 impl<T: RuntimeFactors, U: 'static> FactorsInstanceBuilder<'_, T, U> {
@@ -244,7 +244,7 @@ impl<T: RuntimeFactors, U: 'static> FactorsInstanceBuilder<'_, T, U> {
 }
 
 impl<T: RuntimeFactors, U: Send> FactorsInstanceBuilder<'_, T, U> {
-    /// Instantiates the instance with the given executor instance state
+    /// Instantiates the instance with the given executor instance state.
     pub async fn instantiate(
         self,
         executor_instance_state: U,
@@ -252,16 +252,13 @@ impl<T: RuntimeFactors, U: Send> FactorsInstanceBuilder<'_, T, U> {
         spin_core::Instance,
         spin_core::Store<InstanceState<T::InstanceState, U>>,
     )> {
-        let instance_state = InstanceState {
-            core: Default::default(),
-            factors: self.factors.build_instance_state(self.factor_builders)?,
-            executor: executor_instance_state,
-            cpu_time_elapsed: Duration::from_millis(0),
-            cpu_time_last_entry: None,
-            memory_used_on_init: 0,
-            component_id: self.app_component.id().into(),
-        };
-        let mut store = self.store_builder.build(instance_state)?;
+        let mut store = Self::build_store(
+            self.store_builder,
+            self.factor_builders,
+            &self.app_component,
+            self.factors,
+            executor_instance_state,
+        )?;
 
         #[cfg(feature = "cpu-time-metrics")]
         store.as_mut().call_hook(|mut store, hook| {
@@ -277,20 +274,38 @@ impl<T: RuntimeFactors, U: Send> FactorsInstanceBuilder<'_, T, U> {
         Ok((instance, store))
     }
 
+    /// Builds a store with the given executor instance state.
     pub fn instantiate_store(
         self,
         executor_instance_state: U,
     ) -> anyhow::Result<spin_core::Store<InstanceState<T::InstanceState, U>>> {
+        Self::build_store(
+            self.store_builder,
+            self.factor_builders,
+            &self.app_component,
+            self.factors,
+            executor_instance_state,
+        )
+    }
+
+    fn build_store(
+        store_builder: spin_core::StoreBuilder,
+        factor_builders: T::InstanceBuilders,
+        app_component: &AppComponent,
+        factors: &T,
+        executor_instance_state: U,
+    ) -> anyhow::Result<spin_core::Store<InstanceState<T::InstanceState, U>>> {
+        let factors = factors.build_instance_state(factor_builders)?;
         let instance_state = InstanceState {
             core: Default::default(),
-            factors: self.factors.build_instance_state(self.factor_builders)?,
+            factors,
             executor: executor_instance_state,
             cpu_time_elapsed: Duration::from_millis(0),
             cpu_time_last_entry: None,
             memory_used_on_init: 0,
-            component_id: self.app_component.id().into(),
+            component_id: app_component.id().into(),
         };
-        self.store_builder.build(instance_state)
+        store_builder.build(instance_state)
     }
 }
 

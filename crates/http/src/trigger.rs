@@ -73,6 +73,7 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
         }
 
         match candidates.len() {
+            1 => Ok(candidates.pop().unwrap()),
             0 => {
                 anyhow::bail!(
                     "Expected component to export one of \
@@ -85,10 +86,8 @@ impl<T, S: HandlerState<StoreData = T>> HandlerType<S> {
                      If you're sure this is an HTTP module, check if a Spin upgrade is available: this may handle the newer version."
                 )
             }
-            1 => Ok(candidates.pop().unwrap()),
-            _ => anyhow::bail!(
-                "component exports multiple different handlers but \
-                     it's expected to export only one"
+            too_many => anyhow::bail!(
+                "component exports {too_many} different handlers but it's expected to export only one"
             ),
         }
     }
