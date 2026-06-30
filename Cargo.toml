@@ -74,6 +74,7 @@ spin-telemetry = { path = "crates/telemetry", features = [
   "tracing-log-compat",
 ] }
 spin-templates = { path = "crates/templates" }
+spin-tls = { path = "crates/tls" }
 spin-trigger = { path = "crates/trigger" }
 spin-trigger-http = { path = "crates/trigger-http" }
 spin-trigger-redis = { path = "crates/trigger-redis" }
