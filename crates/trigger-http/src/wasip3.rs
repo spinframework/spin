@@ -1,4 +1,4 @@
-use crate::server::HttpHandlerState;
+use crate::{HttpServer, server::HttpHandlerState};
 use anyhow::{Context as _, Result};
 use futures::{FutureExt, channel::oneshot};
 use http_body_util::BodyExt;
@@ -6,7 +6,7 @@ use spin_factor_outbound_http::{NotifyOnDropBody, p3_to_p2_error_code};
 use spin_factors::RuntimeFactors;
 use spin_factors_executor::InstanceState;
 use spin_http::routes::RouteMatch;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 use tracing::{Instrument, Level, instrument};
 use wasmtime::component::Accessor;
 use wasmtime_wasi_http::{
@@ -24,10 +24,12 @@ impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
     #[instrument(name = "spin_trigger_http.execute_wasm", skip_all, err(level = Level::INFO), fields(otel.name = format!("execute_wasm_component {}", route_match.lookup_key().to_string())))]
     pub async fn execute(
         &self,
+        server: &Arc<HttpServer<F>>,
         route_match: &RouteMatch<'_, '_>,
         mut req: http::Request<Body>,
         client_addr: SocketAddr,
     ) -> Result<http::Response<Body>> {
+        self.0.state().init_once(server, req.uri());
         super::wasi::prepare_request(route_match, &mut req, client_addr)?;
 
         let getter = (|data| wasi_http::<F>(data).unwrap())
