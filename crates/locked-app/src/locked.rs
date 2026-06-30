@@ -243,6 +243,9 @@ pub struct LockedComponent {
     /// Component dependencies
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<DependencyName, LockedComponentDependency>,
+    /// Component dependencies
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub trigger_dependencies: BTreeMap<String, Vec<LockedComponentDependency>>,
     /// Host requirements
     #[serde(
         default,
@@ -263,6 +266,16 @@ pub struct LockedComponentDependency {
     #[serde(default, skip_serializing_if = "InheritConfiguration::is_none")]
     pub inherit: InheritConfiguration,
 }
+
+// /// A LockedDependency represents a "fully resolved" Spin component dependency.
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct LockedTriggerDependency {
+//     /// Locked dependency source
+//     pub source: LockedComponentSource,
+//     /// Which configurations to inherit from parent
+//     #[serde(default, skip_serializing_if = "InheritConfiguration::is_none")]
+//     pub inherit: InheritConfiguration,
+// }
 
 /// InheritConfiguration specifies which configurations to inherit from parent.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -340,6 +353,9 @@ pub struct LockedTrigger {
     pub trigger_type: String,
     /// Trigger-type-specific configuration
     pub trigger_config: Value,
+    /// Trigger dependencies (e.g. middleware)
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub trigger_dependencies: BTreeMap<String, Vec<LockedComponentDependency>>,
 }
 
 /// A Variable specifies a custom configuration variable.

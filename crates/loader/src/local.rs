@@ -20,6 +20,8 @@ use tokio::{io::AsyncWriteExt, sync::Semaphore};
 
 use crate::{FilesMountStrategy, cache::Cache};
 
+mod trigger_components;
+
 #[derive(Debug)]
 pub struct LocalLoader {
     app_root: PathBuf,
@@ -107,15 +109,23 @@ impl LocalLoader {
             .collect::<Result<BTreeMap<_, _>>>()?;
         let resolver = Resolver::new(variables.clone())?;
 
-        let triggers = triggers
-            .into_iter()
-            .flat_map(|(trigger_type, configs)| {
-                configs
-                    .into_iter()
-                    .map(|trigger| locked_trigger(trigger_type.clone(), trigger))
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let triggers = try_join_all(triggers.into_iter().flat_map(|(trigger_type, configs)| {
+            configs
+                .into_iter()
+                .map(|trigger| {
+                    let trigger_type_2 = trigger_type.clone();
+                    let id = trigger.id.clone();
+                    async move {
+                        self.load_trigger(&id, &trigger_type_2, trigger)
+                            .await
+                            .with_context(|| {
+                                format!("Failed to load `{}` trigger `{}`", trigger_type_2, id)
+                            })
+                    }
+                })
+                .collect::<Vec<_>>()
+        }))
+        .await?;
 
         let sloth_guard = warn_if_component_load_slothful();
 
@@ -143,7 +153,7 @@ impl LocalLoader {
 
         drop(sloth_guard);
 
-        Ok(LockedApp {
+        let locked = LockedApp {
             spin_lock_version: Default::default(),
             metadata,
             must_understand,
@@ -151,6 +161,44 @@ impl LocalLoader {
             variables,
             triggers,
             components,
+        };
+
+        let locked = trigger_components::reassign_trigger_deps(locked);
+
+        Ok(locked)
+    }
+
+    async fn load_trigger(
+        &self,
+        id: &str,
+        trigger_type: &str,
+        trigger: v2::Trigger,
+    ) -> Result<LockedTrigger> {
+        fn reference_id(spec: v2::ComponentSpec) -> toml::Value {
+            let v2::ComponentSpec::Reference(id) = spec else {
+                unreachable!("should have already been normalized");
+            };
+            id.as_ref().into()
+        }
+
+        let mut config = trigger.config;
+
+        if let Some(id) = trigger.component.map(reference_id) {
+            config.insert("component".into(), id);
+        }
+
+        let locked_deps = if !trigger.dependencies.is_empty() {
+            self.load_trigger_dependencies(id, trigger.dependencies.iter())
+                .await?
+        } else {
+            BTreeMap::new()
+        };
+
+        Ok(LockedTrigger {
+            id: trigger.id,
+            trigger_type: trigger_type.to_string(),
+            trigger_config: config.try_into()?,
+            trigger_dependencies: locked_deps,
         })
     }
 
@@ -245,6 +293,7 @@ impl LocalLoader {
             files,
             config,
             dependencies,
+            trigger_dependencies: Default::default(), // We will fix this up later
             host_requirements,
         })
     }
@@ -281,6 +330,50 @@ impl LocalLoader {
         self.wasm_loader
             .load_component_dependency(&dependency_name, &dependency)
             .await
+    }
+
+    async fn load_trigger_dependencies(
+        &self,
+        id: &str,
+        dependencies: impl Iterator<Item = (&String, &v2::TriggerDependencies)>,
+    ) -> Result<BTreeMap<String, Vec<LockedComponentDependency>>> {
+        let mut loaded = BTreeMap::new();
+
+        for (role, deps) in dependencies {
+            let locked_deps = self.load_trigger_dependencies_vec(id, &deps.0).await?;
+            loaded.insert(role.clone(), locked_deps);
+        }
+
+        Ok(loaded)
+    }
+
+    async fn load_trigger_dependencies_vec(
+        &self,
+        id: &str,
+        dependencies: &[v2::TriggerDependency],
+    ) -> Result<Vec<LockedComponentDependency>> {
+        Ok(
+            try_join_all(dependencies.iter().map(|dependency| async move {
+                let locked_dependency = self
+                    .load_trigger_dependency(dependency.clone())
+                    .await
+                    .with_context(|| {
+                        format!("Failed to load trigger dependency `{dependency:?}` for `{id}`")
+                    })?;
+
+                anyhow::Ok(locked_dependency)
+            }))
+            .await?
+            .into_iter()
+            .collect(),
+        )
+    }
+
+    async fn load_trigger_dependency(
+        &self,
+        dependency: v2::TriggerDependency,
+    ) -> Result<LockedComponentDependency> {
+        self.wasm_loader.load_trigger_dependency(&dependency).await
     }
 
     // Load a Wasm source from the given ContentRef and update the source
@@ -624,49 +717,6 @@ fn locked_variable(variable: v2::Variable) -> Result<locked::Variable> {
     })
 }
 
-fn locked_trigger(trigger_type: String, trigger: v2::Trigger) -> Result<LockedTrigger> {
-    fn reference_id(spec: v2::ComponentSpec) -> toml::Value {
-        let v2::ComponentSpec::Reference(id) = spec else {
-            unreachable!("should have already been normalized");
-        };
-        id.as_ref().into()
-    }
-
-    let mut config = trigger.config;
-    if let Some(id) = trigger.component.map(reference_id) {
-        config.insert("component".into(), id);
-    }
-    if !trigger.components.is_empty() {
-        // Flatten trigger config `components` `OneOrManyComponentSpecs` into
-        // lists of component references.
-        config.insert(
-            "components".into(),
-            trigger
-                .components
-                .into_iter()
-                .map(|(key, specs)| {
-                    (
-                        key,
-                        specs
-                            .0
-                            .into_iter()
-                            .map(reference_id)
-                            .collect::<Vec<_>>()
-                            .into(),
-                    )
-                })
-                .collect::<toml::Table>()
-                .into(),
-        );
-    }
-
-    Ok(LockedTrigger {
-        id: trigger.id,
-        trigger_type,
-        trigger_config: config.try_into()?,
-    })
-}
-
 #[derive(Debug)]
 /// Handles loading of component Wasm from different sources.
 pub struct WasmLoader {
@@ -812,18 +862,75 @@ impl WasmLoader {
         dependency_name: &DependencyName,
         dependency: &v2::ComponentDependency,
     ) -> Result<locked::LockedComponentDependency> {
-        let inherit = match dependency.inherit_configuration() {
-            Some(v2::InheritConfiguration::All(true)) => locked::InheritConfiguration::All,
-            Some(v2::InheritConfiguration::Some(keys)) => {
-                locked::InheritConfiguration::Some(keys.clone())
-            }
-            Some(v2::InheritConfiguration::All(false)) | None => {
-                locked::InheritConfiguration::Some(vec![])
-            }
-        };
+        let inherit = locked_inherit(dependency);
 
         let (content, export) = self
             .load_dependency_content(dependency_name, dependency)
+            .await?;
+
+        Ok(locked::LockedComponentDependency {
+            source: locked::LockedComponentSource {
+                content_type: "application/wasm".into(),
+                content: file_content_ref(content)?,
+            },
+            export,
+            inherit,
+        })
+    }
+
+    /// Loads a dependency and returns a fully resolved locked component dependency.
+    pub async fn load_trigger_dependency(
+        &self,
+        dependency: &v2::TriggerDependency,
+    ) -> Result<locked::LockedComponentDependency> {
+        let as_component_dep = match dependency.clone() {
+            v2::TriggerDependency::Package {
+                version,
+                registry,
+                package,
+                inherit_configuration,
+            } => v2::ComponentDependency::Package {
+                version,
+                registry,
+                package: Some(package),
+                export: None,
+                inherit_configuration,
+            },
+            v2::TriggerDependency::Local {
+                path,
+                inherit_configuration,
+            } => v2::ComponentDependency::Local {
+                path,
+                export: None,
+                inherit_configuration,
+            },
+            v2::TriggerDependency::HTTP {
+                url,
+                digest,
+                inherit_configuration,
+            } => v2::ComponentDependency::HTTP {
+                url,
+                digest,
+                export: None,
+                inherit_configuration,
+            },
+            v2::TriggerDependency::AppComponent {
+                component,
+                inherit_configuration,
+            } => v2::ComponentDependency::AppComponent {
+                component,
+                export: None,
+                inherit_configuration,
+            },
+        };
+
+        let inherit = locked_inherit(&as_component_dep);
+
+        let fake_dep_name =
+            DependencyName::Plain(KebabId::try_from("to-do-fix-fix-fix".to_string()).unwrap());
+
+        let (content, export) = self
+            .load_dependency_content(&fake_dep_name, &as_component_dep)
             .await?;
 
         Ok(locked::LockedComponentDependency {
@@ -913,6 +1020,18 @@ impl WasmLoader {
     }
 }
 
+fn locked_inherit(dependency: &v2::ComponentDependency) -> locked::InheritConfiguration {
+    match dependency.inherit_configuration() {
+        Some(v2::InheritConfiguration::All(true)) => locked::InheritConfiguration::All,
+        Some(v2::InheritConfiguration::Some(keys)) => {
+            locked::InheritConfiguration::Some(keys.clone())
+        }
+        Some(v2::InheritConfiguration::All(false)) | None => {
+            locked::InheritConfiguration::Some(vec![])
+        }
+    }
+}
+
 fn looks_like_glob_pattern(s: impl AsRef<str>) -> bool {
     let s = s.as_ref();
     glob::Pattern::escape(s) != s
@@ -957,11 +1076,13 @@ fn warn_if_component_load_slothful() -> sloth::SlothGuard {
 mod test {
     use super::*;
 
-    #[tokio::test]
-    async fn bad_destination_filename_is_explained() -> anyhow::Result<()> {
+    async fn load_test_case(
+        testcase_dir: &str,
+        manifest_file: &str,
+    ) -> anyhow::Result<(tempfile::TempDir, LockedApp)> {
         let app_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
-            .join("file-errors");
+            .join(testcase_dir);
         let wd = tempfile::tempdir()?;
         let loader = LocalLoader::new(
             &app_root,
@@ -970,8 +1091,13 @@ mod test {
             None,
         )
         .await?;
-        let err = loader
-            .load_file(app_root.join("bad.toml"))
+        let locked_app = loader.load_file(app_root.join(manifest_file)).await;
+        locked_app.map(|locked| (wd, locked))
+    }
+
+    #[tokio::test]
+    async fn bad_destination_filename_is_explained() -> anyhow::Result<()> {
+        let err = load_test_case("file-errors", "bad.toml")
             .await
             .expect_err("loader should not have succeeded");
         let err_ctx = format!("{err:#}");
@@ -980,5 +1106,190 @@ mod test {
             "expected error to show destination file name but got {err_ctx}",
         );
         Ok(())
+    }
+
+    fn trigger_by_route<'a>(locked: &'a LockedApp, route: &str) -> &'a LockedTrigger {
+        fn route_of(trigger: &LockedTrigger) -> &str {
+            trigger
+                .trigger_config
+                .get("route")
+                .and_then(|v| v.as_str())
+                .unwrap()
+        }
+        locked
+            .triggers
+            .iter()
+            .find(|t| route_of(t) == route)
+            .unwrap()
+    }
+
+    fn component_for_route<'a>(locked: &'a LockedApp, route: &str) -> &'a LockedComponent {
+        let component_id = component_id(trigger_by_route(locked, route));
+        locked
+            .components
+            .iter()
+            .find(|c| c.id == component_id)
+            .unwrap()
+    }
+
+    fn component_id(trigger: &LockedTrigger) -> &str {
+        trigger
+            .trigger_config
+            .get("component")
+            .and_then(|v| v.as_str())
+            .unwrap()
+    }
+
+    fn component_trigger_deps_for_route<'a>(
+        locked: &'a LockedApp,
+        route: &str,
+        key: &str,
+    ) -> &'a Vec<LockedComponentDependency> {
+        let component = component_for_route(locked, route);
+        component
+            .trigger_dependencies
+            .get(key)
+            .expect("should have had trigger deps for key")
+    }
+
+    #[tokio::test]
+    async fn unenriched_lockfile_is_unchanged() {
+        let (_wd, locked_app) = load_test_case("extra-components", "vanilla.toml")
+            .await
+            .unwrap();
+        assert_eq!(3, locked_app.triggers.len());
+        assert_eq!(2, locked_app.components.len());
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_only_one_trigger_per_component_no_changes() {
+        let (_wd, locked_app) = load_test_case("extra-components", "inoffensive.toml")
+            .await
+            .unwrap();
+        assert_eq!(2, locked_app.triggers.len());
+        assert_eq!("a", component_id(trigger_by_route(&locked_app, "/a")));
+        assert_eq!("b", component_id(trigger_by_route(&locked_app, "/b")));
+        assert_eq!(5, locked_app.components.len());
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_multiple_enriched_triggers_per_component_get_split() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+        // Splitting should result in triggers pointing to different IDs, but the same primary source
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a1")));
+        assert!(
+            component_for_route(&locked_app, "/a1")
+                .source
+                .content
+                .source
+                .as_ref()
+                .unwrap()
+                .ends_with("/a.dummy.wasm.txt")
+        );
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a2")));
+        assert!(
+            component_for_route(&locked_app, "/a3")
+                .source
+                .content
+                .source
+                .as_ref()
+                .unwrap()
+                .ends_with("/a.dummy.wasm.txt")
+        );
+        assert_ne!("a", component_id(trigger_by_route(&locked_app, "/a3")));
+        assert!(
+            component_for_route(&locked_app, "/a3")
+                .source
+                .content
+                .source
+                .as_ref()
+                .unwrap()
+                .ends_with("/a.dummy.wasm.txt")
+        );
+        // Triggers that don't need splitting should be unaffected
+        assert_eq!("b", component_id(trigger_by_route(&locked_app, "/b")));
+        // There should be new components inserted for the split
+        assert_eq!(8, locked_app.components.len());
+    }
+
+    // Content refs have `file:` URIs with absolute paths. This is great for
+    // definiteness but not so convenient for testing!
+    fn content_ref_to_file_name(content_ref: &ContentRef) -> String {
+        let url = content_ref.source.as_ref().unwrap();
+        let url = Url::parse(url).unwrap();
+        let file_path = PathBuf::from(url.path());
+        file_path.file_name().unwrap().to_string_lossy().to_string()
+    }
+
+    #[tokio::test]
+    async fn enriched_lockfile_captures_composition_graph_in_split_component() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+
+        let a1_mw = component_trigger_deps_for_route(&locked_app, "/a1", "middleware");
+        assert_eq!(2, a1_mw.len());
+        assert_eq!(
+            "a.dummy.wasm.txt",
+            content_ref_to_file_name(&a1_mw[0].source.content)
+        );
+        assert_eq!(
+            "b.dummy.wasm.txt",
+            content_ref_to_file_name(&a1_mw[1].source.content)
+        );
+
+        let a2_mw = component_trigger_deps_for_route(&locked_app, "/a2", "middleware");
+        assert_eq!(2, a2_mw.len());
+        assert_eq!(
+            "b.dummy.wasm.txt",
+            content_ref_to_file_name(&a2_mw[0].source.content)
+        );
+        assert_eq!(
+            "c.dummy.wasm.txt",
+            content_ref_to_file_name(&a2_mw[1].source.content)
+        );
+
+        let a3_mw = component_trigger_deps_for_route(&locked_app, "/a3", "middleware");
+        assert_eq!(3, a3_mw.len());
+        assert_eq!(
+            "c.dummy.wasm.txt",
+            content_ref_to_file_name(&a3_mw[0].source.content)
+        );
+        assert_eq!(
+            "b.dummy.wasm.txt",
+            content_ref_to_file_name(&a3_mw[1].source.content)
+        );
+        assert_eq!(
+            "a.dummy.wasm.txt",
+            content_ref_to_file_name(&a3_mw[2].source.content)
+        );
+
+        // Unsplit things should still get the shunt
+        let b_mw = component_trigger_deps_for_route(&locked_app, "/b", "middleware");
+        assert_eq!(2, b_mw.len());
+        assert_eq!(
+            "a.dummy.wasm.txt",
+            content_ref_to_file_name(&b_mw[0].source.content)
+        );
+        assert_eq!(
+            "c.dummy.wasm.txt",
+            content_ref_to_file_name(&b_mw[1].source.content)
+        );
+    }
+
+    #[tokio::test]
+    async fn deps_moved_off_trigger() {
+        let (_wd, locked_app) = load_test_case("extra-components", "three-to-one.toml")
+            .await
+            .unwrap();
+        assert_eq!(4, locked_app.triggers.len());
+
+        for t in &locked_app.triggers {
+            assert!(t.trigger_dependencies.is_empty());
+        }
     }
 }

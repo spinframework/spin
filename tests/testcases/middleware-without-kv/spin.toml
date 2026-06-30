@@ -1,0 +1,21 @@
+spin_manifest_version = 2
+
+[application]
+name = "middleware-without-kv"
+authors = ["Spin Framework"]
+version = "0.1.0"
+
+[[trigger.http]]
+route = "/..."
+component = "echo"
+dependencies.middleware = [{ component = "middleware-header-adder" }, { component = "middleware-kv-stasher", inherit_configuration = [] }] # kv stasher needs kv but we're not going to let it have it
+
+[component.echo]
+source = "%{source=middleware-primary}"
+key_value_stores = ["default"]
+
+[component.middleware-header-adder]
+source = "%{source=middleware-header-adder}"
+
+[component.middleware-kv-stasher]
+source = "%{source=middleware-kv-stasher}"

@@ -2,6 +2,7 @@ use spin_common::{ui::quoted_path, url::parse_file_url};
 use spin_compose::ComponentSourceLoaderFs;
 use spin_core::{Component, async_trait, wasmtime};
 use spin_factors::{AppComponent, RuntimeFactors};
+use spin_factors_executor::TriggerDependencyData;
 use wasmtime::error::Context as _;
 
 #[derive(Default)]
@@ -65,6 +66,36 @@ impl ComponentLoader {
             }
         }
     }
+
+    pub(crate) async fn load_composed(
+        &self,
+        component: &AppComponent<'_>,
+        trigger_dependencies_composer: &impl spin_factors_executor::TriggerDependenciesComposer,
+    ) -> anyhow::Result<Vec<u8>> {
+        let loader = ComponentSourceLoaderFs;
+
+        let trigger_deps = &component.locked.trigger_dependencies;
+
+        let trigger_deps = load_trigger_dependencies(&mut trigger_deps.iter(), &loader).await?;
+
+        let apply_trigger_deps = async |c: Vec<u8>| {
+            trigger_dependencies_composer
+                .compose_trigger_dependencies(&trigger_deps, c)
+                .await
+                .map_err(spin_compose::ComposeError::PrepareError)
+        };
+
+        let composed = spin_compose::compose(&loader, component.locked, apply_trigger_deps)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to resolve dependencies for component {:?}",
+                    component.locked.id
+                )
+            })?;
+
+        Ok(composed)
+    }
 }
 
 #[async_trait]
@@ -73,6 +104,7 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
         &self,
         engine: &wasmtime::Engine,
         component: &AppComponent,
+        trigger_dependencies_composer: &impl spin_factors_executor::TriggerDependenciesComposer,
     ) -> anyhow::Result<Component> {
         let source = component
             .source()
@@ -90,17 +122,62 @@ impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for Comp
             return Ok(component);
         }
 
-        let composed = spin_compose::compose(&ComponentSourceLoaderFs, component.locked)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to resolve dependencies for component {:?}",
-                    component.locked.id
-                )
-            })?;
+        let composed = self
+            .load_composed(component, trigger_dependencies_composer)
+            .await?;
 
         let component = spin_core::Component::new(engine, composed)
             .with_context(|| format!("failed to compile component from {}", quoted_path(&path)))?;
         Ok(component)
+    }
+}
+
+pub(crate) async fn load_trigger_dependencies(
+    trigger_dependencies: &mut impl ExactSizeIterator<
+        Item = (&String, &Vec<spin_app::locked::LockedComponentDependency>),
+    >,
+    loader: &spin_compose::ComponentSourceLoaderFs,
+) -> Result<
+    std::collections::HashMap<String, Vec<spin_factors_executor::TriggerDependency>>,
+    anyhow::Error,
+> {
+    use spin_factors_executor::TriggerDependency;
+    use std::collections::HashMap;
+
+    let mut resolved_trigger_deps = HashMap::with_capacity(trigger_dependencies.len());
+
+    for (role, role_components) in trigger_dependencies {
+        let mut deps_for_role = Vec::with_capacity(role_components.len());
+
+        for locked_dep in role_components {
+            let data = load_trigger_dep_data(loader, &locked_dep.source).await?;
+            deps_for_role.push(TriggerDependency {
+                data,
+                dependency: locked_dep.clone(),
+            });
+        }
+        resolved_trigger_deps.insert(role.clone(), deps_for_role);
+    }
+
+    Ok(resolved_trigger_deps)
+}
+
+async fn load_trigger_dep_data(
+    loader: &ComponentSourceLoaderFs,
+    source: &spin_app::locked::LockedComponentSource,
+) -> anyhow::Result<TriggerDependencyData> {
+    use spin_compose::ComponentSourceLoader;
+
+    if let Some(path) = source
+        .content
+        .source
+        .as_ref()
+        .and_then(|url| parse_file_url(url).ok())
+    {
+        Ok(TriggerDependencyData::OnDisk(path))
+    } else {
+        Ok(TriggerDependencyData::InMemory(
+            loader.load_source(source).await?,
+        ))
     }
 }

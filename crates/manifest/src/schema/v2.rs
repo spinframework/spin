@@ -151,11 +151,18 @@ pub struct Trigger {
     /// Learn more: https://spinframework.dev/triggers#triggers-and-components
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub component: Option<ComponentSpec>,
-    /// Reserved for future use.
+    /// Additional components used when the trigger occurs.
+    /// The meaning of entries in this table is trigger-specific.
     ///
     /// `components = { ... }`
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     pub components: Map<String, OneOrManyComponentSpecs>,
+    /// Additional components to be invoked during trigger processing.
+    /// The meaning of entries in this table is trigger-specific.
+    ///
+    /// `dependencies = { ... }`
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub dependencies: Map<String, TriggerDependencies>,
     /// Opaque trigger-type-specific config
     #[serde(flatten)]
     pub config: toml::Table,
@@ -170,6 +177,11 @@ pub struct OneOrManyComponentSpecs(
     pub Vec<ComponentSpec>,
 );
 
+/// One or many `ComponentSpec`(s)
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
+pub struct TriggerDependencies(pub Vec<TriggerDependency>);
+
 /// Component reference or inline definition
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, untagged, try_from = "toml::Value")]
@@ -179,6 +191,135 @@ pub enum ComponentSpec {
     Reference(KebabId),
     /// `{ ... }`
     Inline(Box<Component>),
+}
+
+/// Specifies how to satisfy an import dependency of the component. This may be one of:
+///
+/// - A semantic versioning constraint for the package version to use. Spin fetches the latest matching version of the package whose name matches the dependency name from the default registry.
+///
+/// Example: `"my:dep/import" = ">= 0.1.0"`
+///
+/// - A package from a registry.
+///
+/// Example: `"my:dep/import" = { version = "0.1.0", registry = "registry.io", ...}`
+///
+/// - A package from a filesystem path.
+///
+/// Example: `"my:dependency" = { path = "path/to/component.wasm", export = "my-export" }`
+///
+/// - A component in the application. The referenced component binary is composed: additional
+///   configuration such as files, networking, storage, etc. are ignored. This is intended
+///   primarily as a convenience for including dependencies in the manifest so that they
+///   can be built using `spin build`.
+///
+/// Example: `"my:dependency" = { component = "my-dependency", export = "my-export" }`
+///
+/// - A package from an HTTP URL.
+///
+/// Example: `"my:import" = { url = "https://example.com/component.wasm", sha256 = "sha256:..." }`
+///
+/// Learn more: https://spinframework.dev/v3/writing-apps#using-component-dependencies
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged, deny_unknown_fields)]
+pub enum TriggerDependency {
+    /// `... = { version = "0.1.0", registry = "registry.io", ...}`
+    #[schemars(description = "")] // schema docs are on the parent
+    Package {
+        /// A semantic versioning constraint for the package version to use. Required. Spin
+        /// fetches the latest matching version from the specified registry, or from
+        /// the default registry if no registry is specified.
+        ///
+        /// Example: `"my:dep/import" = { version = ">= 0.1.0" }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-registry
+        version: String,
+        /// The registry that hosts the package. If omitted, this defaults to your
+        /// system default registry.
+        ///
+        /// Example: `"my:dep/import" = { registry = "registry.io", version = "0.1.0" }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-registry
+        registry: Option<String>,
+        /// The name of the package to use. If omitted, this defaults to the package name of the
+        /// imported interface.
+        ///
+        /// Example: `"my:dep/import" = { package = "your:implementation", version = "0.1.0" }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-registry
+        package: String,
+        /// The set of configurations to inherit from the parent component. If omitted or set to `false`,
+        /// no configurations will be inherited. If `true`, all configurations will be inherited.
+        /// Selective inheritance can be specified by enumerating the configuration keys the dependency
+        /// would like to inherit.
+        ///
+        /// Examples:
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
+        inherit_configuration: Option<InheritConfiguration>,
+    },
+    /// `... = { path = "path/to/component.wasm", export = "my-export" }`
+    #[schemars(description = "")] // schema docs are on the parent
+    Local {
+        /// The path to the Wasm file that implements the dependency.
+        ///
+        /// Example: `"my:dep/import" = { path = "path/to/component.wasm" }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-local-component
+        path: PathBuf,
+        /// The set of configurations to inherit from the parent component. If omitted or set to `false`,
+        /// no configurations will be inherited. If `true`, all configurations will be inherited.
+        /// Selective inheritance can be specified by enumerating the configuration keys the dependency
+        /// would like to inherit.
+        ///
+        /// Examples:
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
+        inherit_configuration: Option<InheritConfiguration>,
+    },
+    /// `... = { url = "https://example.com/component.wasm", sha256 = "..." }`
+    #[schemars(description = "")] // schema docs are on the parent
+    HTTP {
+        /// The URL to the Wasm component that implements the dependency.
+        ///
+        /// Example: `"my:dep/import" = { url = "https://example.com/component.wasm", sha256 = "sha256:..." }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-url
+        url: String,
+        /// The SHA256 digest of the Wasm file. This is required for integrity checking. Must begin with `sha256:`.
+        ///
+        /// Example: `"my:dep/import" = { sha256 = "sha256:...", ... }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#dependencies-from-a-url
+        digest: String,
+        /// The set of configurations to inherit from the parent component. If omitted or set to `false`,
+        /// no configurations will be inherited. If `true`, all configurations will be inherited.
+        /// Selective inheritance can be specified by enumerating the configuration keys the dependency
+        /// would like to inherit.
+        ///
+        /// Examples:
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
+        inherit_configuration: Option<InheritConfiguration>,
+    },
+    /// `... = { component = "my-dependency" }`
+    #[schemars(description = "")] // schema docs are on the parent
+    AppComponent {
+        /// The ID of the component which implements the dependency.
+        ///
+        /// Example: `"my:dep/import" = { component = "my-dependency" }`
+        ///
+        /// Learn more: https://spinframework.dev/writing-apps#using-component-dependencies
+        component: KebabId,
+        /// The set of configurations to inherit from the parent component. If omitted or set to `false`,
+        /// no configurations will be inherited. If `true`, all configurations will be inherited.
+        /// Selective inheritance can be specified by enumerating the configuration keys the dependency
+        /// would like to inherit.
+        ///
+        /// Examples:
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
+        ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
+        inherit_configuration: Option<InheritConfiguration>,
+    },
 }
 
 impl TryFrom<toml::Value> for ComponentSpec {
@@ -844,10 +985,18 @@ mod one_or_many {
         D: Deserializer<'de>,
     {
         let value = toml::Value::deserialize(deserializer)?;
-        if let Ok(val) = T::deserialize(value.clone()) {
-            Ok(vec![val])
+        // NOTE: We explicitly check for array first rather than trying T::deserialize
+        // first, because toml's serde impl will treat an array as a sequence of fields
+        // to be assigned to struct members (e.g. Component), producing nonsensical results.
+        if let Some(arr) = value.as_array() {
+            arr.iter()
+                .map(|v| T::deserialize(v.clone()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(serde::de::Error::custom)
         } else {
-            Vec::deserialize(value).map_err(serde::de::Error::custom)
+            T::deserialize(value)
+                .map(|v| vec![v])
+                .map_err(serde::de::Error::custom)
         }
     }
 }
@@ -868,6 +1017,27 @@ mod tests {
     #[allow(dead_code)]
     struct FakeTriggerConfig {
         option: Option<bool>,
+    }
+
+    fn as_reference(spec: &ComponentSpec) -> Option<&str> {
+        match spec {
+            ComponentSpec::Reference(id) => Some(id.as_ref()),
+            ComponentSpec::Inline(_) => None,
+        }
+    }
+
+    fn as_inline(spec: &ComponentSpec) -> Option<&Component> {
+        match spec {
+            ComponentSpec::Reference(_) => None,
+            ComponentSpec::Inline(c) => Some(c),
+        }
+    }
+
+    fn as_local(source: &ComponentSource) -> Option<&str> {
+        match source {
+            ComponentSource::Local(path) => Some(path),
+            _ => None,
+        }
     }
 
     #[test]
@@ -1409,5 +1579,78 @@ mod tests {
                 .expect("fancy-thing dep should have been set"),
             ComponentDependency::Version(v) if v == "1.2.3",
         ));
+    }
+
+    #[test]
+    fn can_deserialise_one_or_many_one_ref() {
+        let manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+            [application]
+            name = "test"
+            [[trigger.fake]]
+            component = "test1"
+            components = { babble = "test2" }
+        })
+        .expect("manifest should be valid");
+
+        let trigger = manifest.triggers.get("fake").unwrap()[0].clone();
+
+        assert_eq!(
+            Some("test1"),
+            as_reference(trigger.component.as_ref().unwrap())
+        );
+        assert_eq!(1, trigger.components.len());
+        let babble_comps = &trigger.components.get("babble").as_ref().unwrap().0;
+        assert_eq!(1, babble_comps.len());
+        assert_eq!(Some("test2"), as_reference(&babble_comps[0]));
+    }
+
+    #[test]
+    fn can_deserialise_one_or_many_one_inline() {
+        let manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+            [application]
+            name = "test"
+            [[trigger.fake]]
+            component = "test1"
+            components = { babble = { source = "fie.wasm", allowed_outbound_hosts = ["http://example.com"] } }
+        })
+        .expect("manifest should be valid");
+
+        let trigger = manifest.triggers.get("fake").unwrap()[0].clone();
+
+        assert_eq!(1, trigger.components.len());
+        let babble_comps = &trigger.components.get("babble").as_ref().unwrap().0;
+        assert_eq!(1, babble_comps.len());
+        let single = as_inline(&babble_comps[0]).expect("should have deserialised to inline");
+        assert_eq!(Some("fie.wasm"), as_local(&single.source));
+        assert_eq!(1, single.allowed_outbound_hosts.len());
+    }
+
+    #[test]
+    fn can_deserialise_one_or_many_many() {
+        let manifest = AppManifest::deserialize(toml! {
+            spin_manifest_version = 2
+            [application]
+            name = "test"
+            [[trigger.fake]]
+            component = "test1"
+            components = { babble = ["test2", { source = "fie.wasm", allowed_outbound_hosts = ["http://example.com"] }, "test3"] }
+        })
+        .expect("manifest should be valid");
+
+        let trigger = manifest.triggers.get("fake").unwrap()[0].clone();
+
+        assert_eq!(1, trigger.components.len());
+        let babble_comps = &trigger.components.get("babble").as_ref().unwrap().0;
+        assert_eq!(3, babble_comps.len());
+
+        assert_eq!(Some("test2"), as_reference(&babble_comps[0]));
+
+        let inline = as_inline(&babble_comps[1]).expect("should have deserialised to inline");
+        assert_eq!(Some("fie.wasm"), as_local(&inline.source));
+        assert_eq!(1, inline.allowed_outbound_hosts.len());
+
+        assert_eq!(Some("test3"), as_reference(&babble_comps[2]));
     }
 }
