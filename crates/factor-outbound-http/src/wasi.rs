@@ -55,7 +55,7 @@ use spin_factor_outbound_networking::{ConnectionPermit, ConnectionSemaphore};
 use crate::{
     InstanceHttpHooks, OutboundHttpFactor, SelfRequestOrigin,
     intercept::{InterceptOutcome, OutboundHttpInterceptor},
-    wasi_2023_10_18, wasi_2023_11_10,
+    wasi_2023_10_18, wasi_2023_11_10, wasi_2026_03_15,
 };
 
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
@@ -312,6 +312,7 @@ where
 
     wasi_2023_10_18::add_to_linker(linker, get_http)?;
     wasi_2023_11_10::add_to_linker(linker, get_http)?;
+    wasi_2026_03_15::add_to_linker(linker, get_http_p3)?;
 
     Ok(())
 }

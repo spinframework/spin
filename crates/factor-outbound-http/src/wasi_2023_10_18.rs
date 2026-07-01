@@ -1,4 +1,5 @@
 use anyhow::Result;
+use spin_factor_wasi::convert;
 use wasmtime::component::{Linker, Resource};
 use wasmtime_wasi_http::p2::WasiHttpCtxView;
 use wasmtime_wasi_http::p2::bindings as latest;
@@ -513,61 +514,6 @@ impl wasi::http::outgoing_handler::Host for WasiHttpCtxView<'_> {
         }
     }
 }
-
-macro_rules! convert {
-    () => {};
-    ($kind:ident $from:path [<=>] $to:path { $($body:tt)* } $($rest:tt)*) => {
-        convert!($kind $from => $to { $($body)* });
-        convert!($kind $to => $from { $($body)* });
-
-        convert!($($rest)*);
-    };
-    (struct $from:ty => $to:path { $($field:ident,)* } $($rest:tt)*) => {
-        impl From<$from> for $to {
-            fn from(e: $from) -> $to {
-                $to {
-                    $( $field: e.$field.into(), )*
-                }
-            }
-        }
-
-        convert!($($rest)*);
-    };
-    (enum $from:path => $to:path { $($variant:ident $(($e:ident))?,)* } $($rest:tt)*) => {
-        impl From<$from> for $to {
-            fn from(e: $from) -> $to {
-                use $from as A;
-                use $to as B;
-                match e {
-                    $(
-                        A::$variant $(($e))? => B::$variant $(($e.into()))?,
-                    )*
-                }
-            }
-        }
-
-        convert!($($rest)*);
-    };
-    (flags $from:path => $to:path { $($flag:ident,)* } $($rest:tt)*) => {
-        impl From<$from> for $to {
-            fn from(e: $from) -> $to {
-                use $from as A;
-                use $to as B;
-                let mut out = B::empty();
-                $(
-                    if e.contains(A::$flag) {
-                        out |= B::$flag;
-                    }
-                )*
-                out
-            }
-        }
-
-        convert!($($rest)*);
-    };
-}
-
-pub(crate) use convert;
 
 convert! {
     enum latest::http::types::Method [<=>] Method {

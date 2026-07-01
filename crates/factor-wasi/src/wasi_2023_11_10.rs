@@ -1,4 +1,4 @@
-use super::wasi_2023_10_18::{convert, convert_result};
+use super::{convert, wasi_2023_10_18::convert_result};
 use crate::sockets::{SpinSockets, SpinSocketsView};
 use spin_factors::anyhow::Result;
 use wasmtime::component::{Linker, Resource, ResourceTable};

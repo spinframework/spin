@@ -1630,6 +1630,7 @@ where
     }
 }
 
+#[macro_export]
 macro_rules! convert {
     () => {};
     ($kind:ident $from:path [<=>] $to:path { $($body:tt)* } $($rest:tt)*) => {
@@ -1682,8 +1683,6 @@ macro_rules! convert {
         convert!($($rest)*);
     };
 }
-
-pub(crate) use convert;
 
 convert! {
     struct latest::clocks::wall_clock::Datetime [<=>] Datetime {
