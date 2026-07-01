@@ -11,11 +11,12 @@ indexmap = { workspace = true }
 spin-loader = { path = "../loader" }
 spin-manifest = { path = "../manifest" }
 spin-serde = { path = "../serde" }
-tokio = { workspace = true, features = ["rt", "time"] }
+tokio = { workspace = true, features = ["fs"] }
 wasmparser = { workspace = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 wit-component = { workspace = true, features = ["dummy-module"] }

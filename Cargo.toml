@@ -97,6 +97,7 @@ http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 redis = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
 runtime-tests = { path = "tests/runtime-tests" }
 test-codegen-macro = { path = "crates/test-codegen-macro" }
 test-components = { path = "tests/test-components" }

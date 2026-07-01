@@ -23,7 +23,7 @@ spin-outbound-networking-config = { path = "../outbound-networking-config" }
 spin-serde = { path = "../serde" }
 tempfile = { workspace = true }
 terminal = { path = "../terminal" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
 toml = { workspace = true }
 tracing = { workspace = true }
 wasm-pkg-client = { workspace = true }

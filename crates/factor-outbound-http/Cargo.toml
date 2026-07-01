@@ -13,7 +13,7 @@ http = { workspace = true }
 http-body = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
-hyper-util = { workspace = true }
+hyper-util = { workspace = true, features = ["client-legacy", "http1", "http2"] }
 pin-project-lite = { workspace = true }
 reqwest = { workspace = true, features = ["gzip"] }
 rustls = { workspace = true }
@@ -24,7 +24,7 @@ spin-factors = { path = "../factors" }
 spin-telemetry = { path = "../telemetry" }
 spin-world = { path = "../world" }
 terminal = { path = "../terminal" }
-tokio = { workspace = true, features = ["macros", "rt", "net"] }
+tokio = { workspace = true, features = ["net", "rt", "time"] }
 tokio-rustls = { workspace = true }
 tower-service = { workspace = true }
 tracing = { workspace = true }
@@ -38,6 +38,7 @@ wasmtime-wasi-http = { workspace = true }
 spin-common = { path = "../common" }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factors-test = { path = "../factors-test" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 
 [features]

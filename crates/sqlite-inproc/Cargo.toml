@@ -12,7 +12,7 @@ rusqlite = { workspace = true, features = ["bundled", "hooks"] }
 spin-factor-sqlite = { path = "../factor-sqlite" }
 spin-wasi-async = { path = "../wasi-async" }
 spin-world = { path = "../world" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
 
 [lints]
 workspace = true
