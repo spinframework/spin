@@ -31,7 +31,7 @@ spin-loader = { path = "../loader" }
 spin-locked-app = { path = "../locked-app" }
 tar = "0.4"
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["fs"] }
+tokio = { workspace = true, features = ["fs", "io-util", "rt"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tracing = { workspace = true }
 walkdir = { workspace = true }
@@ -39,6 +39,7 @@ wasmparser = { workspace = true }
 wat = "1"
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
 wasm-encoder = { workspace = true }
 wit-component = { workspace = true, features = ["dummy-module"] }
 wit-parser = { workspace = true }

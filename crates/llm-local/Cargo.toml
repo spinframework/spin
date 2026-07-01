@@ -17,7 +17,7 @@ spin-common = { path = "../common" }
 spin-core = { path = "../core" }
 spin-world = { path = "../world" }
 tokenizers = "0.21"
-tokio = { workspace = true, features = ["macros", "sync", "fs"] }
+tokio = { workspace = true, features = ["fs", "rt"] }
 tracing = { workspace = true }
 
 [features]

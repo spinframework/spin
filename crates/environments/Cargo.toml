@@ -28,7 +28,7 @@ spin-loader = { path = "../loader" }
 spin-manifest = { path = "../manifest" }
 spin-serde = { path = "../serde" }
 toml = { workspace = true }
-tokio = { version = "1.23", features = ["fs"] }
+tokio = { version = "1.23", features = ["fs", "sync", "time"] }
 tracing = { workspace = true }
 url = { workspace = true }
 wac-graph = { workspace = true }
@@ -40,6 +40,7 @@ wit-parser = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { version = "1.23", features = ["macros", "rt"] }
 wit-component = { workspace = true, features = ["dummy-module"] }
 wit-encoder = "0.235"
 

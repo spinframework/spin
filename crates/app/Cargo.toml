@@ -14,4 +14,4 @@ spin-locked-app = { path = "../locked-app" }
 [dev-dependencies]
 toml = { workspace = true }
 spin-factors-test = { path = "../factors-test" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -43,6 +43,7 @@ tracing = { workspace = true }
 [dev-dependencies]
 spin-world = { path = "../world" }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 
 [lints]
 workspace = true

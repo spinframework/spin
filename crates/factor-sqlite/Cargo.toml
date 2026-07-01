@@ -18,7 +18,7 @@ spin-locked-app = { path = "../locked-app" }
 spin-resource-table = { path = "../table" }
 spin-wasi-async = { path = "../wasi-async" }
 spin-world = { path = "../world" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
