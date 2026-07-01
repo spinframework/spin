@@ -8777,6 +8777,7 @@ dependencies = [
  "spin-runtime-factors",
  "spin-telemetry",
  "spin-templates",
+ "spin-tls",
  "spin-trigger",
  "spin-trigger-http",
  "spin-trigger-redis",
@@ -9748,6 +9749,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "spin-tls"
+version = "4.1.0-pre0"
+dependencies = [
+ "rustls 0.23.37",
+]
+
+[[package]]
 name = "spin-trigger"
 version = "4.1.0-pre0"
 dependencies = [
@@ -9770,6 +9778,7 @@ dependencies = [
  "spin-factors",
  "spin-factors-executor",
  "spin-telemetry",
+ "spin-tls",
  "spin-world",
  "tempfile",
  "tokio",

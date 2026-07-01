@@ -185,6 +185,7 @@ pub struct NoCliArgs;
 impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, B> {
     /// Create a new TriggerExecutorBuilder from this TriggerExecutorCommand.
     pub async fn run(self) -> Result<()> {
+        spin_tls::install_default_crypto_provider();
         // Handle --help-args-only
         if self.help_args_only {
             Self::command()
