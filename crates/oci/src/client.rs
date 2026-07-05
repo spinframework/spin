@@ -1083,6 +1083,12 @@ mod test {
         };
     }
 
+    fn file_url(path: impl AsRef<Path>) -> String {
+        Url::from_file_path(path)
+            .expect("should convert test path to file URL")
+            .to_string()
+    }
+
     #[tokio::test]
     async fn can_assemble_layers() {
         use spin_locked_app::locked::LockedComponent;
@@ -1184,14 +1190,14 @@ mod test {
                     "id": "component1",
                     "source": {
                         "content_type": "application/wasm",
-                        "source": format!("file://{}", working_dir.path().join("component1.wasm").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component1.wasm")),
                         "digest": "digest",
                 }},
                 {
                     "id": "component2",
                     "source": {
                         "content_type": "application/wasm",
-                        "source": format!("file://{}", working_dir.path().join("component2.wasm").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component2.wasm")),
                         "digest": "digest",
                 }}]),
                 expected_layer_count: 2,
@@ -1200,21 +1206,23 @@ mod test {
             },
             TestCase {
                 name: "One component layer and two file layers",
-                opts: Some(ClientOpts{content_ref_inline_max_size: 0}),
+                opts: Some(ClientOpts {
+                    content_ref_inline_max_size: 0,
+                }),
                 locked_components: from_json!([{
                 "id": "component1",
                 "source": {
                     "content_type": "application/wasm",
-                    "source": format!("file://{}", working_dir.path().join("component1.wasm").to_str().unwrap()),
+                    "source": file_url(working_dir.path().join("component1.wasm")),
                     "digest": "digest",
                 },
                 "files": [
                     {
-                        "source": format!("file://{}", working_dir.path().join("component1").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component1")),
                         "path": working_dir.path().join("component1").join("bar").to_str().unwrap()
                     },
                     {
-                        "source": format!("file://{}", working_dir.path().join("component1").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component1")),
                         "path": working_dir.path().join("component1").join("baz").to_str().unwrap()
                     }
                 ]
@@ -1230,12 +1238,12 @@ mod test {
                 "id": "component1",
                 "source": {
                     "content_type": "application/wasm",
-                    "source": format!("file://{}", working_dir.path().join("component1.wasm").to_str().unwrap()),
+                    "source": file_url(working_dir.path().join("component1.wasm")),
                     "digest": "digest",
                 },
                 "files": [
                     {
-                        "source": format!("file://{}", working_dir.path().join("component1").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component1")),
                         "path": working_dir.path().join("component1").join("bar").to_str().unwrap()
                     }
                 ]
@@ -1246,19 +1254,21 @@ mod test {
             },
             TestCase {
                 name: "One component layer and one dependency component layer skipping composition",
-                opts: Some(ClientOpts{content_ref_inline_max_size: 0}),
+                opts: Some(ClientOpts {
+                    content_ref_inline_max_size: 0,
+                }),
                 locked_components: from_json!([{
                 "id": "component1",
                 "source": {
                     "content_type": "application/wasm",
-                    "source": format!("file://{}", working_dir.path().join("component1.wasm").to_str().unwrap()),
+                    "source": file_url(working_dir.path().join("component1.wasm")),
                     "digest": "digest",
                 },
                 "dependencies": {
                     "test:comp2": {
                         "source": {
                             "content_type": "application/wasm",
-                            "source": format!("file://{}", working_dir.path().join("component2.wasm").to_str().unwrap()),
+                            "source": file_url(working_dir.path().join("component2.wasm")),
                             "digest": "digest",
                         },
                         "export": null,
@@ -1291,14 +1301,14 @@ mod test {
                     "id": "component1",
                     "source": {
                         "content_type": "application/wasm",
-                        "source": format!("file://{}", working_dir.path().join("component1.wasm").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component1.wasm")),
                         "digest": "digest",
                 }},
                 {
                     "id": "component2",
                     "source": {
                         "content_type": "application/wasm",
-                        "source": format!("file://{}", working_dir.path().join("component1.wasm").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component1.wasm")),
                         "digest": "digest",
                 }}]),
                 expected_layer_count: 1,
@@ -1307,21 +1317,23 @@ mod test {
             },
             TestCase {
                 name: "Duplicate file paths",
-                opts: Some(ClientOpts{content_ref_inline_max_size: 0}),
+                opts: Some(ClientOpts {
+                    content_ref_inline_max_size: 0,
+                }),
                 locked_components: from_json!([{
                 "id": "component1",
                 "source": {
                     "content_type": "application/wasm",
-                    "source": format!("file://{}", working_dir.path().join("component1.wasm").to_str().unwrap()),
+                    "source": file_url(working_dir.path().join("component1.wasm")),
                     "digest": "digest",
                 },
                 "files": [
                     {
-                        "source": format!("file://{}", working_dir.path().join("component1").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component1")),
                         "path": working_dir.path().join("component1").join("bar").to_str().unwrap()
                     },
                     {
-                        "source": format!("file://{}", working_dir.path().join("component1").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component1")),
                         "path": working_dir.path().join("component1").join("baz").to_str().unwrap()
                     }
                 ]},
@@ -1329,12 +1341,12 @@ mod test {
                     "id": "component2",
                     "source": {
                         "content_type": "application/wasm",
-                        "source": format!("file://{}", working_dir.path().join("component2.wasm").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component2.wasm")),
                         "digest": "digest",
                 },
                 "files": [
                     {
-                        "source": format!("file://{}", working_dir.path().join("component2").to_str().unwrap()),
+                        "source": file_url(working_dir.path().join("component2")),
                         "path": working_dir.path().join("component2").join("baz").to_str().unwrap()
                     }
                 ]
@@ -1345,19 +1357,21 @@ mod test {
             },
             TestCase {
                 name: "One component layer and one dependency component layer with composition",
-                opts: Some(ClientOpts{content_ref_inline_max_size: 0}),
+                opts: Some(ClientOpts {
+                    content_ref_inline_max_size: 0,
+                }),
                 locked_components: from_json!([{
                 "id": "component-with-deps",
                 "source": {
                     "content_type": "application/wasm",
-                    "source": format!("file://{}", working_dir.path().join("root.wasm").to_str().unwrap()),
+                    "source": file_url(working_dir.path().join("root.wasm")),
                     "digest": "digest",
                 },
                 "dependencies": {
                     "test:test/a": {
                         "source": {
                             "content_type": "application/wasm",
-                            "source": format!("file://{}", working_dir.path().join("dep_a.wasm").to_str().unwrap()),
+                            "source": file_url(working_dir.path().join("dep_a.wasm")),
                             "digest": "digest",
                         },
                         "export": null,

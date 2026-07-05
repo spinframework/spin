@@ -59,6 +59,12 @@ mod test {
     use spin_locked_app::locked::LockedComponent;
     use tokio::io::AsyncWriteExt;
 
+    fn file_url(path: impl AsRef<std::path::Path>) -> String {
+        reqwest::Url::from_file_path(path)
+            .expect("should convert test path to file URL")
+            .to_string()
+    }
+
     #[tokio::test]
     async fn ensures_valid_wasm_binaries() {
         let working_dir = tempfile::tempdir().unwrap();
@@ -69,7 +75,7 @@ mod test {
                     "id": "jiggs",
                     "source": {
                         "content_type": "application/wasm",
-                        "source": format!("file://{}", working_dir.path().join($source).to_str().unwrap()),
+                        "source": file_url(working_dir.path().join($source)),
                         "digest": "digest",
                     },
                     "dependencies": {
@@ -77,7 +83,7 @@ mod test {
                             $dep_name: {
                                 "source": {
                                     "content_type": "application/wasm",
-                                    "source": format!("file://{}", working_dir.path().join($dep_path).to_str().unwrap()),
+                                    "source": file_url(working_dir.path().join($dep_path)),
                                     "digest": "digest",
                                 },
                             }
