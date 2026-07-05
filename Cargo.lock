@@ -9486,6 +9486,7 @@ dependencies = [
  "anyhow",
  "glob",
  "indexmap 2.14.0",
+ "itertools 0.14.0",
  "schemars",
  "semver",
  "serde",
