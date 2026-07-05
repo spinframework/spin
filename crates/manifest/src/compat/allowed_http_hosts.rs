@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use itertools::Itertools;
 use url::Url;
 
 const ALLOW_ALL_HOSTS: &str = "insecure:allow-all";
@@ -40,11 +41,10 @@ pub fn parse_allowed_http_hosts(list: &[impl AsRef<str>]) -> Result<AllowedHttpH
     if list.iter().any(|domain| domain.as_ref() == ALLOW_ALL_HOSTS) {
         Ok(AllowedHttpHosts::AllowAll)
     } else {
-        let parse_results = list
+        let (hosts, errors): (Vec<_>, Vec<_>) = list
             .iter()
             .map(|h| parse_allowed_http_host(h.as_ref()))
-            .collect::<Vec<_>>();
-        let (hosts, errors) = partition_results(parse_results);
+            .partition_result();
 
         if errors.is_empty() {
             Ok(AllowedHttpHosts::AllowSpecific(hosts))
@@ -101,21 +101,6 @@ fn parse_allowed_http_host_from_http_url(url: &Url, text: &str) -> Result<Allowe
     }
 
     Ok(AllowedHttpHost::new(host, url.port()))
-}
-
-fn partition_results<T, E>(results: Vec<Result<T, E>>) -> (Vec<T>, Vec<E>) {
-    // We are going to to be OPTIMISTIC do you hear me
-    let mut oks = Vec::with_capacity(results.len());
-    let mut errs = vec![];
-
-    for result in results {
-        match result {
-            Ok(t) => oks.push(t),
-            Err(e) => errs.push(e),
-        }
-    }
-
-    (oks, errs)
 }
 
 #[cfg(test)]

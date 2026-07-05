@@ -36,7 +36,7 @@ impl ToSql for Interval {
 impl FromSql<'_> for Interval {
     fn from_sql(
         _ty: &Type,
-        raw: &'_ [u8],
+        mut raw: &'_ [u8],
     ) -> std::result::Result<Self, Box<dyn std::error::Error + Sync + Send>> {
         const EXPECTED_LEN: usize = size_of::<i64>() + size_of::<i32>() + size_of::<i32>();
 
@@ -44,12 +44,11 @@ impl FromSql<'_> for Interval {
             return Err(Box::new(IntervalLengthError));
         }
 
-        let (micro_bytes, rest) = raw.split_at(size_of::<i64>());
-        let (day_bytes, rest) = rest.split_at(size_of::<i32>());
-        let month_bytes = rest;
-        let months = i32::from_be_bytes(month_bytes.try_into().unwrap());
-        let days = i32::from_be_bytes(day_bytes.try_into().unwrap());
-        let micros = i64::from_be_bytes(micro_bytes.try_into().unwrap());
+        use bytes::Buf;
+
+        let micros = raw.get_i64();
+        let days = raw.get_i32();
+        let months = raw.get_i32();
 
         Ok(Self(v4::Interval {
             micros,

@@ -154,7 +154,7 @@ http-body-util = "0.1"
 hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 indexmap = "2"
-itertools = "0.14"
+itertools = "0.15"
 lazy_static = "1.5"
 opentelemetry = "0.29"
 # The default `reqwest-blocking-client` causes a runtime panic

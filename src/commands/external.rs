@@ -365,7 +365,7 @@ mod test {
         );
 
         let cmd_with_args = "example arg1 arg2"
-            .split(' ')
+            .split_whitespace()
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
         assert_eq!(
@@ -378,7 +378,7 @@ mod test {
         );
 
         let cmd_with_args_override = format!("example arg1 arg2 {override_flag}")
-            .split(' ')
+            .split_whitespace()
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
         assert_eq!(
@@ -391,7 +391,7 @@ mod test {
         );
 
         let cmd_with_args_override = format!("example {override_flag} arg1 arg2")
-            .split(' ')
+            .split_whitespace()
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
         assert_eq!(
@@ -404,7 +404,7 @@ mod test {
         );
 
         let cmd_with_args_override = format!("{override_flag} example arg1 arg2")
-            .split(' ')
+            .split_whitespace()
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
         assert_eq!(

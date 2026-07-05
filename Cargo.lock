@@ -4793,6 +4793,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8741,7 +8750,7 @@ dependencies = [
  "hyper 1.8.1",
  "hyper-util",
  "indicatif",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "lazy_static 1.5.0",
  "levenshtein",
  "nix 0.29.0",
@@ -9472,7 +9481,7 @@ version = "4.1.0-pre0"
 dependencies = [
  "anyhow",
  "async-trait",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "serde",
  "serde_json",
  "spin-serde",
@@ -9486,6 +9495,7 @@ dependencies = [
  "anyhow",
  "glob",
  "indexmap 2.14.0",
+ "itertools 0.15.0",
  "schemars",
  "semver",
  "serde",
@@ -9512,7 +9522,7 @@ dependencies = [
  "docker_credential",
  "flate2",
  "futures-util",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "oci-client 0.17.0",
  "reqwest 0.12.9",
  "reqwest 0.13.4",
@@ -9725,7 +9735,7 @@ dependencies = [
  "fs_extra",
  "heck 0.5.0",
  "indexmap 2.14.0",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "lazy_static 1.5.0",
  "liquid",
  "liquid-core",
