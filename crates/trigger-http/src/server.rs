@@ -434,7 +434,8 @@ impl<F: RuntimeFactors> HttpServer<F> {
                 }
                 HandlerType::Wasi0_2(_)
                 | HandlerType::Wasi2023_11_10(_)
-                | HandlerType::Wasi2023_10_18(_) => {
+                | HandlerType::Wasi2023_10_18(_)
+                | HandlerType::Wasi2026_03_15(_) => {
                     WasiHttpExecutor { handler_type }
                         .execute(instance_builder, &route_match, req, client_addr)
                         .await

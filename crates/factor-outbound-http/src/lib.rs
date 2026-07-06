@@ -4,7 +4,7 @@ mod spin;
 mod wasi;
 pub mod wasi_2023_10_18;
 pub mod wasi_2023_11_10;
-mod wasi_2026_03_15;
+pub mod wasi_2026_03_15;
 
 use std::{net::SocketAddr, sync::Arc};
 

@@ -29,6 +29,8 @@ mod bindings {
     });
 }
 
+pub use bindings::{Service, ServiceIndices};
+
 mod wasi {
     pub use super::bindings::wasi::http0_3_0_rc_2026_03_15 as http;
 }
