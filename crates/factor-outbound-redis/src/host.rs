@@ -236,7 +236,8 @@ impl crate::RedisFactorData {
 }
 
 impl v3::HostConnectionWithStore for crate::RedisFactorData {
-    #[instrument(name = "spin_outbound_redis.open_connection", skip(accessor, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    #[instrument(name = "spin_outbound_redis.open_connection", skip(accessor, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
     async fn open<T: Send>(
         accessor: &Accessor<T, Self>,
         address: String,
@@ -281,7 +282,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         })
     }
 
-    #[instrument(name = "spin_outbound_redis.publish", skip(accessor, connection, payload), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("PUBLISH {}", channel)))]
+    #[instrument(name = "spin_outbound_redis.publish", skip(accessor, connection, payload), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "PUBLISH"))]
     async fn publish<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -292,7 +294,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         operations::publish(&mut conn, channel, payload).await
     }
 
-    #[instrument(name = "spin_outbound_redis.get", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("GET {}", key)))]
+    #[instrument(name = "spin_outbound_redis.get", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "GET"))]
     async fn get<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -302,7 +305,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         operations::get(&mut conn, key).await
     }
 
-    #[instrument(name = "spin_outbound_redis.set", skip(accessor, connection, value), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("SET {}", key)))]
+    #[instrument(name = "spin_outbound_redis.set", skip(accessor, connection, value), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SET"))]
     async fn set<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -313,7 +317,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         operations::set(&mut conn, key, value).await
     }
 
-    #[instrument(name = "spin_outbound_redis.incr", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("INCRBY {} 1", key)))]
+    #[instrument(name = "spin_outbound_redis.incr", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "INCRBY"))]
     async fn incr<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -323,7 +328,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         operations::incr(&mut conn, key).await
     }
 
-    #[instrument(name = "spin_outbound_redis.del", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("DEL {}", keys.join(" "))))]
+    #[instrument(name = "spin_outbound_redis.del", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "DEL"))]
     async fn del<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -333,7 +339,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         operations::del(&mut conn, keys).await
     }
 
-    #[instrument(name = "spin_outbound_redis.sadd", skip(accessor, connection, values), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("SADD {} {}", key, values.join(" "))))]
+    #[instrument(name = "spin_outbound_redis.sadd", skip(accessor, connection, values), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SADD"))]
     async fn sadd<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -344,7 +351,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         operations::sadd(&mut conn, key, values).await
     }
 
-    #[instrument(name = "spin_outbound_redis.smembers", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("SMEMBERS {}", key)))]
+    #[instrument(name = "spin_outbound_redis.smembers", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SMEMBERS"))]
     async fn smembers<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -354,7 +362,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         operations::smembers(&mut conn, key).await
     }
 
-    #[instrument(name = "spin_outbound_redis.srem", skip(accessor, connection, values), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("SREM {} {}", key, values.join(" "))))]
+    #[instrument(name = "spin_outbound_redis.srem", skip(accessor, connection, values), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SREM"))]
     async fn srem<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -365,7 +374,8 @@ impl v3::HostConnectionWithStore for crate::RedisFactorData {
         operations::srem(&mut conn, key, values).await
     }
 
-    #[instrument(name = "spin_outbound_redis.execute", skip(accessor, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("{}", command)))]
+    #[instrument(name = "spin_outbound_redis.execute", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("{}", command)))]
     async fn execute<T: Send>(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
@@ -386,7 +396,8 @@ impl v2::Host for crate::InstanceState {
 }
 
 impl v2::HostConnection for crate::InstanceState {
-    #[instrument(name = "spin_outbound_redis.open_connection", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    #[instrument(name = "spin_outbound_redis.open_connection", skip(self, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
         self.otel.reparent_tracing_span();
         if !self
@@ -400,7 +411,8 @@ impl v2::HostConnection for crate::InstanceState {
         self.establish_connection(address).await
     }
 
-    #[instrument(name = "spin_outbound_redis.publish", skip(self, connection, payload), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("PUBLISH {}", channel)))]
+    #[instrument(name = "spin_outbound_redis.publish", skip(self, connection, payload), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "PUBLISH"))]
     async fn publish(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -414,7 +426,8 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(operations::publish(conn, channel, payload).await?)
     }
 
-    #[instrument(name = "spin_outbound_redis.get", skip(self, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("GET {}", key)))]
+    #[instrument(name = "spin_outbound_redis.get", skip(self, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "GET"))]
     async fn get(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -427,7 +440,8 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(operations::get(conn, key).await?)
     }
 
-    #[instrument(name = "spin_outbound_redis.set", skip(self, connection, value), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("SET {}", key)))]
+    #[instrument(name = "spin_outbound_redis.set", skip(self, connection, value), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SET"))]
     async fn set(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -440,7 +454,8 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(operations::set(conn, key, value).await?)
     }
 
-    #[instrument(name = "spin_outbound_redis.incr", skip(self, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("INCRBY {} 1", key)))]
+    #[instrument(name = "spin_outbound_redis.incr", skip(self, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "INCRBY"))]
     async fn incr(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -452,7 +467,8 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(operations::incr(conn, key).await?)
     }
 
-    #[instrument(name = "spin_outbound_redis.del", skip(self, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("DEL {}", keys.join(" "))))]
+    #[instrument(name = "spin_outbound_redis.del", skip(self, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "DEL"))]
     async fn del(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -464,7 +480,8 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(operations::del(conn, keys).await?)
     }
 
-    #[instrument(name = "spin_outbound_redis.sadd", skip(self, connection, values), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("SADD {} {}", key, values.join(" "))))]
+    #[instrument(name = "spin_outbound_redis.sadd", skip(self, connection, values), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SADD"))]
     async fn sadd(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -477,7 +494,8 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(operations::sadd(conn, key, values).await?)
     }
 
-    #[instrument(name = "spin_outbound_redis.smembers", skip(self, connection), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("SMEMBERS {}", key)))]
+    #[instrument(name = "spin_outbound_redis.smembers", skip(self, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SMEMBERS"))]
     async fn smembers(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -489,7 +507,8 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(operations::smembers(conn, key).await?)
     }
 
-    #[instrument(name = "spin_outbound_redis.srem", skip(self, connection, values), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("SREM {} {}", key, values.join(" "))))]
+    #[instrument(name = "spin_outbound_redis.srem", skip(self, connection, values), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SREM"))]
     async fn srem(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -502,7 +521,8 @@ impl v2::HostConnection for crate::InstanceState {
         Ok(operations::srem(conn, key, values).await?)
     }
 
-    #[instrument(name = "spin_outbound_redis.execute", skip(self, connection, arguments), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("{}", command)))]
+    #[instrument(name = "spin_outbound_redis.execute", skip(self, connection, arguments), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = command))]
     async fn execute(
         &mut self,
         connection: Resource<v2::Connection>,

@@ -102,12 +102,14 @@ impl v3::Host for InstanceState {
 }
 
 impl v3::HostConnection for InstanceState {
-    #[instrument(name = "spin_sqlite.open", skip(self), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", sqlite.backend = Empty))]
+    #[instrument(name = "spin_sqlite.open", skip(self), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", sqlite.backend = Empty))]
     async fn open(&mut self, database: String) -> Result<Resource<v3::Connection>, v3::Error> {
         self.open_impl(database).await
     }
 
-    #[instrument(name = "spin_sqlite.execute", skip(self, connection, parameters), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", otel.name = query, sqlite.backend = Empty))]
+    #[instrument(name = "spin_sqlite.execute", skip(self, connection, parameters), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", sqlite.backend = Empty))]
     async fn execute(
         &mut self,
         connection: Resource<v3::Connection>,
@@ -275,13 +277,15 @@ impl v2::Host for InstanceState {
 }
 
 impl v2::HostConnection for InstanceState {
-    #[instrument(name = "spin_sqlite.open", skip(self), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", sqlite.backend = Empty))]
+    #[instrument(name = "spin_sqlite.open", skip(self), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", sqlite.backend = Empty))]
     async fn open(&mut self, database: String) -> Result<Resource<v2::Connection>, v2::Error> {
         self.otel.reparent_tracing_span();
         self.open_impl(database).await.map_err(to_v2_error)
     }
 
-    #[instrument(name = "spin_sqlite.execute", skip(self, connection, parameters), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", otel.name = query, sqlite.backend = Empty))]
+    #[instrument(name = "spin_sqlite.execute", skip(self, connection, parameters), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", sqlite.backend = Empty))]
     async fn execute(
         &mut self,
         connection: Resource<v2::Connection>,

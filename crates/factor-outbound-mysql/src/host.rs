@@ -178,7 +178,8 @@ impl<C: Client> v3::HostConnectionWithStore for MysqlFactorData<C> {
 impl<C: Client> v2::Host for InstanceState<C> {}
 
 impl<C: Client> v2::HostConnection for InstanceState<C> {
-    #[instrument(name = "spin_outbound_mysql.open", skip(self, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    #[instrument(name = "spin_outbound_mysql.open", skip(self, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
         let permit = self
             .semaphore
@@ -193,7 +194,8 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
             .map(Resource::new_own)
     }
 
-    #[instrument(name = "spin_outbound_mysql.execute", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_mysql.execute", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql"))]
     async fn execute(
         &mut self,
         connection: Resource<v2::Connection>,
@@ -211,7 +213,8 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
             .map_err(track_db_error_on_span)
     }
 
-    #[instrument(name = "spin_outbound_mysql.query", skip(self, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", otel.name = statement))]
+    #[instrument(name = "spin_outbound_mysql.query", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql"))]
     async fn query(
         &mut self,
         connection: Resource<v2::Connection>,
