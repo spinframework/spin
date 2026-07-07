@@ -8,6 +8,7 @@ use http::{
     HeaderMap, HeaderValue, Response, StatusCode,
     header::{HOST, HeaderName},
     request::Parts,
+    uri::Authority,
 };
 
 use crate::{Body, body, routes::RouteMatch};
@@ -173,10 +174,7 @@ fn parse_host_header_uri(
     uri: &hyper::Uri,
     default_host: &str,
 ) -> (String, String) {
-    let host_header = headers.get(HOST).and_then(|v| match v.to_str() {
-        Err(_) => None,
-        Ok(s) => Some(s.to_owned()),
-    });
+    let host_header = headers.get(HOST).and_then(|v| v.to_str().ok());
 
     let mut host = uri
         .host()
@@ -184,24 +182,30 @@ fn parse_host_header_uri(
         .unwrap_or_else(|| "localhost".to_owned());
     let mut port = uri.port_u16().unwrap_or(80).to_string();
 
-    let mut parse_host = |hdr: String| {
-        let mut parts = hdr.splitn(2, ':');
-        match parts.next() {
-            Some(h) if !h.is_empty() => h.clone_into(&mut host),
-            _ => {}
-        }
-        match parts.next() {
-            Some(p) if !p.is_empty() => {
+    let mut parse_host = |hdr: &str| match hdr.parse::<Authority>() {
+        Ok(authority) => {
+            let authority_host = authority.host();
+            if authority_host.is_empty() {
+                tracing::debug!(authority = hdr, "Ignoring host authority with empty host");
+                return;
+            }
+
+            authority_host.clone_into(&mut host);
+
+            if let Some(p) = authority.port() {
+                let p = p.as_str();
                 tracing::debug!(port = p, "Overriding port");
                 p.clone_into(&mut port);
             }
-            _ => {}
+        }
+        Err(error) => {
+            tracing::debug!(authority = hdr, %error, "Ignoring invalid host authority");
         }
     };
 
     // Override with local host field if set.
     if !default_host.is_empty() {
-        parse_host(default_host.to_owned());
+        parse_host(default_host);
     }
 
     // Finally, the value of the HOST header is considered authoritative.
@@ -322,4 +326,57 @@ fn internal_error(msg: impl std::string::ToString) -> Response<Body> {
     let mut res = Response::new(body::full(message.into()));
     *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
     res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_host_header_uri_prefers_host_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static("host.example:8443"));
+        let uri: hyper::Uri = "http://uri.example:7000/path".parse().unwrap();
+
+        assert_eq!(
+            parse_host_header_uri(&headers, &uri, "default.example:9000"),
+            ("host.example".to_owned(), "8443".to_owned())
+        );
+    }
+
+    #[test]
+    fn parse_host_header_uri_keeps_existing_port_when_authority_has_none() {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static("host.example"));
+        let uri: hyper::Uri = "http://uri.example:7000/path".parse().unwrap();
+
+        assert_eq!(
+            parse_host_header_uri(&headers, &uri, "default.example:9000"),
+            ("host.example".to_owned(), "9000".to_owned())
+        );
+    }
+
+    #[test]
+    fn parse_host_header_uri_handles_bracketed_ipv6() {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static("[::1]:3000"));
+        let uri: hyper::Uri = "/path".parse().unwrap();
+
+        assert_eq!(
+            parse_host_header_uri(&headers, &uri, ""),
+            ("[::1]".to_owned(), "3000".to_owned())
+        );
+    }
+
+    #[test]
+    fn parse_host_header_uri_ignores_authority_with_empty_host() {
+        let mut headers = HeaderMap::new();
+        headers.insert(HOST, HeaderValue::from_static(":8443"));
+        let uri: hyper::Uri = "http://uri.example:7000/path".parse().unwrap();
+
+        assert_eq!(
+            parse_host_header_uri(&headers, &uri, "default.example:9000"),
+            ("default.example".to_owned(), "9000".to_owned())
+        );
+    }
 }
