@@ -23,7 +23,9 @@ jobs:
   dependency-review:
     name: Review new dependencies for known vulnerabilities
     runs-on: "ubuntu-22.04"
-    if: ${{ github.event_name == 'pull_request' }}
+    # TODO: re-enable once https://github.com/spinframework/spin/issues/3598 has been addressed:
+    if: false
+    #if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: 'Checkout Repository'
         uses: actions/checkout@v4

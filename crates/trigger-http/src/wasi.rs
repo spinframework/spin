@@ -1,20 +1,27 @@
+use std::future;
 use std::io::IsTerminal;
 use std::net::SocketAddr;
 
 use anyhow::{Context, Result, anyhow};
 use futures::TryFutureExt;
 use http::{HeaderName, HeaderValue};
+use http_body_util::BodyExt;
 use hyper::{Request, Response};
+use spin_core::Store;
 use spin_factor_outbound_http::wasi_2023_10_18::Proxy as Proxy2023_10_18;
 use spin_factor_outbound_http::wasi_2023_11_10::Proxy as Proxy2023_11_10;
-use spin_factors::RuntimeFactors;
+use spin_factor_outbound_http::wasi_2026_03_15::Service as Service2026_03_15;
+use spin_factors::{RuntimeFactors, RuntimeFactorsInstanceState};
+use spin_factors_executor::InstanceState;
 use spin_http::routes::RouteMatch;
 use spin_http::trigger::HandlerType;
 use tokio::{sync::oneshot, task};
 use tracing::{Instrument, Level, instrument};
+use wasmtime::AsContextMut;
 use wasmtime_wasi_http::handler::HandlerState;
 use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
 use wasmtime_wasi_http::p2::{bindings::Proxy, body::HyperIncomingBody as Body};
+use wasmtime_wasi_http::p3;
 
 use crate::{TriggerInstanceBuilder, headers::prepare_request_headers, server::HttpExecutor};
 
@@ -64,16 +71,6 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
 
-        let mut wasi_http = spin_factor_outbound_http::OutboundHttpFactor::get_wasi_http_impl(
-            store.data_mut().factors_instance_state_mut(),
-        )
-        .context("missing OutboundHttpFactor")?;
-
-        let request = wasi_http.new_incoming_request(Scheme::Http, req)?;
-
-        let (response_tx, response_rx) = oneshot::channel();
-        let response = wasi_http.new_response_outparam(response_tx)?;
-
         enum Handler {
             Latest(Proxy),
             Handler2023_11_10(Proxy2023_11_10),
@@ -89,11 +86,25 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
                 let guest = indices.load(&mut store, &instance)?;
                 Handler::Handler2023_11_10(guest)
             }
+            HandlerType::Wasi2026_03_15(indices) => {
+                let guest = indices.load(&mut store, &instance)?;
+                return handle_2026_03_15(store, guest, req).await;
+            }
             HandlerType::Wasi0_2(indices) => Handler::Latest(indices.load(&mut store, &instance)?),
-            HandlerType::Wasi0_3(_, _) => unreachable!("should have used Wasip3HttpExecutor"),
+            HandlerType::Wasi0_3(_) => unreachable!("should have used Wasip3HttpExecutor"),
             HandlerType::Spin => unreachable!("should have used SpinHttpExecutor"),
             HandlerType::Wagi(_) => unreachable!("should have used WagiExecutor instead"),
         };
+
+        let mut wasi_http = spin_factor_outbound_http::OutboundHttpFactor::get_wasi_http_impl(
+            store.data_mut().factors_instance_state_mut(),
+        )
+        .context("missing OutboundHttpFactor")?;
+
+        let request = wasi_http.new_incoming_request(Scheme::Http, req)?;
+
+        let (response_tx, response_rx) = oneshot::channel();
+        let response = wasi_http.new_response_outparam(response_tx)?;
 
         let handle = task::spawn(
             async move {
@@ -168,4 +179,63 @@ impl<S: HandlerState> HttpExecutor for WasiHttpExecutor<'_, S> {
             }
         }
     }
+}
+
+async fn handle_2026_03_15<T: RuntimeFactorsInstanceState, U: Send>(
+    mut store: Store<InstanceState<T, U>>,
+    guest: Service2026_03_15,
+    req: Request<Body>,
+) -> Result<Response<Body>> {
+    let (request, request_io_result) = p3::Request::from_http(req);
+    let view: fn(&mut InstanceState<_, _>) -> p3::WasiHttpCtxView =
+        |data: &mut InstanceState<_, _>| {
+            spin_factor_outbound_http::OutboundHttpFactor::get_wasi_p3_http_impl(
+                data.factors_instance_state_mut(),
+            )
+            .unwrap()
+        };
+    let request = view(store.data_mut()).table.push(request)?;
+
+    let (tx, rx) = oneshot::channel();
+    task::spawn(
+        async move {
+            store
+                .as_context_mut()
+                .run_concurrent(async |accessor| {
+                    let response = guest
+                        .wasi_http0_3_0_rc_2026_03_15_handler()
+                        .call_handle(accessor, request)
+                        .await??;
+
+                    let response = accessor.with(|mut store| {
+                        view(store.get())
+                            .table
+                            .delete(response)?
+                            .into_http_with_getter(&mut store, request_io_result, view)
+                    })?;
+
+                    _ = tx.send(response);
+
+                    future::poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
+
+                    Ok(())
+                })
+                .await?
+        }
+        .map_err(|e: anyhow::Error| {
+            if std::io::stderr().is_terminal() {
+                tracing::error!(
+                    "Component error while handling request. \
+                                 The response may not be fully sent: {e:?}"
+                );
+            } else {
+                terminal::warn!("Component error while handling request: {e:?}");
+            }
+        })
+        .in_current_span(),
+    );
+
+    Ok(rx
+        .await?
+        .map(|body| body.map_err(|e| e.into()).boxed_unsync()))
 }

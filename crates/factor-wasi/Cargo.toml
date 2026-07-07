@@ -8,6 +8,8 @@ license = { workspace = true }
 [dependencies]
 async-trait = { workspace = true }
 bytes = { workspace = true }
+futures = { workspace = true }
+pin-project-lite = { workspace = true }
 spin-common = { path = "../common" }
 spin-connection-semaphore = { path = "../connection-semaphore" }
 spin-factors = { path = "../factors" }

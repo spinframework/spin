@@ -4,6 +4,7 @@ mod spin;
 mod wasi;
 pub mod wasi_2023_10_18;
 pub mod wasi_2023_11_10;
+pub mod wasi_2026_03_15;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -33,8 +34,6 @@ pub use wasmtime_wasi_http::p2::{
     types::{HostFutureIncomingResponse, OutgoingRequestConfig},
 };
 
-pub use wasi::{MutexBody, NotifyOnDropBody, p2_to_p3_error_code, p3_to_p2_error_code};
-
 #[derive(Default)]
 pub struct OutboundHttpFactor {
     _priv: (),
@@ -45,7 +44,7 @@ impl Factor for OutboundHttpFactor {
     type AppState = AppState;
     type InstanceBuilder = InstanceState;
 
-    fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
+    fn init<T: spin_factors::InitContext<Self>>(&mut self, ctx: &mut T) -> anyhow::Result<()> {
         ctx.link_bindings(spin_world::v1::http::add_to_linker::<_, FactorData<Self>>)?;
         wasi::add_to_linker(ctx)?;
         Ok(())

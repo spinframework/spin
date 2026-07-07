@@ -37,7 +37,7 @@ impl Factor for LlmFactor {
     type AppState = AppState;
     type InstanceBuilder = InstanceState;
 
-    fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
+    fn init<T: spin_factors::InitContext<Self>>(&mut self, ctx: &mut T) -> anyhow::Result<()> {
         ctx.link_bindings(spin_world::v1::llm::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(spin_world::v2::llm::add_to_linker::<_, FactorData<Self>>)?;
         Ok(())

@@ -33,7 +33,7 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
     type AppState = AppState<CF>;
     type InstanceBuilder = InstanceState<CF>;
 
-    fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
+    fn init<T: spin_factors::InitContext<Self>>(&mut self, ctx: &mut T) -> anyhow::Result<()> {
         ctx.link_bindings(spin_world::v1::postgres::add_to_linker::<_, PgFactorData<CF>>)?;
         ctx.link_bindings(spin_world::v2::postgres::add_to_linker::<_, PgFactorData<CF>>)?;
         ctx.link_bindings(

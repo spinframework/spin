@@ -1,7 +1,7 @@
 #![doc(hidden)] // internal implementation detail used in tests and spin-trigger
 
-use super::wasi_2023_10_18::convert;
 use anyhow::Result;
+use spin_factor_wasi::convert;
 use wasmtime::component::{Linker, Resource};
 use wasmtime_wasi_http::p2::WasiHttpCtxView;
 use wasmtime_wasi_http::p2::bindings as latest;

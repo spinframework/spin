@@ -34,7 +34,7 @@ impl Factor for OtelFactor {
     type AppState = ();
     type InstanceBuilder = InstanceState;
 
-    fn init(&mut self, ctx: &mut impl spin_factors::InitContext<Self>) -> anyhow::Result<()> {
+    fn init<T: spin_factors::InitContext<Self>>(&mut self, ctx: &mut T) -> anyhow::Result<()> {
         // Only link the WASI OTel bindings if experimental support is enabled. This means that if
         // the user tries to run a guest component that consumes the WASI OTel WIT without enabling
         // experimental support they'll see an error like "component imports instance

@@ -112,9 +112,9 @@ impl v3::HostConnection for InstanceState {
     }
 }
 
-impl v3::HostConnectionWithStore for crate::MqttFactorData {
+impl<T: Send> v3::HostConnectionWithStore<T> for crate::MqttFactorData {
     #[instrument(name = "spin_outbound_mqtt.open_connection", skip(accessor, password), err(level = Level::INFO), fields(otel.kind = "client"))]
-    async fn open<T: Send>(
+    async fn open(
         accessor: &Accessor<T, Self>,
         address: String,
         username: String,
@@ -169,7 +169,7 @@ impl v3::HostConnectionWithStore for crate::MqttFactorData {
             messaging.system = "mqtt",
             messaging.destination.name = topic,
         ))]
-    async fn publish<T: Send>(
+    async fn publish(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,
         topic: String,

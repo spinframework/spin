@@ -28,7 +28,7 @@ pub trait Factor: Any + Sized {
     /// This will be called at most once, before any call to
     /// [`Factor::prepare`]. `InitContext` provides access to a wasmtime
     /// `Linker`, so this is where any bindgen `add_to_linker` calls go.
-    fn init(&mut self, ctx: &mut impl InitContext<Self>) -> anyhow::Result<()> {
+    fn init<T: InitContext<Self>>(&mut self, ctx: &mut T) -> anyhow::Result<()> {
         let _ = ctx;
         Ok(())
     }

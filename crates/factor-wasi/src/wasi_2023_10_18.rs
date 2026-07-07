@@ -127,7 +127,7 @@ pub fn add_to_linker<T>(
     clocks_closure: fn(&mut T) -> WasiClocksCtxView<'_>,
     cli_closure: fn(&mut T) -> WasiCliCtxView<'_>,
     filesystem_closure: fn(&mut T) -> WasiFilesystemCtxView<'_>,
-    sockets_closure: fn(&mut T) -> SpinSocketsView<'_>,
+    sockets_closure: fn(&mut T) -> SpinSocketsView<'_, T>,
 ) -> Result<()>
 where
     T: Send + 'static,
@@ -151,13 +151,13 @@ where
     wasi::cli::terminal_stdin::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
     wasi::cli::terminal_stdout::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
     wasi::cli::terminal_stderr::add_to_linker::<_, WasiCli>(linker, cli_closure)?;
-    wasi::sockets::tcp::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
-    wasi::sockets::tcp_create_socket::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
-    wasi::sockets::udp::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
-    wasi::sockets::udp_create_socket::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
-    wasi::sockets::instance_network::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
-    wasi::sockets::network::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
-    wasi::sockets::ip_name_lookup::add_to_linker::<_, SpinSockets>(linker, sockets_closure)?;
+    wasi::sockets::tcp::add_to_linker::<_, SpinSockets<T>>(linker, sockets_closure)?;
+    wasi::sockets::tcp_create_socket::add_to_linker::<_, SpinSockets<T>>(linker, sockets_closure)?;
+    wasi::sockets::udp::add_to_linker::<_, SpinSockets<T>>(linker, sockets_closure)?;
+    wasi::sockets::udp_create_socket::add_to_linker::<_, SpinSockets<T>>(linker, sockets_closure)?;
+    wasi::sockets::instance_network::add_to_linker::<_, SpinSockets<T>>(linker, sockets_closure)?;
+    wasi::sockets::network::add_to_linker::<_, SpinSockets<T>>(linker, sockets_closure)?;
+    wasi::sockets::ip_name_lookup::add_to_linker::<_, SpinSockets<T>>(linker, sockets_closure)?;
     Ok(())
 }
 
@@ -901,9 +901,9 @@ impl wasi::cli::terminal_output::HostTerminalOutput for WasiCliCtxView<'_> {
     }
 }
 
-impl wasi::sockets::tcp::Host for SpinSocketsView<'_> {}
+impl<T> wasi::sockets::tcp::Host for SpinSocketsView<'_, T> {}
 
-impl wasi::sockets::tcp::HostTcpSocket for SpinSocketsView<'_> {
+impl<T> wasi::sockets::tcp::HostTcpSocket for SpinSocketsView<'_, T> {
     async fn start_bind(
         &mut self,
         self_: Resource<TcpSocket>,
@@ -1152,7 +1152,7 @@ impl wasi::sockets::tcp::HostTcpSocket for SpinSocketsView<'_> {
     }
 }
 
-impl wasi::sockets::tcp_create_socket::Host for SpinSocketsView<'_> {
+impl<T> wasi::sockets::tcp_create_socket::Host for SpinSocketsView<'_, T> {
     fn create_tcp_socket(
         &mut self,
         address_family: IpAddressFamily,
@@ -1164,7 +1164,7 @@ impl wasi::sockets::tcp_create_socket::Host for SpinSocketsView<'_> {
     }
 }
 
-impl wasi::sockets::udp::Host for SpinSocketsView<'_> {}
+impl<T> wasi::sockets::udp::Host for SpinSocketsView<'_, T> {}
 
 /// Between the snapshot of WASI that this file is implementing and the current
 /// implementation of WASI UDP sockets were redesigned slightly to deal with
@@ -1184,8 +1184,8 @@ pub enum UdpSocket {
 }
 
 impl UdpSocket {
-    async fn finish_connect(
-        table: &mut SpinSocketsView<'_>,
+    async fn finish_connect<T>(
+        table: &mut SpinSocketsView<'_, T>,
         socket: &Resource<UdpSocket>,
         explicit: bool,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
@@ -1232,7 +1232,7 @@ impl UdpSocket {
     }
 }
 
-impl wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_> {
+impl<T> wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_, T> {
     async fn start_bind(
         &mut self,
         self_: Resource<UdpSocket>,
@@ -1511,7 +1511,7 @@ impl wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_> {
     }
 }
 
-impl wasi::sockets::udp_create_socket::Host for SpinSocketsView<'_> {
+impl<T> wasi::sockets::udp_create_socket::Host for SpinSocketsView<'_, T> {
     fn create_udp_socket(
         &mut self,
         address_family: IpAddressFamily,
@@ -1542,21 +1542,21 @@ impl wasi::sockets::udp_create_socket::Host for SpinSocketsView<'_> {
     }
 }
 
-impl wasi::sockets::instance_network::Host for SpinSocketsView<'_> {
+impl<T> wasi::sockets::instance_network::Host for SpinSocketsView<'_, T> {
     fn instance_network(&mut self) -> wasmtime::Result<Resource<Network>> {
         latest::sockets::instance_network::Host::instance_network(&mut self.inner)
     }
 }
 
-impl wasi::sockets::network::Host for SpinSocketsView<'_> {}
+impl<T> wasi::sockets::network::Host for SpinSocketsView<'_, T> {}
 
-impl wasi::sockets::network::HostNetwork for SpinSocketsView<'_> {
+impl<T> wasi::sockets::network::HostNetwork for SpinSocketsView<'_, T> {
     fn drop(&mut self, rep: Resource<Network>) -> wasmtime::Result<()> {
         latest::sockets::network::HostNetwork::drop(&mut self.inner, rep)
     }
 }
 
-impl wasi::sockets::ip_name_lookup::Host for SpinSocketsView<'_> {
+impl<T> wasi::sockets::ip_name_lookup::Host for SpinSocketsView<'_, T> {
     fn resolve_addresses(
         &mut self,
         network: Resource<Network>,
@@ -1572,7 +1572,7 @@ impl wasi::sockets::ip_name_lookup::Host for SpinSocketsView<'_> {
     }
 }
 
-impl wasi::sockets::ip_name_lookup::HostResolveAddressStream for SpinSocketsView<'_> {
+impl<T> wasi::sockets::ip_name_lookup::HostResolveAddressStream for SpinSocketsView<'_, T> {
     fn resolve_next_address(
         &mut self,
         self_: Resource<ResolveAddressStream>,
@@ -1630,6 +1630,7 @@ where
     }
 }
 
+#[macro_export]
 macro_rules! convert {
     () => {};
     ($kind:ident $from:path [<=>] $to:path { $($body:tt)* } $($rest:tt)*) => {
@@ -1682,8 +1683,6 @@ macro_rules! convert {
         convert!($($rest)*);
     };
 }
-
-pub(crate) use convert;
 
 convert! {
     struct latest::clocks::wall_clock::Datetime [<=>] Datetime {

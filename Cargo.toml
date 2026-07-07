@@ -169,7 +169,7 @@ opentelemetry-semantic-conventions = { version = "0.29", features = ["semconv_ex
 path-absolutize = "3"
 pin-project-lite = "0.2.16"
 quote = "1"
-rand = "0.9"
+rand = "0.10.1"
 redis = "0.32.5"
 regex = "1"
 reqwest = { version = "0.12", features = ["stream", "blocking", "rustls-tls-native-roots"] }
@@ -205,9 +205,9 @@ wasm-metadata = "0.247.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 wasmparser = "0.247.0"
-wasmtime = { version = "44.0.0", features = ["component-model-async"] }
-wasmtime-wasi = { version = "44.0.0", features = ["p3"] }
-wasmtime-wasi-http = { version = "44.0.0", features = ["p3", "component-model-async"] }
+wasmtime = "46.0.1"
+wasmtime-wasi = { version = "46.0.1", features = ["p3"] }
+wasmtime-wasi-http = { version = "46.0.1", features = ["p3", "component-model-async"] }
 wit-component = "0.247.0"
 wit-parser = "0.247.0"
 

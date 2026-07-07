@@ -1,18 +1,14 @@
 use crate::server::HttpHandlerState;
-use anyhow::{Context as _, Result};
-use futures::{FutureExt, channel::oneshot};
+use anyhow::Result;
 use http_body_util::BodyExt;
-use spin_factor_outbound_http::{NotifyOnDropBody, p3_to_p2_error_code};
 use spin_factors::RuntimeFactors;
-use spin_factors_executor::InstanceState;
 use spin_http::routes::RouteMatch;
 use std::net::SocketAddr;
-use tracing::{Instrument, Level, instrument};
-use wasmtime::component::Accessor;
+use tracing::{Level, instrument};
 use wasmtime_wasi_http::{
-    handler::{Proxy, ProxyHandler},
-    p2::body::HyperIncomingBody as Body,
-    p3::{WasiHttpCtxView, bindings::http::types},
+    handler::{ErrorCode, ProxyHandler},
+    p2::{bindings::http::types as p2_types, body::HyperIncomingBody as Body},
+    p3::bindings::http::types as p3_types,
 };
 
 /// An [`HttpExecutor`] that uses the `wasi:http@0.3.*/handler` interface.
@@ -30,79 +26,19 @@ impl<F: RuntimeFactors> Wasip3HttpExecutor<'_, F> {
     ) -> Result<http::Response<Body>> {
         super::wasi::prepare_request(route_match, &mut req, client_addr)?;
 
-        let getter = (|data| wasi_http::<F>(data).unwrap())
-            as fn(&mut InstanceState<F::InstanceState, ()>) -> WasiHttpCtxView<'_>;
-
-        let (request, body) = req.into_parts();
-        let body = body.map_err(spin_factor_outbound_http::p2_to_p3_error_code);
-        let request = http::Request::from_parts(request, body);
-        let (request, request_io_result) = types::Request::from_http(request);
-
-        let (tx, rx) = oneshot::channel();
-        self.0.spawn(
-            None,
-            Box::new(move |store: &Accessor<_>, guest: &Proxy| {
-                Box::pin(
-                    async move {
-                        let Proxy::P3(guest) = guest else {
-                            unreachable!();
-                        };
-
-                        let request = store.with(|mut store| {
-                            anyhow::Ok(wasi_http::<F>(store.data_mut())?.table.push(request)?)
-                        })?;
-
-                        let response = guest
-                            .wasi_http_handler()
-                            .call_handle(store, request)
-                            .await?;
-                        let response = store.with(|mut store| {
-                            anyhow::Ok(wasi_http::<F>(store.get())?.table.delete(response?)?)
-                        })?;
-                        let response = store.with(|mut store| {
-                            response.into_http_with_getter(&mut store, request_io_result, getter)
-                        })?;
-
-                        // Wrap the response body in a `NotifyOnDropBody` so we can
-                        // be notified when Hyper has finished reading it.
-                        let (response_body_tx, response_body_rx) = oneshot::channel();
-                        let response = response.map(|body| {
-                            NotifyOnDropBody::new(
-                                body.map_err(p3_to_p2_error_code),
-                                response_body_tx,
-                            )
-                            .boxed_unsync()
-                        });
-
-                        if tx.send(response).is_ok() {
-                            // We must not exit the store's event loop until
-                            // Hyper has finished reading the response body;
-                            // otherwise, the guest will not have a chance
-                            // to finish writing it.
-                            _ = response_body_rx.await;
-                        }
-
-                        anyhow::Ok(())
-                    }
-                    .in_current_span()
-                    .map(|result| {
-                        if let Err(error) = result {
-                            tracing::error!("Component error handling request: {error:?}");
-                        }
-                    }),
-                )
-            }),
-        );
-
-        Ok(rx.await?)
+        Ok(self
+            .0
+            .handle(
+                (),
+                req.map(|body| body.map_err(ErrorCode::from).boxed_unsync()),
+            )
+            .await?
+            .map(|body| {
+                body.map_err(|e| match e.downcast::<p3_types::ErrorCode>() {
+                    Ok(e) => e.into(),
+                    Err(e) => p2_types::ErrorCode::InternalError(Some(e.to_string())),
+                })
+                .boxed_unsync()
+            }))
     }
-}
-
-fn wasi_http<F: RuntimeFactors>(
-    data: &mut InstanceState<F::InstanceState, ()>,
-) -> Result<WasiHttpCtxView<'_>> {
-    spin_factor_outbound_http::OutboundHttpFactor::get_wasi_p3_http_impl(
-        data.factors_instance_state_mut(),
-    )
-    .context("missing OutboundHttpFactor")
 }
