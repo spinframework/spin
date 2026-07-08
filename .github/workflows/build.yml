@@ -23,14 +23,14 @@ jobs:
   dependency-review:
     name: Review new dependencies for known vulnerabilities
     runs-on: "ubuntu-22.04"
-    # TODO: re-enable once https://github.com/spinframework/spin/issues/3598 has been addressed:
-    if: false
-    #if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: 'Checkout Repository'
         uses: actions/checkout@v4
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v4
+        with:
+          allow-ghsas: "GHSA-w9wp-h8wv-79jx" # TODO: remove once https://github.com/spinframework/spin/issues/3598 has been addressed
 
   lint-rust:
     name: Lint Rust
