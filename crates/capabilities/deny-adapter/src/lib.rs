@@ -9,6 +9,7 @@ wit_bindgen::generate!({
         export wasi:http/client@0.3.0-rc-2026-03-15;
         export spin:key-value/key-value@3.0.0;
         export spin:mqtt/mqtt@3.0.0;
+        export spin:mysql/mysql@3.0.0;
         export spin:postgres/postgres@3.0.0;
         export spin:postgres/postgres@4.2.0;
         export spin:redis/redis@3.0.0;
@@ -205,6 +206,49 @@ impl exports::spin::postgres3_0_0::postgres::GuestConnection for Adapter {
         statement: _rt::String,
         params: _rt::Vec<exports::spin::postgres3_0_0::postgres::ParameterValue>,
     ) -> Result<u64, exports::spin::postgres3_0_0::postgres::Error> {
+        unreachable!()
+    }
+}
+impl exports::spin::mysql::mysql::Guest for Adapter {
+    type Connection = Adapter;
+}
+impl exports::spin::mysql::mysql::GuestConnection for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    async fn open(
+        address: _rt::String,
+    ) -> Result<exports::spin::mysql::mysql::Connection, exports::spin::mysql::mysql::Error> {
+        Err(exports::spin::mysql::mysql::Error::Other(
+            format_deny_error("spin:mysql/mysql"),
+        ))
+    }
+
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    async fn query(
+        &self,
+        statement: _rt::String,
+        params: _rt::Vec<exports::spin::mysql::mysql::ParameterValue>,
+    ) -> Result<
+        (
+            _rt::Vec<exports::spin::mysql::mysql::Column>,
+            wit_bindgen::rt::async_support::StreamReader<exports::spin::mysql::mysql::Row>,
+            wit_bindgen::rt::async_support::FutureReader<
+                Result<(), exports::spin::mysql::mysql::Error>,
+            >,
+        ),
+        exports::spin::mysql::mysql::Error,
+    > {
+        unreachable!()
+    }
+
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    async fn execute(
+        &self,
+        statement: _rt::String,
+        params: _rt::Vec<exports::spin::mysql::mysql::ParameterValue>,
+    ) -> Result<(), exports::spin::mysql::mysql::Error> {
         unreachable!()
     }
 }
