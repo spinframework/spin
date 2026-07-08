@@ -1,12 +1,14 @@
 wit_bindgen::generate!({
     path: "../../../wit",
     generate_all,
+    merge_structurally_equal_types: true,
     inline: r#"
     package spin:deny;
 
     world adapter {
         export wasi:http/outgoing-handler@0.2.6;
         export wasi:http/client@0.3.0-rc-2026-03-15;
+        export wasi:http/client@0.3.0;
         export spin:key-value/key-value@3.0.0;
         export spin:mqtt/mqtt@3.0.0;
         export spin:mysql/mysql@3.0.0;
@@ -32,8 +34,11 @@ wit_bindgen::generate!({
         export wasi:sockets/tcp-create-socket@0.2.6;
         export wasi:sockets/ip-name-lookup@0.2.6;
         export wasi:cli/environment@0.3.0-rc-2026-03-15;
+        export wasi:cli/environment@0.3.0;
         export wasi:filesystem/preopens@0.3.0-rc-2026-03-15;
+        export wasi:filesystem/preopens@0.3.0;
         export wasi:sockets/ip-name-lookup@0.3.0-rc-2026-03-15;
+        export wasi:sockets/ip-name-lookup@0.3.0;
         export fermyon:spin/llm@2.0.0;
         export fermyon:spin/redis@2.0.0;
         export fermyon:spin/mqtt@2.0.0;
@@ -82,6 +87,22 @@ impl exports::wasi::http0_3_0_rc_2026_03_15::client::Guest for Adapter {
     > {
         Err(
             exports::wasi::http0_3_0_rc_2026_03_15::client::ErrorCode::InternalError(Some(
+                format_deny_error("wasi:http/client"),
+            )),
+        )
+    }
+}
+impl exports::wasi::http0_3_0::client::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    async fn send(
+        request: exports::wasi::http0_3_0::client::Request,
+    ) -> Result<
+        exports::wasi::http0_3_0::client::Response,
+        exports::wasi::http0_3_0::client::ErrorCode,
+    > {
+        Err(
+            exports::wasi::http0_3_0::client::ErrorCode::InternalError(Some(
                 format_deny_error("wasi:http/client"),
             )),
         )
@@ -1282,11 +1303,38 @@ impl exports::wasi::cli0_3_0_rc_2026_03_15::environment::Guest for Adapter {
         None
     }
 }
+impl exports::wasi::cli0_3_0::environment::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get_environment() -> _rt::Vec<(_rt::String, _rt::String)> {
+        Vec::new()
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get_arguments() -> _rt::Vec<_rt::String> {
+        Vec::new()
+    }
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get_initial_cwd() -> Option<_rt::String> {
+        None
+    }
+}
 impl exports::wasi::filesystem0_3_0_rc_2026_03_15::preopens::Guest for Adapter {
     #[allow(unused_variables)]
     #[allow(async_fn_in_trait)]
     fn get_directories() -> _rt::Vec<(
         exports::wasi::filesystem0_3_0_rc_2026_03_15::preopens::Descriptor,
+        _rt::String,
+    )> {
+        Vec::new()
+    }
+}
+impl exports::wasi::filesystem0_3_0::preopens::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get_directories() -> _rt::Vec<(
+        exports::wasi::filesystem0_3_0::preopens::Descriptor,
         _rt::String,
     )> {
         Vec::new()
@@ -1302,6 +1350,18 @@ impl exports::wasi::sockets0_3_0_rc_2026_03_15::ip_name_lookup::Guest for Adapte
         exports::wasi::sockets0_3_0_rc_2026_03_15::ip_name_lookup::ErrorCode,
     > {
         Err(exports::wasi::sockets0_3_0_rc_2026_03_15::ip_name_lookup::ErrorCode::AccessDenied)
+    }
+}
+impl exports::wasi::sockets0_3_0::ip_name_lookup::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    async fn resolve_addresses(
+        name: _rt::String,
+    ) -> Result<
+        _rt::Vec<exports::wasi::sockets0_3_0::ip_name_lookup::IpAddress>,
+        exports::wasi::sockets0_3_0::ip_name_lookup::ErrorCode,
+    > {
+        Err(exports::wasi::sockets0_3_0::ip_name_lookup::ErrorCode::AccessDenied)
     }
 }
 impl exports::fermyon::spin2_0_0::llm::Guest for Adapter {

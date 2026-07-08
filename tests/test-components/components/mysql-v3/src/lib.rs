@@ -2,15 +2,16 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "spin:up/http-trigger@4.0.0",
+    world: "spin:up/http-trigger@4.1.0",
+    merge_structurally_equal_types: true,
     generate_all,
 });
 
 use {
     crate::{
-        exports::wasi::http0_3_0_rc_2026_03_15::handler::Guest,
+        exports::wasi::http0_3_0::handler::Guest,
         spin::mysql::mysql,
-        wasi::http0_3_0_rc_2026_03_15::types::{ErrorCode, Fields, Request, Response},
+        wasi::http0_3_0::types::{ErrorCode, Fields, Request, Response},
     },
     helper::{bail, ensure, ensure_matches, ensure_ok},
     std::env,
@@ -32,7 +33,7 @@ impl Guest for Component {
 
 fn respond(status: u16, message: String) -> Response {
     let (mut tx, rx) = wit_stream::new();
-    async_support::spawn(async move {
+    async_support::spawn_local(async move {
         tx.write_all(message.into_bytes()).await;
     });
     let response = Response::new(
