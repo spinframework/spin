@@ -82,7 +82,7 @@ async fn compose_middlewares(
 ) -> anyhow::Result<Vec<u8>> {
     use spin_compose::DependencyLike;
 
-    const MW_HANDLER_INTERFACE: &str = "wasi:http/handler@0.3.0-rc-2026-03-15";
+    const MW_HANDLER_INTERFACE: &str = "wasi:http/handler@0.3.0";
 
     let mut graph = CompositionGraph::new();
     let mut package_ids: Vec<PackageId> = Vec::new();
