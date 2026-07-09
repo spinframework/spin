@@ -239,6 +239,7 @@ pub struct InstanceReuseConfig {
     max_instance_reuse_count: Range<usize>,
     max_instance_concurrent_reuse_count: Range<usize>,
     request_timeout: Option<Range<Duration>>,
+    request_deadline: Option<Duration>,
     idle_instance_timeout: Range<Duration>,
 }
 
@@ -250,6 +251,26 @@ impl Default for InstanceReuseConfig {
                 DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT,
             ),
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
+            request_deadline: None,
+            idle_instance_timeout: DEFAULT_IDLE_INSTANCE_TIMEOUT,
+        }
+    }
+}
+
+impl InstanceReuseConfig {
+    /// Creates a single-use instance reuse configuration with a Wasmtime request deadline.
+    ///
+    /// The deadline is enforced by the Wasmtime epoch interruption mechanism in the
+    /// underlying Spin store. It is a rough deadline: the guest may run somewhat longer
+    /// depending on the engine epoch tick interval, host thread scheduling, and how often
+    /// the compiled guest code checks the epoch. Instance reuse is disabled so every request
+    /// receives a fresh store with a request-specific deadline.
+    pub fn single_use_with_request_deadline(timeout: Duration) -> Self {
+        Self {
+            max_instance_reuse_count: Range::Value(1),
+            max_instance_concurrent_reuse_count: Range::Value(1),
+            request_timeout: Some(Range::Value(timeout)),
+            request_deadline: Some(timeout),
             idle_instance_timeout: DEFAULT_IDLE_INSTANCE_TIMEOUT,
         }
     }
@@ -289,6 +310,7 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
                     DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT,
                 )),
             request_timeout: cli_args.request_timeout,
+            request_deadline: None,
             idle_instance_timeout: cli_args.idle_instance_timeout,
         };
 
@@ -444,5 +466,19 @@ mod tests {
         let addr = parse_listen_addr("localhost:12345").unwrap();
         assert_eq!(addr.ip(), Ipv4Addr::LOCALHOST);
         assert_eq!(addr.port(), 12345);
+    }
+
+    #[test]
+    fn request_deadline_config_is_single_use() {
+        let timeout = Duration::from_millis(500);
+        let config = InstanceReuseConfig::single_use_with_request_deadline(timeout);
+
+        assert!(matches!(config.max_instance_reuse_count, Range::Value(1)));
+        assert!(matches!(
+            config.max_instance_concurrent_reuse_count,
+            Range::Value(1)
+        ));
+        assert!(matches!(config.request_timeout, Some(Range::Value(value)) if value == timeout));
+        assert_eq!(config.request_deadline, Some(timeout));
     }
 }

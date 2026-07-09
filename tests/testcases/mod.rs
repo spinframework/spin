@@ -114,10 +114,7 @@ impl<T: std::fmt::Display> std::fmt::Display for TruncatedSlice<'_, T> {
 }
 
 /// Get the test environment ready to run a test
-fn preboot(
-    test: &str,
-    env: &mut TestEnvironment<testing_framework::runtimes::spin_cli::SpinCli>,
-) -> anyhow::Result<()> {
+pub fn preboot<R>(test: &str, env: &mut TestEnvironment<R>) -> anyhow::Result<()> {
     let test_path = format!("tests/testcases/{test}");
     for file in std::fs::read_dir(test_path)? {
         let file = file?;

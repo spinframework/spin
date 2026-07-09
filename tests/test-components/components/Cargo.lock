@@ -423,6 +423,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-infinite-loop"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "http 0.2.11",
+ "spin-sdk 2.2.0",
+]
+
+[[package]]
 name = "http-routing"
 version = "0.1.0"
 dependencies = [

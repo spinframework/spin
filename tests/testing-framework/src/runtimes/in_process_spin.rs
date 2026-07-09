@@ -25,13 +25,22 @@ impl InProcessSpin {
         services_config: ServicesConfig,
         preboot: impl FnOnce(&mut TestEnvironment<InProcessSpin>) -> anyhow::Result<()> + 'static,
     ) -> TestEnvironmentConfig<Self> {
+        Self::config_with_reuse_config(services_config, InstanceReuseConfig::default(), preboot)
+    }
+
+    /// Configure a new in-process Spin instance with an explicit HTTP instance reuse policy.
+    pub fn config_with_reuse_config(
+        services_config: ServicesConfig,
+        reuse_config: InstanceReuseConfig,
+        preboot: impl FnOnce(&mut TestEnvironment<InProcessSpin>) -> anyhow::Result<()> + 'static,
+    ) -> TestEnvironmentConfig<Self> {
         TestEnvironmentConfig {
             services_config,
-            create_runtime: Box::new(|env| {
+            create_runtime: Box::new(move |env| {
                 preboot(env)?;
                 tokio::runtime::Runtime::new()
                     .context("failed to start tokio runtime")?
-                    .block_on(async { initialize_trigger(env).await })
+                    .block_on(async { initialize_trigger(env, reuse_config).await })
             }),
         }
     }
@@ -95,6 +104,7 @@ impl Runtime for InProcessSpin {
 /// Initialize the trigger for the Spin instance inside the environment
 async fn initialize_trigger(
     env: &mut TestEnvironment<InProcessSpin>,
+    reuse_config: InstanceReuseConfig,
 ) -> anyhow::Result<InProcessSpin> {
     let locked_app = spin_loader::from_file(
         env.path().join("spin.toml"),
@@ -111,7 +121,7 @@ async fn initialize_trigger(
         None,
         false,
         None,
-        InstanceReuseConfig::default(),
+        reuse_config,
         OutputFormat::default(),
     )?;
     let mut builder = TriggerAppBuilder::<_, FactorsBuilder>::new(trigger);
