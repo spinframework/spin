@@ -2,6 +2,7 @@
 #![allow(clippy::box_default)]
 
 use heck::{ToKebabCase, ToSnakeCase, ToUpperCamelCase};
+use itertools::Itertools;
 use liquid_core::{Filter, ParseFilter, Runtime, ValueView};
 use liquid_derive::FilterReflection;
 
@@ -155,11 +156,7 @@ impl Filter for DottedPascalCaseFilter {
 
         let input = input.into_string().to_string();
 
-        let result = input
-            .split('.')
-            .map(|s| s.to_upper_camel_case())
-            .collect::<Vec<_>>()
-            .join(".");
+        let result = input.split('.').map(|s| s.to_upper_camel_case()).join(".");
 
         Ok(result.to_value())
     }
