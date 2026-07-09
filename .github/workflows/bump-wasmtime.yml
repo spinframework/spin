@@ -25,8 +25,11 @@ jobs:
       - name: Bump Spin to latest Wasmtime release
         run: |
           sed -i -E "s/wasmtime = \{ version = \"[0-9]+[0-9.]*\"/wasmtime = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
+          sed -i -E "s/wasmtime = \"[0-9]+[0-9.]*\"/wasmtime = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\" }/g" Cargo.toml
           sed -i -E "s/wasmtime-wasi = \{ version = \"[0-9]+[0-9.]*\"/wasmtime-wasi = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
+          sed -i -E "s/wasmtime-wasi = \"[0-9]+[0-9.]*\"/wasmtime-wasi = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\" }/g" Cargo.toml
           sed -i -E "s/wasmtime-wasi-http = \{ version = \"[0-9]+[0-9.]*\"/wasmtime-wasi-http = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
+          sed -i -E "s/wasmtime-wasi-http = \"[0-9]+[0-9.]*\"/wasmtime-wasi = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\" }/g" Cargo.toml
           cargo update
 
       # Import GPG key for signing commits
