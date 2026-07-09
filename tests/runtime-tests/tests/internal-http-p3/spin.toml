@@ -1,0 +1,21 @@
+spin_manifest_version = 2
+
+[application]
+name = "internal-http-p3"
+authors = ["Fermyon Engineering <engineering@fermyon.com>"]
+version = "0.1.0"
+
+[[trigger.http]]
+route = "/..."
+component = "front"
+
+[component.front]
+source = "%{source=internal-http-p3-front}"
+allowed_outbound_hosts = ["http://one.spin.internal"]
+
+[[trigger.http]]
+route = { private = true }
+component = "one"
+
+[component.one]
+source = "%{source=internal-http-p3-back}"

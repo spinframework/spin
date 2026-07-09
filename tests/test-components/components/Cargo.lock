@@ -667,6 +667,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "internal-http-p3-back-component"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.54.0",
+]
+
+[[package]]
+name = "internal-http-p3-front-component"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.54.0",
+]
+
+[[package]]
 name = "internal-http-streaming-back-component"
 version = "0.1.0"
 dependencies = [
