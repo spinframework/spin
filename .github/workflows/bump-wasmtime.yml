@@ -3,7 +3,7 @@
 name: Bump wasmtime (prerelease)
 on:
   schedule:
-    - cron: 0 0 9 * * # 9th of each month, at 00:00 UTC
+    - cron: 0 0 * * * # every day at 00:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,20 @@ jobs:
           LAST_WASMTIME=$(git ls-remote https://github.com/bytecodealliance/wasmtime 'refs/heads/release-*' | awk '{print $2}' | sed -e "s/^refs\/heads\/release-//" | sort -V | tail -n1)
           echo "last_wasmtime=$LAST_WASMTIME" >>$GITHUB_OUTPUT
 
+      - name: Check whether Wasmtime needs bumping
+        id: check
+        run: |
+          LATEST_BRANCH="release-${{ steps.wasmtime-release.outputs.last_wasmtime }}"
+          if grep -qF "branch = \"$LATEST_BRANCH\"" Cargo.toml; then
+            echo "Wasmtime already pinned to $LATEST_BRANCH; nothing to bump."
+            echo "needs_bump=false" >>$GITHUB_OUTPUT
+          else
+            echo "Wasmtime needs bumping to $LATEST_BRANCH."
+            echo "needs_bump=true" >>$GITHUB_OUTPUT
+          fi
+
       - name: Bump Spin to latest Wasmtime release
+        if: steps.check.outputs.needs_bump == 'true'
         run: |
           sed -i -E "s/wasmtime = \{ version = \"[0-9]+[0-9.]*\"/wasmtime = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
           sed -i -E "s/wasmtime = \"[0-9]+[0-9.]*\"/wasmtime = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\" }/g" Cargo.toml
@@ -34,6 +47,7 @@ jobs:
 
       # Import GPG key for signing commits
       - name: Import GPG key
+        if: steps.check.outputs.needs_bump == 'true'
         uses: crazy-max/ghaction-import-gpg@v6
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -42,6 +56,7 @@ jobs:
           git_commit_gpgsign: true
 
       - name: Create Spin PR
+        if: steps.check.outputs.needs_bump == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.SPINFRAMEWORKBOT_PR_PAT }}
