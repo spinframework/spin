@@ -16,6 +16,7 @@ _Listed in alphabetical order by first name_
 | Radu Matei | radu-matei |
 | Rajat Jindal | rajatjindal |
 | Ryan Levick | rylev |
+| Alex Crichton | alexcrichton |
 
 ## Emeritus Maintainers
 
