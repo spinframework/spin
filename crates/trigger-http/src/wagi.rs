@@ -1,4 +1,4 @@
-use std::{io::Cursor, net::SocketAddr};
+use std::{io::Cursor, net::SocketAddr, time::Duration};
 
 use anyhow::{Context, Result, ensure};
 use http_body_util::BodyExt;
@@ -11,7 +11,11 @@ use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi_http::p2::body::HyperIncomingBody as Body;
 
-use crate::{TriggerInstanceBuilder, headers::compute_default_headers, server::HttpExecutor};
+use crate::{
+    TriggerInstanceBuilder,
+    headers::compute_default_headers,
+    server::{HttpExecutor, set_request_deadline},
+};
 
 pub struct WagiHttpExecutor<'a> {
     pub wagi_config: &'a WagiTriggerConfig,
@@ -26,6 +30,7 @@ impl HttpExecutor for WagiHttpExecutor<'_> {
         route_match: &RouteMatch<'_, '_>,
         req: Request<Body>,
         client_addr: SocketAddr,
+        request_deadline: Option<Duration>,
     ) -> Result<Response<Body>> {
         let spin_http::routes::TriggerLookupKey::Component(component) = route_match.lookup_key()
         else {
@@ -90,6 +95,7 @@ impl HttpExecutor for WagiHttpExecutor<'_> {
         wasi_builder.stdout(stdout.clone());
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
+        set_request_deadline(&mut store, request_deadline);
 
         let command = self.indices.load(&mut store, &instance)?;
 

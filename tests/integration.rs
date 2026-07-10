@@ -11,8 +11,36 @@ mod integration_tests {
     use testing_framework::runtimes::{SpinAppType, spin_cli::SpinConfig};
 
     pub use super::testcases::{
-        assert_spin_request, bootstap_env, http_smoke_test_template, run_test, spin_binary,
+        assert_spin_request, bootstap_env, http_smoke_test_template, preboot, run_test, spin_binary,
     };
+
+    #[test]
+    fn http_request_deadline_interrupts_wasip2_loop() -> anyhow::Result<()> {
+        use spin_trigger_http::InstanceReuseConfig;
+        use std::time::{Duration, Instant};
+        use test_environment::{TestEnvironment, services::ServicesConfig};
+        use testing_framework::runtimes::in_process_spin::InProcessSpin;
+
+        let config = InProcessSpin::config_with_reuse_config(
+            ServicesConfig::none(),
+            InstanceReuseConfig::single_use_with_request_deadline(Duration::from_millis(100)),
+            |env| preboot("http-infinite-loop", env),
+        );
+        let mut env = TestEnvironment::up(config, |_| Ok(()))?;
+        let started = Instant::now();
+        let response =
+            env.runtime_mut()
+                .make_http_request(test_environment::http::Request::full(
+                    test_environment::http::Method::Get,
+                    "/",
+                    &[("Host", "localhost")],
+                    None,
+                ))?;
+
+        assert_eq!(response.status(), 500);
+        assert!(started.elapsed() < Duration::from_secs(2));
+        Ok(())
+    }
 
     #[cfg(feature = "extern-dependencies-tests")]
     /// Helper macro to assert that a condition is true eventually

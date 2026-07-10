@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use anyhow::Result;
 use http_body_util::BodyExt;
@@ -12,7 +12,7 @@ use tracing::{Level, instrument};
 use crate::{
     Body, TriggerInstanceBuilder,
     headers::{append_headers, prepare_request_headers},
-    server::HttpExecutor,
+    server::{HttpExecutor, set_request_deadline},
 };
 
 /// An [`HttpExecutor`] that uses the `fermyon:spin/inbound-http` interface.
@@ -27,6 +27,7 @@ impl HttpExecutor for SpinHttpExecutor {
         route_match: &RouteMatch<'_, '_>,
         req: Request<Body>,
         client_addr: SocketAddr,
+        request_deadline: Option<Duration>,
     ) -> Result<Response<Body>> {
         let spin_http::routes::TriggerLookupKey::Component(component_id) = route_match.lookup_key()
         else {
@@ -36,6 +37,7 @@ impl HttpExecutor for SpinHttpExecutor {
         tracing::trace!("Executing request using the Spin executor for component {component_id}");
 
         let (instance, mut store) = instance_builder.instantiate(()).await?;
+        set_request_deadline(&mut store, request_deadline);
 
         let headers = prepare_request_headers(&req, route_match, client_addr)?;
         // Expects here are safe since we have already checked that this
