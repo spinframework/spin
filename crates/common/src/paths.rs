@@ -1,6 +1,7 @@
 //! Resolves a file path to a manifest file
 
 use anyhow::{Context, Result, anyhow};
+use std::env::current_dir;
 use std::path::{Path, PathBuf};
 
 use crate::ui::quoted_path;
@@ -71,8 +72,8 @@ pub fn search_upwards_for_manifest() -> Option<(PathBuf, usize)> {
         return Some((candidate, 0));
     }
 
-    for distance in 1..20 {
-        let inferred_dir = PathBuf::from("../".repeat(distance));
+    let current_dir = current_dir().ok()?;
+    for (distance, inferred_dir) in current_dir.ancestors().enumerate() {
         if !inferred_dir.is_dir() {
             return None;
         }
@@ -82,7 +83,7 @@ pub fn search_upwards_for_manifest() -> Option<(PathBuf, usize)> {
             return Some((candidate, distance));
         }
 
-        if is_git_root(&inferred_dir) {
+        if is_git_root(inferred_dir) {
             return None;
         }
     }
