@@ -48,12 +48,14 @@ impl ComponentToValidate<'_> {
 
 pub struct ApplicationToValidate {
     manifest: spin_manifest::schema::v2::AppManifest,
+    component_ids: Vec<String>,
     wasm_loader: spin_loader::WasmLoader,
 }
 
 impl ApplicationToValidate {
     pub async fn new(
         mut manifest: spin_manifest::schema::v2::AppManifest,
+        component_ids: &[String],
         profile: Option<&str>,
         base_dir: impl AsRef<Path>,
     ) -> anyhow::Result<Self> {
@@ -62,6 +64,7 @@ impl ApplicationToValidate {
             spin_loader::WasmLoader::new(base_dir.as_ref().to_owned(), None, None).await?;
         Ok(Self {
             manifest,
+            component_ids: component_ids.to_vec(),
             wasm_loader,
         })
     }
@@ -136,14 +139,20 @@ impl ApplicationToValidate {
         triggers: &'a [spin_manifest::schema::v2::Trigger],
     ) -> anyhow::Result<Vec<ComponentToValidate<'a>>> {
         let component_futures = triggers.iter().map(|t| self.load_and_resolve_trigger(t));
-        try_join_all(component_futures).await
+        let components = try_join_all(component_futures).await?;
+        let components = components.into_iter().flatten().collect();
+        Ok(components)
     }
 
     async fn load_and_resolve_trigger<'a>(
         &'a self,
         trigger: &'a spin_manifest::schema::v2::Trigger,
-    ) -> anyhow::Result<ComponentToValidate<'a>> {
+    ) -> anyhow::Result<Option<ComponentToValidate<'a>>> {
         let component = self.component_source(trigger)?;
+        if !self.component_ids.is_empty() && !self.component_ids.contains(&component.id.to_string())
+        {
+            return Ok(None);
+        }
 
         let loader = ComponentSourceLoader::new(&self.wasm_loader);
 
@@ -155,12 +164,12 @@ impl ApplicationToValidate {
             vec![]
         };
 
-        Ok(ComponentToValidate {
+        Ok(Some(ComponentToValidate {
             id: component.id,
             source_description: source_description(component.source),
             wasm,
             host_requirements,
-        })
+        }))
     }
 }
 

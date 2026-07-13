@@ -391,7 +391,7 @@ mod test {
         )
         .unwrap();
 
-        let application = crate::ApplicationToValidate::new(manifest, None, temp_dir.path())
+        let application = crate::ApplicationToValidate::new(manifest, &[], None, temp_dir.path())
             .await
             .unwrap();
 
@@ -457,7 +457,7 @@ mod test {
         )
         .unwrap();
 
-        let application = crate::ApplicationToValidate::new(manifest, None, temp_dir.path())
+        let application = crate::ApplicationToValidate::new(manifest, &[], None, temp_dir.path())
             .await
             .unwrap();
 
@@ -483,6 +483,74 @@ mod test {
         );
 
         assert!(!validation.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ignores_unincluded_component() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm1 = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+        let wasm2 = generate_dummy_component(&wit_text, "spin:test/not-so-simple@1.0.0");
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::write(temp_dir.path().join("wasm1"), wasm1).unwrap();
+        std::fs::write(temp_dir.path().join("wasm2"), wasm2).unwrap();
+
+        let env1 = target_simple_world(&wit_path);
+
+        // This would normally be derived from the manifest
+        let targets = RealisedTargets {
+            default: vec![env1],
+            overrides: Default::default(),
+        };
+
+        let manifest = spin_manifest::manifest_from_str(
+            r#"
+            spin_manifest_version = 2
+
+            [application]
+            name = "test"
+            targets = ["test"]  # default: maps to env1 as per `targets`
+
+            [[trigger.s]]
+            route = "/1"
+            component = "s"
+
+            [[trigger.s]]
+            route = "/2"
+            component = "nss"
+
+            [component.s]
+            source = "wasm1"
+
+            [component.nss]
+            source = "wasm2"
+        "#,
+        )
+        .unwrap();
+
+        let application =
+            crate::ApplicationToValidate::new(manifest, &["s".to_string()], None, temp_dir.path())
+                .await
+                .unwrap();
+
+        let validation = crate::validate_application_against_environments(&application, &targets)
+            .await
+            .unwrap();
+        assert!(
+            validation.errors().is_empty(),
+            "{}",
+            validation
+                .errors()
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert!(validation.is_ok());
     }
 
     #[tokio::test]
