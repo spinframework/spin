@@ -371,6 +371,14 @@ impl<T: 'static> Engine<T> {
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
         Ok(self.linker.instantiate_pre(component)?)
     }
+
+    /// Checks that the given [`Component`] can be instantiated by this engine.
+    pub fn check_component(
+        &self,
+        component: &Component,
+    ) -> Result<wasmtime::component::types::Component> {
+        Ok(self.linker.substituted_component_type(component)?)
+    }
 }
 
 impl<T> AsRef<wasmtime::Engine> for Engine<T> {
