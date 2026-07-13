@@ -258,7 +258,6 @@ fn bypass_gh_added_root(unpack_dir: PathBuf) -> PathBuf {
         return unpack_dir;
     };
 
-    // If we get here, there is a single directory (dirs has a single element). Look in it to see if it's a plausible repo root.
     let candidate_repo_root = dir.path();
     let Ok(mut candidate_repo_dirs) = candidate_repo_root.read_dir() else {
         // Again, if it all goes awry, propose the base unpack directory.
