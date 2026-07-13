@@ -55,7 +55,7 @@ macro_rules! exemplars_to_otel {
             $exemplar_type:ty
         ) => {
         $wasi_exemplar_list
-            .iter()
+            .into_iter()
             .map(|e| {
                 let span_id: [u8; 8] = e
                     .span_id
@@ -70,7 +70,6 @@ macro_rules! exemplars_to_otel {
                 opentelemetry_sdk::metrics::data::Exemplar::<$exemplar_type> {
                     filtered_attributes: e
                         .filtered_attributes
-                        .to_owned()
                         .into_iter()
                         .map(Into::into)
                         .collect(),
@@ -90,9 +89,9 @@ macro_rules! wasi_gauge_to_otel {
         Box::new(opentelemetry_sdk::metrics::data::Gauge {
             data_points: $gauge
                 .data_points
-                .iter()
+                .into_iter()
                 .map(|dp| opentelemetry_sdk::metrics::data::GaugeDataPoint {
-                    attributes: dp.attributes.iter().map(Into::into).collect(),
+                    attributes: dp.attributes.into_iter().map(Into::into).collect(),
                     value: dp.value.into(),
                     exemplars: exemplars_to_otel!(dp.exemplars, $number_type),
                 })
@@ -112,9 +111,9 @@ macro_rules! wasi_sum_to_otel {
         Box::new(opentelemetry_sdk::metrics::data::Sum {
             data_points: $sum
                 .data_points
-                .iter()
+                .into_iter()
                 .map(|dp| opentelemetry_sdk::metrics::data::SumDataPoint {
-                    attributes: dp.attributes.iter().map(Into::into).collect(),
+                    attributes: dp.attributes.into_iter().map(Into::into).collect(),
                     exemplars: exemplars_to_otel!(dp.exemplars, $number_type),
                     value: dp.value.into(),
                 })
@@ -133,11 +132,11 @@ macro_rules! wasi_histogram_to_otel {
         Box::new(opentelemetry_sdk::metrics::data::Histogram {
             data_points: $histogram
                 .data_points
-                .iter()
+                .into_iter()
                 .map(|dp| opentelemetry_sdk::metrics::data::HistogramDataPoint {
-                    attributes: dp.attributes.iter().map(Into::into).collect(),
-                    bounds: dp.bounds.to_owned(),
-                    bucket_counts: dp.bucket_counts.to_owned(),
+                    attributes: dp.attributes.into_iter().map(Into::into).collect(),
+                    bounds: dp.bounds,
+                    bucket_counts: dp.bucket_counts,
                     exemplars: exemplars_to_otel!(dp.exemplars, $number_type),
                     count: dp.count,
                     max: match dp.max {
@@ -164,10 +163,10 @@ macro_rules! wasi_exponential_histogram_to_otel {
         Box::new(opentelemetry_sdk::metrics::data::ExponentialHistogram {
             data_points: $histogram
                 .data_points
-                .iter()
+                .into_iter()
                 .map(
                     |dp| opentelemetry_sdk::metrics::data::ExponentialHistogramDataPoint {
-                        attributes: dp.attributes.iter().map(Into::into).collect(),
+                        attributes: dp.attributes.into_iter().map(Into::into).collect(),
                         exemplars: exemplars_to_otel!(dp.exemplars, $number_type),
                         count: dp.count as usize,
                         max: match dp.max {
@@ -181,8 +180,8 @@ macro_rules! wasi_exponential_histogram_to_otel {
                         sum: dp.sum.into(),
                         scale: dp.scale,
                         zero_count: dp.zero_count,
-                        positive_bucket: dp.positive_bucket.to_owned().into(),
-                        negative_bucket: dp.negative_bucket.to_owned().into(),
+                        positive_bucket: dp.positive_bucket.into(),
+                        negative_bucket: dp.negative_bucket.into(),
                         zero_threshold: dp.zero_threshold,
                     },
                 )

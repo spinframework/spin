@@ -16,14 +16,6 @@ impl From<wasi::otel::types::KeyValue> for opentelemetry::KeyValue {
     }
 }
 
-impl From<&wasi::otel::types::KeyValue> for opentelemetry::KeyValue {
-    fn from(kv: &wasi::otel::types::KeyValue) -> Self {
-        let owned: OwnedValue = from_json(&kv.value);
-        let value: opentelemetry::Value = owned.into();
-        opentelemetry::KeyValue::new(kv.key.to_owned(), value)
-    }
-}
-
 impl From<OwnedValue> for opentelemetry::Value {
     fn from(value: OwnedValue) -> Self {
         match value {
@@ -36,8 +28,8 @@ impl From<OwnedValue> for opentelemetry::Value {
                 OwnedArray::F64(v) => opentelemetry::Array::F64(v),
                 OwnedArray::I64(v) => opentelemetry::Array::I64(v),
                 OwnedArray::String(v) => opentelemetry::Array::String(
-                    v.iter()
-                        .map(|e| opentelemetry::StringValue::from(e.to_owned()))
+                    v.into_iter()
+                        .map(opentelemetry::StringValue::from)
                         .collect(),
                 ),
             }),

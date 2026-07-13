@@ -673,11 +673,10 @@ impl WorkingDirectory {
 
 // Parse the environment variables passed in `key=value` pairs.
 fn parse_env_var(s: &str) -> Result<(String, String)> {
-    let parts: Vec<_> = s.splitn(2, '=').collect();
-    if parts.len() != 2 {
+    let Some((key, value)) = s.split_once('=') else {
         bail!("Environment variable must be of the form `key=value`");
-    }
-    Ok((parts[0].to_owned(), parts[1].to_owned()))
+    };
+    Ok((key.to_owned(), value.to_owned()))
 }
 
 fn resolve_trigger_plugin(trigger_type: &str) -> Result<String> {

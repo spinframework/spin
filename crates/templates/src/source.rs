@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, anyhow};
+use itertools::Itertools;
 use tempfile::{TempDir, tempdir};
 use tokio::process::Command;
 use url::Url;
@@ -253,13 +254,11 @@ fn bypass_gh_added_root(unpack_dir: PathBuf) -> PathBuf {
     // Is there a single directory at the root?  If not, we can't be in the GitHub situation:
     // return the root of the unpacking. (The take(2) here is because we don't need to traverse
     // the full list - we only care whether there is more than one.)
-    let dirs = dirs.filter_map(|de| de.ok()).take(2).collect::<Vec<_>>();
-    if dirs.len() != 1 {
+    let Ok(dir) = dirs.filter_map(Result::ok).exactly_one() else {
         return unpack_dir;
-    }
+    };
 
-    // If we get here, there is a single directory (dirs has a single element). Look in it to see if it's a plausible repo root.
-    let candidate_repo_root = dirs[0].path();
+    let candidate_repo_root = dir.path();
     let Ok(mut candidate_repo_dirs) = candidate_repo_root.read_dir() else {
         // Again, if it all goes awry, propose the base unpack directory.
         return unpack_dir;

@@ -67,18 +67,14 @@ impl AuthConfig {
 
         let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)?;
         let decoded = std::str::from_utf8(&bytes)?;
-        let parts: Vec<&str> = decoded.splitn(2, ':').collect();
+        let (username, secret) = decoded
+            .split_once(':')
+            .context("expected secret as second element of the decoded auth")?;
 
         tracing::trace!("Decoded registry credentials from the Spin configuration.");
         Ok(RegistryAuth::Basic(
-            parts
-                .first()
-                .context("expected username as first element of the decoded auth")?
-                .to_string(),
-            parts
-                .get(1)
-                .context("expected secret as second element of the decoded auth")?
-                .to_string(),
+            username.to_string(),
+            secret.to_string(),
         ))
     }
 

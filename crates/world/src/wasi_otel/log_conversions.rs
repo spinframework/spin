@@ -63,7 +63,7 @@ pub fn parse_wasi_log_record(
     let otel_scope = if let Some(wasi_scope) = wasi_log_record.instrumentation_scope {
         let attrs: Vec<opentelemetry::KeyValue> = wasi_scope
             .attributes
-            .iter()
+            .into_iter()
             .map(|e| {
                 let kv: opentelemetry::KeyValue = e.into();
                 kv
@@ -122,7 +122,6 @@ fn severity_from_u8(n: u8) -> opentelemetry::logs::Severity {
     }
 }
 
-#[derive(Clone)]
 enum OwnedAnyValue {
     Int(i64),
     Double(f64),
@@ -138,17 +137,15 @@ impl From<OwnedAnyValue> for opentelemetry::logs::AnyValue {
         use opentelemetry::logs::AnyValue;
         match value {
             OwnedAnyValue::Boolean(v) => AnyValue::Boolean(v),
-            OwnedAnyValue::Bytes(v) => AnyValue::Bytes(Box::new(v.to_vec())),
+            OwnedAnyValue::Bytes(v) => AnyValue::Bytes(Box::new(v)),
             OwnedAnyValue::Double(v) => AnyValue::Double(v),
             OwnedAnyValue::Int(v) => AnyValue::Int(v),
-            OwnedAnyValue::String(v) => AnyValue::String(v.clone().into()),
+            OwnedAnyValue::String(v) => AnyValue::String(v.into()),
             OwnedAnyValue::ListAny(v) => {
-                AnyValue::ListAny(Box::new(v.iter().map(|e| e.clone().into()).collect()))
+                AnyValue::ListAny(Box::new(v.into_iter().map(|e| e.into()).collect()))
             }
             OwnedAnyValue::Map(v) => AnyValue::Map(Box::new(
-                v.iter()
-                    .map(|(k, v)| (k.clone().into(), v.clone().into()))
-                    .collect(),
+                v.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
             )),
         }
     }
