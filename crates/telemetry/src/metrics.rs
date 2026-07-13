@@ -88,6 +88,50 @@ pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
     Ok(MetricsLayer::new(meter_provider))
 }
 
+// The two mutually exclusive features cannot both select a default level.
+#[cfg(all(
+    feature = "metrics-default-level-debug",
+    feature = "metrics-default-level-info"
+))]
+compile_error!(
+    "features `metrics-default-level-debug` and `metrics-default-level-info` are mutually exclusive"
+);
+
+/// The [`tracing::Level`] at which the metrics macros (`counter!`, `histogram!`,
+/// `monotonic_counter!`, `gauge!`) emit their events when no explicit `level:` is given.
+///
+/// Defaults to [`tracing::Level::TRACE`]. Enable the `metrics-default-level-debug` or
+/// `metrics-default-level-info` feature on `spin-telemetry` to raise it to `DEBUG` or `INFO`.
+#[cfg(all(
+    not(feature = "metrics-default-level-debug"),
+    not(feature = "metrics-default-level-info")
+))]
+pub const DEFAULT_METRICS_LEVEL: tracing::Level = tracing::Level::TRACE;
+
+/// The [`tracing::Level`] at which the metrics macros (`counter!`, `histogram!`,
+/// `monotonic_counter!`, `gauge!`) emit their events when no explicit `level:` is given.
+///
+/// Defaults to [`tracing::Level::DEBUG`]. Enable the `metrics-default-level-info` or
+/// remove the `metrics-default-level-debug` feature on `spin-telemetry` to raise it to `INFO`
+/// or lower it to `TRACE` respectively.
+#[cfg(all(
+    feature = "metrics-default-level-debug",
+    not(feature = "metrics-default-level-info")
+))]
+pub const DEFAULT_METRICS_LEVEL: tracing::Level = tracing::Level::DEBUG;
+
+/// The [`tracing::Level`] at which the metrics macros (`counter!`, `histogram!`,
+/// `monotonic_counter!`, `gauge!`) emit their events when no explicit `level:` is given.
+///
+/// Defaults to [`tracing::Level::INFO`]. Enable the `metrics-default-level-debug` or
+/// remove the `metrics-default-level-info` feature on `spin-telemetry` to lower it to `DEBUG`
+/// or `TRACE` respectively.
+#[cfg(all(
+    feature = "metrics-default-level-info",
+    not(feature = "metrics-default-level-debug")
+))]
+pub const DEFAULT_METRICS_LEVEL: tracing::Level = tracing::Level::INFO;
+
 #[macro_export]
 /// Records an increment to the named counter with the given attributes.
 ///
@@ -95,13 +139,15 @@ pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
 ///
 /// Takes advantage of counter support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
 ///
+/// The metric event is emitted at [`DEFAULT_METRICS_LEVEL`] (`TRACE` unless raised by a crate feature).
+///
 /// ```no_run
 /// # use spin_telemetry::metrics::counter;
 /// counter!(spin.metric_name = 1, metric_attribute = "value");
 /// ```
 macro_rules! counter {
     ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
-        tracing::trace!(counter.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
+        tracing::event!($crate::metrics::DEFAULT_METRICS_LEVEL, counter.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
     }
 }
 
@@ -112,13 +158,15 @@ macro_rules! counter {
 ///
 /// Takes advantage of histogram support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
 ///
+/// The metric event is emitted at [`DEFAULT_METRICS_LEVEL`] (`TRACE` unless raised by a crate feature).
+///
 /// ```no_run
 /// # use spin_telemetry::metrics::histogram;
 /// histogram!(spin.metric_name = 1.5, metric_attribute = "value");
 /// ```
 macro_rules! histogram {
     ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
-        tracing::trace!(histogram.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
+        tracing::event!($crate::metrics::DEFAULT_METRICS_LEVEL, histogram.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
     }
 }
 
@@ -129,22 +177,26 @@ macro_rules! histogram {
 ///
 /// Takes advantage of monotonic counter support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
 ///
+/// The metric event is emitted at [`DEFAULT_METRICS_LEVEL`] (`TRACE` unless raised by a crate feature).
+///
 /// ```no_run
 /// # use spin_telemetry::metrics::monotonic_counter;
 /// monotonic_counter!(spin.metric_name = 1, metric_attribute = "value");
 /// ```
 macro_rules! monotonic_counter {
     ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
-        tracing::trace!(monotonic_counter.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
+        tracing::event!($crate::metrics::DEFAULT_METRICS_LEVEL, monotonic_counter.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
     }
 }
 
 #[macro_export]
-/// Records an increment to the named monotonic counter with the given attributes.
+/// Records the current value of the named gauge with the given attributes.
 ///
-/// The increment may only be a positive i64 or f64. You must not mix types for the same metric.
+/// The value may only be a positive i64 or f64. You must not mix types for the same metric.
 ///
 /// Takes advantage of gauge support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
+///
+/// The metric event is emitted at [`DEFAULT_METRICS_LEVEL`] (`TRACE` unless raised by a crate feature).
 ///
 /// ```no_run
 /// # use spin_telemetry::metrics::gauge;
@@ -152,7 +204,7 @@ macro_rules! monotonic_counter {
 /// ```
 macro_rules! gauge {
     ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
-        tracing::trace!(gauge.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
+        tracing::event!($crate::metrics::DEFAULT_METRICS_LEVEL, gauge.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
     }
 }
 

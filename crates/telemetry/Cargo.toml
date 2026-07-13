@@ -22,3 +22,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["s
 [features]
 testing = []
 tracing-log-compat = ["tracing-subscriber/tracing-log", "tracing-opentelemetry/tracing-log"]
+# By default, the metrics macros emit their events at the TRACE level. These features raise that
+# default to DEBUG or INFO respectively. They are mutually exclusive; enabling both is a compile
+# error.
+metrics-default-level-debug = []
+metrics-default-level-info = []
