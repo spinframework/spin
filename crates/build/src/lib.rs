@@ -95,6 +95,7 @@ pub async fn build(
     if target_checks.check() {
         let application = spin_environments::ApplicationToValidate::new(
             manifest.clone(),
+            component_ids,
             profile,
             manifest_file.parent().unwrap(),
         )
@@ -563,6 +564,7 @@ mod tests {
         spin_manifest::normalize::normalize_manifest(&mut manifest, None).unwrap();
         let application = spin_environments::ApplicationToValidate::new(
             manifest.clone(),
+            &[],
             None,
             manifest_file.parent().unwrap(),
         )
