@@ -1,0 +1,10 @@
+[package]
+name = "internal-http-p3-back-component"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { workspace = true, features = ['async-spawn'] }
