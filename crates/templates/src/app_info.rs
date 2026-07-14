@@ -5,6 +5,7 @@
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use anyhow::ensure;
@@ -129,10 +130,10 @@ impl AppInfo {
     }
 }
 
-lazy_static::lazy_static! {
-    static ref EXTRACT_TRIGGER: regex::Regex =
-        regex::Regex::new(r"^\s*\[\[trigger\.(?<trigger>[a-zA-Z0-9-]+)").expect("Invalid unknown filter regex");
-}
+static EXTRACT_TRIGGER: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"^\s*\[\[trigger\.(?<trigger>[a-zA-Z0-9-]+)")
+        .expect("Invalid unknown filter regex")
+});
 
 fn infer_trigger_type_from_raw_line(line: &str) -> Option<String> {
     EXTRACT_TRIGGER

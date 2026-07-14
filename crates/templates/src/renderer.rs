@@ -1,6 +1,5 @@
 use anyhow::anyhow;
-use lazy_static::lazy_static;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
 use crate::writer::{TemplateOutput, TemplateOutputs};
 
@@ -134,10 +133,9 @@ enum TemplateParseFailure {
     Other(liquid::Error),
 }
 
-lazy_static! {
-    static ref UNKNOWN_FILTER: regex::Regex =
-        regex::Regex::new("requested filter=(\\S+)").expect("Invalid unknown filter regex");
-}
+static UNKNOWN_FILTER: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new("requested filter=(\\S+)").expect("Invalid unknown filter regex")
+});
 
 fn understand_liquid_error(e: liquid::Error) -> TemplateParseFailure {
     let err_str = e.to_string();
