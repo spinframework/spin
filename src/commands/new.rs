@@ -526,9 +526,9 @@ async fn prompt_name(variant: &TemplateVariantInfo) -> anyhow::Result<String> {
     }
 }
 
-lazy_static::lazy_static! {
-    static ref PATH_UNSAFE_CHARACTERS: regex::Regex = regex::Regex::new("[^-_.a-zA-Z0-9]").expect("Invalid path safety regex");
-}
+static PATH_UNSAFE_CHARACTERS: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new("[^-_.a-zA-Z0-9]").expect("Invalid path safety regex")
+});
 
 fn path_safe(text: &str) -> PathBuf {
     let path = PATH_UNSAFE_CHARACTERS.replace_all(text, "_");

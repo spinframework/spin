@@ -13,7 +13,6 @@ fs_extra = "1"
 heck = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
-lazy_static = { workspace = true }
 liquid = "0.26"
 liquid-core = "0.26"
 liquid-derive = "0.26"

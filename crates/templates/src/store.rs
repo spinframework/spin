@@ -1,6 +1,7 @@
 use anyhow::Context;
 use spin_common::data_dir::data_dir;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use crate::directory::subdirectories;
 
@@ -10,9 +11,8 @@ pub(crate) struct TemplateStore {
     root: PathBuf,
 }
 
-lazy_static::lazy_static! {
-    static ref UNSAFE_CHARACTERS: regex::Regex = regex::Regex::new("[^-_a-zA-Z0-9]").expect("Invalid identifier regex");
-}
+static UNSAFE_CHARACTERS: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new("[^-_a-zA-Z0-9]").expect("Invalid identifier regex"));
 
 impl TemplateStore {
     pub(crate) fn new(root: impl AsRef<Path>) -> Self {

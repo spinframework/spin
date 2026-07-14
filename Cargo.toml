@@ -30,7 +30,6 @@ futures = { workspace = true }
 http = { workspace = true }
 indicatif = "0.17"
 itertools = { workspace = true }
-lazy_static = { workspace = true }
 levenshtein = "1"
 nix = { version = "0.29", features = ["signal"] }
 path-absolutize = { workspace = true }
@@ -155,7 +154,6 @@ hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 indexmap = "2"
 itertools = "0.15"
-lazy_static = "1.5"
 opentelemetry = "0.29"
 # The default `reqwest-blocking-client` causes a runtime panic
 opentelemetry-otlp = { version = "0.29", default-features = false, features = ["http-proto", "reqwest-client", "logs"]}
