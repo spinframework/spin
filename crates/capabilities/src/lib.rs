@@ -40,12 +40,15 @@ const ALLOWED_OUTBOUND_HOSTS: &[&str] = &[
     "fermyon:spin/postgres@2.0.0",
     "fermyon:spin/redis@2.0.0",
     "spin:mqtt/mqtt@3.0.0",
+    "spin:mysql/mysql@3.0.0",
     "spin:postgres/postgres@3.0.0",
     "spin:postgres/postgres@4.2.0",
     "spin:redis/redis@3.0.0",
+    "wasi:http/client@0.3.0",
     "wasi:http/client@0.3.0-rc-2026-03-15",
     "wasi:http/outgoing-handler@0.2.6",
     "wasi:sockets/ip-name-lookup@0.2.6",
+    "wasi:sockets/ip-name-lookup@0.3.0",
     "wasi:sockets/ip-name-lookup@0.3.0-rc-2026-03-15",
     "wasi:sockets/tcp-create-socket@0.2.6",
     "wasi:sockets/tcp@0.2.6",
@@ -55,11 +58,13 @@ const ALLOWED_OUTBOUND_HOSTS: &[&str] = &[
 
 const ENVIRONMENT: &[&str] = &[
     "wasi:cli/environment@0.2.6",
+    "wasi:cli/environment@0.3.0",
     "wasi:cli/environment@0.3.0-rc-2026-03-15",
 ];
 
 const FILES: &[&str] = &[
     "wasi:filesystem/preopens@0.2.6",
+    "wasi:filesystem/preopens@0.3.0",
     "wasi:filesystem/preopens@0.3.0-rc-2026-03-15",
 ];
 

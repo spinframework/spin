@@ -2,13 +2,13 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "wasi:http/service@0.3.0-rc-2026-03-15",
+    world: "wasi:http/service@0.3.0",
     generate_all,
 });
 
 use crate::{
-    exports::wasi::http0_3_0_rc_2026_03_15::handler::Guest,
-    wasi::http0_3_0_rc_2026_03_15::{
+    exports::wasi::http0_3_0::handler::Guest,
+    wasi::http0_3_0::{
         types::{ErrorCode, Fields, Request, Response},
     },
 };
@@ -38,7 +38,7 @@ impl Guest for Component {
             ("back-received-body".into(), inbound_body.into()),
         ]).unwrap();
         let (mut resp_body_tx, resp_body_rx) = wit_stream::new();
-        wit_bindgen::spawn(async move {
+        wit_bindgen::spawn_local(async move {
             resp_body_tx.write("Response body from back".into()).await;
         });
         let (_trailers_fw, trailers_fr) = wit_future::new(|| Ok(None));

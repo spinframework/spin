@@ -2,13 +2,13 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "wasi:http/service@0.3.0-rc-2026-03-15",
+    world: "wasi:http/service@0.3.0",
     generate_all,
 });
 
 use crate::{
-    exports::wasi::http0_3_0_rc_2026_03_15::handler::Guest,
-    wasi::http0_3_0_rc_2026_03_15::{
+    exports::wasi::http0_3_0::handler::Guest,
+    wasi::http0_3_0::{
         client,
         types::{ErrorCode, Fields, Method, Request, Response, Scheme},
     },
@@ -61,7 +61,7 @@ impl Guest for Component {
 fn text_response(status: u16, body: impl Into<Vec<u8>>) -> Response {
     let (mut tx, rx) = wit_stream::new();
     let body = body.into();
-    async_support::spawn(async move {
+    async_support::spawn_local(async move {
         tx.write_all(body).await;
     });
     let response = Response::new(

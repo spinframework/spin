@@ -2,15 +2,15 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "wasi:http/middleware@0.3.0-rc-2026-03-15",
+    world: "wasi:http/middleware@0.3.0",
     generate_all,
 });
 
 use {
     crate::{
-        exports::wasi::http0_3_0_rc_2026_03_15::handler::Guest,
+        exports::wasi::http0_3_0::handler::Guest,
         wasi::{
-            http0_3_0_rc_2026_03_15::{
+            http0_3_0::{
                 types::{ErrorCode, Request, Response},
             },
         },
@@ -36,7 +36,7 @@ impl Guest for Component {
         request.set_scheme(scheme.as_ref()).unwrap();
         request.set_path_with_query(path_with_query.as_deref()).unwrap();
 
-        let resp = wasi::http0_3_0_rc_2026_03_15::handler::handle(request).await.unwrap();
+        let resp = wasi::http0_3_0::handler::handle(request).await.unwrap();
 
         let status_code = resp.get_status_code();
         let headers = resp.get_headers().clone();

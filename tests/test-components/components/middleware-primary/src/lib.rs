@@ -2,15 +2,15 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "wasi:http/service@0.3.0-rc-2026-03-15",
+    world: "wasi:http/service@0.3.0",
     generate_all,
 });
 
 use {
     crate::{
-        exports::wasi::http0_3_0_rc_2026_03_15::handler::Guest,
+        exports::wasi::http0_3_0::handler::Guest,
         wasi::{
-            http0_3_0_rc_2026_03_15::{
+            http0_3_0::{
                 types::{ErrorCode, Fields, Request, Response},
             },
         },
@@ -38,7 +38,7 @@ impl Guest for Component {
 
         let (mut req_body, _trailers_fr) = Request::consume_body(request, consume_body_fr);
 
-        async_support::spawn(async move {
+        async_support::spawn_local(async move {
             sw.write_all("Request body:\n\n".into()).await;
             loop {
                 let Some(chunk) = req_body.next().await else {

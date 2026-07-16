@@ -2,16 +2,16 @@
 
 wit_bindgen::generate!({
     path: "../../../../wit",
-    world: "wasi:http/service@0.3.0-rc-2026-03-15",
+    world: "wasi:http/service@0.3.0",
     generate_all,
 });
 
 use {
     crate::{
-        exports::wasi::http0_3_0_rc_2026_03_15::handler::Guest,
+        exports::wasi::http0_3_0::handler::Guest,
         wasi::{
-            clocks0_3_0_rc_2026_03_15::monotonic_clock,
-            http0_3_0_rc_2026_03_15::{
+            clocks0_3_0::monotonic_clock,
+            http0_3_0::{
                 client,
                 types::{ErrorCode, Fields, Method, Request, Response, Scheme},
             },
@@ -42,7 +42,7 @@ impl Guest for Component {
                     // Send a chunked response slowly.
                     let (mut tx, rx) = wit_stream::new();
 
-                    async_support::spawn(async move {
+                    async_support::spawn_local(async move {
                         for v in ["1", "2", "3"] {
                             tx.write_all(format!("{v}\n").into_bytes()).await;
                             monotonic_clock::wait_for(1_000_000_000 /*nanoseconds*/).await;
@@ -78,7 +78,7 @@ impl Guest for Component {
 
                     let mut results = stream::iter(results).buffer_unordered(MAX_CONCURRENCY);
                     let (mut tx, rx) = wit_stream::new();
-                    async_support::spawn(async move {
+                    async_support::spawn_local(async move {
                         while let Some((url, result)) = results.next().await {
                             tx.write_all(
                                 match result {
