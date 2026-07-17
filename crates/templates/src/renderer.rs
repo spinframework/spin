@@ -18,8 +18,22 @@ pub(crate) enum TemplateContent {
 pub(crate) enum RenderOperation {
     AppendToml(PathBuf, TemplateContent),
     MergeToml(PathBuf, MergeTarget, TemplateContent), // file to merge into, table to merge into, content to merge
-    WriteFile(PathBuf, TemplateContent),
+    WriteFile(TemplateablePath, TemplateContent),
     CreateDirectory(PathBuf, std::sync::Arc<liquid::Template>),
+}
+
+pub(crate) enum TemplateablePath {
+    Plain(PathBuf),
+    Template(liquid::Template),
+}
+
+impl TemplateablePath {
+    fn render(self, globals: &liquid::Object) -> anyhow::Result<PathBuf> {
+        Ok(match self {
+            TemplateablePath::Plain(path) => path,
+            TemplateablePath::Template(template) => PathBuf::from(template.render(globals)?),
+        })
+    }
 }
 
 pub(crate) enum MergeTarget {
@@ -62,6 +76,7 @@ impl RenderOperation {
         match self {
             Self::WriteFile(path, content) => {
                 let rendered = content.render(globals)?;
+                let path = path.render(globals)?;
                 Ok(TemplateOutput::WriteFile(path, rendered))
             }
             Self::AppendToml(path, content) => {
