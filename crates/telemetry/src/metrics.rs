@@ -1,5 +1,4 @@
 use anyhow::{Result, bail};
-use opentelemetry::global;
 use opentelemetry_otlp::WithHttpConfig;
 use opentelemetry_sdk::{
     Resource,
@@ -10,11 +9,12 @@ use opentelemetry_sdk::{
     resource::{EnvResourceDetector, ResourceDetector, TelemetryResourceDetector},
     runtime::Tokio,
 };
-use tracing::Subscriber;
-use tracing_opentelemetry::MetricsLayer;
-use tracing_subscriber::{Layer, registry::LookupSpan};
 
 use crate::{detector::SpinResourceDetector, env::OtlpProtocol};
+
+/// Re-exported so the metric macros can refer to `$crate::opentelemetry::...`.
+#[doc(hidden)]
+pub use opentelemetry;
 
 /// A custom histogram bucketing for a named metric.
 ///
@@ -30,15 +30,20 @@ pub struct HistogramBuckets {
     pub boundaries: Vec<f64>,
 }
 
-/// Constructs a layer for the tracing subscriber that sends metrics to an OTEL collector.
+/// Builds an [`SdkMeterProvider`] configured to export to an OTLP collector.
 ///
 /// It pulls OTEL configuration from the environment based on the variables defined
 /// [here](https://opentelemetry.io/docs/specs/otel/protocol/exporter/) and
 /// [here](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration).
-pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
+///
+/// The caller is responsible for registering the returned provider as the global one (e.g. via
+/// [`opentelemetry::global::set_meter_provider`]). Instruments created by the macros in this
+/// module (e.g. [`monotonic_counter_u64`](crate::monotonic_counter_u64)) bind to whatever meter
+/// provider is global *at the time they're first used*, and never rebind afterwards.
+pub(crate) fn metrics_provider(
     spin_version: String,
     histogram_buckets: Vec<HistogramBuckets>,
-) -> Result<impl Layer<S>> {
+) -> Result<SdkMeterProvider> {
     let resource = Resource::builder()
         .with_detectors(&[
             // Set service.name from env OTEL_SERVICE_NAME > env OTEL_RESOURCE_ATTRIBUTES > spin
@@ -81,82 +86,176 @@ pub(crate) fn otel_metrics_layer<S: Subscriber + for<'span> LookupSpan<'span>>(
             }),
         )?);
     }
-    let meter_provider = provider_builder.build();
-
-    global::set_meter_provider(meter_provider.clone());
-
-    Ok(MetricsLayer::new(meter_provider))
+    Ok(provider_builder.build())
 }
 
+/// Builds a metric name from a dotted-ident path (`spin.foo.bar` => `"spin.foo.bar"`), gets or
+/// creates a static instrument for it, and records a value with the given attributes.
+/// Shared by every public macro in this module.
+///
+/// Each macro invocation expands inline at its call site, so the `static` below is a distinct
+/// instrument per call site (not shared across calls).
+#[doc(hidden)]
 #[macro_export]
-/// Records an increment to the named counter with the given attributes.
-///
-/// The increment may only be an i64 or f64. You must not mix types for the same metric.
-///
-/// Takes advantage of counter support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
-///
-/// ```no_run
-/// # use spin_telemetry::metrics::counter;
-/// counter!(spin.metric_name = 1, metric_attribute = "value");
-/// ```
-macro_rules! counter {
-    ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
-        tracing::trace!(counter.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
-    }
+macro_rules! __otel_metric_record {
+    (
+        $T:ty, $builder:ident, $record_method:ident,
+        $metric:ident $(. $suffixes:ident)* = $metric_value:expr $(, $attrs:ident = $values:expr)*
+    ) => {{
+        static INSTRUMENT: ::std::sync::LazyLock<$T> = ::std::sync::LazyLock::new(|| {
+            $crate::metrics::opentelemetry::global::meter(env!("CARGO_PKG_NAME"))
+                .$builder(::std::concat!(
+                    ::std::stringify!($metric) $(, ".", ::std::stringify!($suffixes))*
+                ))
+                .build()
+        });
+        INSTRUMENT.$record_method(
+            $metric_value,
+            &[$( $crate::metrics::opentelemetry::KeyValue::new(::std::stringify!($attrs), $values) ),*],
+        );
+    }};
 }
 
+/// Records an increment to the named monotonic counter (as a `u64`) with the given attributes.
+///
+/// ```
+/// spin_telemetry::metrics::monotonic_counter_u64!(spin.metric_name = 1, metric_attribute = "value");
+/// ```
 #[macro_export]
-/// Adds an additional value to the distribution of the named histogram with the given attributes.
-///
-/// The increment may only be an i64 or f64. You must not mix types for the same metric.
-///
-/// Takes advantage of histogram support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
-///
-/// ```no_run
-/// # use spin_telemetry::metrics::histogram;
-/// histogram!(spin.metric_name = 1.5, metric_attribute = "value");
-/// ```
-macro_rules! histogram {
-    ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
-        tracing::trace!(histogram.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
-    }
+macro_rules! monotonic_counter_u64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::Counter<u64>, u64_counter, add, $($tt)*
+        )
+    };
 }
 
+/// Records an increment to the named monotonic counter (as an `f64`) with the given attributes.
+///
+/// The increment must be non-negative.
+///
+/// ```
+/// spin_telemetry::metrics::monotonic_counter_f64!(spin.metric_name = 1.5, metric_attribute = "value");
+/// ```
 #[macro_export]
-/// Records an increment to the named monotonic counter with the given attributes.
-///
-/// The increment may only be a positive i64 or f64. You must not mix types for the same metric.
-///
-/// Takes advantage of monotonic counter support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
-///
-/// ```no_run
-/// # use spin_telemetry::metrics::monotonic_counter;
-/// monotonic_counter!(spin.metric_name = 1, metric_attribute = "value");
-/// ```
-macro_rules! monotonic_counter {
-    ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
-        tracing::trace!(monotonic_counter.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
-    }
+macro_rules! monotonic_counter_f64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::Counter<f64>, f64_counter, add, $($tt)*
+        )
+    };
 }
 
+/// Records a delta to the named counter (as an `i64`) with the given attributes.
+///
+/// Unlike `monotonic_counter_*`, the delta may be negative. This maps to OTel's `UpDownCounter`.
+///
+/// ```
+/// spin_telemetry::metrics::counter_i64!(spin.metric_name = -1, metric_attribute = "value");
+/// ```
 #[macro_export]
-/// Records an increment to the named monotonic counter with the given attributes.
-///
-/// The increment may only be a positive i64 or f64. You must not mix types for the same metric.
-///
-/// Takes advantage of gauge support in [tracing-opentelemetry](https://docs.rs/tracing-opentelemetry/0.32.0/tracing_opentelemetry/struct.MetricsLayer.html).
-///
-/// ```no_run
-/// # use spin_telemetry::metrics::gauge;
-/// gauge!(spin.metric_name = 1, metric_attribute = "value");
-/// ```
-macro_rules! gauge {
-    ($metric:ident $(. $suffixes:ident)*  = $metric_value:expr $(, $attrs:ident=$values:expr)*) => {
-        tracing::trace!(gauge.$metric $(. $suffixes)* = $metric_value $(, $attrs=$values)*);
-    }
+macro_rules! counter_i64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::UpDownCounter<i64>, i64_up_down_counter, add, $($tt)*
+        )
+    };
 }
 
-pub use counter;
-pub use gauge;
-pub use histogram;
-pub use monotonic_counter;
+/// Records a delta to the named counter (as an `f64`) with the given attributes.
+///
+/// Unlike `monotonic_counter_*`, the delta may be negative. This maps to OTel's `UpDownCounter`.
+///
+/// ```
+/// spin_telemetry::metrics::counter_f64!(spin.metric_name = -1.5, metric_attribute = "value");
+/// ```
+#[macro_export]
+macro_rules! counter_f64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::UpDownCounter<f64>, f64_up_down_counter, add, $($tt)*
+        )
+    };
+}
+
+/// Records an additional value (as a `u64`) to the distribution of the named histogram with the
+/// given attributes.
+///
+/// ```
+/// spin_telemetry::metrics::histogram_u64!(spin.metric_name = 1, metric_attribute = "value");
+/// ```
+#[macro_export]
+macro_rules! histogram_u64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::Histogram<u64>, u64_histogram, record, $($tt)*
+        )
+    };
+}
+
+/// Records an additional value (as an `f64`) to the distribution of the named histogram with the
+/// given attributes.
+///
+/// ```
+/// spin_telemetry::metrics::histogram_f64!(spin.metric_name = 1.5, metric_attribute = "value");
+/// ```
+#[macro_export]
+macro_rules! histogram_f64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::Histogram<f64>, f64_histogram, record, $($tt)*
+        )
+    };
+}
+
+/// Records the current value (as a `u64`) of the named gauge with the given attributes.
+///
+/// ```
+/// spin_telemetry::metrics::gauge_u64!(spin.metric_name = 1, metric_attribute = "value");
+/// ```
+#[macro_export]
+macro_rules! gauge_u64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::Gauge<u64>, u64_gauge, record, $($tt)*
+        )
+    };
+}
+
+/// Records the current value (as an `i64`) of the named gauge with the given attributes.
+///
+/// ```
+/// spin_telemetry::metrics::gauge_i64!(spin.metric_name = 1, metric_attribute = "value");
+/// ```
+#[macro_export]
+macro_rules! gauge_i64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::Gauge<i64>, i64_gauge, record, $($tt)*
+        )
+    };
+}
+
+/// Records the current value (as an `f64`) of the named gauge with the given attributes.
+///
+/// ```
+/// spin_telemetry::metrics::gauge_f64!(spin.metric_name = 1.5, metric_attribute = "value");
+/// ```
+#[macro_export]
+macro_rules! gauge_f64 {
+    ($($tt:tt)*) => {
+        $crate::__otel_metric_record!(
+            $crate::metrics::opentelemetry::metrics::Gauge<f64>, f64_gauge, record, $($tt)*
+        )
+    };
+}
+
+pub use counter_f64;
+pub use counter_i64;
+pub use gauge_f64;
+pub use gauge_i64;
+pub use gauge_u64;
+pub use histogram_f64;
+pub use histogram_u64;
+pub use monotonic_counter_f64;
+pub use monotonic_counter_u64;

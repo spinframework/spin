@@ -113,7 +113,7 @@ impl ConnectionSemaphore {
     pub async fn acquire(&self) -> anyhow::Result<ConnectionPermit> {
         // Fast path: all required permits are already available
         if let Ok(permit) = self.try_acquire_permits() {
-            spin_telemetry::monotonic_counter!(
+            spin_telemetry::monotonic_counter_u64!(
                 outbound_connection_permits_acquired = 1,
                 kind = self.factor,
                 waited = false
@@ -182,12 +182,12 @@ impl ConnectionSemaphore {
 
         let factor = self.factor;
         if waited {
-            spin_telemetry::histogram!(
+            spin_telemetry::histogram_f64!(
                 outbound_connection_permit_wait_duration_ms = start.elapsed().as_millis() as f64,
                 kind = factor
             );
         }
-        spin_telemetry::monotonic_counter!(
+        spin_telemetry::monotonic_counter_u64!(
             outbound_connection_permits_acquired = 1,
             kind = factor,
             waited = waited
@@ -210,7 +210,7 @@ impl ConnectionSemaphore {
     pub fn try_acquire(&self) -> Option<ConnectionPermit> {
         match self.try_acquire_permits() {
             Ok(permit) => {
-                spin_telemetry::monotonic_counter!(
+                spin_telemetry::monotonic_counter_u64!(
                     outbound_connection_permits_acquired = 1,
                     kind = self.factor,
                     waited = false
@@ -220,7 +220,7 @@ impl ConnectionSemaphore {
                 Some(permit)
             }
             Err(limit) => {
-                spin_telemetry::monotonic_counter!(
+                spin_telemetry::monotonic_counter_u64!(
                     outbound_connection_permits_rejected = 1,
                     kind = self.factor,
                     limit = limit
@@ -279,13 +279,13 @@ impl ConnectionSemaphore {
     /// reporting the same number.
     fn emit_utilization(&self) {
         if let Some(util) = utilization(self.factor_specific.as_ref()) {
-            spin_telemetry::histogram!(
+            spin_telemetry::histogram_f64!(
                 outbound_connection_factor_utilization = util,
                 kind = self.factor
             );
         }
         if let Some(util) = utilization(self.global.as_ref()) {
-            spin_telemetry::histogram!(outbound_connection_global_utilization = util);
+            spin_telemetry::histogram_f64!(outbound_connection_global_utilization = util);
         }
     }
 }
@@ -297,7 +297,7 @@ impl ConnectionSemaphore {
 /// topping out at 10000) would collapse every sample into the lowest bucket. These boundaries sit
 /// near typical alerting cutoffs (75%, 90%, 95%, 99%). Pass the result to `spin_telemetry::init`.
 ///
-/// The metric names here must match the identifiers used in the `histogram!` calls above.
+/// The metric names here must match the identifiers used in the `histogram_f64!` calls above.
 pub fn metric_histogram_buckets() -> Vec<spin_telemetry::HistogramBuckets> {
     let boundaries = vec![0.25, 0.5, 0.75, 0.9, 0.95, 0.99];
     [
@@ -534,193 +534,28 @@ mod tests {
         );
     }
 
-    /// Captures the f64 values logged for a given tracing field name, regardless of
-    /// surrounding span context. Used to inspect the histogram samples that
-    /// `spin_telemetry::histogram!` emits as `tracing::trace!` events.
-    mod capture {
-        use std::sync::{Arc, Mutex};
-        use tracing::field::{Field, Visit};
-        use tracing_subscriber::layer::{Context, Layer};
-
-        #[derive(Clone, Default)]
-        pub(super) struct CapturedValues(pub Arc<Mutex<Vec<f64>>>);
-
-        impl CapturedValues {
-            pub fn snapshot(&self) -> Vec<f64> {
-                self.0.lock().unwrap().clone()
-            }
-        }
-
-        pub(super) struct CaptureLayer {
-            pub field_name: &'static str,
-            pub sink: CapturedValues,
-        }
-
-        impl<S: tracing::Subscriber> Layer<S> for CaptureLayer {
-            fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-                let mut v = FieldVisitor {
-                    target: self.field_name,
-                    found: None,
-                };
-                event.record(&mut v);
-                if let Some(val) = v.found {
-                    self.sink.0.lock().unwrap().push(val);
-                }
-            }
-        }
-
-        struct FieldVisitor {
-            target: &'static str,
-            found: Option<f64>,
-        }
-
-        impl Visit for FieldVisitor {
-            fn record_f64(&mut self, field: &Field, value: f64) {
-                if field.name() == self.target {
-                    self.found = Some(value);
-                }
-            }
-            fn record_i64(&mut self, _: &Field, _: i64) {}
-            fn record_u64(&mut self, _: &Field, _: u64) {}
-            fn record_bool(&mut self, _: &Field, _: bool) {}
-            fn record_str(&mut self, _: &Field, _: &str) {}
-            fn record_debug(&mut self, _: &Field, _: &dyn std::fmt::Debug) {}
-        }
-    }
-
-    fn with_capture<R>(field_name: &'static str, f: impl FnOnce() -> R) -> (R, Vec<f64>) {
-        use tracing_subscriber::layer::SubscriberExt;
-        let sink = capture::CapturedValues::default();
-        let layer = capture::CaptureLayer {
-            field_name,
-            sink: sink.clone(),
-        };
-        let subscriber = tracing_subscriber::registry().with(layer);
-        let result = tracing::subscriber::with_default(subscriber, f);
-        (result, sink.snapshot())
-    }
-
-    const UTIL_FIELD: &str = "histogram.outbound_connection_factor_utilization";
-    const GLOBAL_UTIL_FIELD: &str = "histogram.outbound_connection_global_utilization";
-
     #[test]
-    fn utilization_emitted_on_acquire_and_drop_reflects_post_release_state() {
-        let (_, samples) = with_capture(UTIL_FIELD, || {
-            let sem = ConnectionSemaphore::new(
-                None,
-                Some(LimitedSemaphore::new(2)),
-                "test",
-                Arc::from("test-app"),
-                None,
-            );
-            let p1 = sem.try_acquire().expect("first acquire");
-            // After acquire: 1/2 in use
-            let p2 = sem.try_acquire().expect("second acquire");
-            // After acquire: 2/2 in use
-            drop(p1);
-            // After release: 1/2 in use
-            drop(p2);
-            // After release: 0/2 in use
-        });
-        assert_eq!(
-            samples,
-            vec![0.5, 1.0, 0.5, 0.0],
-            "expected acquire/drop transitions at 0.5, 1.0, 0.5, 0.0; got {samples:?}"
-        );
+    fn utilization_reflects_post_release_state() {
+        let limited = LimitedSemaphore::new(2);
+        assert_eq!(utilization(Some(&limited)), Some(0.0));
+        let p1 = limited
+            .semaphore()
+            .try_acquire_owned()
+            .expect("first acquire");
+        assert_eq!(utilization(Some(&limited)), Some(0.5));
+        let p2 = limited
+            .semaphore()
+            .try_acquire_owned()
+            .expect("second acquire");
+        assert_eq!(utilization(Some(&limited)), Some(1.0));
+        drop(p1);
+        assert_eq!(utilization(Some(&limited)), Some(0.5));
+        drop(p2);
+        assert_eq!(utilization(Some(&limited)), Some(0.0));
     }
 
     #[test]
-    fn no_utilization_emitted_when_factor_limit_is_none() {
-        let (_, samples) = with_capture(UTIL_FIELD, || {
-            let sem = ConnectionSemaphore::new(None, None, "test", Arc::from("test-app"), None);
-            let p = sem.try_acquire().expect("acquire");
-            drop(p);
-        });
-        assert!(
-            samples.is_empty(),
-            "expected no utilization samples when factor limit unset; got {samples:?}"
-        );
-    }
-
-    #[test]
-    fn global_utilization_emitted_on_acquire_and_drop_reflects_post_release_state() {
-        let (_, samples) = with_capture(GLOBAL_UTIL_FIELD, || {
-            let sem = ConnectionSemaphore::new(
-                Some(LimitedSemaphore::new(2)),
-                None,
-                "test",
-                Arc::from("test-app"),
-                None,
-            );
-            let p1 = sem.try_acquire().expect("first acquire");
-            // After acquire: 1/2 in use
-            let p2 = sem.try_acquire().expect("second acquire");
-            // After acquire: 2/2 in use
-            drop(p1);
-            // After release: 1/2 in use
-            drop(p2);
-            // After release: 0/2 in use
-        });
-        assert_eq!(
-            samples,
-            vec![0.5, 1.0, 0.5, 0.0],
-            "expected acquire/drop transitions at 0.5, 1.0, 0.5, 0.0; got {samples:?}"
-        );
-    }
-
-    #[test]
-    fn no_global_utilization_emitted_when_global_limit_is_none() {
-        let (_, samples) = with_capture(GLOBAL_UTIL_FIELD, || {
-            let sem = ConnectionSemaphore::new(
-                None,
-                Some(LimitedSemaphore::new(2)),
-                "test",
-                Arc::from("test-app"),
-                None,
-            );
-            let p = sem.try_acquire().expect("acquire");
-            drop(p);
-        });
-        assert!(
-            samples.is_empty(),
-            "expected no global utilization samples when global limit unset; got {samples:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn utilization_emitted_on_slow_path_acquire() {
-        use tracing_subscriber::layer::SubscriberExt;
-        let sink = capture::CapturedValues::default();
-        let layer = capture::CaptureLayer {
-            field_name: UTIL_FIELD,
-            sink: sink.clone(),
-        };
-        let subscriber = tracing_subscriber::registry().with(layer);
-        let _guard = tracing::subscriber::set_default(subscriber);
-
-        let factor = LimitedSemaphore::new(1);
-        let factor_sem = factor.semaphore();
-        let sem = ConnectionSemaphore::new(
-            None,
-            Some(factor),
-            "test",
-            Arc::from("test-app"),
-            Some(Duration::from_secs(1)),
-        );
-        let blocker = factor_sem.acquire_owned().await.unwrap();
-        let sem_clone = sem.clone();
-        let handle = tokio::spawn(async move { sem_clone.acquire().await });
-        tokio::task::yield_now().await;
-        drop(blocker);
-        let permit = handle.await.expect("task").expect("acquire");
-        drop(permit);
-
-        let samples = sink.snapshot();
-        // Slow-path acquire fills the only slot (1.0), then drop releases it (0.0).
-        assert_eq!(
-            samples,
-            vec![1.0, 0.0],
-            "expected slow-path acquire and drop samples; got {samples:?}"
-        );
+    fn no_utilization_when_limit_is_none() {
+        assert_eq!(utilization(None), None);
     }
 }
