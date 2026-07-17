@@ -31,6 +31,9 @@ jobs:
           sed -i -E "s/wasmtime-wasi-http = \{ version = \"[0-9]+[0-9.]*\"/wasmtime-wasi-http = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" Cargo.toml
           sed -i -E "s/wasmtime-wasi-http = \"[0-9]+[0-9.]*\"/wasmtime-wasi = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\" }/g" Cargo.toml
           cargo update
+          sed -i -E "s/wasmtime = \{ version = \"[0-9]+[0-9.]*\"/wasmtime = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\"/g" examples/spin-timer/Cargo.toml
+          sed -i -E "s/wasmtime = \"[0-9]+[0-9.]*\"/wasmtime = \{ git = \"https:\/\/github.com\/bytecodealliance\/wasmtime\", branch = \"release-${{ steps.wasmtime-release.outputs.last_wasmtime }}\" }/g" examples/spin-timer/Cargo.toml
+          cargo update --manifest-path examples/spin-timer/Cargo.toml
 
       # Import GPG key for signing commits
       - name: Import GPG key
