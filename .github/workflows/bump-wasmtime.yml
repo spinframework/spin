@@ -3,7 +3,7 @@
 name: Bump wasmtime (prerelease)
 on:
   schedule:
-    - cron: 0 0 9 * * # 9th of each month, at 00:00 UTC
+    - cron: 0 12 5 * * # 12 hours after Wasmtime branch schedule
   workflow_dispatch:
 
 jobs:
