@@ -615,7 +615,7 @@ mod tests {
         }
     }
 
-    const TPLS_IN_THIS: usize = 12;
+    const TPLS_IN_THIS: usize = 13;
 
     #[tokio::test]
     async fn can_install_into_new_directory() {

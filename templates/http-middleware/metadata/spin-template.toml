@@ -3,6 +3,9 @@ id = "http-middleware"
 description = "http middleware rust template"
 tags = []
 
+[new_application]
+supported = false
+
 [add_component]
 skip_files = ["spin.toml"]
 [add_component.snippets]
