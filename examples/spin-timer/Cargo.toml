@@ -5,14 +5,14 @@ authors = ["Spin Framework Contributors"]
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.68"
+anyhow = "1"
 clap = { version = "4.6.0", features = ["derive", "env"] }
-serde = "1.0.188"
+serde = "1"
 spin-factors = { path = "../../crates/factors" }
 spin-runtime-factors = { path = "../../crates/runtime-factors" }
 spin-trigger = { path = "../../crates/trigger" }
 tokio = { version = "1", features = ["full"] }
 tokio-scoped = "0.2.0"
-wasmtime = { version = "46.0.1", features = ["component-model-async"] }
+wasmtime = "47.0.2"
 
 [workspace]

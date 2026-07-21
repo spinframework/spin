@@ -836,7 +836,7 @@ impl<T> p3_HostUdpSocket for SpinSocketsView<'_, T> {
     }
 }
 
-impl<T: 'static> HostTcpSocketWithStore<T> for SpinSockets<T> {
+impl<T: Send + 'static> HostTcpSocketWithStore<T> for SpinSockets<T> {
     async fn connect(
         store: &Accessor<T, Self>,
         socket: Resource<p3_types::TcpSocket>,
@@ -868,13 +868,13 @@ impl<T: 'static> HostTcpSocketWithStore<T> for SpinSockets<T> {
         result
     }
 
-    fn listen(
+    async fn listen(
         mut store: Access<'_, T, Self>,
         socket: Resource<p3_types::TcpSocket>,
     ) -> P3SocketResult<wasmtime::component::StreamReader<Resource<p3_types::TcpSocket>>> {
         let getter = store.get().getter;
         let wasi_store = Access::<T, WasiSockets>::new(store.as_context_mut(), getter);
-        <WasiSockets as HostTcpSocketWithStore<T>>::listen(wasi_store, socket)
+        <WasiSockets as HostTcpSocketWithStore<T>>::listen(wasi_store, socket).await
     }
 
     fn send(

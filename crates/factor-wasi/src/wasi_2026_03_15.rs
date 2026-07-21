@@ -36,7 +36,7 @@ mod bindings {
             "wasi:filesystem/types.[method]descriptor.append-via-stream": store | trappable,
             "wasi:filesystem/types.[method]descriptor.read-directory": store | trappable,
             "wasi:sockets/types.[method]tcp-socket.bind": async | trappable,
-            "wasi:sockets/types.[method]tcp-socket.listen": store | trappable,
+            "wasi:sockets/types.[method]tcp-socket.listen": async | store | trappable,
             "wasi:sockets/types.[method]tcp-socket.send": store | trappable,
             "wasi:sockets/types.[method]tcp-socket.receive": store | trappable,
             "wasi:sockets/types.[method]udp-socket.bind": async | trappable,
@@ -823,7 +823,7 @@ impl<T: Send + 'static> wasi::sockets::types::HostTcpSocketWithStore<T> for Spin
         )
     }
 
-    fn listen(
+    async fn listen(
         store: Access<'_, T, Self>,
         socket: Resource<wasi::sockets::types::TcpSocket>,
     ) -> wasmtime::Result<
@@ -832,9 +832,7 @@ impl<T: Send + 'static> wasi::sockets::types::HostTcpSocketWithStore<T> for Spin
             wasi::sockets::types::ErrorCode,
         >,
     > {
-        convert_result(latest::sockets::types::HostTcpSocketWithStore::listen(
-            store, socket,
-        ))
+        convert_result(latest::sockets::types::HostTcpSocketWithStore::listen(store, socket).await)
     }
 
     fn send(

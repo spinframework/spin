@@ -30,7 +30,7 @@ jobs:
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v4
         with:
-          allow-ghsas: "GHSA-w9wp-h8wv-79jx" # TODO: remove once https://github.com/spinframework/spin/issues/3598 has been addressed
+          allow-ghsas: "GHSA-w9wp-h8wv-79jx, GHSA-f89h-2fjh-2r9q, GHSA-7gcf-g7xr-8hxj" # TODO: remove once https://github.com/spinframework/spin/issues/3598 has been addressed
 
   lint-rust:
     name: Lint Rust
