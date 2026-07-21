@@ -254,7 +254,12 @@ impl Run {
                 match crate::app_info::AppInfo::from_file(manifest_path) {
                     Some(Ok(app_info)) if app_info.manifest_format() == 1 => self
                         .template
-                        .check_compatible_trigger(app_info.trigger_type()),
+                        .check_compatible_trigger(
+                            app_info
+                            .trigger_types()
+                            .and_then(|types| types.first())
+                            .map(|trigger_type| trigger_type.as_str())
+                        ),
                     _ => Ok(()), // Fail forgiving - don't block the user if things are under construction
                 }
             }
