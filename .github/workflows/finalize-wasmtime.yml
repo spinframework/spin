@@ -1,0 +1,269 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# Finalizes an in-flight "Bump wasmtime (prerelease)" PR once the targeted
+# wasmtime version has been published to crates.io.
+#
+# It complements bump-wasmtime.yml: that workflow points Spin at a wasmtime
+# release *branch* (a git dependency) so integration can begin before wasmtime
+# ships. This workflow watches crates.io and, once the release is published:
+#   1. Rewrites the bump PR's git/branch dependency back to the crates.io
+#      version and pushes it to the PR branch.
+#   2. Backports the entire bump PR onto the last Spin release branch and opens
+#      a PR that also bumps the patch version, ready to be tagged as a release.
+name: Finalize wasmtime release
+on:
+  schedule:
+    - cron: 0 13 * * * # Daily; polls crates.io for the published wasmtime release
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Bump-wasmtime PR number to finalize (auto-detected if empty)
+        required: false
+        default: ""
+      crates_version:
+        description: Published wasmtime crates.io version to pin (auto-detected if empty)
+        required: false
+        default: ""
+      release_branch:
+        description: Spin release branch to backport into, e.g. v4.0 (auto-detected if empty)
+        required: false
+        default: ""
+
+# Serialize runs so overlapping crons don't race on the same branches/PRs
+concurrency: ${{ github.workflow }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  finalize-wasmtime:
+    name: Finalize wasmtime to crates.io release
+    runs-on: "ubuntu-22.04"
+    if: ${{ github.repository == 'spinframework/spin' }}
+    env:
+      GH_TOKEN: ${{ secrets.SPINFRAMEWORKBOT_PR_PAT }}
+      WASMTIME_GIT: https://github.com/bytecodealliance/wasmtime
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.SPINFRAMEWORKBOT_PR_PAT }}
+          fetch-depth: 0
+
+      - name: Discover bump PR, published version, and release branch
+        id: discover
+        shell: bash
+        env:
+          INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          INPUT_CRATES_VERSION: ${{ github.event.inputs.crates_version }}
+          INPUT_RELEASE_BRANCH: ${{ github.event.inputs.release_branch }}
+        run: |
+          set -eu
+
+          # --- Locate the open bump-wasmtime PR (or use the dispatch override) ---
+          pr_number="${INPUT_PR_NUMBER:-}"
+          pr_branch=""
+          if [ -n "${pr_number}" ]; then
+            pr_branch=$(gh pr view "${pr_number}" --json headRefName --jq '.headRefName')
+          else
+            # NOTE: assumes at most one open bump PR (branch sort is lexical).
+            prs=$(gh pr list --state open --json number,headRefName \
+              --jq 'map(select(.headRefName | startswith("bump-wasmtime/prerelease-")))')
+            pr_number=$(echo "${prs}" | jq -r 'sort_by(.headRefName) | last | .number // empty')
+            pr_branch=$(echo "${prs}" | jq -r 'sort_by(.headRefName) | last | .headRefName // empty')
+          fi
+
+          if [ -z "${pr_number}" ] || [ -z "${pr_branch}" ]; then
+            echo "No open bump-wasmtime PR found; nothing to finalize."
+            echo "proceed=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Found bump PR #${pr_number} (${pr_branch})"
+
+          # --- Derive the wasmtime major version from the PR branch name ---
+          prerelease_version="${pr_branch#bump-wasmtime/prerelease-}"
+          major="${prerelease_version%%.*}"
+          echo "Prerelease targets wasmtime ${prerelease_version} (major ${major})"
+
+          # --- Determine the published crates.io version (highest stable major.*) ---
+          crates_version="${INPUT_CRATES_VERSION:-}"
+          if [ -z "${crates_version}" ]; then
+            crates_json=$(curl -sSL -H 'User-Agent: spinframework-ci (spin@spinframework.dev)' \
+              "https://crates.io/api/v1/crates/wasmtime")
+            crates_version=$(echo "${crates_json}" \
+              | jq -r '.versions[] | select(.yanked==false) | .num' \
+              | grep -E "^${major}\.[0-9]+\.[0-9]+$" \
+              | sort -V | tail -n1)
+          fi
+
+          if [ -z "${crates_version}" ]; then
+            echo "wasmtime ${major}.x is not published on crates.io yet; will retry on the next run."
+            echo "proceed=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Published wasmtime crates.io version: ${crates_version}"
+
+          # --- Determine the last Spin release branch (highest vX.Y) ---
+          release_branch="${INPUT_RELEASE_BRANCH:-}"
+          if [ -z "${release_branch}" ]; then
+            release_branch=$(git ls-remote --heads origin 'v[0-9]*.[0-9]*' \
+              | awk '{print $2}' | sed 's#refs/heads/##' \
+              | grep -E '^v[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          fi
+          if [ -z "${release_branch}" ]; then
+            echo "Could not determine a Spin release branch."
+            echo "proceed=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Last Spin release branch: ${release_branch}"
+
+          # --- Compute the next patch version from the release branch ---
+          current_version=$(git show "origin/${release_branch}:Cargo.toml" \
+            | grep -E '^version = "' | head -n1 | sed -E 's/version = "([^"]+)"/\1/')
+          if [ -z "${current_version}" ]; then
+            echo "Could not read the version from origin/${release_branch}:Cargo.toml."
+            echo "proceed=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          major_s="${current_version%%.*}"
+          rest="${current_version#*.}"
+          minor_s="${rest%%.*}"
+          patch_s="${rest#*.}"
+          patch_num="${patch_s%%[-+]*}" # strip any pre-release/build suffix
+          next_version="${major_s}.${minor_s}.$((patch_num + 1))"
+          echo "Release branch is at ${current_version}; patch release will be ${next_version}"
+
+          backport_branch="backport-wasmtime-${crates_version}-to-${release_branch}"
+          backport_exists=false
+          if git ls-remote --exit-code --heads origin "${backport_branch}" >/dev/null 2>&1; then
+            backport_exists=true
+          fi
+
+          {
+            echo "proceed=true"
+            echo "pr_number=${pr_number}"
+            echo "pr_branch=${pr_branch}"
+            echo "crates_version=${crates_version}"
+            echo "release_branch=${release_branch}"
+            echo "next_version=${next_version}"
+            echo "backport_branch=${backport_branch}"
+            echo "backport_exists=${backport_exists}"
+          } >>"$GITHUB_OUTPUT"
+
+      # Import GPG key for signing commits (matches bump-wasmtime.yml)
+      - name: Import GPG key
+        if: steps.discover.outputs.proceed == 'true'
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Point bump PR at the crates.io release
+        if: steps.discover.outputs.proceed == 'true'
+        shell: bash
+        env:
+          PR_BRANCH: ${{ steps.discover.outputs.pr_branch }}
+          CRATES_VERSION: ${{ steps.discover.outputs.crates_version }}
+        run: |
+          set -eu
+          git fetch origin "${PR_BRANCH}"
+          git checkout -B "${PR_BRANCH}" "origin/${PR_BRANCH}"
+
+          if ! grep -q 'bytecodealliance/wasmtime' Cargo.toml examples/spin-timer/Cargo.toml; then
+            echo "Bump PR already points at a crates.io release; skipping swap."
+            exit 0
+          fi
+
+          # Replace the git/branch reference with the published crates.io version.
+          # This is the inverse of the rewrite performed by bump-wasmtime.yml.
+          sed -i -E \
+            "s#git = \"${WASMTIME_GIT}\", branch = \"release-[0-9][0-9.]*\"#version = \"${CRATES_VERSION}\"#g" \
+            Cargo.toml examples/spin-timer/Cargo.toml
+          # Collapse a bare wasmtime table back to the plain-version form
+          sed -i -E \
+            "s#^wasmtime = \{ version = \"${CRATES_VERSION}\" \}#wasmtime = \"${CRATES_VERSION}\"#" \
+            Cargo.toml
+
+          if grep -q 'bytecodealliance/wasmtime' Cargo.toml examples/spin-timer/Cargo.toml; then
+            echo "::error::Some wasmtime git references remain after the rewrite; the Cargo.toml format may have changed. Update the dependency manually."
+            exit 1
+          fi
+
+          cargo update
+          cargo update --manifest-path examples/spin-timer/Cargo.toml
+
+          git commit -a -m "Point wasmtime at crates.io v${CRATES_VERSION}"
+          git push origin "HEAD:${PR_BRANCH}"
+
+      - name: Backport and prepare the patch release
+        if: ${{ steps.discover.outputs.proceed == 'true' && steps.discover.outputs.backport_exists == 'false' }}
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.discover.outputs.pr_number }}
+          CRATES_VERSION: ${{ steps.discover.outputs.crates_version }}
+          RELEASE_BRANCH: ${{ steps.discover.outputs.release_branch }}
+          NEXT_VERSION: ${{ steps.discover.outputs.next_version }}
+          BACKPORT_BRANCH: ${{ steps.discover.outputs.backport_branch }}
+        run: |
+          set -eu
+
+          git fetch origin "${RELEASE_BRANCH}"
+          git fetch origin "refs/pull/${PR_NUMBER}/head"
+          git checkout -B "${BACKPORT_BRANCH}" "origin/${RELEASE_BRANCH}"
+
+          # Cherry-pick every commit from the bump PR onto the release branch
+          # (same approach as .github/gh-backport.sh, run non-interactively).
+          commits=$(gh pr view "${PR_NUMBER}" --json commits --jq '.commits[].oid')
+          if ! git cherry-pick -x ${commits}; then
+            git cherry-pick --abort || true
+            echo "::error::Cherry-pick of #${PR_NUMBER} onto ${RELEASE_BRANCH} hit conflicts. Backport manually with .github/gh-backport.sh ${PR_NUMBER} ${RELEASE_BRANCH}"
+            exit 1
+          fi
+
+          # Bump the patch version and refresh the workspace lockfile
+          sed -i -E "s/^version = \"[0-9]+\.[0-9]+\.[0-9]+([^\"]*)\"/version = \"${NEXT_VERSION}\"/" Cargo.toml
+          cargo update -w
+          git commit -a -m "Bump Spin to ${NEXT_VERSION}"
+
+          git push origin "${BACKPORT_BRANCH}"
+
+          title="[Backport ${RELEASE_BRANCH}] wasmtime v${CRATES_VERSION} + Spin ${NEXT_VERSION} patch release"
+          body=$(printf '%s\n' \
+            "Backports #${PR_NUMBER} to \`${RELEASE_BRANCH}\` and prepares the \`${NEXT_VERSION}\` patch release." \
+            "" \
+            "- Pins wasmtime to the published crates.io release \`v${CRATES_VERSION}\`." \
+            "- Bumps the Spin version to \`${NEXT_VERSION}\`." \
+            "" \
+            "Once merged, tag \`${NEXT_VERSION}\` on \`${RELEASE_BRANCH}\` to trigger the Release workflow." \
+            "" \
+            "> [!WARNING]" \
+            "> This backports the entire wasmtime bump. Confirm that shipping these changes as a patch release is appropriate before merging.")
+          gh pr create \
+            --base "${RELEASE_BRANCH}" \
+            --head "${BACKPORT_BRANCH}" \
+            --title "${title}" \
+            --body "${body}"
+
+      - name: Summary
+        if: steps.discover.outputs.proceed == 'true'
+        shell: bash
+        env:
+          PR_NUMBER: ${{ steps.discover.outputs.pr_number }}
+          PR_BRANCH: ${{ steps.discover.outputs.pr_branch }}
+          CRATES_VERSION: ${{ steps.discover.outputs.crates_version }}
+          RELEASE_BRANCH: ${{ steps.discover.outputs.release_branch }}
+          NEXT_VERSION: ${{ steps.discover.outputs.next_version }}
+          BACKPORT_BRANCH: ${{ steps.discover.outputs.backport_branch }}
+          BACKPORT_EXISTS: ${{ steps.discover.outputs.backport_exists }}
+        run: |
+          {
+            echo "### Finalize wasmtime release"
+            echo ""
+            echo "- Bump PR: #${PR_NUMBER} (\`${PR_BRANCH}\`)"
+            echo "- crates.io version: \`${CRATES_VERSION}\`"
+            echo "- Release branch: \`${RELEASE_BRANCH}\`"
+            echo "- Patch release: \`${NEXT_VERSION}\`"
+            echo "- Backport branch: \`${BACKPORT_BRANCH}\` (already existed: ${BACKPORT_EXISTS})"
+          } >>"$GITHUB_STEP_SUMMARY"
