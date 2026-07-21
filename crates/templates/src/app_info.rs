@@ -8,7 +8,6 @@ use std::{
     sync::LazyLock,
 };
 
-use anyhow::ensure;
 use serde::Deserialize;
 use spin_manifest::schema::v1;
 
@@ -16,7 +15,11 @@ use crate::store::TemplateLayout;
 
 pub(crate) struct AppInfo {
     manifest_format: u32,
-    trigger_type: Option<String>, // None = v2 template does not contain any triggers yet
+    // Used for v1 manifests, which have exactly one trigger type and are the
+    // only manifests subject to a compatibility check. v2 manifests may host
+    // multiple trigger types. Triggerless templates also allowed for all
+    // manifest versions.
+    trigger_types: Option<Vec<String>>,
 }
 
 impl AppInfo {
@@ -53,27 +56,28 @@ impl AppInfo {
             spin_manifest::ManifestVersion::V1 => 1,
             spin_manifest::ManifestVersion::V2 => 2,
         };
-        let trigger_type = match manifest_version {
-            spin_manifest::ManifestVersion::V1 => Some(
+        let trigger_types = match manifest_version {
+            // v1 manifests always have exactly one trigger type.
+            spin_manifest::ManifestVersion::V1 => Some(vec![
                 toml::from_str::<ManifestV1TriggerProbe>(manifest_str)?
                     .trigger
                     .trigger_type,
-            ),
+            ]),
+            // v2 manifests may declare multiple trigger types.
             spin_manifest::ManifestVersion::V2 => {
                 let triggers = toml::from_str::<ManifestV2TriggerProbe>(manifest_str)?
                     .trigger
                     .unwrap_or_default();
-                let type_count = triggers.len();
-                ensure!(
-                    type_count <= 1,
-                    "only 1 trigger type currently supported; got {type_count}"
-                );
-                triggers.into_iter().next().map(|t| t.0)
+                if triggers.is_empty() {
+                    None
+                } else {
+                    Some(triggers.into_iter().map(|(trigger_type, _)| trigger_type).collect())
+                }
             }
         };
         Ok(Self {
             manifest_format,
-            trigger_type,
+            trigger_types,
         })
     }
 
@@ -104,20 +108,22 @@ impl AppInfo {
     }
 
     fn from_v2_template_text(manifest_tpl_str: &str) -> anyhow::Result<Self> {
-        let trigger_types: HashSet<_> = manifest_tpl_str
+        // Preserve declaration order while removing duplicate trigger types.
+        let mut seen = HashSet::new();
+        let trigger_types: Vec<String> = manifest_tpl_str
             .lines()
             .filter_map(infer_trigger_type_from_raw_line)
+            .filter(|trigger_type| seen.insert(trigger_type.clone()))
             .collect();
-        let type_count = trigger_types.len();
-        ensure!(
-            type_count <= 1,
-            "only 1 trigger type currently supported; got {type_count}"
-        );
-        let trigger_type = trigger_types.into_iter().next();
+        let trigger_types = if trigger_types.is_empty() {
+            None
+        } else {
+            Some(trigger_types)
+        };
 
         Ok(Self {
             manifest_format: 2,
-            trigger_type,
+            trigger_types,
         })
     }
 
@@ -125,8 +131,8 @@ impl AppInfo {
         self.manifest_format
     }
 
-    pub fn trigger_type(&self) -> Option<&str> {
-        self.trigger_type.as_deref()
+    pub fn trigger_types(&self) -> Option<&[String]> {
+        self.trigger_types.as_deref()
     }
 }
 
@@ -197,7 +203,7 @@ mod test {
 
         let info = AppInfo::from_template_text(tpl).unwrap();
         assert_eq!(1, info.manifest_format);
-        assert_eq!("triggy", info.trigger_type.unwrap());
+        assert_eq!(vec!["triggy".to_owned()], info.trigger_types.unwrap());
     }
 
     #[test]
@@ -219,7 +225,33 @@ mod test {
 
         let info = AppInfo::from_template_text(tpl).unwrap();
         assert_eq!(2, info.manifest_format);
-        assert_eq!("triggy", info.trigger_type.unwrap());
+        assert_eq!(vec!["triggy".to_owned()], info.trigger_types.unwrap());
+    }
+
+      #[test]
+    fn can_read_app_info_from_multi_trigger_template_v2() {
+        let tpl = r#"spin_manifest_version = 2
+        name = "{{ thingy }}"
+        version = "1.2.3"
+
+        [application.trigger.triggy]
+        arg = "{{ another-thingy }}"
+
+        [[trigger.triggy]]
+        spork = "{{ utensil }}"
+        component = "{{ thingy | kebab_case }}"
+
+        [[trigger.anothertrigger]]
+        spork = "{{ utensil }}"
+        component = "{{ thingy | kebab_case }}"
+
+        [component.{{ thingy | kebab_case }}]
+        source = "path/to/{{ thingy | snake_case }}.wasm"
+        "#;
+
+        let info = AppInfo::from_template_text(tpl).unwrap();
+        assert_eq!(2, info.manifest_format);
+        assert_eq!(vec!["triggy".to_owned(), "anothertrigger".to_owned()], info.trigger_types.unwrap());
     }
 
     #[test]
@@ -231,6 +263,6 @@ mod test {
 
         let info = AppInfo::from_template_text(tpl).unwrap();
         assert_eq!(2, info.manifest_format);
-        assert_eq!(None, info.trigger_type);
+        assert_eq!(None, info.trigger_types);
     }
 }

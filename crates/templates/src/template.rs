@@ -345,7 +345,7 @@ impl Template {
 
     fn infer_trigger_type(layout: &TemplateLayout) -> TemplateTriggerCompatibility {
         match crate::app_info::AppInfo::from_layout(layout) {
-            Some(Ok(app_info)) => match app_info.trigger_type() {
+            Some(Ok(app_info)) => match app_info.trigger_types().and_then(|types| types.first()) {
                 None => TemplateTriggerCompatibility::Any,
                 Some(t) => TemplateTriggerCompatibility::Only(t.to_owned()),
             },
