@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use spin_factor_key_value::{
     Cas, Error, Store, StoreManager, SwapError, log_error, log_error_v3, v3,
 };
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::auth::KeyValueAzureCosmosAuthOptions;
@@ -266,14 +267,14 @@ impl Store for AzureCosmosStore {
         let mut stream = self
             .client
             .query_items::<Pair>(
-                Query::from(self.get_in_query(keys)),
+                Query::from(self.get_in_query(keys.clone())),
                 FeedScope::full_container(),
                 None,
             )
             .await
             .map_err(log_error)?;
 
-        let mut results = Vec::new();
+        let mut found = HashMap::new();
         let mut byte_count = std::mem::size_of::<Vec<(String, Option<Vec<u8>>)>>();
         while let Some(pair) = stream.try_next().await.map_err(log_error)? {
             byte_count +=
@@ -284,9 +285,16 @@ impl Store for AzureCosmosStore {
                     "query result exceeds limit of {max_result_bytes} bytes"
                 )));
             }
-            results.push((pair.id, Some(pair.value)))
+            found.insert(pair.id, pair.value);
         }
-        Ok(results)
+
+        Ok(keys
+            .into_iter()
+            .map(|key| {
+                let value = found.get(&key).cloned();
+                (key, value)
+            })
+            .collect())
     }
 
     async fn set_many(&self, key_values: Vec<(String, Vec<u8>)>) -> Result<(), Error> {
