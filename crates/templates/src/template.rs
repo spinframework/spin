@@ -25,7 +25,6 @@ pub struct Template {
     tags: HashSet<String>,
     description: Option<String>,
     installed_from: InstalledFrom,
-    trigger: TemplateTriggerCompatibility,
     variants: HashMap<TemplateVariantKind, TemplateVariant>,
     parameters: Vec<TemplateParameter>,
     extra_outputs: Vec<ExtraOutputAction>,
@@ -117,12 +116,6 @@ pub(crate) enum Condition {
     Always(bool),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub(crate) enum TemplateTriggerCompatibility {
-    Any,
-    Only(String),
-}
-
 #[derive(Clone, Debug)]
 pub(crate) enum TemplateParameterDataType {
     String(StringConstraints),
@@ -199,7 +192,6 @@ impl Template {
                 tags: raw.tags.map(Self::normalize_tags).unwrap_or_default(),
                 description: raw.description.clone(),
                 installed_from,
-                trigger: Self::parse_trigger_type(raw.trigger_type, layout),
                 variants: Self::parse_template_variants(raw.new_application, raw.add_component),
                 parameters: Self::parse_parameters(&raw.parameters)?,
                 extra_outputs: Self::parse_extra_outputs(&raw.outputs)?,
@@ -333,26 +325,6 @@ impl Template {
         tags.into_iter().map(|tag| tag.to_lowercase()).collect()
     }
 
-    fn parse_trigger_type(
-        raw: Option<String>,
-        layout: &TemplateLayout,
-    ) -> TemplateTriggerCompatibility {
-        match raw {
-            None => Self::infer_trigger_type(layout),
-            Some(t) => TemplateTriggerCompatibility::Only(t),
-        }
-    }
-
-    fn infer_trigger_type(layout: &TemplateLayout) -> TemplateTriggerCompatibility {
-        match crate::app_info::AppInfo::from_layout(layout) {
-            Some(Ok(app_info)) => match app_info.trigger_types().and_then(|types| types.first()) {
-                None => TemplateTriggerCompatibility::Any,
-                Some(t) => TemplateTriggerCompatibility::Only(t.to_owned()),
-            },
-            _ => TemplateTriggerCompatibility::Any, // Fail forgiving
-        }
-    }
-
     fn parse_template_variants(
         new_application: Option<RawTemplateVariant>,
         add_component: Option<RawTemplateVariant>,
@@ -455,26 +427,6 @@ impl Template {
             .into_iter()
             .filter(|path| !variant.skip_file(base, path))
             .collect()
-    }
-
-    pub(crate) fn check_compatible_trigger(&self, app_trigger: Option<&str>) -> anyhow::Result<()> {
-        // The application we are merging into might not have a trigger yet, in which case
-        // we're good to go.
-        let Some(app_trigger) = app_trigger else {
-            return Ok(());
-        };
-        match &self.trigger {
-            TemplateTriggerCompatibility::Any => Ok(()),
-            TemplateTriggerCompatibility::Only(t) => {
-                if app_trigger == t {
-                    Ok(())
-                } else {
-                    Err(anyhow!(
-                        "Component trigger type '{t}' does not match application trigger type '{app_trigger}'"
-                    ))
-                }
-            }
-        }
     }
 
     pub(crate) fn check_compatible_manifest_format(
@@ -769,7 +721,6 @@ mod test {
             tags: HashSet::new(),
             description: None,
             installed_from: InstalledFrom::Unknown,
-            trigger: TemplateTriggerCompatibility::Any,
             variants,
             parameters: vec![],
             extra_outputs: vec![],
