@@ -44,7 +44,7 @@ pub fn environments() -> Vec<CompletionCandidate> {
             return vec![];
         };
 
-        let envs = catalogue.list().await.unwrap_or_default();
+        let envs = catalogue.list().await;
 
         envs.into_iter().map(CompletionCandidate::new).collect()
     };

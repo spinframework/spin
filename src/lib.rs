@@ -31,6 +31,8 @@ use spin_trigger_redis::RedisTrigger;
 
 pub use opts::HELP_ARGS_ONLY_TRIGGER_TYPE;
 
+use crate::commands::target_environments::TargetEnvironmentCommands;
+
 pub async fn run() -> anyhow::Result<()> {
     if is_completion_request() {
         return (MaintenanceCommands::GenerateCompletions).run().await;
@@ -111,6 +113,8 @@ enum SpinApp {
     Build(BuildCommand),
     #[clap(subcommand, alias = "plugin")]
     Plugins(PluginCommands),
+    #[clap(subcommand, alias = "environments")]
+    Targets(TargetEnvironmentCommands),
     #[clap(subcommand, hide = true)]
     Trigger(TriggerCommands),
     #[clap(external_subcommand)]
@@ -147,6 +151,7 @@ impl SpinApp {
             Self::Trigger(TriggerCommands::Redis(cmd)) => cmd.run().await,
             Self::Trigger(TriggerCommands::HelpArgsOnly(cmd)) => cmd.run().await,
             Self::Plugins(cmd) => cmd.run().await,
+            Self::Targets(cmd) => cmd.run().await,
             Self::External(args) => execute_external_subcommand(args, SpinApp::command()).await,
             Self::Watch(cmd) => cmd.run().await,
             Self::Doctor(cmd) => cmd.run().await,
