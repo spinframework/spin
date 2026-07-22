@@ -2,44 +2,16 @@
 // interest to the template system.  spin_loader does too
 // much processing to fit our needs here.
 
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-    sync::LazyLock,
-};
-
-use serde::Deserialize;
-use spin_manifest::schema::v1;
-
-use crate::store::TemplateLayout;
+use std::path::Path;
 
 pub(crate) struct AppInfo {
     manifest_format: u32,
-    // Used for v1 manifests, which have exactly one trigger type and are the
-    // only manifests subject to a compatibility check. v2 manifests may host
-    // multiple trigger types. Triggerless templates also allowed for all
-    // manifest versions.
-    trigger_types: Option<Vec<String>>,
 }
 
 impl AppInfo {
-    pub fn from_layout(layout: &TemplateLayout) -> Option<anyhow::Result<AppInfo>> {
-        Self::layout_manifest_path(layout)
-            .map(|manifest_path| Self::from_existent_template(&manifest_path))
-    }
-
     pub fn from_file(manifest_path: &Path) -> Option<anyhow::Result<AppInfo>> {
         if manifest_path.exists() {
             Some(Self::from_existent_file(manifest_path))
-        } else {
-            None
-        }
-    }
-
-    fn layout_manifest_path(layout: &TemplateLayout) -> Option<PathBuf> {
-        let manifest_path = layout.content_dir().join("spin.toml");
-        if manifest_path.exists() {
-            Some(manifest_path)
         } else {
             None
         }
@@ -56,107 +28,12 @@ impl AppInfo {
             spin_manifest::ManifestVersion::V1 => 1,
             spin_manifest::ManifestVersion::V2 => 2,
         };
-        let trigger_types = match manifest_version {
-            // v1 manifests always have exactly one trigger type.
-            spin_manifest::ManifestVersion::V1 => Some(vec![
-                toml::from_str::<ManifestV1TriggerProbe>(manifest_str)?
-                    .trigger
-                    .trigger_type,
-            ]),
-            // v2 manifests may declare multiple trigger types.
-            spin_manifest::ManifestVersion::V2 => {
-                let triggers = toml::from_str::<ManifestV2TriggerProbe>(manifest_str)?
-                    .trigger
-                    .unwrap_or_default();
-                if triggers.is_empty() {
-                    None
-                } else {
-                    Some(triggers.into_iter().map(|(trigger_type, _)| trigger_type).collect())
-                }
-            }
-        };
-        Ok(Self {
-            manifest_format,
-            trigger_types,
-        })
-    }
-
-    fn from_existent_template(manifest_path: &Path) -> anyhow::Result<Self> {
-        // This has to be cruder, because (with the v2 style of component) a template
-        // is no longer valid TOML, so `from_existent_file` fails at manifest
-        // version inference.
-        let read_to_string = std::fs::read_to_string(manifest_path)?;
-        let manifest_tpl_str = read_to_string;
-
-        Self::from_template_text(&manifest_tpl_str)
-    }
-
-    fn from_template_text(manifest_tpl_str: &str) -> anyhow::Result<Self> {
-        // TODO: investigate using a TOML parser or regex to be more accurate
-        let is_v1_tpl = manifest_tpl_str.contains("spin_manifest_version = \"1\"");
-        let is_v2_tpl = manifest_tpl_str.contains("spin_manifest_version = 2");
-        if is_v1_tpl {
-            // V1 manifest templates are valid TOML
-            return Self::from_manifest_text(manifest_tpl_str);
-        }
-        if !is_v2_tpl {
-            // The system will default to being permissive in this case
-            anyhow::bail!("Unsure of template manifest version");
-        }
-
-        Self::from_v2_template_text(manifest_tpl_str)
-    }
-
-    fn from_v2_template_text(manifest_tpl_str: &str) -> anyhow::Result<Self> {
-        // Preserve declaration order while removing duplicate trigger types.
-        // Order preservation useful for UX, predictable trigger listing.
-        let mut seen = HashSet::new();
-        let trigger_types: Vec<String> = manifest_tpl_str
-            .lines()
-            .filter_map(infer_trigger_type_from_raw_line)
-            .filter(|trigger_type| seen.insert(trigger_type.clone()))
-            .collect();
-        let trigger_types = if trigger_types.is_empty() {
-            None
-        } else {
-            Some(trigger_types)
-        };
-        Ok(Self {
-            manifest_format: 2,
-            trigger_types,
-        })
+        Ok(Self { manifest_format })
     }
 
     pub fn manifest_format(&self) -> u32 {
         self.manifest_format
     }
-
-    pub fn trigger_types(&self) -> Option<&[String]> {
-        self.trigger_types.as_deref()
-    }
-}
-
-static EXTRACT_TRIGGER: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"^\s*\[\[trigger\.(?<trigger>[a-zA-Z0-9-]+)")
-        .expect("Invalid unknown filter regex")
-});
-
-fn infer_trigger_type_from_raw_line(line: &str) -> Option<String> {
-    EXTRACT_TRIGGER
-        .captures(line)
-        .map(|c| c["trigger"].to_owned())
-}
-
-#[derive(Deserialize)]
-struct ManifestV1TriggerProbe {
-    // `trigger = { type = "<type>", ...}`
-    trigger: v1::AppTriggerV1,
-}
-
-#[derive(Deserialize)]
-struct ManifestV2TriggerProbe {
-    /// `[trigger.<type>]` - empty will not have a trigger table in v2
-    trigger: Option<toml::value::Table>,
 }
 
 #[cfg(test)]
@@ -164,105 +41,38 @@ mod test {
     use super::*;
 
     #[test]
-    fn can_extract_triggers() {
-        assert_eq!(
-            "http",
-            infer_trigger_type_from_raw_line("[[trigger.http]]").unwrap()
-        );
-        assert_eq!(
-            "http",
-            infer_trigger_type_from_raw_line("  [[trigger.http]]").unwrap()
-        );
-        assert_eq!(
-            "fie",
-            infer_trigger_type_from_raw_line("  [[trigger.fie]]").unwrap()
-        );
-        assert_eq!(
-            "x-y",
-            infer_trigger_type_from_raw_line("  [[trigger.x-y]]").unwrap()
-        );
-
-        assert_eq!(None, infer_trigger_type_from_raw_line("# [[trigger.http]]"));
-        assert_eq!(None, infer_trigger_type_from_raw_line("trigger. But,"));
-        assert_eq!(None, infer_trigger_type_from_raw_line("[[trigger.  snerk"));
-    }
-
-    #[test]
-    fn can_read_app_info_from_template_v1() {
-        let tpl = r#"spin_manifest_version = "1"
-        name = "{{ thingy }}"
+    fn can_detect_v1_manifest_format() {
+        let manifest = r#"spin_manifest_version = "1"
+        name = "test"
         version = "1.2.3"
-        trigger = { type = "triggy", arg = "{{ another-thingy }}" }
+        trigger = { type = "http" }
 
         [[component]]
-        id = "{{ thingy | kebab_case }}"
-        source = "path/to/{{ thingy | snake_case }}.wasm"
+        id = "test"
+        source = "test.wasm"
         [component.trigger]
-        spork = "{{ utensil }}"
+        route = "/"
         "#;
 
-        let info = AppInfo::from_template_text(tpl).unwrap();
+        let info = AppInfo::from_manifest_text(manifest).unwrap();
         assert_eq!(1, info.manifest_format);
-        assert_eq!(vec!["triggy".to_owned()], info.trigger_types.unwrap());
     }
 
     #[test]
-    fn can_read_app_info_from_template_v2() {
-        let tpl = r#"spin_manifest_version = 2
-        name = "{{ thingy }}"
+    fn can_detect_v2_manifest_format() {
+        let manifest = r#"spin_manifest_version = 2
+        name = "test"
         version = "1.2.3"
 
-        [application.trigger.triggy]
-        arg = "{{ another-thingy }}"
+        [[trigger.http]]
+        route = "/"
+        component = "test"
 
-        [[trigger.triggy]]
-        spork = "{{ utensil }}"
-        component = "{{ thingy | kebab_case }}"
-
-        [component.{{ thingy | kebab_case }}]
-        source = "path/to/{{ thingy | snake_case }}.wasm"
+        [component.test]
+        source = "test.wasm"
         "#;
 
-        let info = AppInfo::from_template_text(tpl).unwrap();
+        let info = AppInfo::from_manifest_text(manifest).unwrap();
         assert_eq!(2, info.manifest_format);
-        assert_eq!(vec!["triggy".to_owned()], info.trigger_types.unwrap());
-    }
-
-    #[test]
-    fn can_read_app_info_from_multi_trigger_template_v2() {
-        let tpl = r#"spin_manifest_version = 2
-        name = "{{ thingy }}"
-        version = "1.2.3"
-
-        [application.trigger.triggy]
-        arg = "{{ another-thingy }}"
-
-        [[trigger.triggy]]
-        spork = "{{ utensil }}"
-        component = "{{ thingy | kebab_case }}"
-
-        [[trigger.anothertrigger]]
-        spork = "{{ utensil }}"
-        component = "{{ thingy | kebab_case }}"
-
-        [component.{{ thingy | kebab_case }}]
-        source = "path/to/{{ thingy | snake_case }}.wasm"
-        "#;
-
-        let info = AppInfo::from_template_text(tpl).unwrap();
-        assert_eq!(2, info.manifest_format);
-        assert_eq!(vec!["triggy".to_owned(), "anothertrigger".to_owned()], info.trigger_types.unwrap());
-    }
-
-    #[test]
-    fn can_read_app_info_from_triggerless_template_v2() {
-        let tpl = r#"spin_manifest_version = 2
-        name = "{{ thingy }}"
-        version = "1.2.3"
-        "#;
-
-        let info = AppInfo::from_template_text(tpl).unwrap();
-        assert_eq!(2, info.manifest_format);
-        assert_eq!(None, info.trigger_types);
     }
 }
