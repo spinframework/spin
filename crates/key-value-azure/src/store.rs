@@ -420,9 +420,14 @@ impl Cas for CompareAndSwap {
             }
         };
 
-        response
-            .map_err(|e| SwapError::CasFailed(format!("{e:?}")))
-            .map(drop)
+        response.map(drop).map_err(|e| {
+            let msg = format!("{e:?}");
+            if e.status().is_precondition_failed() || e.status().is_conflict() {
+                SwapError::CasFailed(msg)
+            } else {
+                SwapError::Other(msg)
+            }
+        })
     }
 
     async fn bucket_rep(&self) -> u32 {
