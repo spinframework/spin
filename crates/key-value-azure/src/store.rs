@@ -52,10 +52,7 @@ impl KeyValueAzureCosmos {
 
         let account_ref = match auth_options {
             KeyValueAzureCosmosAuthOptions::RuntimeConfigValues(config) => {
-                AccountReference::with_authentication_key(
-                    endpoint,
-                    Secret::from(config.key.clone()),
-                )
+                AccountReference::with_authentication_key(endpoint, Secret::from(config.key))
             }
             KeyValueAzureCosmosAuthOptions::AadCredential(kind) => {
                 let credential = kind.credential().map_err(log_error)?;
@@ -413,6 +410,7 @@ impl Cas for CompareAndSwap {
 
         let partition_key = partition_key(self.store_id.as_deref(), &self.key);
         let etag = self.etag.lock().unwrap().clone();
+        let had_etag = etag.is_some();
 
         let response = match etag {
             Some(etag) => {
@@ -431,7 +429,11 @@ impl Cas for CompareAndSwap {
 
         response.map(drop).map_err(|e| {
             let msg = format!("{e:?}");
-            if e.status().is_precondition_failed() || e.status().is_conflict() {
+            let status = e.status();
+            if status.is_precondition_failed()
+                || status.is_conflict()
+                || (had_etag && status.is_not_found())
+            {
                 SwapError::CasFailed(msg)
             } else {
                 SwapError::Other(msg)
