@@ -8,6 +8,7 @@ use azure_data_cosmos::{
     AccountReference, ContainerClient, CosmosClient, FeedScope, Query, RoutingStrategy,
 };
 use futures::TryStreamExt;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use spin_factor_key_value::{
     Cas, Error, Store, StoreManager, SwapError, log_error, log_error_v3, v3,
@@ -267,7 +268,7 @@ impl Store for AzureCosmosStore {
         let mut stream = self
             .client
             .query_items::<Pair>(
-                Query::from(self.get_in_query(keys.clone())),
+                Query::from(self.get_in_query(&keys)),
                 FeedScope::full_container(),
                 None,
             )
@@ -460,12 +461,8 @@ impl AzureCosmosStore {
         query
     }
 
-    fn get_in_query(&self, keys: Vec<String>) -> String {
-        let in_clause: String = keys
-            .into_iter()
-            .map(|k| format!("'{k}'"))
-            .collect::<Vec<String>>()
-            .join(", ");
+    fn get_in_query(&self, keys: &[String]) -> String {
+        let in_clause = keys.iter().map(|k| format!("'{k}'")).join(", ");
 
         let mut query = format!("SELECT * FROM c WHERE c.id IN ({in_clause})");
         append_store_id_condition(&mut query, self.store_id.as_deref(), true);
