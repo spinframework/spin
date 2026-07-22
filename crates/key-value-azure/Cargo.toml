@@ -18,6 +18,7 @@ azure_core = { version = "1.0", default-features = false }
 azure_data_cosmos = { version = "0.37", default-features = false, features = ["key_auth", "native_tls", "hmac_rust"] }
 azure_identity = { version = "1.0", default-features = false, features = ["tokio"] }
 futures = { workspace = true }
+itertools = { workspace = true }
 serde = { workspace = true }
 spin-factor-key-value = { path = "../factor-key-value" }
 tokio = { workspace = true, features = ["rt", "sync"] }

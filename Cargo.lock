@@ -9685,6 +9685,7 @@ dependencies = [
  "azure_data_cosmos",
  "azure_identity 1.0.0",
  "futures",
+ "itertools 0.15.0",
  "serde",
  "spin-factor-key-value",
  "tokio",
