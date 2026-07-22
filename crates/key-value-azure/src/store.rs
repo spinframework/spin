@@ -262,6 +262,10 @@ impl Store for AzureCosmosStore {
         keys: Vec<String>,
         max_result_bytes: usize,
     ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
+        // Deduplicate first: a repeated key would otherwise be counted once
+        // against `max_result_bytes` but returned once per occurrence.
+        let keys: Vec<String> = keys.into_iter().unique().collect();
+
         let mut stream = self
             .client
             .query_items::<Pair>(
@@ -289,7 +293,7 @@ impl Store for AzureCosmosStore {
         Ok(keys
             .into_iter()
             .map(|key| {
-                let value = found.get(&key).cloned();
+                let value = found.remove(&key);
                 (key, value)
             })
             .collect())
