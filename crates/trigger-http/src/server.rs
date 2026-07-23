@@ -98,6 +98,8 @@ pub struct HttpServer<F: RuntimeFactors> {
     router: Router,
     /// The app being triggered.
     trigger_app: Arc<TriggerApp<F>>,
+    /// The application name, resolved once for use as the `app_id` telemetry attribute.
+    app_id: String,
     // Component ID -> component trigger config
     component_trigger_configs: HashMap<spin_http::routes::TriggerLookupKey, HttpTriggerConfig>,
     // Component ID -> handler type
@@ -158,6 +160,11 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
         let trigger_app = Arc::new(trigger_app);
 
+        let app_id = trigger_app
+            .app()
+            .get_metadata(APP_NAME_KEY)?
+            .unwrap_or_else(|| "<unnamed>".into());
+
         let component_handler_types = component_trigger_configs
             .iter()
             .filter_map(|(key, trigger_config)| match key {
@@ -180,6 +187,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
             find_free_port,
             router,
             trigger_app,
+            app_id,
             http1_max_buf_size,
             component_trigger_configs,
             component_handler_types,
@@ -350,18 +358,12 @@ impl<F: RuntimeFactors> HttpServer<F> {
         client_addr: SocketAddr,
     ) -> anyhow::Result<Response<Body>> {
         set_req_uri(&mut req, server_scheme)?;
-        let app_id = self
-            .trigger_app
-            .app()
-            .get_metadata(APP_NAME_KEY)?
-            .unwrap_or_else(|| "<unnamed>".into());
-
         let lookup_key = route_match.lookup_key();
 
         spin_telemetry::metrics::monotonic_counter!(
             spin.request_count = 1,
             trigger_type = "http",
-            app_id = app_id,
+            app_id = self.app_id.as_str(),
             component_id = lookup_key.to_string()
         );
 

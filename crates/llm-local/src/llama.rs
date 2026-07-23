@@ -89,7 +89,7 @@ impl InferencingModel for LlamaModels {
         let mut cache = self.cache.clone();
         // Try to retrieve the End of Sentence (EOS) token ID from config or
         // default to a single EOS token. EOS token is used to determine when to stop.
-        let eos_token_id = config.clone().eos_token_id.or_else(|| {
+        let eos_token_id = config.eos_token_id.clone().or_else(|| {
             tokenizer
                 .token_to_id(EOS_TOKEN)
                 .map(llama::LlamaEosToks::Single)
