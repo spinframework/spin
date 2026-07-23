@@ -74,25 +74,23 @@ impl<T> ResolvedRuntimeConfig<T> {
         // [sqlite_database.<label>: <type>]
         summaries.extend(summarize_labeled_typed_tables("sqlite_database"));
         // [llm_compute: <type>]
-        if let Some(table) = self.toml.get("llm_compute").and_then(Value::as_table) {
-            if let Some(ty) = table.get("type").and_then(Value::as_str) {
-                summaries.push(format!("[llm_compute: {ty}"));
-            }
+        if let Some(table) = self.toml.get("llm_compute").and_then(Value::as_table)
+            && let Some(ty) = table.get("type").and_then(Value::as_str)
+        {
+            summaries.push(format!("[llm_compute: {ty}"));
         }
         // [outbound_networking: max_total_connections=N]
         if let Some(table) = self
             .toml
             .get("outbound_networking")
             .and_then(Value::as_table)
-        {
-            if let Some(max) = table
+            && let Some(max) = table
                 .get("max_total_connections")
                 .and_then(Value::as_integer)
-            {
-                summaries.push(format!(
-                    "[outbound_networking: max_total_connections={max}]"
-                ));
-            }
+        {
+            summaries.push(format!(
+                "[outbound_networking: max_total_connections={max}]"
+            ));
         }
         // [outbound_redis: max_connections=N], [outbound_pg: max_connections=N], [outbound_mysql: max_connections=N], [outbound_mqtt: max_connections=N], [outbound_http: max_connections=N]
         for key in [
@@ -102,22 +100,21 @@ impl<T> ResolvedRuntimeConfig<T> {
             "outbound_mqtt",
             "outbound_http",
         ] {
-            if let Some(table) = self.toml.get(key).and_then(Value::as_table) {
-                if let Some(max) = table.get("max_connections").and_then(Value::as_integer) {
-                    summaries.push(format!("[{key}: max_connections={max}]"));
-                }
+            if let Some(table) = self.toml.get(key).and_then(Value::as_table)
+                && let Some(max) = table.get("max_connections").and_then(Value::as_integer)
+            {
+                summaries.push(format!("[{key}: max_connections={max}]"));
             }
         }
         // [outbound_http: max_concurrent_requests=N (deprecated)]
-        if let Some(table) = self.toml.get("outbound_http").and_then(Value::as_table) {
-            if let Some(max) = table
+        if let Some(table) = self.toml.get("outbound_http").and_then(Value::as_table)
+            && let Some(max) = table
                 .get("max_concurrent_requests")
                 .and_then(Value::as_integer)
-            {
-                summaries.push(format!(
-                    "[outbound_http: max_concurrent_requests={max} (deprecated, use max_connections)]"
-                ));
-            }
+        {
+            summaries.push(format!(
+                "[outbound_http: max_concurrent_requests={max} (deprecated, use max_connections)]"
+            ));
         }
         if !summaries.is_empty() {
             let summaries = summaries.join(", ");

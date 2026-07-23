@@ -101,19 +101,19 @@ impl Router {
         // Remove duplicates.
         for re in routes_iter {
             let re = re?;
-            if let Some(replaced) = routes.insert(re.raw_route, re) {
-                if let Some(duplicate_routes) = &mut duplicate_routes {
-                    let effective_id = routes
-                        .get(replaced.raw_route)
-                        .unwrap() // Safe because we just inserted it
-                        .lookup_key
-                        .to_string();
-                    duplicate_routes.push(DuplicateRoute {
-                        route: replaced.based_route,
-                        replaced_id: replaced.lookup_key.to_string(),
-                        effective_id,
-                    });
-                }
+            if let Some(replaced) = routes.insert(re.raw_route, re)
+                && let Some(duplicate_routes) = &mut duplicate_routes
+            {
+                let effective_id = routes
+                    .get(replaced.raw_route)
+                    .unwrap() // Safe because we just inserted it
+                    .lookup_key
+                    .to_string();
+                duplicate_routes.push(DuplicateRoute {
+                    route: replaced.based_route,
+                    replaced_id: replaced.lookup_key.to_string(),
+                    effective_id,
+                });
             }
         }
 

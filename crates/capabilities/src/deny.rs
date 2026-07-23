@@ -64,13 +64,12 @@ pub fn apply_deny_adapter(
                     .map(|(import_name, ty)| (import_name.clone(), ty))
             });
 
-        if let Some((socket_name, socket_ty)) = matching_import {
-            if checker
+        if let Some((socket_name, socket_ty)) = matching_import
+            && checker
                 .is_subtype(*plug_ty, graph.types(), *socket_ty, graph.types())
                 .is_ok()
-            {
-                plug_exports.push((name.clone(), socket_name));
-            }
+        {
+            plug_exports.push((name.clone(), socket_name));
         }
     }
 

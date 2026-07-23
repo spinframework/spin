@@ -197,10 +197,10 @@ impl Store for AzureCosmosStore {
             .client
             .document_client(key, &self.store_id.clone().unwrap_or(key.to_string()))
             .map_err(log_error)?;
-        if let Err(e) = document_client.delete_document().await {
-            if e.as_http_error().map(|e| e.status() != 404).unwrap_or(true) {
-                return Err(log_error(e));
-            }
+        if let Err(e) = document_client.delete_document().await
+            && e.as_http_error().map(|e| e.status() != 404).unwrap_or(true)
+        {
+            return Err(log_error(e));
         }
         Ok(())
     }

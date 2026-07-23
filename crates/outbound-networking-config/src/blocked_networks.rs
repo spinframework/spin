@@ -49,10 +49,10 @@ impl BlockedNetworks {
             return true;
         }
         // Convert IPv4-compatible IPv6 addresses to IPv4 and check again to prevent bypass
-        if let IpAddr::V6(ipv6) = ip_addr {
-            if let Some(ipv4_compat) = ipv6.to_ipv4() {
-                return self.is_blocked(&IpAddr::V4(ipv4_compat));
-            }
+        if let IpAddr::V6(ipv6) = ip_addr
+            && let Some(ipv4_compat) = ipv6.to_ipv4()
+        {
+            return self.is_blocked(&IpAddr::V4(ipv4_compat));
         }
         false
     }

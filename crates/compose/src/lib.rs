@@ -554,16 +554,16 @@ fn matches_import(dependency_name: &DependencyName, import_name: &str) -> anyhow
                 return Ok(false);
             }
 
-            if let Some(interface) = dependency_name.interface.as_ref() {
-                if import_interface != interface.as_ref() {
-                    return Ok(false);
-                }
+            if let Some(interface) = dependency_name.interface.as_ref()
+                && import_interface != interface.as_ref()
+            {
+                return Ok(false);
             }
 
-            if let Some(version) = dependency_name.version.as_ref() {
-                if import_version != Some(version.clone()) {
-                    return Ok(false);
-                }
+            if let Some(version) = dependency_name.version.as_ref()
+                && import_version != Some(version.clone())
+            {
+                return Ok(false);
             }
 
             Ok(true)
