@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# Phase 1 of finalizing a wasmtime upgrade: point the in-flight
+# "Bump wasmtime (prerelease)" PR at the published crates.io release, replacing
+# the temporary git dependency. Run this once wasmtime has shipped the version
+# the bump PR targets; a human then reviews and merges the PR.
+#
+# Phase 2 (backport + patch release) lives in wasmtime-backport.yml.
+# Both phases are implemented in ./scripts/wasmtime-release.sh.
+#
+# NOTE: Manual dispatch only for now; automation can be added once we trust it.
+name: Update wasmtime bump PR
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Bump-wasmtime PR number (auto-detected if empty)
+        required: false
+        default: ""
+      crates_version:
+        description: Published wasmtime crates.io version to pin (auto-detected if empty)
+        required: false
+        default: ""
+
+# Serialize runs so a dispatch can't race with a previous one
+concurrency: ${{ github.workflow }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update bump PR to crates.io release
+    if: ${{ github.repository == 'spinframework/spin' }}
+    runs-on: "ubuntu-22.04"
+    env:
+      GH_TOKEN: ${{ secrets.SPINFRAMEWORKBOT_PR_PAT }}
+      PR_NUMBER: ${{ github.event.inputs.pr_number }}
+      CRATES_VERSION: ${{ github.event.inputs.crates_version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.SPINFRAMEWORKBOT_PR_PAT }}
+          fetch-depth: 0
+
+      # Import GPG key for signing commits (matches bump-wasmtime.yml)
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Update bump PR to the crates.io release
+        run: ./scripts/wasmtime-release.sh update

@@ -3,7 +3,7 @@ name = "pg-app"
 authors = ["Kate Goldenring <kate.goldenring@fermyon.com>"]
 description = ""
 version = "0.1.0"
-rust-version = "1.78"
+rust-version = "1.94"
 edition = "2024"
 
 [lib]

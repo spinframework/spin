@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+# Phase 2 of finalizing a wasmtime upgrade: after the updated bump PR has merged
+# to main, backport it onto the last Spin release branch and open a PR that also
+# bumps the patch version. Once that PR merges, tag the release to cut it.
+#
+# Phase 1 (point the bump PR at crates.io) lives in wasmtime-update.yml.
+# Both phases are implemented in ./scripts/wasmtime-release.sh.
+#
+# NOTE: Manual dispatch only for now; automation can be added once we trust it.
+name: Backport wasmtime bump PR
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Bump-wasmtime PR number to backport (auto-detected if empty)
+        required: false
+        default: ""
+      release_branch:
+        description: Spin release branch to backport into, e.g. v4.0 (auto-detected if empty)
+        required: false
+        default: ""
+
+# Serialize runs so a dispatch can't race with a previous one
+concurrency: ${{ github.workflow }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backport:
+    name: Backport bump PR and prepare patch release
+    if: ${{ github.repository == 'spinframework/spin' }}
+    runs-on: "ubuntu-22.04"
+    env:
+      GH_TOKEN: ${{ secrets.SPINFRAMEWORKBOT_PR_PAT }}
+      PR_NUMBER: ${{ github.event.inputs.pr_number }}
+      RELEASE_BRANCH: ${{ github.event.inputs.release_branch }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.SPINFRAMEWORKBOT_PR_PAT }}
+          fetch-depth: 0
+
+      # Import GPG key for signing commits (matches bump-wasmtime.yml)
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Backport bump PR and open patch release PR
+        run: ./scripts/wasmtime-release.sh backport

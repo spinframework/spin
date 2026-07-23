@@ -16,6 +16,8 @@ pub mod new;
 pub mod plugins;
 /// Commands for working with OCI registries.
 pub mod registry;
+/// Commands for the target environments catalogue.
+pub mod target_environments;
 /// Commands for working with templates.
 pub mod templates;
 /// Commands for starting the runtime.

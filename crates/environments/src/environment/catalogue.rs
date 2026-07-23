@@ -133,10 +133,14 @@ impl Catalogue {
         Ok(Some(env_def))
     }
 
-    pub async fn list(&self) -> anyhow::Result<Vec<String>> {
+    pub async fn list(&self) -> Vec<String> {
         let mut envs = vec![];
 
-        for ns_entry in self.envs_root.read_dir()? {
+        let Ok(read_dir) = self.envs_root.read_dir() else {
+            return Default::default();
+        };
+
+        for ns_entry in read_dir {
             let Ok(ns_entry) = ns_entry else {
                 continue; // avoid blocking the list for one error
             };
@@ -158,7 +162,7 @@ impl Catalogue {
             }
         }
 
-        Ok(envs)
+        envs
     }
 }
 
