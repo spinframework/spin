@@ -75,7 +75,10 @@ impl LlmEngine for RemoteHttpLlmEngine {
         params: v2::InferencingParams,
         max_result_bytes: usize,
     ) -> Result<v2::InferencingResult, v2::Error> {
-        spin_telemetry::monotonic_counter!(spin.llm_infer = 1, model_name = model);
+        spin_telemetry::metrics::monotonic_counter_u64!(
+            spin.llm_infer = 1,
+            model_name = model.clone()
+        );
         self.infer(model, prompt, params, max_result_bytes).await
     }
 

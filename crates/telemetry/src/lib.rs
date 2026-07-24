@@ -51,7 +51,7 @@ pub use propagation::inject_trace_context;
 /// Examples of emitting metrics from Spin:
 ///
 /// ```no_run
-/// spin_telemetry::metrics::monotonic_counter!(spin.metric_name = 1, metric_attribute = "value");
+/// spin_telemetry::metrics::monotonic_counter_u64!(spin.metric_name = 1, metric_attribute = "value");
 /// ```
 ///
 /// `histogram_buckets` lets callers override the OTel default histogram boundaries for specific
@@ -83,21 +83,11 @@ pub fn init(spin_version: String, histogram_buckets: Vec<HistogramBuckets>) -> a
         None
     };
 
-    let otel_metrics_layer = if otel_metrics_enabled() {
-        Some(
-            metrics::otel_metrics_layer(spin_version.clone(), histogram_buckets)
-                .context("failed to initialize otel metrics")?,
-        )
-    } else {
-        None
-    };
-
     let alert_in_dev_layer = alert_in_dev::alert_in_dev_layer();
 
     // Build a registry subscriber with the layers we want to use.
     registry()
         .with(otel_tracing_layer)
-        .with(otel_metrics_layer)
         .with(fmt_layer)
         .with(alert_in_dev_layer)
         .init();
@@ -105,6 +95,12 @@ pub fn init(spin_version: String, histogram_buckets: Vec<HistogramBuckets>) -> a
     // Used to propagate trace information in the standard W3C TraceContext format. Even if the otel
     // layer is disabled we still want to propagate trace context.
     opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
+
+    if otel_metrics_enabled() {
+        let meter_provider = metrics::metrics_provider(spin_version.clone(), histogram_buckets)
+            .context("failed to initialize otel metrics")?;
+        opentelemetry::global::set_meter_provider(meter_provider);
+    }
 
     if otel_logs_enabled() {
         logs::init_otel_logging_backend(spin_version)

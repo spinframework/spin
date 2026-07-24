@@ -358,7 +358,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
         let lookup_key = route_match.lookup_key();
 
-        spin_telemetry::metrics::monotonic_counter!(
+        spin_telemetry::metrics::monotonic_counter_u64!(
             spin.request_count = 1,
             trigger_type = "http",
             app_id = app_id,
