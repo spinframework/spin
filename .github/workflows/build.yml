@@ -26,7 +26,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: 'Checkout Repository'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v4
         with:
@@ -39,7 +39,7 @@ jobs:
       ## Allow this job to potentially cancel the running workflow (on failure)
       actions: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: setup dependencies
         uses: ./.github/actions/spin-ci-dependencies
@@ -58,7 +58,7 @@ jobs:
     name: Build Spin Ubuntu
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: setup dependencies
         uses: ./.github/actions/spin-ci-dependencies
@@ -92,7 +92,7 @@ jobs:
               target: "x86_64-unknown-linux-musl"
             }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: setup dependencies
         uses: ./.github/actions/spin-ci-dependencies
@@ -119,7 +119,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-15-intel, macos-14]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: setup dependencies
         uses: ./.github/actions/spin-ci-dependencies
@@ -148,7 +148,7 @@ jobs:
       matrix:
         runner: [ubuntu-22.04-4core-spin, macos-14]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: setup dependencies
         uses: ./.github/actions/spin-ci-dependencies
@@ -190,7 +190,7 @@ jobs:
     runs-on: ubuntu-22.04-4core-spin
     if: ${{ github.repository_owner == 'spinframework' }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: setup dependencies
         uses: ./.github/actions/spin-ci-dependencies
@@ -203,14 +203,14 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: '0.14.1'
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.25'
           cache-dependency-path: "**/go.sum"  # To suppress warning: https://github.com/actions/setup-go/issues/427
-      - uses: acifani/setup-tinygo@v2
+      - uses: acifani/setup-tinygo@v3
         with:
           tinygo-version: '0.37.0'
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.x'
       - name: Install Grain
@@ -275,7 +275,7 @@ jobs:
               targetDir: "target/release",
             }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         shell: bash

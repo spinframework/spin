@@ -131,7 +131,7 @@ runs:
         version: ${{ inputs.wasmtime-version }}
 
     - name: "Install Go"
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v7
       if: ${{ inputs.golang == 'true' }}
       with:
         go-version: ${{ inputs.golang-version }}

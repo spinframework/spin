@@ -69,7 +69,7 @@ jobs:
               targetDir: "target/release",
             }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: set the release version (tag)
         if: startsWith(github.ref, 'refs/tags/v')
@@ -222,7 +222,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: download binaries for release assets
         uses: actions/download-artifact@v4
@@ -270,7 +270,7 @@ jobs:
     needs: build-and-sign
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Set the tag to spin/templates/v*
         shell: bash
@@ -308,7 +308,7 @@ jobs:
               target: "x86_64-unknown-linux-musl"
             }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: set the release version (tag)
         if: startsWith(github.ref, 'refs/tags/v')
