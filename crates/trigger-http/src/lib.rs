@@ -214,14 +214,14 @@ impl FromStr for ParsedDuration {
         Ok(Self(match s.parse() {
             Ok(val) => Duration::from_secs(val),
             Err(err) => {
-                if let Some(num) = s.strip_suffix("s") {
-                    Duration::from_secs(num.parse().map_err(error)?)
-                } else if let Some(num) = s.strip_suffix("ms") {
+                if let Some(num) = s.strip_suffix("ms") {
                     Duration::from_millis(num.parse().map_err(error)?)
                 } else if let Some(num) = s.strip_suffix("us").or(s.strip_suffix("μs")) {
                     Duration::from_micros(num.parse().map_err(error)?)
                 } else if let Some(num) = s.strip_suffix("ns") {
                     Duration::from_nanos(num.parse().map_err(error)?)
+                } else if let Some(num) = s.strip_suffix("s") {
+                    Duration::from_secs(num.parse().map_err(error)?)
                 } else {
                     return Err(error(err));
                 }
