@@ -113,7 +113,7 @@ impl ConnectionSemaphore {
     pub async fn acquire(&self) -> anyhow::Result<ConnectionPermit> {
         // Fast path: all required permits are already available
         if let Ok(permit) = self.try_acquire_permits() {
-            spin_telemetry::monotonic_counter_u64!(
+            spin_telemetry::counter!(
                 outbound_connection_permits_acquired = 1,
                 kind = self.factor,
                 waited = false
@@ -187,7 +187,7 @@ impl ConnectionSemaphore {
                 kind = factor
             );
         }
-        spin_telemetry::monotonic_counter_u64!(
+        spin_telemetry::counter!(
             outbound_connection_permits_acquired = 1,
             kind = factor,
             waited = waited
@@ -210,7 +210,7 @@ impl ConnectionSemaphore {
     pub fn try_acquire(&self) -> Option<ConnectionPermit> {
         match self.try_acquire_permits() {
             Ok(permit) => {
-                spin_telemetry::monotonic_counter_u64!(
+                spin_telemetry::counter!(
                     outbound_connection_permits_acquired = 1,
                     kind = self.factor,
                     waited = false
@@ -220,7 +220,7 @@ impl ConnectionSemaphore {
                 Some(permit)
             }
             Err(limit) => {
-                spin_telemetry::monotonic_counter_u64!(
+                spin_telemetry::counter!(
                     outbound_connection_permits_rejected = 1,
                     kind = self.factor,
                     limit = limit

@@ -25,10 +25,13 @@ pub use propagation::inject_trace_context;
 /// Initializes telemetry for Spin using the [tracing] library.
 ///
 /// Under the hood this involves initializing a [tracing::Subscriber] with multiple [Layer]s. One
-/// [Layer] emits [tracing] events to stderr, another sends spans to an OTel collector, and another
-/// sends metrics to an OTel collector.
+/// [Layer] emits [tracing] events to stderr, and another sends spans to an OTel collector. Metrics
+/// are handled separately from the tracing [Layer]s: a global OTel meter provider is registered
+/// directly, and the metric macros in [`metrics`] record to it without going through `tracing`.
 ///
-/// Configuration for the OTel layers is pulled from the environment.
+/// Configuration for the OTel layers and the meter provider is pulled from the environment. This
+/// sets the global [tracing::Subscriber] and the global OTel meter provider, so it should be
+/// called early in the process before any other code that emits telemetry.
 ///
 /// Examples of emitting traces from Spin:
 ///
@@ -51,7 +54,7 @@ pub use propagation::inject_trace_context;
 /// Examples of emitting metrics from Spin:
 ///
 /// ```no_run
-/// spin_telemetry::metrics::monotonic_counter_u64!(spin.metric_name = 1, metric_attribute = "value");
+/// spin_telemetry::metrics::counter!(spin.metric_name = 1, metric_attribute = "value");
 /// ```
 ///
 /// `histogram_buckets` lets callers override the OTel default histogram boundaries for specific

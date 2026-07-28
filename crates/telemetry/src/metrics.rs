@@ -38,7 +38,7 @@ pub struct HistogramBuckets {
 ///
 /// The caller is responsible for registering the returned provider as the global one (e.g. via
 /// [`opentelemetry::global::set_meter_provider`]). Instruments created by the macros in this
-/// module (e.g. [`monotonic_counter_u64`](crate::monotonic_counter_u64)) bind to whatever meter
+/// module (e.g. [`counter`](crate::counter)) bind to whatever meter
 /// provider is global *at the time they're first used*, and never rebind afterwards.
 pub(crate) fn metrics_provider(
     spin_version: String,
@@ -93,8 +93,11 @@ pub(crate) fn metrics_provider(
 /// creates a static instrument for it, and records a value with the given attributes.
 /// Shared by every public macro in this module.
 ///
-/// Each macro invocation expands inline at its call site, so the `static` below is a distinct
-/// instrument per call site (not shared across calls).
+/// The `static` is block-scoped to this expansion, so each call site gets its own — safe even in
+/// code that runs many times (e.g. once per request), since the `LazyLock` resolves the
+/// instrument only on the first call and every later call just records against it. It's also
+/// safe to use the same metric name from multiple call sites: the OTel SDK deduplicates
+/// instruments by (meter, name), so the separate statics end up recording to the same series.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __otel_metric_record {
@@ -119,10 +122,10 @@ macro_rules! __otel_metric_record {
 /// Records an increment to the named monotonic counter (as a `u64`) with the given attributes.
 ///
 /// ```
-/// spin_telemetry::metrics::monotonic_counter_u64!(spin.metric_name = 1, metric_attribute = "value");
+/// spin_telemetry::metrics::counter!(spin.metric_name = 1, metric_attribute = "value");
 /// ```
 #[macro_export]
-macro_rules! monotonic_counter_u64 {
+macro_rules! counter {
     ($($tt:tt)*) => {
         $crate::__otel_metric_record!(
             $crate::metrics::opentelemetry::metrics::Counter<u64>, u64_counter, add, $($tt)*
@@ -130,50 +133,18 @@ macro_rules! monotonic_counter_u64 {
     };
 }
 
-/// Records an increment to the named monotonic counter (as an `f64`) with the given attributes.
-///
-/// The increment must be non-negative.
-///
-/// ```
-/// spin_telemetry::metrics::monotonic_counter_f64!(spin.metric_name = 1.5, metric_attribute = "value");
-/// ```
-#[macro_export]
-macro_rules! monotonic_counter_f64 {
-    ($($tt:tt)*) => {
-        $crate::__otel_metric_record!(
-            $crate::metrics::opentelemetry::metrics::Counter<f64>, f64_counter, add, $($tt)*
-        )
-    };
-}
-
 /// Records a delta to the named counter (as an `i64`) with the given attributes.
 ///
-/// Unlike `monotonic_counter_*`, the delta may be negative. This maps to OTel's `UpDownCounter`.
+/// Unlike `counter`, the delta may be negative. This maps to OTel's `UpDownCounter`.
 ///
 /// ```
-/// spin_telemetry::metrics::counter_i64!(spin.metric_name = -1, metric_attribute = "value");
+/// spin_telemetry::metrics::up_and_down_counter!(spin.metric_name = -1, metric_attribute = "value");
 /// ```
 #[macro_export]
-macro_rules! counter_i64 {
+macro_rules! up_and_down_counter {
     ($($tt:tt)*) => {
         $crate::__otel_metric_record!(
             $crate::metrics::opentelemetry::metrics::UpDownCounter<i64>, i64_up_down_counter, add, $($tt)*
-        )
-    };
-}
-
-/// Records a delta to the named counter (as an `f64`) with the given attributes.
-///
-/// Unlike `monotonic_counter_*`, the delta may be negative. This maps to OTel's `UpDownCounter`.
-///
-/// ```
-/// spin_telemetry::metrics::counter_f64!(spin.metric_name = -1.5, metric_attribute = "value");
-/// ```
-#[macro_export]
-macro_rules! counter_f64 {
-    ($($tt:tt)*) => {
-        $crate::__otel_metric_record!(
-            $crate::metrics::opentelemetry::metrics::UpDownCounter<f64>, f64_up_down_counter, add, $($tt)*
         )
     };
 }
@@ -250,12 +221,27 @@ macro_rules! gauge_f64 {
     };
 }
 
-pub use counter_f64;
-pub use counter_i64;
+pub use counter;
 pub use gauge_f64;
 pub use gauge_i64;
 pub use gauge_u64;
 pub use histogram_f64;
 pub use histogram_u64;
-pub use monotonic_counter_f64;
-pub use monotonic_counter_u64;
+pub use up_and_down_counter;
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_macros_compile() {
+        counter!(spin.test_counter = 1, attr = "value");
+        histogram_u64!(spin.test_histogram_u64 = 1, attr = "value");
+        histogram_f64!(spin.test_histogram_f64 = 1.5, attr = "value");
+        gauge_u64!(spin.test_gauge_u64 = 1, attr = "value");
+        gauge_i64!(spin.test_gauge_i64 = -1, attr = "value");
+        gauge_f64!(spin.test_gauge_f64 = 1.5, attr = "value");
+        up_and_down_counter!(spin.test_up_and_down_counter = -1, attr = "value");
+        // repeat to ensure repeat calls still compile
+        up_and_down_counter!(spin.test_up_and_down_counter = -1, attr = "value");
+    }
+}

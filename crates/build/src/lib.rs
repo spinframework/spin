@@ -271,7 +271,7 @@ fn build_component(build_info: ComponentBuildInfo, app_dir: &Path) -> Result<()>
                     .map_err(|err| {
                         anyhow!(
                             "Cannot spawn build process '{:?}' for component {}: {}",
-                            &b.command,
+                            b.command,
                             build_info.id,
                             err
                         )

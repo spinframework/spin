@@ -225,7 +225,7 @@ impl Login {
 
         println!(
             "Successfully logged in as {} to registry {}",
-            username, &self.server
+            username, self.server
         );
         Ok(())
     }

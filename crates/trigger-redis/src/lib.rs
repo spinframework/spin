@@ -198,7 +198,7 @@ impl<F: RuntimeFactors> Subscriber<F> {
     }
 
     async fn dispatch_handler(&self, msg: &Msg, component_id: &str) -> anyhow::Result<()> {
-        spin_telemetry::metrics::monotonic_counter_u64!(
+        spin_telemetry::metrics::counter!(
             spin.request_count = 1,
             trigger_type = "redis",
             app_id = self.trigger_app.app().id().to_string(),
