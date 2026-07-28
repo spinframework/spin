@@ -152,9 +152,7 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
 #[cfg(feature = "experimental-wasm-features")]
 #[derive(Clone, Debug, ValueEnum)]
 pub enum ExperimentalWasmFeature {
-    Gc,
     ReferenceTypes,
-    Exceptions,
     FunctionReferences,
 }
 
@@ -276,11 +274,9 @@ impl<T: Trigger<B::Factors>, B: RuntimeFactorsBuilder> FactorsTriggerCommand<T, 
             let wasmtime_config = config.wasmtime_config();
             for wasm_feature in self.experimental_wasm_feature {
                 match wasm_feature {
-                    ExperimentalWasmFeature::Gc => wasmtime_config.wasm_gc(true),
                     ExperimentalWasmFeature::ReferenceTypes => {
                         wasmtime_config.wasm_reference_types(true)
                     }
-                    ExperimentalWasmFeature::Exceptions => wasmtime_config.wasm_exceptions(true),
                     ExperimentalWasmFeature::FunctionReferences => {
                         wasmtime_config.wasm_function_references(true)
                     }
