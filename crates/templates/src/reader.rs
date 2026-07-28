@@ -17,7 +17,10 @@ pub(crate) enum RawTemplateManifest {
 pub(crate) struct RawTemplateManifestV1 {
     pub id: String,
     pub description: Option<String>,
-    pub trigger_type: Option<String>,
+    // Retained so existing templates that declare `trigger_type` continue
+    // to parse under `deny_unknown_fields`; the value is no longer used.
+    #[allow(dead_code)]
+    pub trigger_type: Option<serde::de::IgnoredAny>,
     pub tags: Option<HashSet<String>>,
     pub new_application: Option<RawTemplateVariant>,
     pub add_component: Option<RawTemplateVariant>,

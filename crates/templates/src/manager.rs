@@ -1132,7 +1132,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cannot_add_component_that_does_not_match_manifest() {
+    async fn cannot_add_component_to_v1_manifest() {
         let manager = TempManager::new_with_this_repo_templates().await;
 
         let dest_temp_dir = tempdir().unwrap();

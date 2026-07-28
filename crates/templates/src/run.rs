@@ -97,7 +97,7 @@ impl Run {
         interaction: impl InteractionStrategy,
     ) -> anyhow::Result<Option<TemplateRenderer>> {
         self.validate_version()?;
-        self.validate_trigger()?;
+        self.validate_add_component_manifest_version()?;
 
         // TODO: rationalise `path` and `dir`
         let to = self.generation_target_dir();
@@ -247,14 +247,14 @@ impl Run {
         }
     }
 
-    fn validate_trigger(&self) -> anyhow::Result<()> {
+    fn validate_add_component_manifest_version(&self) -> anyhow::Result<()> {
         match &self.options.variant {
             TemplateVariantInfo::NewApplication => Ok(()),
             TemplateVariantInfo::AddComponent { manifest_path } => {
                 match crate::app_info::AppInfo::from_file(manifest_path) {
-                    Some(Ok(app_info)) if app_info.manifest_format() == 1 => self
-                        .template
-                        .check_compatible_trigger(app_info.trigger_type()),
+                    Some(Ok(app_info)) if app_info.manifest_format() == 1 => Err(anyhow!(
+                        "Components cannot be added to Spin manifest version 1 applications.",
+                    )),
                     _ => Ok(()), // Fail forgiving - don't block the user if things are under construction
                 }
             }
