@@ -40,7 +40,7 @@ jobs:
     env:
       OCI_IMAGE_NAME: spin-docs
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Check out specific ref
         if: ${{ github.event_name == 'workflow_dispatch' }} && ${{ inputs.ref != ''}}

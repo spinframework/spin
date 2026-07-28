@@ -11,7 +11,7 @@ jobs:
     env:
       CARGO_VET_VERSION: 0.7.0
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Install Rust
         run: rustup update stable && rustup default stable
       - uses: actions/cache@v3
