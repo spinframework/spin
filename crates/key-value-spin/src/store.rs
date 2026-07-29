@@ -478,6 +478,7 @@ mod test {
                 "default".to_owned(),
                 Arc::new(KeyValueSqlite::new(DatabaseLocation::InMemory)) as _,
             )])),
+            Arc::from("test"),
         );
 
         assert!(matches!(

@@ -1,5 +1,6 @@
 use super::{Cas, SwapError};
 use anyhow::{Context, Result};
+use spin_connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
 use spin_core::{
     async_trait,
     wasmtime::component::{Accessor, FutureReader, Resource, StreamReader},
@@ -71,15 +72,21 @@ pub struct KeyValueDispatch {
     manager: Arc<dyn StoreManager>,
     stores: Table<Arc<dyn Store>>,
     compare_and_swaps: Table<Arc<dyn Cas>>,
+    semaphore: ConnectionSemaphore,
     otel: OtelFactorState,
 }
 
 impl KeyValueDispatch {
-    pub fn new(allowed_stores: HashSet<String>, manager: Arc<dyn StoreManager>) -> Self {
-        Self::new_with_capacity(
+    pub fn new(
+        allowed_stores: HashSet<String>,
+        manager: Arc<dyn StoreManager>,
+        app_id: Arc<str>,
+    ) -> Self {
+        Self::new_with_capacity_and_semaphore(
             allowed_stores,
             manager,
             DEFAULT_STORE_TABLE_CAPACITY,
+            ConnectionSemaphore::new(None, None, "key-value", app_id, None),
             Default::default(),
         )
     }
@@ -88,6 +95,23 @@ impl KeyValueDispatch {
         allowed_stores: HashSet<String>,
         manager: Arc<dyn StoreManager>,
         capacity: u32,
+        app_id: Arc<str>,
+        otel: OtelFactorState,
+    ) -> Self {
+        Self::new_with_capacity_and_semaphore(
+            allowed_stores,
+            manager,
+            capacity,
+            ConnectionSemaphore::new(None, None, "key-value", app_id, None),
+            otel,
+        )
+    }
+
+    pub fn new_with_capacity_and_semaphore(
+        allowed_stores: HashSet<String>,
+        manager: Arc<dyn StoreManager>,
+        capacity: u32,
+        semaphore: ConnectionSemaphore,
         otel: OtelFactorState,
     ) -> Self {
         Self {
@@ -95,8 +119,25 @@ impl KeyValueDispatch {
             manager,
             stores: Table::new(capacity),
             compare_and_swaps: Table::new(capacity),
+            semaphore,
             otel,
         }
+    }
+
+    async fn acquire_permit(&self) -> std::result::Result<ConnectionPermit, Error> {
+        self.semaphore.acquire().await.map_err(|err| {
+            tracing::warn!("key-value error: {err:?}");
+            Error::Other("too many requests".into())
+        })
+    }
+
+    async fn acquire_permit_wasi(
+        &self,
+    ) -> std::result::Result<ConnectionPermit, wasi_keyvalue::store::Error> {
+        self.semaphore.acquire().await.map_err(|err| {
+            tracing::warn!("key-value error: {err:?}");
+            wasi_keyvalue::store::Error::Other("too many requests".into())
+        })
     }
 
     pub fn get_store<T: 'static>(&self, store: Resource<T>) -> anyhow::Result<&Arc<dyn Store>> {
@@ -172,6 +213,7 @@ impl key_value::HostStore for KeyValueDispatch {
     ) -> Result<Result<Option<Vec<u8>>, Error>> {
         self.otel.reparent_tracing_span();
         let store = self.get_store(store)?;
+        let _permit = self.acquire_permit().await.map_err(track_error_on_span)?;
         Ok(store
             .get(&key, MAX_HOST_BUFFERED_BYTES)
             .await
@@ -187,6 +229,7 @@ impl key_value::HostStore for KeyValueDispatch {
     ) -> Result<Result<(), Error>> {
         self.otel.reparent_tracing_span();
         let store = self.get_store(store)?;
+        let _permit = self.acquire_permit().await.map_err(track_error_on_span)?;
         Ok(store.set(&key, &value).await.map_err(track_error_on_span))
     }
 
@@ -198,6 +241,7 @@ impl key_value::HostStore for KeyValueDispatch {
     ) -> Result<Result<(), Error>> {
         self.otel.reparent_tracing_span();
         let store = self.get_store(store)?;
+        let _permit = self.acquire_permit().await.map_err(track_error_on_span)?;
         Ok(store.delete(&key).await.map_err(track_error_on_span))
     }
 
@@ -209,6 +253,7 @@ impl key_value::HostStore for KeyValueDispatch {
     ) -> Result<Result<bool, Error>> {
         self.otel.reparent_tracing_span();
         let store = self.get_store(store)?;
+        let _permit = self.acquire_permit().await.map_err(track_error_on_span)?;
         Ok(store.exists(&key).await.map_err(track_error_on_span))
     }
 
@@ -219,6 +264,7 @@ impl key_value::HostStore for KeyValueDispatch {
     ) -> Result<Result<Vec<String>, Error>> {
         self.otel.reparent_tracing_span();
         let store = self.get_store(store)?;
+        let _permit = self.acquire_permit().await.map_err(track_error_on_span)?;
         Ok(store
             .get_keys(MAX_HOST_BUFFERED_BYTES)
             .await
@@ -280,13 +326,15 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
         store: Resource<v3::Store>,
         key: String,
     ) -> Result<Option<Vec<u8>>, v3::Error> {
-        let store = accessor
-            .with(|mut access| {
-                let host = access.get();
-                host.otel.reparent_tracing_span();
-                host.get_store(store).cloned()
-            })
-            .map_err(|_| v3::Error::NoSuchStore)?;
+        let (store_result, permit_fut) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (host.get_store(store).cloned(), host.semaphore.clone())
+        });
+        let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
+        let _permit = acquire_permit_v3(&permit_fut)
+            .await
+            .map_err(track_error_on_span_v3)?;
         store
             .get(&key, MAX_HOST_BUFFERED_BYTES)
             .await
@@ -300,13 +348,15 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
         key: String,
         value: Vec<u8>,
     ) -> Result<(), v3::Error> {
-        let store = accessor
-            .with(|mut access| {
-                let host = access.get();
-                host.otel.reparent_tracing_span();
-                host.get_store(store).cloned()
-            })
-            .map_err(|_| v3::Error::NoSuchStore)?;
+        let (store_result, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (host.get_store(store).cloned(), host.semaphore.clone())
+        });
+        let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
+        let _permit = acquire_permit_v3(&semaphore)
+            .await
+            .map_err(track_error_on_span_v3)?;
         store
             .set(&key, &value)
             .await
@@ -319,13 +369,15 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
         store: Resource<v3::Store>,
         key: String,
     ) -> Result<(), v3::Error> {
-        let store = accessor
-            .with(|mut access| {
-                let host = access.get();
-                host.otel.reparent_tracing_span();
-                host.get_store(store).cloned()
-            })
-            .map_err(|_| v3::Error::NoSuchStore)?;
+        let (store_result, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (host.get_store(store).cloned(), host.semaphore.clone())
+        });
+        let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
+        let _permit = acquire_permit_v3(&semaphore)
+            .await
+            .map_err(track_error_on_span_v3)?;
         store
             .delete(&key)
             .await
@@ -338,13 +390,15 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
         store: Resource<v3::Store>,
         key: String,
     ) -> Result<bool, v3::Error> {
-        let store = accessor
-            .with(|mut access| {
-                let host = access.get();
-                host.otel.reparent_tracing_span();
-                host.get_store(store).cloned()
-            })
-            .map_err(|_| v3::Error::NoSuchStore)?;
+        let (store_result, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (host.get_store(store).cloned(), host.semaphore.clone())
+        });
+        let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
+        let _permit = acquire_permit_v3(&semaphore)
+            .await
+            .map_err(track_error_on_span_v3)?;
         store
             .exists(&key)
             .await
@@ -356,13 +410,16 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
         accessor: &Accessor<T, Self>,
         store: Resource<v3::Store>,
     ) -> Result<(StreamReader<String>, FutureReader<Result<(), v3::Error>>)> {
-        let store = accessor
-            .with(|mut access| {
-                let host = access.get();
-                host.otel.reparent_tracing_span();
-                host.get_store(store).cloned()
-            })
-            .map_err(|_| v3::Error::NoSuchStore)?;
+        let (store_result, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (host.get_store(store).cloned(), host.semaphore.clone())
+        });
+        let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
+
+        let _permit = acquire_permit_v3(&semaphore)
+            .await
+            .map_err(track_error_on_span_v3)?;
 
         let (keys_rx, err_rx) = store.get_keys_async(MAX_HOST_BUFFERED_BYTES).await;
 
@@ -379,8 +436,9 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
 
 /// Make sure that infrastructure related errors are tracked in the current span.
 fn track_error_on_span(err: Error) -> Error {
-    let blame = match err {
+    let blame = match &err {
         Error::NoSuchStore | Error::AccessDenied => Blame::Guest,
+        Error::Other(msg) if msg.contains("too many requests") => Blame::Guest,
         Error::StoreTableFull | Error::Other(_) => Blame::Host,
     };
     traces::mark_as_error(&err, Some(blame));
@@ -389,12 +447,24 @@ fn track_error_on_span(err: Error) -> Error {
 
 /// Make sure that infrastructure related errors are tracked in the current span.
 fn track_error_on_span_v3(err: v3::Error) -> v3::Error {
-    let blame = match err {
+    let blame = match &err {
         v3::Error::NoSuchStore | v3::Error::AccessDenied => Blame::Guest,
+        v3::Error::Other(msg) if msg.contains("too many requests") => Blame::Guest,
         v3::Error::StoreTableFull | v3::Error::Other(_) => Blame::Host,
     };
     traces::mark_as_error(&err, Some(blame));
     err
+}
+
+/// Maps a semaphore acquisition failure to a v3 error with a consistent "too many requests"
+/// message so that `track_error_on_span_v3` correctly attributes the blame to the guest.
+async fn acquire_permit_v3(
+    semaphore: &ConnectionSemaphore,
+) -> std::result::Result<ConnectionPermit, v3::Error> {
+    semaphore.acquire().await.map_err(|err| {
+        tracing::warn!("key-value error: {err:?}");
+        v3::Error::Other("too many requests".into())
+    })
 }
 
 fn to_wasi_err(e: Error) -> wasi_keyvalue::store::Error {
@@ -451,6 +521,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         key: String,
     ) -> Result<Option<Vec<u8>>, wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
+        let _permit = self.acquire_permit_wasi().await?;
         store
             .get(&key, MAX_HOST_BUFFERED_BYTES)
             .await
@@ -465,6 +536,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         value: Vec<u8>,
     ) -> Result<(), wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
+        let _permit = self.acquire_permit_wasi().await?;
         store.set(&key, &value).await.map_err(to_wasi_err)
     }
 
@@ -475,6 +547,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         key: String,
     ) -> Result<(), wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
+        let _permit = self.acquire_permit_wasi().await?;
         store.delete(&key).await.map_err(to_wasi_err)
     }
 
@@ -485,6 +558,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
         key: String,
     ) -> Result<bool, wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(self_)?;
+        let _permit = self.acquire_permit_wasi().await?;
         store.exists(&key).await.map_err(to_wasi_err)
     }
 
@@ -500,6 +574,7 @@ impl wasi_keyvalue::store::HostBucket for KeyValueDispatch {
             )),
             None => {
                 let store = self.get_store_wasi(self_)?;
+                let _permit = self.acquire_permit_wasi().await?;
                 let keys = store
                     .get_keys(MAX_HOST_BUFFERED_BYTES)
                     .await
@@ -527,6 +602,7 @@ impl wasi_keyvalue::batch::Host for KeyValueDispatch {
         if keys.is_empty() {
             return Ok(vec![]);
         }
+        let _permit = self.acquire_permit_wasi().await?;
         store
             .get_many(keys, MAX_HOST_BUFFERED_BYTES)
             .await
@@ -543,6 +619,7 @@ impl wasi_keyvalue::batch::Host for KeyValueDispatch {
         if key_values.is_empty() {
             return Ok(());
         }
+        let _permit = self.acquire_permit_wasi().await?;
         store.set_many(key_values).await.map_err(to_wasi_err)
     }
 
@@ -556,6 +633,7 @@ impl wasi_keyvalue::batch::Host for KeyValueDispatch {
         if keys.is_empty() {
             return Ok(());
         }
+        let _permit = self.acquire_permit_wasi().await?;
         store.delete_many(keys).await.map_err(to_wasi_err)
     }
 }
@@ -592,6 +670,7 @@ impl wasi_keyvalue::atomics::HostCas for KeyValueDispatch {
         let cas = self
             .get_cas(cas)
             .map_err(|e| wasi_keyvalue::store::Error::Other(e.to_string()))?;
+        let _permit = self.acquire_permit_wasi().await?;
         cas.current(MAX_HOST_BUFFERED_BYTES)
             .await
             .map_err(to_wasi_err)
@@ -619,6 +698,7 @@ impl wasi_keyvalue::atomics::Host for KeyValueDispatch {
         delta: i64,
     ) -> Result<i64, wasi_keyvalue::store::Error> {
         let store = self.get_store_wasi(bucket)?;
+        let _permit = self.acquire_permit_wasi().await?;
         store.increment(key, delta).await.map_err(to_wasi_err)
     }
 
@@ -632,6 +712,10 @@ impl wasi_keyvalue::atomics::Host for KeyValueDispatch {
         let cas = self
             .get_cas(Resource::<Bucket>::new_own(cas_rep))
             .map_err(|e| CasError::StoreError(atomics::Error::Other(e.to_string())))?;
+        let _permit = self
+            .acquire_permit_wasi()
+            .await
+            .map_err(CasError::StoreError)?;
 
         match cas.swap(value).await {
             Ok(_) => Ok(()),

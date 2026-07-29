@@ -8,11 +8,13 @@ use std::{
 };
 
 use anyhow::ensure;
+use spin_connection_semaphore::{ConnectionSemaphore, LimitedSemaphore};
 use spin_factor_otel::OtelFactorState;
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, FactorInstanceBuilder, InitContext, PrepareContext,
     RuntimeFactors,
 };
+use spin_locked_app::APP_NAME_KEY;
 use spin_locked_app::MetadataKey;
 
 /// Metadata key for key-value stores.
@@ -62,7 +64,8 @@ impl Factor for KeyValueFactor {
         &self,
         mut ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState> {
-        let store_managers = ctx.take_runtime_config().unwrap_or_default();
+        let runtime_config = ctx.take_runtime_config().unwrap_or_default();
+        let store_managers = runtime_config.clone();
 
         let delegating_manager = DelegatingStoreManager::new(store_managers);
         let store_manager = Arc::new(delegating_manager);
@@ -87,9 +90,29 @@ impl Factor for KeyValueFactor {
             // TODO: warn (?) on unused store?
         }
 
+        let app_id: Arc<str> = ctx
+            .app()
+            .get_metadata(APP_NAME_KEY)?
+            .unwrap_or_else(|| "<unnamed>".into())
+            .into();
+
+        // The global connection semaphore is not used here because the KV factor limits
+        // operations (not connections) and cannot access the underlying client through the
+        // `Store` trait abstraction.
+        let semaphore = ConnectionSemaphore::new(
+            None,
+            runtime_config
+                .max_concurrent_operations()
+                .map(LimitedSemaphore::new),
+            "key-value",
+            app_id,
+            runtime_config.wait_timeout(),
+        );
+
         Ok(AppState {
             store_manager,
             component_allowed_stores,
+            semaphore,
         })
     }
 
@@ -107,6 +130,7 @@ impl Factor for KeyValueFactor {
         Ok(InstanceBuilder {
             store_manager: app_state.store_manager.clone(),
             allowed_stores,
+            semaphore: app_state.semaphore.clone(),
             otel,
         })
     }
@@ -126,6 +150,8 @@ pub struct AppState {
     /// This is a map from component ID to the set of store labels that the
     /// component is allowed to use.
     component_allowed_stores: HashMap<String, HashSet<String>>,
+    /// App-scoped semaphore used to limit in-flight key-value operations.
+    semaphore: ConnectionSemaphore,
 }
 
 impl AppState {
@@ -187,6 +213,8 @@ pub struct InstanceBuilder {
     store_manager: Arc<AppStoreManager>,
     /// The allowed stores for this component instance.
     allowed_stores: HashSet<String>,
+    /// App-scoped semaphore shared by all component instances for this app.
+    semaphore: ConnectionSemaphore,
     otel: OtelFactorState,
 }
 
@@ -197,12 +225,14 @@ impl FactorInstanceBuilder for InstanceBuilder {
         let Self {
             store_manager,
             allowed_stores,
+            semaphore,
             otel,
         } = self;
-        Ok(KeyValueDispatch::new_with_capacity(
+        Ok(KeyValueDispatch::new_with_capacity_and_semaphore(
             allowed_stores,
             store_manager,
             u32::MAX,
+            semaphore,
             otel,
         ))
     }
