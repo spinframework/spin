@@ -332,10 +332,8 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
             (host.get_store(store).cloned(), host.semaphore.clone())
         });
         let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
-        let _permit = permit_fut
-            .acquire()
+        let _permit = acquire_permit_v3(&permit_fut)
             .await
-            .map_err(log_error_v3)
             .map_err(track_error_on_span_v3)?;
         store
             .get(&key, MAX_HOST_BUFFERED_BYTES)
@@ -356,10 +354,8 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
             (host.get_store(store).cloned(), host.semaphore.clone())
         });
         let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
-        let _permit = semaphore
-            .acquire()
+        let _permit = acquire_permit_v3(&semaphore)
             .await
-            .map_err(log_error_v3)
             .map_err(track_error_on_span_v3)?;
         store
             .set(&key, &value)
@@ -379,10 +375,8 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
             (host.get_store(store).cloned(), host.semaphore.clone())
         });
         let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
-        let _permit = semaphore
-            .acquire()
+        let _permit = acquire_permit_v3(&semaphore)
             .await
-            .map_err(log_error_v3)
             .map_err(track_error_on_span_v3)?;
         store
             .delete(&key)
@@ -402,10 +396,8 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
             (host.get_store(store).cloned(), host.semaphore.clone())
         });
         let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
-        let _permit = semaphore
-            .acquire()
+        let _permit = acquire_permit_v3(&semaphore)
             .await
-            .map_err(log_error_v3)
             .map_err(track_error_on_span_v3)?;
         store
             .exists(&key)
@@ -425,10 +417,8 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
         });
         let store = store_result.map_err(|_| v3::Error::NoSuchStore)?;
 
-        let _permit = semaphore
-            .acquire()
+        let _permit = acquire_permit_v3(&semaphore)
             .await
-            .map_err(log_error_v3)
             .map_err(track_error_on_span_v3)?;
 
         let (keys_rx, err_rx) = store.get_keys_async(MAX_HOST_BUFFERED_BYTES).await;
@@ -446,8 +436,9 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
 
 /// Make sure that infrastructure related errors are tracked in the current span.
 fn track_error_on_span(err: Error) -> Error {
-    let blame = match err {
+    let blame = match &err {
         Error::NoSuchStore | Error::AccessDenied => Blame::Guest,
+        Error::Other(msg) if msg.contains("too many requests") => Blame::Guest,
         Error::StoreTableFull | Error::Other(_) => Blame::Host,
     };
     traces::mark_as_error(&err, Some(blame));
@@ -456,12 +447,24 @@ fn track_error_on_span(err: Error) -> Error {
 
 /// Make sure that infrastructure related errors are tracked in the current span.
 fn track_error_on_span_v3(err: v3::Error) -> v3::Error {
-    let blame = match err {
+    let blame = match &err {
         v3::Error::NoSuchStore | v3::Error::AccessDenied => Blame::Guest,
+        v3::Error::Other(msg) if msg.contains("too many requests") => Blame::Guest,
         v3::Error::StoreTableFull | v3::Error::Other(_) => Blame::Host,
     };
     traces::mark_as_error(&err, Some(blame));
     err
+}
+
+/// Maps a semaphore acquisition failure to a v3 error with a consistent "too many requests"
+/// message so that `track_error_on_span_v3` correctly attributes the blame to the guest.
+async fn acquire_permit_v3(
+    semaphore: &ConnectionSemaphore,
+) -> std::result::Result<ConnectionPermit, v3::Error> {
+    semaphore.acquire().await.map_err(|err| {
+        tracing::warn!("key-value error: {err:?}");
+        v3::Error::Other("too many requests".into())
+    })
 }
 
 fn to_wasi_err(e: Error) -> wasi_keyvalue::store::Error {

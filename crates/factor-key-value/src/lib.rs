@@ -96,6 +96,9 @@ impl Factor for KeyValueFactor {
             .unwrap_or_else(|| "<unnamed>".into())
             .into();
 
+        // The global connection semaphore is not used here because the KV factor limits
+        // operations (not connections) and cannot access the underlying client through the
+        // `Store` trait abstraction.
         let semaphore = ConnectionSemaphore::new(
             None,
             runtime_config
