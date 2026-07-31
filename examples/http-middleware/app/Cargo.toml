@@ -1,0 +1,13 @@
+[package]
+name = "http-middleware-app"
+version = "0.2.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1"
+spin-sdk = { git = "https://github.com/spinframework/spin-rust-sdk", branch = "main", default-features = false, features = ["http"] }
+
+[workspace]
