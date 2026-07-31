@@ -386,25 +386,25 @@ impl<T, U> Drop for InstanceState<T, U> {
     fn drop(&mut self) {
         // Record the component execution time.
         #[cfg(feature = "cpu-time-metrics")]
-        spin_telemetry::metrics::histogram!(
+        spin_telemetry::metrics::histogram_f64!(
             spin.component_cpu_time = self.cpu_time_elapsed.as_secs_f64(),
-            component_id = self.component_id,
+            component_id = self.component_id.clone(),
             // According to the OpenTelemetry spec, instruments measuring durations should use "s" as the unit.
             // See https://opentelemetry.io/docs/specs/semconv/general/metrics/#units
             unit = "s"
         );
 
         // Record the component memory consumed on initialization.
-        spin_telemetry::metrics::histogram!(
+        spin_telemetry::metrics::histogram_u64!(
             spin.component_memory_used_on_init = self.memory_used_on_init,
-            component_id = self.component_id,
+            component_id = self.component_id.clone(),
             unit = "By"
         );
 
         // Record the component memory consumed during execution.
-        spin_telemetry::metrics::histogram!(
+        spin_telemetry::metrics::histogram_u64!(
             spin.component_memory_used = self.core.memory_consumed(),
-            component_id = self.component_id,
+            component_id = self.component_id.clone(),
             unit = "By"
         );
     }
