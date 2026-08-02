@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, anyhow};
+use itertools::Itertools;
 
 mod environment;
 mod loader;
@@ -25,16 +26,11 @@ impl<'a> Targets<'a> {
     }
 
     fn all_refs(&self) -> Vec<&TargetEnvironmentRef> {
-        let mut set = std::collections::HashSet::new();
-        for env_id in self.default {
-            set.insert(env_id);
-        }
-        for list in self.overrides.values() {
-            for env_id in *list {
-                set.insert(env_id);
-            }
-        }
-        set.into_iter().collect()
+        self.default
+            .iter()
+            .chain(self.overrides.values().flat_map(|list| list.iter()))
+            .unique()
+            .collect()
     }
 }
 

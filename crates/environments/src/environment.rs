@@ -244,6 +244,7 @@ pub type TriggerType = String;
 mod test {
     use super::*;
 
+    use itertools::Itertools;
     use std::path::PathBuf;
 
     const SIMPLE_WIT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/simple-wit");
@@ -335,14 +336,7 @@ mod test {
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
                 .await;
-        assert!(
-            errs.is_empty(),
-            "{}",
-            errs.iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
+        assert!(errs.is_empty(), "{}", errs.iter().join("\n"));
     }
 
     #[tokio::test]
@@ -401,12 +395,7 @@ mod test {
         assert!(
             validation.errors().is_empty(),
             "{}",
-            validation
-                .errors()
-                .iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join("\n")
+            validation.errors().iter().join("\n")
         );
         assert!(validation.is_ok());
     }
@@ -543,12 +532,7 @@ mod test {
         assert!(
             validation.errors().is_empty(),
             "{}",
-            validation
-                .errors()
-                .iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join("\n")
+            validation.errors().iter().join("\n")
         );
         assert!(validation.is_ok());
     }
@@ -577,14 +561,7 @@ mod test {
             &component,
         )
         .await;
-        assert!(
-            errs.is_empty(),
-            "{}",
-            errs.iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
+        assert!(errs.is_empty(), "{}", errs.iter().join("\n"));
     }
 
     #[tokio::test]
@@ -618,14 +595,7 @@ mod test {
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
                 .await;
-        assert!(
-            errs.is_empty(),
-            "{}",
-            errs.iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
+        assert!(errs.is_empty(), "{}", errs.iter().join("\n"));
     }
 
     #[tokio::test]
