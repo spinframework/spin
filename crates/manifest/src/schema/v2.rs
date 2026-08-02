@@ -1,4 +1,5 @@
 use anyhow::{Context, anyhow};
+use itertools::Itertools;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use spin_serde::{DependencyName, DependencyPackageName, FixedVersion, LowerSnakeId};
@@ -807,18 +808,14 @@ impl ComponentDependencies {
     /// This method ensures that dependencies names do not conflict with each other. That is to say
     /// that two dependencies of the same package must have disjoint versions or interfaces.
     fn ensure_disjoint(&self) -> anyhow::Result<()> {
-        for (idx, this) in self.inner.keys().enumerate() {
-            for other in self.inner.keys().skip(idx + 1) {
-                let DependencyName::Package(other) = other else {
-                    continue;
-                };
-                let DependencyName::Package(this) = this else {
-                    continue;
-                };
+        for [this, other] in self.inner.keys().array_combinations::<2>() {
+            let (DependencyName::Package(this), DependencyName::Package(other)) = (this, other)
+            else {
+                continue;
+            };
 
-                if this.package == other.package {
-                    Self::check_disjoint(this, other)?;
-                }
+            if this.package == other.package {
+                Self::check_disjoint(this, other)?;
             }
         }
         Ok(())

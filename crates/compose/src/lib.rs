@@ -1,5 +1,6 @@
 use anyhow::Context;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use semver::Version;
 use spin_app::locked::InheritConfiguration as LockedInheritConfiguration;
 use spin_common::{ui::quoted_path, url::parse_file_url};
@@ -191,14 +192,9 @@ fn format_conflicts(conflicts: &[(String, Vec<DependencyName>)]) -> String {
             format!(
                 "import '{}' satisfied by dependencies: '{}'",
                 import_name,
-                dependency_names
-                    .iter()
-                    .map(|name| name.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                dependency_names.iter().join(", ")
             )
         })
-        .collect::<Vec<_>>()
         .join("; ")
 }
 

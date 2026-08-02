@@ -2,6 +2,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
+use itertools::Itertools;
 use spin_common::ui::quoted_path;
 
 use crate::{Diagnosis, PatientApp, Treatment};
@@ -75,7 +76,6 @@ impl Treatment for WasmMissing {
             .build_cmd(patient)?
             .get_args()
             .map(|arg| arg.to_string_lossy())
-            .collect::<Vec<_>>()
             .join(" ");
         Ok(format!("Run `spin {args}`"))
     }

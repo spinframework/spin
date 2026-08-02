@@ -12,6 +12,7 @@ rust-version.workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
+itertools = { workspace = true }
 semver = { workspace = true }
 spin-app = { path = "../app" }
 spin-capabilities = { path = "../capabilities" }
