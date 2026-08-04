@@ -482,6 +482,7 @@ mod test {
                 .into_iter()
                 .map(ToOwned::to_owned)
                 .collect(),
+            Default::default(),
             Arc::new(DelegatingStoreManager::new([(
                 "default".to_owned(),
                 Arc::new(KeyValueSqlite::new(DatabaseLocation::InMemory)) as _,

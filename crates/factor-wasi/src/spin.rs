@@ -22,10 +22,11 @@ impl SpinFilesMounter {
 impl FilesMounter for SpinFilesMounter {
     fn mount_files(
         &self,
-        app_component: &spin_factors::AppComponent,
+        files: std::slice::Iter<'_, spin_factors::ContentPath>,
+        // app_component: &spin_factors::AppComponent,
         mut ctx: crate::MountFilesContext,
     ) -> spin_factors::anyhow::Result<()> {
-        for content_dir in app_component.files() {
+        for content_dir in files {
             let source_uri = content_dir
                 .content
                 .source

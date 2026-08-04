@@ -30,4 +30,4 @@ tokio = { workspace = true, features = ["macros", "rt", "fs"] }
 toml = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
-wat = "1"
+wat = "1.259"

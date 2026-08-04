@@ -210,7 +210,7 @@ pub(crate) struct TracingState {
 
 /// Manages access to the OtelFactor tracing state for the purpose of maintaining proper span
 /// parent/child relationships when WASI Otel spans are being created.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct OtelFactorState {
     pub(crate) tracing_state: Option<Arc<RwLock<TracingState>>>,
 }

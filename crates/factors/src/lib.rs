@@ -7,7 +7,7 @@ pub use anyhow;
 pub use serde;
 pub use wasmtime;
 
-pub use spin_app::{App, AppComponent};
+pub use spin_app::{App, AppComponent, locked::ContentPath};
 pub use spin_factors_derive::RuntimeFactors;
 
 pub use crate::{

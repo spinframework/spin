@@ -37,7 +37,7 @@ tokio-util = { version = "0.7", features = ["compat"] }
 tracing = { workspace = true }
 walkdir = { workspace = true }
 wasmparser = { workspace = true }
-wat = "1"
+wat = "1.259"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

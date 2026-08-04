@@ -19,7 +19,9 @@ pub use app_details::AppDetails;
 pub use component::{
     Component, ComponentDependencies, ComponentProfileBuildOverride, ComponentProfileOverride,
 };
-pub use dependency::{ComponentDependency, InheritConfiguration, TriggerDependency};
+pub use dependency::{
+    ComponentDependency, DependencyCapabilities, InheritConfiguration, TriggerDependency,
+};
 pub use target_env::TargetEnvironmentRef;
 pub use trigger::{ComponentSpec, OneOrManyComponentSpecs, Trigger, TriggerDependencies};
 

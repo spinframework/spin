@@ -2,6 +2,7 @@ use crate::{
     AI_MODELS, ALLOWED_OUTBOUND_HOSTS, CAPABILITY_SETS, ENVIRONMENT, FILES, InheritConfiguration,
     KEY_VALUE_STORES, SQLITE_DATABASES, VARIABLES,
 };
+use spin_serde::{CapabilitySetKey, NamedImportKey};
 use wac_graph::types::{ItemKind, SubtypeChecker, are_semver_compatible};
 use wac_graph::{CompositionGraph, types::Package};
 
@@ -28,7 +29,8 @@ pub fn apply_deny_adapter(
     source: &[u8],
     inherits: InheritConfiguration,
 ) -> anyhow::Result<Vec<u8>> {
-    let allow = allow_list(inherits);
+    let allow = allow_list(&inherits);
+    let reimplements = reimplement_list(&inherits);
 
     let mut graph = CompositionGraph::new();
 
@@ -54,6 +56,8 @@ pub fn apply_deny_adapter(
     let mut plug_exports: Vec<(String, String)> = Vec::new();
     let mut cache = Default::default();
     let mut checker = SubtypeChecker::new(&mut cache);
+    let mut reimplementations = vec![];
+
     for (import_name, socket_ty) in &types[graph[dependency_id].ty()].imports {
         let ItemKind::Instance(iface) = socket_ty else {
             continue;
@@ -85,13 +89,33 @@ pub fn apply_deny_adapter(
                 .is_subtype(*plug_ty, types, *socket_ty, types)
                 .is_ok()
         {
-            plug_exports.push((plug_name.to_owned(), import_name.clone()));
+            match reimplements
+                .iter()
+                .find(|reimp| reimp.interface_name == plug_name)
+            {
+                Some(reimp) => reimplementations.push((
+                    reimp.capability_set_key.clone(),
+                    *socket_ty,
+                    import_name.to_string(),
+                )), // cannot be borrows because that results in Jane's Fighting Borrows of the World
+                None => plug_exports.push((plug_name.to_owned(), import_name.clone())),
+            }
         }
     }
 
-    if plug_exports.is_empty() {
+    if plug_exports.is_empty() && reimplementations.is_empty() {
         // No plugging needed — return the original source as-is.
         return Ok(source.to_vec());
+    }
+
+    for (cap_set_key, socket_ty, name) in reimplementations {
+        let key = NamedImportKey::new(cap_set_key, &name);
+        let reimplement_import = graph.import(key.flatten(), socket_ty)?;
+        graph.set_instantiation_argument(
+            socket_instantiation,
+            &name, /* ??? */
+            reimplement_import,
+        )?;
     }
 
     let plug_instantiation = graph.instantiate(deny_adapter_id);
@@ -115,7 +139,7 @@ pub fn apply_deny_adapter(
     Ok(bytes)
 }
 
-fn allow_list(inherits: InheritConfiguration) -> Vec<&'static str> {
+fn allow_list(inherits: &InheritConfiguration) -> Vec<&'static str> {
     let mut allow = vec![];
 
     match inherits {
@@ -138,10 +162,50 @@ fn allow_list(inherits: InheritConfiguration) -> Vec<&'static str> {
                 }
             }
         }
-        InheritConfiguration::None => {}
+        InheritConfiguration::None | InheritConfiguration::Exact { .. } => {}
     }
 
     allow
+}
+
+struct Reimplement {
+    capability_set_key: CapabilitySetKey,
+    interface_name: &'static str,
+}
+
+fn reimplement_list(inherits: &InheritConfiguration) -> Vec<Reimplement> {
+    fn push(list: &mut Vec<Reimplement>, key: &CapabilitySetKey, interface_name: &'static str) {
+        list.push(Reimplement {
+            capability_set_key: key.clone(),
+            interface_name,
+        });
+    }
+
+    match inherits {
+        InheritConfiguration::Exact(capabilities_key) => {
+            let mut reimplement = vec![];
+            for itf in ALLOWED_OUTBOUND_HOSTS {
+                push(&mut reimplement, capabilities_key, itf);
+            }
+            for itf in FILES {
+                push(&mut reimplement, capabilities_key, itf);
+            }
+            for itf in ENVIRONMENT {
+                push(&mut reimplement, capabilities_key, itf);
+            }
+            for itf in KEY_VALUE_STORES {
+                push(&mut reimplement, capabilities_key, itf);
+            }
+            for itf in SQLITE_DATABASES {
+                push(&mut reimplement, capabilities_key, itf);
+            }
+            for itf in VARIABLES {
+                push(&mut reimplement, capabilities_key, itf);
+            }
+            reimplement
+        }
+        _ => vec![],
+    }
 }
 
 #[cfg(test)]
