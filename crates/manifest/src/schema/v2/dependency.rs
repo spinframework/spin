@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use spin_serde::KebabId;
+use spin_serde::{KebabId, LowerSnakeId};
+
+use super::{Map, WasiFilesMount, json_schema, kebab_or_snake_case};
 
 /// Specifies how to satisfy an import dependency of the component. This may be one of:
 ///
@@ -76,6 +78,8 @@ pub enum ComponentDependency {
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
         inherit_configuration: Option<InheritConfiguration>,
+        /// TODO:
+        capabilities: Option<DependencyCapabilities>,
     },
     /// `... = { path = "path/to/component.wasm", export = "my-export" }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -101,6 +105,8 @@ pub enum ComponentDependency {
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
         inherit_configuration: Option<InheritConfiguration>,
+        /// TODO:
+        capabilities: Option<DependencyCapabilities>,
     },
     /// `... = { url = "https://example.com/component.wasm", sha256 = "..." }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -132,6 +138,8 @@ pub enum ComponentDependency {
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
         inherit_configuration: Option<InheritConfiguration>,
+        /// TODO:
+        capabilities: Option<DependencyCapabilities>,
     },
     /// `... = { component = "my-dependency" }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -157,6 +165,8 @@ pub enum ComponentDependency {
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
         inherit_configuration: Option<InheritConfiguration>,
+        /// TODO:
+        capabilities: Option<DependencyCapabilities>,
     },
 }
 
@@ -181,6 +191,17 @@ impl ComponentDependency {
                 inherit_configuration,
                 ..
             } => inherit_configuration.as_ref(),
+        }
+    }
+
+    /// TODO:
+    pub fn capabilities(&self) -> Option<&DependencyCapabilities> {
+        match self {
+            ComponentDependency::Version(_) => None,
+            ComponentDependency::Package { capabilities, .. }
+            | ComponentDependency::Local { capabilities, .. }
+            | ComponentDependency::HTTP { capabilities, .. }
+            | ComponentDependency::AppComponent { capabilities, .. } => capabilities.as_ref(),
         }
     }
 
@@ -274,6 +295,8 @@ pub enum TriggerDependency {
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
         inherit_configuration: Option<InheritConfiguration>,
+        /// TODO:
+        capabilities: Option<DependencyCapabilities>,
     },
     /// `... = { path = "path/to/component.wasm", export = "my-export" }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -293,6 +316,8 @@ pub enum TriggerDependency {
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
         inherit_configuration: Option<InheritConfiguration>,
+        /// TODO:
+        capabilities: Option<DependencyCapabilities>,
     },
     /// `... = { url = "https://example.com/component.wasm", sha256 = "..." }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -318,6 +343,8 @@ pub enum TriggerDependency {
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
         inherit_configuration: Option<InheritConfiguration>,
+        /// TODO:
+        capabilities: Option<DependencyCapabilities>,
     },
     /// `... = { component = "my-dependency" }`
     #[schemars(description = "")] // schema docs are on the parent
@@ -337,6 +364,8 @@ pub enum TriggerDependency {
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = true }`
         ///     `"my:dep/import" = { version = "0.1.0", inherit_configuration = ["ai_models", "allowed_outbound_hosts"] }`
         inherit_configuration: Option<InheritConfiguration>,
+        /// TODO:
+        capabilities: Option<DependencyCapabilities>,
     },
 }
 
@@ -353,4 +382,88 @@ pub enum InheritConfiguration {
     All(bool),
     /// Only the specified configuration keys will be inherited from the parent component.
     Some(Vec<String>),
+}
+
+/// TODO: unify with component capabilities
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct DependencyCapabilities {
+    // TODO: -------------------------------------------------------------------------------
+    /// Environment variables to be set for the Wasm module.
+    ///
+    /// `environment = { DB_URL = "mysql://spin:spin@localhost/dev" }`
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub environment: Map<String, String>,
+    /// The files the component is allowed to read. Each list entry is either:
+    ///
+    /// - a glob pattern (e.g. "assets/**/*.jpg"); or
+    ///
+    /// - a source-destination pair indicating where a host directory should be mapped in the guest (e.g. { source = "assets", destination = "/" })
+    ///
+    /// Learn more: https://spinframework.dev/writing-apps#including-files-with-components
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<WasiFilesMount>,
+    /// Any files or glob patterns that should not be available to the
+    /// Wasm module at runtime, even though they match a `files`` entry.
+    ///
+    /// Example: `exclude_files = ["secrets/*"]`
+    ///
+    /// Learn more: https://spinframework.dev/writing-apps#including-files-with-components
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_files: Vec<String>,
+
+    // END TODO: -------------------------------------------------------------------------------
+    /// Configuration variables available to the component. Names must be
+    /// in `lower_snake_case`. Values are strings, and may refer
+    /// to application variables using `{{ ... }}` syntax.
+    ///
+    /// `variables = { users_endpoint = "https://{{ api_host }}/users"}`
+    ///
+    /// Learn more: https://spinframework.dev/variables#adding-variables-to-your-applications
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub variables: Map<LowerSnakeId, String>,
+
+    /// The network destinations which the component is allowed to access.
+    /// Each entry is in the form "(scheme)://(host)[:port]". Each element
+    /// allows * as a wildcard e.g. "https://\*" (HTTPS on the default port
+    /// to any destination) or "\*://localhost:\*" (any protocol to any port on
+    /// localhost). The host part allows segment wildcards for subdomains
+    /// e.g. "https://\*.example.com". Application variables are allowed using
+    /// `{{ my_var }}`` syntax.
+    ///
+    /// Example: `allowed_outbound_hosts = ["redis://myredishost.com:6379"]`
+    ///
+    /// Learn more: https://spinframework.dev/http-outbound#granting-http-permissions-to-components
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(with = "Vec<json_schema::AllowedOutboundHost>")]
+    pub allowed_outbound_hosts: Vec<String>,
+
+    /// The key-value stores which the component is allowed to access. Stores are identified
+    /// by label e.g. "default" or "customer". Stores other than "default" must be mapped
+    /// to a backing store in the runtime config.
+    ///
+    /// Example: `key_value_stores = ["default", "my-store"]`
+    ///
+    /// Learn more: https://spinframework.dev/kv-store-api-guide#custom-key-value-stores
+    #[serde(
+        default,
+        with = "kebab_or_snake_case",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    #[schemars(with = "Vec<json_schema::KeyValueStore>")]
+    pub key_value_stores: Vec<String>,
+
+    /// The SQLite databases which the component is allowed to access. Databases are identified
+    /// by label e.g. "default" or "analytics". Databases other than "default" must be mapped
+    /// to a backing store in the runtime config. Use "spin up --sqlite" to run database setup scripts.
+    ///
+    /// Example: `sqlite_databases = ["default", "my-database"]`
+    ///
+    /// Learn more: https://spinframework.dev/sqlite-api-guide#preparing-an-sqlite-database
+    #[serde(
+        default,
+        with = "kebab_or_snake_case",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    #[schemars(with = "Vec<json_schema::SqliteDatabase>")]
+    pub sqlite_databases: Vec<String>,
 }

@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use spin_factor_otel::OtelFactorState;
 use spin_factors::{Factor, anyhow};
 use spin_locked_app::MetadataKey;
+use spin_world::CapabilitySetKey;
 use spin_world::spin::sqlite3_1_0::sqlite as v3;
 use spin_world::v1::sqlite as v1;
 use spin_world::v2::sqlite as v2;
@@ -66,11 +67,46 @@ impl Factor for SqliteFactor {
             })
             .collect::<anyhow::Result<HashMap<_, _>>>()?;
 
+        let mut id_capset_allowed_databases = HashMap::new();
+        for c in ctx.app().components() {
+            let mut this_comp_capset_allowed_databases = HashMap::new();
+            for caps in c.locked.dependency_capabilities() {
+                let csk = caps.capabilities_key.clone();
+                let allowed = caps.sqlite_databases.clone().into_iter().collect();
+                this_comp_capset_allowed_databases.insert(csk, allowed);
+            }
+            id_capset_allowed_databases.insert(
+                c.id().to_string(),
+                Arc::new(this_comp_capset_allowed_databases),
+            );
+        }
+
         ensure_allowed_databases_are_configured(&allowed_databases, |label| {
             connection_creators.contains_key(label)
         })?;
 
-        Ok(AppState::new(allowed_databases, connection_creators))
+        Ok(AppState::new(
+            allowed_databases,
+            id_capset_allowed_databases,
+            connection_creators,
+        ))
+    }
+
+    fn register_named_imports<T: spin_factors::InitContext<Self>>(
+        &self,
+        ctx: &mut T,
+        component: &spin_core::wasmtime::component::Component,
+    ) -> anyhow::Result<()> {
+        spin_world::named_imports::spin::sqlite3_1_0::sqlite::add_to_linker::<_, SqliteFactorData>(
+            ctx.linker(),
+            component,
+            |key| {
+                key.try_into()
+                    .map_err(spin_core::wasmtime::Error::from_anyhow)
+            },
+            T::get_data,
+        )?;
+        Ok(())
     }
 
     fn prepare<T: spin_factors::RuntimeFactors>(
@@ -83,9 +119,16 @@ impl Factor for SqliteFactor {
             .get(ctx.app_component().id())
             .cloned()
             .unwrap_or_default();
+        let capset_allowed_databases = ctx
+            .app_state()
+            .id_capset_allowed_databases
+            .get(ctx.app_component().id())
+            .cloned()
+            .unwrap_or_default();
         let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
         Ok(InstanceState::new(
             allowed_databases,
+            capset_allowed_databases,
             ctx.app_state().connection_creators.clone(),
             otel,
         ))
@@ -132,6 +175,7 @@ pub const ALLOWED_DATABASES_KEY: MetadataKey<Vec<String>> = MetadataKey::new("da
 pub struct AppState {
     /// A map from component id to a set of allowed database labels.
     allowed_databases: HashMap<String, Arc<HashSet<String>>>,
+    id_capset_allowed_databases: HashMap<String, Arc<HashMap<CapabilitySetKey, HashSet<String>>>>,
     /// A mapping from database label to a connection creator.
     connection_creators: HashMap<String, Arc<dyn ConnectionCreator>>,
 }
@@ -140,10 +184,15 @@ impl AppState {
     /// Create a new `AppState`
     pub fn new(
         allowed_databases: HashMap<String, Arc<HashSet<String>>>,
+        id_capset_allowed_databases: HashMap<
+            String,
+            Arc<HashMap<CapabilitySetKey, HashSet<String>>>,
+        >,
         connection_creators: HashMap<String, Arc<dyn ConnectionCreator>>,
     ) -> Self {
         Self {
             allowed_databases,
+            id_capset_allowed_databases,
             connection_creators,
         }
     }

@@ -10,6 +10,7 @@ dirs = { workspace = true }
 futures = { workspace = true }
 glob = { workspace = true }
 path-absolutize = { workspace = true, features = ["use_unix_paths_on_wasm"] }
+regex = { workspace = true }
 reqwest = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }

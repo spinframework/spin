@@ -9,10 +9,10 @@ use spin_core::wasmtime::component::{Accessor, Resource};
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::ConnectionSemaphore;
 use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::redis::redis as v3;
 use spin_world::v1::{redis as v1, redis_types};
 use spin_world::v2::redis as v2;
+use spin_world::{CapabilitySetKey, MAX_HOST_BUFFERED_BYTES, NamedImportKey};
 use tracing::field::Empty;
 use tracing::{Level, instrument};
 
@@ -30,8 +30,14 @@ pub struct InstanceState {
 }
 
 impl InstanceState {
-    async fn is_address_allowed(&self, address: &str) -> Result<bool> {
-        self.allowed_host_checker.is_address_allowed(address).await
+    async fn is_address_allowed(
+        &self,
+        key: Option<&CapabilitySetKey>,
+        address: &str,
+    ) -> Result<bool> {
+        self.allowed_host_checker
+            .is_address_allowed(key, address)
+            .await
     }
 
     async fn establish_connection(
@@ -235,6 +241,189 @@ impl crate::RedisFactorData {
     }
 }
 
+impl spin_world::named_imports::spin::redis::redis::Host for InstanceState {
+    fn convert_error(&mut self, err: v3::Error) -> anyhow::Result<v3::Error> {
+        Ok(err)
+    }
+}
+
+impl spin_world::named_imports::spin::redis::redis::HostConnection for InstanceState {
+    async fn drop(
+        &mut self,
+        _id: NamedImportKey,
+        connection: Resource<spin_world::named_imports::spin::redis::redis::Connection>,
+    ) -> anyhow::Result<()> {
+        self.connections.remove(connection.rep());
+        Ok(())
+    }
+}
+
+impl<T: Send> spin_world::named_imports::spin::redis::redis::HostConnectionWithStore<T>
+    for crate::RedisFactorData
+{
+    #[instrument(name = "spin_outbound_redis.open_connection", skip(accessor, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    async fn open(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        address: String,
+    ) -> Result<Resource<v3::Connection>, v3::Error> {
+        let (allowed_host_checker, blocked_networks, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (
+                host.allowed_host_checker.clone(),
+                host.blocked_networks.clone(),
+                host.semaphore.clone(),
+            )
+        });
+
+        if !allowed_host_checker
+            .is_address_allowed(Some(id.capability_set()), &address)
+            .await
+            .map_err(|e| v3::Error::Other(e.to_string()))?
+        {
+            return Err(v3::Error::InvalidAddress);
+        }
+
+        let permit = semaphore
+            .acquire()
+            .await
+            .map_err(|_| v3::Error::TooManyConnections)?;
+
+        let config =
+            AsyncConnectionConfig::new().set_dns_resolver(SpinDnsResolver(blocked_networks));
+        let conn = redis::Client::open(address.as_str())
+            .map_err(|_| v3::Error::InvalidAddress)?
+            .get_multiplexed_async_connection_with_config(&config)
+            .await
+            .map_err(other_error_v3)?;
+
+        accessor.with(|mut access| {
+            let host = access.get();
+            host.connections
+                .push((conn, permit))
+                .map(Resource::new_own)
+                .map_err(|_| v3::Error::TooManyConnections)
+        })
+    }
+
+    #[instrument(name = "spin_outbound_redis.publish", skip(accessor, connection, payload), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "PUBLISH"))]
+    async fn publish(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        channel: String,
+        payload: v3::Payload,
+    ) -> Result<(), v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        operations::publish(&mut conn, channel, payload).await
+    }
+
+    #[instrument(name = "spin_outbound_redis.get", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "GET"))]
+    async fn get(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        key: String,
+    ) -> Result<Option<v3::Payload>, v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        operations::get(&mut conn, key).await
+    }
+
+    #[instrument(name = "spin_outbound_redis.set", skip(accessor, connection, value), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SET"))]
+    async fn set(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        key: String,
+        value: v3::Payload,
+    ) -> Result<(), v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        operations::set(&mut conn, key, value).await
+    }
+
+    #[instrument(name = "spin_outbound_redis.incr", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "INCRBY"))]
+    async fn incr(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        key: String,
+    ) -> Result<i64, v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        operations::incr(&mut conn, key).await
+    }
+
+    #[instrument(name = "spin_outbound_redis.del", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "DEL"))]
+    async fn del(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        keys: Vec<String>,
+    ) -> Result<u32, v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        operations::del(&mut conn, keys).await
+    }
+
+    #[instrument(name = "spin_outbound_redis.sadd", skip(accessor, connection, values), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SADD"))]
+    async fn sadd(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        key: String,
+        values: Vec<String>,
+    ) -> Result<u32, v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        operations::sadd(&mut conn, key, values).await
+    }
+
+    #[instrument(name = "spin_outbound_redis.smembers", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SMEMBERS"))]
+    async fn smembers(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        key: String,
+    ) -> Result<Vec<String>, v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        operations::smembers(&mut conn, key).await
+    }
+
+    #[instrument(name = "spin_outbound_redis.srem", skip(accessor, connection, values), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = "SREM"))]
+    async fn srem(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        key: String,
+        values: Vec<String>,
+    ) -> Result<u32, v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        operations::srem(&mut conn, key, values).await
+    }
+
+    #[instrument(name = "spin_outbound_redis.execute", skip(accessor, connection), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("{}", command)))]
+    async fn execute(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        command: String,
+        arguments: Vec<v3::RedisParameter>,
+    ) -> Result<Vec<v3::RedisResult>, v3::Error> {
+        let mut conn = Self::get_conn(accessor, connection)?;
+        Ok(operations::execute(&mut conn, command, arguments)
+            .await?
+            .into_v3())
+    }
+}
+
 impl<T: Send> v3::HostConnectionWithStore<T> for crate::RedisFactorData {
     #[instrument(name = "spin_outbound_redis.open_connection", skip(accessor, address), err(level = Level::INFO),
         fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
@@ -253,7 +442,7 @@ impl<T: Send> v3::HostConnectionWithStore<T> for crate::RedisFactorData {
         });
 
         if !allowed_host_checker
-            .is_address_allowed(&address)
+            .is_address_allowed(None, &address)
             .await
             .map_err(|e| v3::Error::Other(e.to_string()))?
         {
@@ -401,7 +590,7 @@ impl v2::HostConnection for crate::InstanceState {
     async fn open(&mut self, address: String) -> Result<Resource<v2::Connection>, v2::Error> {
         self.otel.reparent_tracing_span();
         if !self
-            .is_address_allowed(&address)
+            .is_address_allowed(None, &address)
             .await
             .map_err(|e| v2::Error::Other(e.to_string()))?
         {
@@ -563,7 +752,7 @@ fn other_error_v3(e: impl std::fmt::Display) -> v3::Error {
 /// Delegate a function call to the v2::HostConnection implementation
 macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
-        if !$self.is_address_allowed(&$address).await.map_err(|_| v1::Error::Error)?  {
+        if !$self.is_address_allowed(None, &$address).await.map_err(|_| v1::Error::Error)?  {
             return Err(v1::Error::Error);
         }
         let connection = match $self.establish_connection($address).await {

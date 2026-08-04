@@ -8954,6 +8954,8 @@ name = "spin-capabilities"
 version = "4.3.0-pre0"
 dependencies = [
  "anyhow",
+ "spin-common",
+ "spin-serde",
  "wac-graph",
  "wasm-encoder 0.262.0",
  "wasmparser 0.262.0",
@@ -9222,6 +9224,7 @@ dependencies = [
  "async-trait",
  "futures",
  "spin-locked-app",
+ "spin-serde",
  "thiserror 2.0.20",
  "tokio",
  "toml 0.8.23",
@@ -9488,6 +9491,7 @@ dependencies = [
 name = "spin-factor-variables"
 version = "4.3.0-pre0"
 dependencies = [
+ "spin-common",
  "spin-core",
  "spin-expressions",
  "spin-factor-otel",
@@ -9511,6 +9515,7 @@ dependencies = [
  "spin-connection-semaphore",
  "spin-factors",
  "spin-factors-test",
+ "spin-serde",
  "tokio",
  "tracing",
  "wasmtime",
@@ -9704,6 +9709,7 @@ dependencies = [
  "futures",
  "glob",
  "path-absolutize",
+ "regex",
  "reqwest 0.12.28",
  "semver",
  "serde",
@@ -9730,6 +9736,7 @@ version = "4.3.0-pre0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "indexmap 2.14.0",
  "itertools 0.15.0",
  "serde",
  "serde_json",
@@ -9805,6 +9812,7 @@ dependencies = [
  "ip_network",
  "ip_network_table",
  "spin-expressions",
+ "spin-serde",
  "tracing",
  "url",
  "urlencoding",
@@ -9914,6 +9922,8 @@ dependencies = [
  "schemars 1.2.2",
  "semver",
  "serde",
+ "sha2 0.10.9",
+ "spin-common",
  "wasm-pkg-common",
 ]
 
@@ -10173,6 +10183,7 @@ dependencies = [
  "opentelemetry_sdk",
  "serde",
  "serde_json",
+ "spin-serde",
  "wasmtime",
 ]
 

@@ -53,6 +53,16 @@ pub trait Factor: Any + Sized {
         ctx: ConfigureAppContext<T, Self>,
     ) -> anyhow::Result<Self::AppState>;
 
+    fn register_named_imports<T: InitContext<Self>>(
+        &self,
+        ctx: &mut T,
+        component: &wasmtime::component::Component,
+    ) -> anyhow::Result<()> {
+        // TODO: remove default impl I guess
+        _ = (ctx, component);
+        Ok(())
+    }
+
     /// Creates a new `FactorInstanceBuilder`, which will later build
     /// per-instance state for this factor.
     ///
@@ -76,6 +86,9 @@ pub trait InitContext<F: Factor> {
     /// The `T` in `Store<T>`.
     type StoreData: Send + 'static;
 
+    /// TODO
+    type Field: FactorField<State = Self::StoreData, Factor = F>;
+
     /// Returns a mutable reference to the [`wasmtime::component::Linker`].
     fn linker(&mut self) -> &mut Linker<Self::StoreData>;
 
@@ -88,7 +101,9 @@ pub trait InitContext<F: Factor> {
     /// resource table as well.
     fn get_data_with_table(
         store: &mut Self::StoreData,
-    ) -> (&mut FactorInstanceState<F>, &mut ResourceTable);
+    ) -> (&mut FactorInstanceState<F>, &mut ResourceTable) {
+        Self::Field::get(store)
+    }
 
     /// Convenience method to link a binding to the linker.
     fn link_bindings(
@@ -119,12 +134,29 @@ pub struct FactorInitContext<'a, T: 'static, G> {
 
 // used in #[derive(RuntimeFactor)]
 #[doc(hidden)]
-pub trait FactorField {
-    type State: crate::RuntimeFactorsInstanceState;
+pub trait FactorField: 'static {
+    type State: Send + 'static;
     type Factor: Factor;
 
     fn get(field: &mut Self::State)
     -> (&mut FactorInstanceState<Self::Factor>, &mut ResourceTable);
+}
+
+pub struct InitContextFactorField<T, G>(PhantomData<(T, G)>);
+
+impl<T, G> FactorField for InitContextFactorField<T, G>
+where
+    G: FactorField,
+    T: AsInstanceState<G::State> + Send + 'static,
+{
+    type State = T;
+    type Factor = G::Factor;
+
+    fn get(
+        field: &mut Self::State,
+    ) -> (&mut FactorInstanceState<Self::Factor>, &mut ResourceTable) {
+        G::get(field.as_instance_state())
+    }
 }
 
 impl<T, G> InitContext<G::Factor> for FactorInitContext<'_, T, G>
@@ -133,15 +165,10 @@ where
     T: AsInstanceState<G::State> + Send + 'static,
 {
     type StoreData = T;
+    type Field = InitContextFactorField<T, G>;
 
     fn linker(&mut self) -> &mut Linker<Self::StoreData> {
         self.linker
-    }
-
-    fn get_data_with_table(
-        store: &mut Self::StoreData,
-    ) -> (&mut FactorInstanceState<G::Factor>, &mut ResourceTable) {
-        G::get(store.as_instance_state())
     }
 }
 

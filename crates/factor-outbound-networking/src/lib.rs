@@ -14,6 +14,7 @@ use spin_factors::{
 };
 use spin_locked_app::APP_NAME_KEY;
 use spin_outbound_networking_config::allowed_hosts::{DisallowedHostHandler, OutboundAllowedHosts};
+use spin_serde::CapabilitySetKey;
 use url::Url;
 
 use crate::{
@@ -67,6 +68,24 @@ impl Factor for OutboundNetworkingFactor {
             })
             .collect::<anyhow::Result<_>>()?;
 
+        let component_dep_allowed_hosts = ctx
+            .app()
+            .components()
+            .map(|component| {
+                let dep_allowed_hosts = component
+                    .locked
+                    .dependency_capabilities()
+                    .map(|cc| {
+                        (
+                            cc.capabilities_key.clone(),
+                            Arc::new(cc.allowed_outbound_hosts.clone()),
+                        )
+                    })
+                    .collect();
+                (component.id().to_string(), Arc::new(dep_allowed_hosts))
+            })
+            .collect();
+
         let RuntimeConfig {
             client_tls_configs,
             blocked_ip_networks: block_networks,
@@ -114,6 +133,7 @@ impl Factor for OutboundNetworkingFactor {
 
         Ok(AppState {
             component_allowed_hosts,
+            component_dep_allowed_hosts,
             blocked_networks,
             tls_client_configs,
             socket_connection_semaphore,
@@ -132,7 +152,14 @@ impl Factor for OutboundNetworkingFactor {
             .get(ctx.app_component().id())
             .cloned()
             .context("missing component allowed hosts")?;
-        let is_empty = hosts.is_empty();
+        let dep_hosts = ctx
+            .app_state()
+            .component_dep_allowed_hosts
+            .get(ctx.app_component().id())
+            .cloned()
+            .context("missing component allowed hosts")?;
+        let is_empty = hosts.is_empty() && dep_hosts.values().all(|hs| hs.is_empty());
+
         let resolver = ctx
             .instance_builder::<VariablesFactor>()?
             .expression_resolver()
@@ -143,6 +170,8 @@ impl Factor for OutboundNetworkingFactor {
             .components()
             .map(|c| c.id().to_string())
             .collect::<Vec<_>>();
+        let resolver2 = resolver.clone();
+        let component_ids2 = component_ids.clone();
         let allowed_hosts_future = async move {
             let prepared = resolver.prepare().await.inspect_err(|err| {
                 tracing::error!(
@@ -160,8 +189,34 @@ impl Factor for OutboundNetworkingFactor {
         .map(|res| res.map(Arc::new).map_err(Arc::new))
         .boxed()
         .shared();
+
+        let dep_allowed_hosts_futures = dep_hosts.iter().map(|(csk, aoh)| {
+            let aoh = aoh.clone();
+            let resolver = resolver2.clone();
+            let component_ids = component_ids2.clone();
+            let fut = async move {
+                let prepared = resolver.prepare().await.inspect_err(|err| {
+                    tracing::error!(
+                        %err, "error.type" = "variable_resolution_failed",
+                        "Error resolving variables when checking request against allowed outbound hosts",
+                    );
+                })?;
+                AllowedHostsConfig::parse(&aoh, &prepared, &component_ids).inspect_err(|err| {
+                    tracing::error!(
+                        %err, "error.type" = "invalid_allowed_hosts",
+                        "Error parsing allowed outbound hosts",
+                    );
+                })
+            }
+            .map(|res| res.map(Arc::new).map_err(Arc::new))
+            .boxed()
+            .shared();
+            (csk.clone(), fut)
+        }).collect::<HashMap<_, _>>();
+
         let allowed_hosts = OutboundAllowedHosts::new(
             allowed_hosts_future.clone(),
+            dep_allowed_hosts_futures.clone(),
             self.disallowed_host_handler.clone(),
             is_empty,
         );
@@ -182,9 +237,10 @@ impl Factor for OutboundNetworkingFactor {
 
                 wasi_builder.allow_tcp_udp(!allowed_hosts.is_empty());
 
-                wasi_builder.outbound_socket_addr_check(move |addr, addr_use| {
+                wasi_builder.outbound_socket_addr_check(move |csk, addr, addr_use| {
                     socket_addr_use_allowed(
                         allowed_hosts.clone(),
+                        csk,
                         blocked_networks.clone(),
                         addr,
                         addr_use,
@@ -208,9 +264,12 @@ impl Factor for OutboundNetworkingFactor {
     }
 }
 
+type CapabilitySetKeyToHostsMap = HashMap<CapabilitySetKey, Arc<Vec<String>>>;
+
 pub struct AppState {
     /// Component ID -> Allowed host list
     component_allowed_hosts: HashMap<String, Arc<[String]>>,
+    component_dep_allowed_hosts: HashMap<String, Arc<CapabilitySetKeyToHostsMap>>,
     /// Blocked IP networks
     blocked_networks: BlockedNetworks,
     /// TLS client configs
@@ -329,6 +388,7 @@ pub fn record_address_fields(address: &str) {
 
 async fn socket_addr_use_allowed(
     allowed_hosts: OutboundAllowedHosts,
+    cap_set_key: Option<CapabilitySetKey>,
     blocked_networks: BlockedNetworks,
     addr: SocketAddr,
     addr_use: SocketAddrUse,
@@ -346,7 +406,7 @@ async fn socket_addr_use_allowed(
         SocketAddrUse::UdpBind | SocketAddrUse::UdpReceive | SocketAddrUse::UdpSend => "udp",
     };
     if !allowed_hosts
-        .check_url(&addr.to_string(), scheme)
+        .check_url(cap_set_key.as_ref(), &addr.to_string(), scheme)
         .await
         .unwrap_or(
             // TODO: should this trap (somehow)?
@@ -368,11 +428,12 @@ async fn socket_addr_use_allowed(
 
 pub async fn check_socket_addr_use(
     allowed_hosts: OutboundAllowedHosts,
+    cap_set_key: Option<CapabilitySetKey>,
     blocked_networks: BlockedNetworks,
     addr: SocketAddr,
     addr_use: SocketAddrUse,
 ) -> std::io::Result<()> {
-    if socket_addr_use_allowed(allowed_hosts, blocked_networks, addr, addr_use).await {
+    if socket_addr_use_allowed(allowed_hosts, cap_set_key, blocked_networks, addr, addr_use).await {
         Ok(())
     } else {
         Err(std::io::Error::new(

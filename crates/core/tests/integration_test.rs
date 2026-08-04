@@ -158,8 +158,7 @@ async fn run_test(
     let component = spin_componentize::componentize_if_necessary(&module_bytes)
         .map_err(wasmtime::Error::from_anyhow)?;
     let component = Component::new(engine.as_ref(), &component)?;
-    let instance_pre = engine
-        .instantiate_pre(&component)
+    let instance_pre = spin_core::Engine::instantiate_pre(engine.linker(), &component)
         .map_err(wasmtime::Error::from_anyhow)?;
     let instance = instance_pre.instantiate_async(&mut store).await?;
     let func = {

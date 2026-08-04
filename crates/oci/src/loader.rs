@@ -157,53 +157,86 @@ impl OciLoader {
             }
         }
 
+        let mount_dir = self.working_dir.join("assets").join(&component.id);
+
         if !component.files.is_empty() {
-            let mount_dir = self.working_dir.join("assets").join(&component.id);
-            for file in &mut component.files {
-                ensure!(is_safe_to_join(&file.path), "invalid file mount {file:?}");
-                let mount_path = mount_dir.join(&file.path);
-
-                // Create parent directory
-                let mount_parent = mount_path
-                    .parent()
-                    .with_context(|| format!("invalid mount path {mount_path:?}"))?;
-                tokio::fs::create_dir_all(mount_parent)
-                    .await
-                    .with_context(|| {
-                        format!("failed to create temporary mount path {mount_path:?}")
-                    })?;
-
-                if let Some(content_bytes) = file.content.inline.as_deref() {
-                    // Write inline content to disk
-                    tokio::fs::write(&mount_path, content_bytes)
-                        .await
-                        .with_context(|| {
-                            format!("failed to write inline content to {mount_path:?}")
-                        })?;
-                } else {
-                    // Copy content
-                    let digest = content_digest(&file.content)?;
-                    let content_path = cache.data_file(digest)?;
-                    // TODO: parallelize
-                    tokio::fs::copy(&content_path, &mount_path)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "failed to copy {}->{mount_path:?}",
-                                quoted_path(&content_path)
-                            )
-                        })?;
-                }
-            }
-
+            let mount_dir = mount_dir.clone();
+            resolve_content_paths(cache, &mount_dir, &component.files).await?;
             component.files = vec![ContentPath {
                 content: content_ref(mount_dir)?,
                 path: "/".into(),
-            }]
+            }];
+        }
+
+        // This will exist for non-precomposed apps
+        for dep in component.dependencies.values_mut() {
+            if let spin_locked_app::locked::InheritConfiguration::Exact(caps) = &mut dep.inherit {
+                let mount_dir = mount_dir
+                    .join("_deps_assets")
+                    .join(caps.capabilities_key.to_string());
+                resolve_content_paths(cache, &mount_dir, &caps.files).await?;
+                caps.files = vec![ContentPath {
+                    content: content_ref(mount_dir)?,
+                    path: "/".into(),
+                }];
+            }
+        }
+
+        // This will exist for precomposed apps
+        for dep_cap in &mut component.precomposed_dependency_capabilities {
+            let mount_dir = mount_dir
+                .join("_deps_assets")
+                .join(dep_cap.capabilities_key.to_string());
+            resolve_content_paths(cache, &mount_dir, &dep_cap.files).await?;
+            dep_cap.files = vec![ContentPath {
+                content: content_ref(mount_dir)?,
+                path: "/".into(),
+            }];
         }
 
         Ok(())
     }
+}
+
+async fn resolve_content_paths(
+    cache: &Cache,
+    mount_dir: &Path,
+    files: &Vec<ContentPath>,
+) -> Result<(), anyhow::Error> {
+    for file in files {
+        ensure!(is_safe_to_join(&file.path), "invalid file mount {file:?}");
+        let mount_path = mount_dir.join(&file.path);
+
+        // Create parent directory
+        let mount_parent = mount_path
+            .parent()
+            .with_context(|| format!("invalid mount path {mount_path:?}"))?;
+        tokio::fs::create_dir_all(mount_parent)
+            .await
+            .with_context(|| format!("failed to create temporary mount path {mount_path:?}"))?;
+
+        if let Some(content_bytes) = file.content.inline.as_deref() {
+            // Write inline content to disk
+            tokio::fs::write(&mount_path, content_bytes)
+                .await
+                .with_context(|| format!("failed to write inline content to {mount_path:?}"))?;
+        } else {
+            // Copy content
+            let digest = content_digest(&file.content)?;
+            let content_path = cache.data_file(digest)?;
+            // TODO: parallelize
+            tokio::fs::copy(&content_path, &mount_path)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to copy {}->{mount_path:?}",
+                        quoted_path(&content_path)
+                    )
+                })?;
+        }
+    }
+
+    Ok(())
 }
 
 fn content_digest(content_ref: &ContentRef) -> Result<&str> {
@@ -298,6 +331,7 @@ mod test {
             dependencies: Default::default(),
             trigger_dependencies: Default::default(),
             host_requirements: Default::default(),
+            precomposed_dependency_capabilities: Default::default(),
         };
 
         loader

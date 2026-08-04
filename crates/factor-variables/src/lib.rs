@@ -4,7 +4,7 @@ pub mod runtime_config;
 use std::sync::Arc;
 
 use runtime_config::RuntimeConfig;
-use spin_expressions::{ProviderResolver as ExpressionResolver, Template};
+use spin_expressions::{ProviderResolver as ExpressionResolver, Template, VariableOwner};
 use spin_factor_otel::OtelFactorState;
 use spin_factors::{
     ConfigureAppContext, Factor, FactorData, InitContext, PrepareContext, RuntimeFactors,
@@ -35,6 +35,7 @@ impl Factor for VariablesFactor {
         ctx.link_bindings(spin_world::v2::variables::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(spin_world::wasi::config::store::add_to_linker::<_, FactorData<Self>>)?;
         ctx.link_bindings(v3::add_to_linker::<_, VariablesFactorData>)?;
+
         Ok(())
     }
 
@@ -51,6 +52,18 @@ impl Factor for VariablesFactor {
                 component.id(),
                 component.config().map(|(k, v)| (k.into(), v.into())),
             )?;
+            for caps in component.locked.dependency_capabilities() {
+                let var_owner = VariableOwner::Dependency(
+                    component.id().to_string(),
+                    caps.capabilities_key.clone(),
+                );
+                expression_resolver.add_component_variables(
+                    var_owner,
+                    caps.variables
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.into())),
+                )?;
+            }
         }
 
         let providers = ctx.take_runtime_config().unwrap_or_default();
@@ -61,6 +74,26 @@ impl Factor for VariablesFactor {
         Ok(AppState {
             expression_resolver: Arc::new(expression_resolver),
         })
+    }
+
+    fn register_named_imports<T: InitContext<Self>>(
+        &self,
+        ctx: &mut T,
+        component: &spin_core::Component,
+    ) -> anyhow::Result<()> {
+        spin_world::named_imports::spin::variables::variables::add_to_linker::<
+            _,
+            VariablesFactorData,
+        >(
+            ctx.linker(),
+            component,
+            |key| {
+                key.try_into()
+                    .map_err(spin_core::wasmtime::Error::from_anyhow)
+            },
+            T::get_data,
+        )?;
+        Ok(())
     }
 
     fn prepare<T: RuntimeFactors>(

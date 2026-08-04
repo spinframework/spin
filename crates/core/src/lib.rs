@@ -83,6 +83,7 @@ impl Default for Config {
         inner.epoch_interruption(true);
         inner.wasm_component_model(true);
         inner.wasm_component_model_async(true);
+        inner.wasm_component_model_implements(true);
         // If targeting musl, disable native unwind to address this issue:
         // https://github.com/spinframework/spin/issues/2889
         // TODO: remove this when wasmtime is updated to >= v27.0.0
@@ -368,8 +369,10 @@ impl<T: 'static> Engine<T> {
 
     /// Creates a new [`InstancePre`] for the given [`Component`].
     #[instrument(skip_all, level = "debug")]
-    pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
-        Ok(self.linker.instantiate_pre(component)?)
+    pub fn instantiate_pre(linker: &Linker<T>, component: &Component) -> Result<InstancePre<T>> {
+        // TODO: I wonder if I should make `Engine` `Clone` and then this could be
+        // reverted, `FactorsExecutor` could full-clone the engine and use that. Not sure
+        Ok(linker.instantiate_pre(component)?)
     }
 
     /// Checks that the given [`Component`] can be instantiated by this engine.
@@ -378,6 +381,11 @@ impl<T: 'static> Engine<T> {
         component: &Component,
     ) -> Result<wasmtime::component::types::Component> {
         Ok(self.linker.substituted_component_type(component)?)
+    }
+
+    /// TODO: docs
+    pub fn linker(&self) -> &Linker<T> {
+        &self.linker
     }
 }
 

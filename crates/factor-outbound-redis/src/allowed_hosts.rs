@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
+use spin_world::CapabilitySetKey;
 
 /// Encapsulates checking of a PostgreSQL address/connection string against
 /// an allow-list.
@@ -21,7 +22,11 @@ impl AllowedHostChecker {
 }
 
 impl AllowedHostChecker {
-    pub async fn is_address_allowed(&self, address: &str) -> anyhow::Result<bool> {
-        self.allowed_hosts.check_url(address, "redis").await
+    pub async fn is_address_allowed(
+        &self,
+        key: Option<&CapabilitySetKey>,
+        address: &str,
+    ) -> anyhow::Result<bool> {
+        self.allowed_hosts.check_url(key, address, "redis").await
     }
 }

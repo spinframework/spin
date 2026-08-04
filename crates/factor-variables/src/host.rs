@@ -1,12 +1,47 @@
 use spin_core::wasmtime::component::Accessor;
+use spin_expressions::VariableOwner;
 use spin_factors::anyhow;
 use spin_telemetry::traces::{self, Blame};
 use spin_world::{
-    spin::variables::variables as v3, v1, v2::variables as v2, wasi::config as wasi_config,
+    NamedImportKey, spin::variables::variables as v3, v1, v2::variables as v2,
+    wasi::config as wasi_config,
 };
 use tracing::instrument;
 
 use crate::{InstanceState, VariablesFactorData};
+
+impl<T: Send> spin_world::named_imports::spin::variables::variables::HostWithStore<T>
+    for VariablesFactorData
+{
+    async fn get(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        key: String,
+    ) -> Result<String, v3::Error> {
+        let (resolver, component_id) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (host.expression_resolver.clone(), host.component_id.clone())
+        });
+
+        let key = spin_expressions::Key::new(&key).map_err(expressions_to_variables_err_v3)?;
+        let var_owner = spin_expressions::VariableOwner::Dependency(
+            component_id.clone(),
+            id.capability_set().clone(),
+        );
+
+        resolver
+            .resolve(&var_owner, key)
+            .await
+            .map_err(expressions_to_variables_err_v3)
+    }
+}
+
+impl spin_world::named_imports::spin::variables::variables::Host for InstanceState {
+    fn convert_error(&mut self, err: v3::Error) -> anyhow::Result<v3::Error> {
+        Ok(err)
+    }
+}
 
 impl<T: Send> v3::HostWithStore<T> for VariablesFactorData {
     #[instrument(name = "spin_variables.get", skip(accessor), fields(otel.kind = "client"))]
@@ -20,7 +55,10 @@ impl<T: Send> v3::HostWithStore<T> for VariablesFactorData {
         let key = spin_expressions::Key::new(&key).map_err(expressions_to_variables_err_v3)?;
 
         resolver
-            .resolve(&component_id, key)
+            .resolve(
+                &spin_expressions::VariableOwner::Component(component_id),
+                key,
+            )
             .await
             .map_err(expressions_to_variables_err_v3)
     }
@@ -38,7 +76,7 @@ impl v2::Host for InstanceState {
         self.otel.reparent_tracing_span();
         let key = spin_expressions::Key::new(&key).map_err(expressions_to_variables_err)?;
         self.expression_resolver
-            .resolve(&self.component_id, key)
+            .resolve(&VariableOwner::Component(self.component_id.clone()), key)
             .await
             .map_err(expressions_to_variables_err)
     }
@@ -81,7 +119,7 @@ impl wasi_config::store::Host for InstanceState {
     async fn get_all(&mut self) -> Result<Vec<(String, String)>, wasi_config::store::Error> {
         let all = self
             .expression_resolver
-            .resolve_all(&self.component_id)
+            .resolve_all(&VariableOwner::Component(self.component_id.clone()))
             .await;
         all.map_err(|e| {
             match expressions_to_variables_err(e) {

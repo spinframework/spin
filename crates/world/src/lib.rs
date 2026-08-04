@@ -2,6 +2,7 @@
 #![allow(non_camel_case_types)] // bindgen emits Host_Pre and Host_Indices
 
 pub use async_trait::async_trait;
+pub use spin_serde::{CapabilitySetKey, NamedImportKey};
 
 wasmtime::component::bindgen!({
     inline: r#"
@@ -13,6 +14,7 @@ wasmtime::component::bindgen!({
         include spin:up/platform@3.2.0;
         include spin:up/platform@3.4.0;
         include spin:up/platform@4.0.0;
+        include spin:up/platform@4.1.0;
         include wasi:keyvalue/imports@0.2.0-draft2;
         export spin:redis/inbound-redis@3.0.0;
     }
@@ -20,6 +22,16 @@ wasmtime::component::bindgen!({
     path: "../../wit",
     imports: { default: async | trappable },
     exports: { default: async },
+    named_imports: {
+        "spin:key-value/key-value@3.0.0": NamedImportKey,
+        "spin:mqtt/mqtt@3.0.0": NamedImportKey,
+        "spin:mysql/mysql@3.0.0": NamedImportKey,
+        "spin:postgres/postgres@4.2.0": NamedImportKey,
+        "spin:redis/redis@3.0.0": NamedImportKey,
+        "spin:sqlite/sqlite@3.1.0": NamedImportKey,
+        "spin:variables/variables@3.0.0": NamedImportKey,
+        "wasi:http/client@0.3.0": NamedImportKey,
+    },
     // The following is a roundabout way of saying "the host implementations for these interfaces don't trap"
     trappable_error_type: {
         "fermyon:spin/config.error" => v1::config::Error,

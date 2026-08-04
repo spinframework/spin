@@ -8,8 +8,8 @@ use spin_core::{
 use spin_factor_otel::OtelFactorState;
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
 use spin_factor_outbound_networking::{ConnectionPermit, ConnectionSemaphore};
-use spin_world::spin::mqtt::mqtt as v3;
 use spin_world::v2::mqtt as v2;
+use spin_world::{CapabilitySetKey, NamedImportKey, spin::mqtt::mqtt as v3};
 use tracing::{Level, instrument};
 
 use crate::{ClientCreator, allowed_hosts::AllowedHostChecker};
@@ -53,8 +53,12 @@ pub trait MqttClient: Send + Sync {
 }
 
 impl InstanceState {
-    async fn is_address_allowed(&self, address: &str) -> Result<bool> {
-        self.allowed_hosts.is_address_allowed(address).await
+    async fn is_address_allowed(
+        &self,
+        key: Option<&CapabilitySetKey>,
+        address: &str,
+    ) -> Result<bool> {
+        self.allowed_hosts.is_address_allowed(key, address).await
     }
 
     async fn establish_connection(
@@ -132,7 +136,7 @@ impl<T: Send> v3::HostConnectionWithStore<T> for crate::MqttFactorData {
         });
 
         if !allowed_host_checker
-            .is_address_allowed(&address)
+            .is_address_allowed(None, &address)
             .await
             .map_err(|e| v3::Error::Other(e.to_string()))?
         {
@@ -199,6 +203,114 @@ impl<T: Send> v3::HostConnectionWithStore<T> for crate::MqttFactorData {
     }
 }
 
+impl spin_world::named_imports::spin::mqtt::mqtt::Host for InstanceState {
+    fn convert_error(&mut self, err: v3::Error) -> anyhow::Result<v3::Error> {
+        Ok(err)
+    }
+}
+
+impl spin_world::named_imports::spin::mqtt::mqtt::HostConnection for InstanceState {
+    async fn drop(
+        &mut self,
+        _id: NamedImportKey,
+        connection: Resource<spin_world::named_imports::spin::mqtt::mqtt::Connection>,
+    ) -> anyhow::Result<()> {
+        self.connections.remove(connection.rep());
+        Ok(())
+    }
+}
+
+impl<T: Send> spin_world::named_imports::spin::mqtt::mqtt::HostConnectionWithStore<T>
+    for crate::MqttFactorData
+{
+    #[instrument(name = "spin_outbound_mqtt.open_connection", skip(accessor, password), err(level = Level::INFO), fields(otel.kind = "client"))]
+    async fn open(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        address: String,
+        username: String,
+        password: String,
+        keep_alive_interval_in_secs: u64,
+    ) -> Result<Resource<v3::Connection>, v3::Error> {
+        let (allowed_host_checker, create_client, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (
+                host.allowed_hosts.clone(),
+                host.create_client.clone(),
+                host.semaphore.clone(),
+            )
+        });
+
+        if !allowed_host_checker
+            .is_address_allowed(Some(id.capability_set()), &address)
+            .await
+            .map_err(|e| v3::Error::Other(e.to_string()))?
+        {
+            return Err(v3::Error::ConnectionFailed(format!(
+                "address {address} is not permitted"
+            )));
+        }
+
+        let permit = semaphore
+            .acquire()
+            .await
+            .map_err(|_| v3::Error::TooManyConnections)?;
+
+        let client = create_client.create(
+            address,
+            username,
+            password,
+            Duration::from_secs(keep_alive_interval_in_secs),
+        )?;
+
+        accessor.with(|mut access| {
+            let host = access.get();
+            host.connections
+                .push((client, permit))
+                .map(Resource::new_own)
+                .map_err(|_| v3::Error::TooManyConnections)
+        })
+    }
+
+    #[instrument(name = "spin_outbound_mqtt.publish", skip(accessor, connection, payload), err(level = Level::INFO),
+        fields(
+            otel.kind = "producer",
+            messaging.operation = "publish",
+            messaging.system = "mqtt",
+            messaging.destination.name = topic,
+        ))]
+    async fn publish(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        topic: String,
+        payload: v3::Payload,
+        qos: v3::Qos,
+    ) -> Result<(), v3::Error> {
+        let (conn, max_payload_size_bytes) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            host.get_conn_v3(connection)
+                .map(|c| (c, host.max_payload_size_bytes))
+        })?;
+
+        if let Some(limit) = max_payload_size_bytes
+            && payload.len() > limit
+        {
+            return Err(v3::Error::Other(format!(
+                "payload size {} exceeds the maximum allowed size of {} bytes",
+                payload.len(),
+                limit
+            )));
+        }
+
+        conn.publish_bytes(topic, qos, payload).await?;
+
+        Ok(())
+    }
+}
+
 impl v2::Host for InstanceState {
     fn convert_error(&mut self, error: v2::Error) -> Result<v2::Error> {
         Ok(error)
@@ -217,7 +329,7 @@ impl v2::HostConnection for InstanceState {
         self.otel.reparent_tracing_span();
 
         if !self
-            .is_address_allowed(&address)
+            .is_address_allowed(None, &address)
             .await
             .map_err(|e| v2::Error::Other(e.to_string()))?
         {
