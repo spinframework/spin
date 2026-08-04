@@ -5070,6 +5070,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "indexmap 2.14.0",
+ "itertools 0.15.0",
  "semver",
  "spin-app",
  "spin-capabilities",
@@ -5118,6 +5119,7 @@ version = "4.1.0-pre0"
 dependencies = [
  "anyhow",
  "serde",
+ "spin-connection-semaphore",
  "spin-core",
  "spin-factor-otel",
  "spin-factors",
