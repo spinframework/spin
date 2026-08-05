@@ -22,7 +22,7 @@ pub const SERVICE_CHAINING_KEY: &str = "local_service_chaining";
 
 /// If present and required in `host_requirements`, the host must support
 /// trigger dependencies (trigger.*.dependencies) or reject the app.
-pub const TRIGGER_DEPENDENCIES_KEY: &str = "trigger_dependencies";
+pub const MIDDLEWARE_KEY: &str = "middleware";
 
 /// Indicates that a host feature is optional. This is the default and is
 /// equivalent to omitting the feature from `host_requirements`.
@@ -121,7 +121,7 @@ where
     }
 }
 
-const SUPPORTED_HOST_REQS: &[&str] = &[SERVICE_CHAINING_KEY, TRIGGER_DEPENDENCIES_KEY];
+const SUPPORTED_HOST_REQS: &[&str] = &[SERVICE_CHAINING_KEY, MIDDLEWARE_KEY];
 
 impl Serialize for LockedApp {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

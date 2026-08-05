@@ -81,7 +81,7 @@
         ]
       },
       "host_requirements": {
-        "trigger_dependencies": "required"
+        "middleware": "required"
       }
     },
     {
@@ -126,7 +126,7 @@
         ]
       },
       "host_requirements": {
-        "trigger_dependencies": "required"
+        "middleware": "required"
       }
     },
     {
@@ -150,7 +150,7 @@
         ]
       },
       "host_requirements": {
-        "trigger_dependencies": "required"
+        "middleware": "required"
       }
     }
   ]

@@ -340,7 +340,7 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
     fn supported_host_requirements() -> Vec<&'static str> {
         vec![
             spin_app::locked::SERVICE_CHAINING_KEY,
-            spin_app::locked::TRIGGER_DEPENDENCIES_KEY,
+            spin_app::locked::MIDDLEWARE_KEY,
         ]
     }
 
