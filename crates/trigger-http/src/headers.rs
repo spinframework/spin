@@ -88,6 +88,9 @@ pub fn strip_forbidden_headers(req: &mut Request<Body>) {
     {
         headers.remove("Host");
     }
+    // This header is transport information - only meaningful to the server
+    // itself - and causes problems if guests need to forward requests.
+    headers.remove("Connection");
 }
 
 pub fn prepare_request_headers(
@@ -316,8 +319,9 @@ mod tests {
         assert!(req.headers().get("Host").is_none());
 
         let mut req = Request::get("http://test.spin.internal")
-            .header("Host", "test.spin.internal:1234")
+            .header("Host", "test.spin.internal")
             .header("accept", "text/plain")
+            .header("connection", "the knee bone and the leg bone")
             .body(Default::default())
             .unwrap();
 
@@ -325,6 +329,20 @@ mod tests {
 
         assert_eq!(1, req.headers().len());
         assert!(req.headers().get("Host").is_none());
+        assert!(req.headers().get("Connection").is_none());
+
+        let mut req = Request::get("http://test.spin.internal")
+            .header("Host", "test.spin.internal:1234")
+            .header("accept", "text/plain")
+            .header("Connection", "the knee bone and the leg bone")
+            .body(Default::default())
+            .unwrap();
+
+        strip_forbidden_headers(&mut req);
+
+        assert_eq!(1, req.headers().len());
+        assert!(req.headers().get("Host").is_none());
+        assert!(req.headers().get("connection").is_none());
     }
 
     #[test]
