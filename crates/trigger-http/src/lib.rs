@@ -395,6 +395,11 @@ impl HttpTrigger {
     }
 
     fn validate_app(app: &App) -> anyhow::Result<()> {
+        use spin_http::{
+            config::{HttpExecutorType, HttpTriggerConfig},
+            routes::HttpTriggerRouteConfig,
+        };
+
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct TriggerMetadata {
@@ -411,6 +416,31 @@ impl HttpTrigger {
                 )
             }
         }
+
+        let mut explain_wagi_deprecation = false;
+        for trigger in app.triggers_with_type("http") {
+            if let Ok(config) = trigger.typed_config::<HttpTriggerConfig>()
+                && let Some(executor) = config.executor
+                && let HttpExecutorType::Wagi(_) = executor
+            {
+                let description = match config.route {
+                    HttpTriggerRouteConfig::Route(r) => format!("route {r}"),
+                    HttpTriggerRouteConfig::Private(_) => format!(
+                        "private endpoint for {}",
+                        config.component.unwrap_or_else(|| "<unknown>".into())
+                    ),
+                };
+                terminal::warn!("HTTP {description} uses the WAGI executor.");
+                explain_wagi_deprecation = true;
+            }
+        }
+        if explain_wagi_deprecation {
+            terminal::warn!("WAGI will be deprecated in a future version of Spin.");
+            eprintln!(
+                "To provide feedback, please visit https://github.com/spinframework/spin/issues/3520.\n"
+            );
+        }
+
         Ok(())
     }
 }
