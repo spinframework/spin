@@ -6,7 +6,7 @@ date = "2026-04-09T00:00:00Z"
 
 Summary: A CLI command (`spin deps add`) for adding component dependencies to a Spin application, with interactive prompts for selecting components, exports, and capability inheritance. The command also detects when the resolved component is HTTP middleware and guides attaching it to a trigger selected by route.
 
-Owner(s): [brian.hardock@fermyon.com](mailto:brian.hardock@fermyon.com)
+Owner(s): [bhardock@akamai.com](mailto:bhardock@akamai.com)
 
 Created: April 9, 2026
 
