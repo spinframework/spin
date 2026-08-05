@@ -140,30 +140,34 @@ impl LocalLoader {
         }))
         .await?;
 
-        let host_requirements = spin_locked_app::values::ValuesMap::new();
-
-        let mut must_understand = vec![];
-        if !host_requirements.is_empty() {
-            must_understand.push(spin_locked_app::locked::MustUnderstand::HostRequirements);
-        }
-        if components.iter().any(|c| !c.host_requirements.is_empty()) {
-            must_understand
-                .push(spin_locked_app::locked::MustUnderstand::ComponentHostRequirements);
-        }
-
         drop(sloth_guard);
 
         let locked = LockedApp {
             spin_lock_version: Default::default(),
             metadata,
-            must_understand,
-            host_requirements,
+            must_understand: vec![],
+            host_requirements: spin_locked_app::values::ValuesMap::new(),
             variables,
             triggers,
             components,
         };
 
-        let locked = trigger_components::reassign_trigger_deps(locked);
+        let mut locked = trigger_components::reassign_trigger_deps(locked);
+
+        if !locked.host_requirements.is_empty() {
+            locked
+                .must_understand
+                .push(spin_locked_app::locked::MustUnderstand::HostRequirements);
+        }
+        if locked
+            .components
+            .iter()
+            .any(|c| !c.host_requirements.is_empty())
+        {
+            locked
+                .must_understand
+                .push(spin_locked_app::locked::MustUnderstand::ComponentHostRequirements);
+        }
 
         Ok(locked)
     }

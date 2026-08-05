@@ -1,0 +1,157 @@
+{
+  "spin_lock_version": 1,
+  "must_understand": [
+    "component_host_requirements"
+  ],
+  "metadata": {
+    "authors": [
+      "Gul Madred",
+      "Edward Jellico",
+      "JL"
+    ],
+    "description": "A simple application that returns the number of lights",
+    "name": "chain-of-command",
+    "origin": "file://<test-dir>/middleware.toml",
+    "trigger": {
+      "type": "http"
+    },
+    "triggers": {},
+    "version": "6.11.2"
+  },
+  "triggers": [
+    {
+      "id": "four-lights-http-trigger",
+      "trigger_type": "http",
+      "trigger_config": {
+        "component": "four-lights",
+        "route": "/has-middleware"
+      }
+    },
+    {
+      "id": "five-lights-http-trigger",
+      "trigger_type": "http",
+      "trigger_config": {
+        "component": "five-lights",
+        "route": "/doesnt-have-middleware"
+      }
+    },
+    {
+      "id": "six-lights-http-trigger",
+      "trigger_type": "http",
+      "trigger_config": {
+        "component": "six-lights-for-six-lights-http-trigger",
+        "route": "/same-comp-different-mw1"
+      }
+    },
+    {
+      "id": "http-trigger1",
+      "trigger_type": "http",
+      "trigger_config": {
+        "component": "six-lights-for-http-trigger1",
+        "route": "/same-comp-different-mw2"
+      }
+    }
+  ],
+  "components": [
+    {
+      "id": "four-lights",
+      "metadata": {
+        "resolve-trigger-dependencies-using": "http"
+      },
+      "source": {
+        "content_type": "application/wasm",
+        "source": "file://<test-dir>/wasm/dummy.wasm"
+      },
+      "trigger_dependencies": {
+        "middleware": [
+          {
+            "source": {
+              "content_type": "application/wasm",
+              "source": "file://<test-dir>/wasm/dummy.wasm"
+            },
+            "export": null
+          },
+          {
+            "source": {
+              "content_type": "application/wasm",
+              "source": "file://<test-dir>/wasm/dummy2.wasm"
+            },
+            "export": null
+          }
+        ]
+      },
+      "host_requirements": {
+        "middleware": "required"
+      }
+    },
+    {
+      "id": "five-lights",
+      "source": {
+        "content_type": "application/wasm",
+        "source": "file://<test-dir>/wasm/dummy.wasm"
+      }
+    },
+    {
+      "id": "six-lights",
+      "source": {
+        "content_type": "application/wasm",
+        "source": "file://<test-dir>/wasm/dummy.wasm"
+      }
+    },
+    {
+      "id": "middly2",
+      "source": {
+        "content_type": "application/wasm",
+        "source": "file://<test-dir>/wasm/dummy2.wasm"
+      }
+    },
+    {
+      "id": "six-lights-for-six-lights-http-trigger",
+      "metadata": {
+        "resolve-trigger-dependencies-using": "http"
+      },
+      "source": {
+        "content_type": "application/wasm",
+        "source": "file://<test-dir>/wasm/dummy.wasm"
+      },
+      "trigger_dependencies": {
+        "middleware": [
+          {
+            "source": {
+              "content_type": "application/wasm",
+              "source": "file://<test-dir>/wasm/dummy.wasm"
+            },
+            "export": null
+          }
+        ]
+      },
+      "host_requirements": {
+        "middleware": "required"
+      }
+    },
+    {
+      "id": "six-lights-for-http-trigger1",
+      "metadata": {
+        "resolve-trigger-dependencies-using": "http"
+      },
+      "source": {
+        "content_type": "application/wasm",
+        "source": "file://<test-dir>/wasm/dummy.wasm"
+      },
+      "trigger_dependencies": {
+        "middleware": [
+          {
+            "source": {
+              "content_type": "application/wasm",
+              "source": "file://<test-dir>/wasm/dummy2.wasm"
+            },
+            "export": null
+          }
+        ]
+      },
+      "host_requirements": {
+        "middleware": "required"
+      }
+    }
+  ]
+}

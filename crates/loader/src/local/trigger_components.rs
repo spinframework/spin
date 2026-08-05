@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use spin_locked_app::locked::{LockedApp, LockedComponent, LockedTrigger};
+use spin_locked_app::locked::{
+    HOST_REQ_REQUIRED, LockedApp, LockedComponent, LockedTrigger, MIDDLEWARE_KEY,
+};
 
 /// We want all component/composition graph information to be in the component,
 /// because the component ID is how Spin looks this stuff up. So if a trigger
@@ -76,6 +78,11 @@ fn move_deps_from_triggers_to_components(locked: &mut LockedApp) {
                 "resolve-trigger-dependencies-using".into(),
                 trigger.trigger_type.clone().into(),
             );
+            if component.trigger_dependencies.contains_key("middleware") {
+                component
+                    .host_requirements
+                    .insert(MIDDLEWARE_KEY.into(), HOST_REQ_REQUIRED.into());
+            }
             trigger.trigger_dependencies.clear();
         }
     }
