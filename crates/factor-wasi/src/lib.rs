@@ -24,7 +24,7 @@ use wasmtime_wasi::clocks::{WasiClocks, WasiClocksCtxView};
 use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemCtxView};
 use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
 use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsCtxView};
-use wasmtime_wasi::{DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView};
+use wasmtime_wasi::{FsPerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView};
 
 pub use sockets::{SocketPermitState, SpinSockets, SpinSocketsView};
 pub use wasi_2023_10_18::convert_result;
@@ -446,13 +446,13 @@ impl MountFilesContext<'_> {
         guest_path: impl AsRef<str>,
         writable: bool,
     ) -> anyhow::Result<()> {
-        let (dir_perms, file_perms) = if writable {
-            (DirPerms::all(), FilePerms::all())
+        let perms = if writable {
+            FsPerms::ReadWrite
         } else {
-            (DirPerms::READ, FilePerms::READ)
+            FsPerms::ReadOnly
         };
         self.ctx
-            .preopened_dir(host_path, guest_path, dir_perms, file_perms)?;
+            .preopened_dir(host_path, guest_path, perms)?;
         Ok(())
     }
 }
@@ -515,13 +515,13 @@ impl InstanceBuilder {
         guest_path: impl AsRef<str>,
         writable: bool,
     ) -> anyhow::Result<()> {
-        let (dir_perms, file_perms) = if writable {
-            (DirPerms::all(), FilePerms::all())
+        let perms = if writable {
+            FsPerms::ReadWrite
         } else {
-            (DirPerms::READ, FilePerms::READ)
+            FsPerms::ReadOnly
         };
         self.ctx
-            .preopened_dir(host_path, guest_path, dir_perms, file_perms)?;
+            .preopened_dir(host_path, guest_path, perms)?;
         Ok(())
     }
 }
