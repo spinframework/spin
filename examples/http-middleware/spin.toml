@@ -1,0 +1,40 @@
+spin_manifest_version = 2
+
+[application]
+authors = ["Spin Framework Contributors"]
+description = "Demonstrates using and authoring HTTP middleware."
+name = "spin-http-middleware"
+version = "1.0.0"
+
+[[trigger.http]]
+route = "/..."
+component = "hello"
+dependencies.middleware = [
+    { component = "animal-fact", inherit_configuration = ["allowed_outbound_hosts"] },
+    { component = "yelling" }
+]
+
+[component.hello]
+source = "app/target/wasm32-wasip2/release/http_middleware_app.wasm"
+description = "Your friendly educational application"
+allowed_outbound_hosts = ["https://random-data-api.fermyon.app"] # Middleware permissions must be granted on component
+[component.hello.build]
+command = "cargo build --target wasm32-wasip2 --release"
+workdir = "app"
+watch = ["src/**/*.rs", "Cargo.toml"]
+
+[component.animal-fact]
+source = "animal-fact/target/wasm32-wasip2/release/animal_fact_middleware.wasm"
+description = "Adds an educational animal fact header to the incoming request."
+[component.animal-fact.build]
+command = "cargo build --target wasm32-wasip2 --release"
+workdir = "animal-fact"
+watch = ["src/**/*.rs", "Cargo.toml"]
+
+[component.yelling]
+source = "yelling/target/wasm32-wasip2/release/yelling_middleware.wasm"
+description = "Transforms text responses to ALL CAPITALS IN CASE YOU CAN'T HEAR THEM."
+[component.yelling.build]
+command = "cargo build --target wasm32-wasip2 --release"
+workdir = "yelling"
+watch = ["src/**/*.rs", "Cargo.toml"]
