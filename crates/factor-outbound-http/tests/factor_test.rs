@@ -7,7 +7,7 @@ use http::{Request, Uri};
 use http_body_util::{BodyExt, Empty, combinators::UnsyncBoxBody};
 use spin_common::{assert_matches, assert_not_matches};
 use spin_factor_outbound_http::{
-    ErrorCode, HostFutureIncomingResponse, OutboundHttpFactor, SelfRequestOrigin,
+    OutboundHttpFactor, SelfRequestOrigin,
     intercept::{InterceptOutcome, InterceptRequest, OutboundHttpInterceptor},
 };
 use spin_factor_outbound_networking::OutboundNetworkingFactor;
@@ -25,9 +25,7 @@ use tracing_subscriber::{
     layer::{Context, SubscriberExt},
     registry::LookupSpan,
 };
-use wasmtime_wasi::p2::Pollable;
-use wasmtime_wasi_http::p2::types::OutgoingRequestConfig;
-use wasmtime_wasi_http::p3::{RequestOptions, bindings::http::types as p3_types};
+use wasmtime_wasi_http::{Error as WasiHttpError, RequestOptions};
 
 #[derive(RuntimeFactors)]
 struct TestFactors {
@@ -43,10 +41,14 @@ async fn allowed_host_is_allowed() -> anyhow::Result<()> {
 
     // [100::] is the IPv6 "Discard Prefix", which should always fail
     let req = Request::get("https://[100::1]:443").body(Default::default())?;
-    let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
-    future_resp.ready().await;
+    let response = Box::into_pin(wasi_http.hooks.send_request(
+        req,
+        test_request_options(),
+        noop_cleanup_fut(),
+    ))
+    .await;
 
-    assert_discard_prefix_error(future_resp);
+    assert_discard_prefix_error(response);
     Ok(())
 }
 
@@ -59,10 +61,14 @@ async fn self_request_smoke_test() -> anyhow::Result<()> {
 
     let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
     let req = Request::get("/self-request").body(Default::default())?;
-    let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
-    future_resp.ready().await;
+    let response = Box::into_pin(wasi_http.hooks.send_request(
+        req,
+        test_request_options(),
+        noop_cleanup_fut(),
+    ))
+    .await;
 
-    assert_discard_prefix_error(future_resp);
+    assert_discard_prefix_error(response);
     Ok(())
 }
 
@@ -72,12 +78,14 @@ async fn disallowed_host_fails() -> anyhow::Result<()> {
     let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
 
     let req = Request::get("https://denied.test").body(Default::default())?;
-    let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
-    future_resp.ready().await;
-    assert_matches!(
-        future_resp.unwrap_ready().unwrap(),
-        Err(ErrorCode::HttpRequestDenied),
-    );
+    let response = Box::into_pin(wasi_http.hooks.send_request(
+        req,
+        test_request_options(),
+        noop_cleanup_fut(),
+    ))
+    .await;
+
+    assert_matches!(response.map(drop), Err(WasiHttpError::HttpRequestDenied),);
     Ok(())
 }
 
@@ -88,20 +96,24 @@ async fn disallowed_private_ips_fails() -> anyhow::Result<()> {
         let mut state = test_instance_state("http://*", allow_private_ips).await?;
         let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
         let req = Request::get("http://localhost").body(Default::default())?;
-        let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
-        future_resp.ready().await;
-        match future_resp.unwrap_ready().unwrap() {
+        let response = Box::into_pin(wasi_http.hooks.send_request(
+            req,
+            test_request_options(),
+            noop_cleanup_fut(),
+        ))
+        .await;
+        match response {
             // If we don't allow private IPs, we should not get a response
             Ok(_) if !allow_private_ips => bail!("expected Err, got Ok"),
             // Otherwise, it's fine if the request happens to succeed
             Ok(_) => {}
             // If private IPs are disallowed, we should get an error saying the destination is prohibited
             Err(err) if !allow_private_ips => {
-                assert_matches!(err, ErrorCode::DestinationIpProhibited);
+                assert_matches!(err, WasiHttpError::DestinationIpProhibited);
             }
             // Otherwise, we should get some non-DestinationIpProhibited error
             Err(err) => {
-                assert_not_matches!(err, ErrorCode::DestinationIpProhibited);
+                assert_not_matches!(err, WasiHttpError::DestinationIpProhibited);
             }
         };
         Ok(())
@@ -134,11 +146,15 @@ async fn override_connect_addr_disallowed_private_ip_fails() -> anyhow::Result<(
     })?;
     let wasi_http = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
     let req = Request::get("http://1.1.1.1").body(Default::default())?;
-    let mut future_resp = wasi_http.hooks.send_request(req, test_request_config())?;
-    future_resp.ready().await;
+    let response = Box::into_pin(wasi_http.hooks.send_request(
+        req,
+        test_request_options(),
+        noop_cleanup_fut(),
+    ))
+    .await;
     assert_matches!(
-        future_resp.unwrap_ready().unwrap(),
-        Err(ErrorCode::DestinationIpProhibited),
+        response.map(drop),
+        Err(WasiHttpError::DestinationIpProhibited),
     );
     Ok(())
 }
@@ -170,24 +186,23 @@ async fn test_instance_state(
     env.build_instance_state().await
 }
 
-fn test_request_config() -> OutgoingRequestConfig {
-    OutgoingRequestConfig {
-        use_tls: false,
-        connect_timeout: Duration::from_millis(10),
-        first_byte_timeout: Duration::from_millis(0),
-        between_bytes_timeout: Duration::from_millis(0),
-    }
+fn test_request_options() -> Option<RequestOptions> {
+    Some(RequestOptions {
+        connect_timeout: Some(Duration::from_millis(10)),
+        first_byte_timeout: Some(Duration::from_millis(0)),
+        between_bytes_timeout: Some(Duration::from_millis(0)),
+    })
 }
 
-fn assert_discard_prefix_error(future_resp: HostFutureIncomingResponse) {
+fn assert_discard_prefix_error<T>(response: Result<T, WasiHttpError>) {
     // Different systems handle the discard prefix differently; some will
     // immediately reject it while others will silently let it time out
     assert_matches!(
-        future_resp.unwrap_ready().unwrap(),
-        Err(ErrorCode::ConnectionRefused
-            | ErrorCode::ConnectionTimeout
-            | ErrorCode::ConnectionReadTimeout
-            | ErrorCode::DnsError(_)),
+        response.map(drop),
+        Err(WasiHttpError::ConnectionRefused
+            | WasiHttpError::ConnectionTimeout
+            | WasiHttpError::ConnectionReadTimeout
+            | WasiHttpError::DnsError { .. }),
     );
 }
 
@@ -203,12 +218,12 @@ async fn p3_send_request_propagates_span_to_async_work() -> anyhow::Result<()> {
     let _guard = tracing::subscriber::set_default(subscriber);
 
     let mut state = test_instance_state("https://*", true).await?;
-    let p3_view = OutboundHttpFactor::get_wasi_p3_http_impl(&mut state).unwrap();
+    let view = OutboundHttpFactor::get_wasi_http_impl(&mut state).unwrap();
     // [100::1] is the IPv6 discard prefix — connection fails fast.
-    let req = Request::get("https://[100::1]:443").body(empty_p3_body())?;
-    let result_fut = p3_view
+    let req = Request::get("https://[100::1]:443").body(empty_body())?;
+    let result_fut = view
         .hooks
-        .send_request(req, fast_p3_options(), p3_noop_cleanup_fut());
+        .send_request(req, fast_request_options(), noop_cleanup_fut());
     let _ = Box::into_pin(result_fut).await;
 
     let records = records.lock().unwrap();
@@ -261,13 +276,13 @@ impl Visit for CaptureVisitor<'_> {
     }
 }
 
-fn empty_p3_body() -> UnsyncBoxBody<Bytes, p3_types::ErrorCode> {
+fn empty_body() -> UnsyncBoxBody<Bytes, WasiHttpError> {
     Empty::<Bytes>::new()
         .map_err(|never: std::convert::Infallible| match never {})
         .boxed_unsync()
 }
 
-fn fast_p3_options() -> Option<RequestOptions> {
+fn fast_request_options() -> Option<RequestOptions> {
     Some(RequestOptions {
         connect_timeout: Some(Duration::from_millis(10)),
         first_byte_timeout: Some(Duration::from_millis(10)),
@@ -275,7 +290,6 @@ fn fast_p3_options() -> Option<RequestOptions> {
     })
 }
 
-fn p3_noop_cleanup_fut()
--> Box<dyn std::future::Future<Output = Result<(), p3_types::ErrorCode>> + Send> {
+fn noop_cleanup_fut() -> Box<dyn std::future::Future<Output = Result<(), WasiHttpError>> + Send> {
     Box::new(async { Ok(()) })
 }

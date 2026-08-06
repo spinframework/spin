@@ -13,15 +13,16 @@ use std::{
 
 use spin_connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
 use wasmtime::component::{HasData, Resource};
-use wasmtime_wasi::{p2::bindings::sockets::network::{
-    ErrorCode as SocketErrorCode, Host as NetworkHost, Network,
-}, sockets::{WasiSockets, WasiSocketsCtxView}};
 use wasmtime_wasi::p2::bindings::sockets::tcp::{self as p2_tcp, IpSocketAddress, ShutdownType};
 use wasmtime_wasi::p2::bindings::sockets::tcp_create_socket as p2_tcp_create;
 use wasmtime_wasi::p2::bindings::sockets::udp as p2_udp;
 use wasmtime_wasi::p2::bindings::sockets::udp_create_socket as p2_udp_create;
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
 use wasmtime_wasi::p2::{TcpSocket, UdpSocket};
+use wasmtime_wasi::{
+    p2::bindings::sockets::network::{ErrorCode as SocketErrorCode, Host as NetworkHost, Network},
+    sockets::{WasiSockets, WasiSocketsCtxView},
+};
 
 /// Shared state for tracking per-socket semaphore permits. Permits are
 /// acquired when a socket is allocated (at `start_connect` for TCP, at
@@ -166,7 +167,10 @@ impl<T> p2_tcp::HostTcpSocket for SpinSocketsView<'_, T> {
         p2_tcp::HostTcpSocket::finish_connect(&mut self.inner, this)
     }
 
-    async fn start_listen(&mut self, this: Resource<TcpSocket>) -> wasmtime_wasi::p2::SocketResult<()> {
+    async fn start_listen(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
         p2_tcp::HostTcpSocket::start_listen(&mut self.inner, this).await
     }
 
@@ -522,7 +526,10 @@ impl<T> p2_udp::HostOutgoingDatagramStream for SpinSocketsView<'_, T> {
         p2_udp::HostOutgoingDatagramStream::subscribe(&mut self.inner, this)
     }
 
-    async fn drop(&mut self, this: Resource<p2_udp::OutgoingDatagramStream>) -> wasmtime::Result<()> {
+    async fn drop(
+        &mut self,
+        this: Resource<p2_udp::OutgoingDatagramStream>,
+    ) -> wasmtime::Result<()> {
         p2_udp::HostOutgoingDatagramStream::drop(&mut self.inner, this).await
     }
 }

@@ -44,9 +44,9 @@ use tokio::{
 use tracing::Instrument;
 use wasmtime::{Store, StoreContextMut, ToWasmtimeResult, component::GuestTaskId};
 use wasmtime_wasi::p2::bindings::CommandIndices;
+use wasmtime_wasi_http::Error as WasiHttpError;
 use wasmtime_wasi_http::handler::{
-    HandlerState, Instance, Proxy, ShouldAccept, ViewFn, WorkerExpiration, WorkerState,
-    WorkerStatus,
+    HandlerState, Instance, Proxy, ShouldAccept, WorkerExpiration, WorkerState, WorkerStatus,
 };
 use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
 use wasmtime_wasi_http::p3::bindings::Service;
@@ -594,10 +594,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         async {
             let result = self
                 .handle(
-                    request.map(|body: Incoming| {
-                        body.map_err(wasmtime_wasi_http::p2::hyper_response_error)
-                            .boxed_unsync()
-                    }),
+                    request.map(|body: Incoming| body.map_err(WasiHttpError::from).boxed_unsync()),
                     server_scheme,
                     client_addr,
                 )
@@ -766,7 +763,7 @@ pub(crate) struct HttpWorkerState<F: RuntimeFactors> {
 
 impl<F: RuntimeFactors> WorkerState for HttpWorkerState<F> {
     type StoreData = InstanceState<F::InstanceState, ()>;
-    type RequestId = ();
+    type RequestData = ();
 
     fn should_accept_request(&self, concurrent_count: usize, total_count: usize) -> ShouldAccept {
         if total_count >= self.max_instance_reuse_count {
@@ -781,7 +778,7 @@ impl<F: RuntimeFactors> WorkerState for HttpWorkerState<F> {
     fn on_request_start(
         &self,
         _: StoreContextMut<'_, Self::StoreData>,
-        _: Self::RequestId,
+        _: Self::RequestData,
         _: GuestTaskId,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>> {
         Box::pin(tokio::time::sleep(self.request_timeout))
@@ -845,12 +842,12 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
         Ok(Instance {
             store,
             proxy,
-            view: ViewFn::P3(|data| {
-                spin_factor_outbound_http::OutboundHttpFactor::get_wasi_p3_http_impl(
+            view: |data| {
+                spin_factor_outbound_http::OutboundHttpFactor::get_wasi_http_impl(
                     data.factors_instance_state_mut(),
                 )
                 .unwrap()
-            }),
+            },
             expiration: HttpWorkerExpiration {
                 idle_timeout: rand::rng().random_range(self.reuse_config.idle_instance_timeout),
                 request_timeout,

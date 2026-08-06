@@ -6,7 +6,6 @@ use std::sync::Arc;
 use anyhow::{Context, Result, anyhow};
 use futures::TryFutureExt;
 use http::{HeaderName, HeaderValue};
-use http_body_util::BodyExt;
 use hyper::{Request, Response};
 use spin_core::Store;
 use spin_factor_outbound_http::wasi_2023_10_18::Proxy as Proxy2023_10_18;
@@ -19,6 +18,7 @@ use spin_http::trigger::HandlerType;
 use tokio::{sync::oneshot, task};
 use tracing::{Instrument, Level, instrument};
 use wasmtime::AsContextMut;
+use wasmtime_wasi_http::WasiHttpCtxView;
 use wasmtime_wasi_http::handler::HandlerState;
 use wasmtime_wasi_http::p2::bindings::http::types::Scheme;
 use wasmtime_wasi_http::p2::{bindings::Proxy, body::HyperIncomingBody as Body};
@@ -194,14 +194,13 @@ async fn handle_2026_03_15<T: RuntimeFactorsInstanceState, U: Send>(
     guest: Service2026_03_15,
     req: Request<Body>,
 ) -> Result<Response<Body>> {
-    let (request, request_io_result) = p3::Request::from_http(req);
-    let view: fn(&mut InstanceState<_, _>) -> p3::WasiHttpCtxView =
-        |data: &mut InstanceState<_, _>| {
-            spin_factor_outbound_http::OutboundHttpFactor::get_wasi_p3_http_impl(
-                data.factors_instance_state_mut(),
-            )
-            .unwrap()
-        };
+    let view: fn(&mut InstanceState<_, _>) -> WasiHttpCtxView = |data: &mut InstanceState<_, _>| {
+        spin_factor_outbound_http::OutboundHttpFactor::get_wasi_http_impl(
+            data.factors_instance_state_mut(),
+        )
+        .unwrap()
+    };
+    let (request, request_io_result) = p3::Request::from_http(view(store.data_mut()).hooks, req);
     let request = view(store.data_mut()).table.push(request)?;
 
     let (tx, rx) = oneshot::channel();
@@ -243,7 +242,5 @@ async fn handle_2026_03_15<T: RuntimeFactorsInstanceState, U: Send>(
         .in_current_span(),
     );
 
-    Ok(rx
-        .await?
-        .map(|body| body.map_err(|e| e.into()).boxed_unsync()))
+    Ok(rx.await?)
 }

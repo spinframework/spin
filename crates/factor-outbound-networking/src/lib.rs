@@ -2,7 +2,7 @@ mod allowed_hosts;
 pub mod runtime_config;
 mod tls;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use futures_util::FutureExt as _;
 use opentelemetry_semantic_conventions::attribute as otel_attribute;
@@ -178,36 +178,12 @@ impl Factor for OutboundNetworkingFactor {
 
                 let allowed_hosts = allowed_hosts.clone();
                 wasi_builder.outbound_socket_addr_check(move |addr, addr_use| {
-                    let allowed_hosts = allowed_hosts.clone();
-                    let blocked_networks = blocked_networks.clone();
-                    async move {
-                        let scheme = match addr_use {
-                            SocketAddrUse::TcpBind => return false,
-                            SocketAddrUse::TcpConnect => "tcp",
-                            SocketAddrUse::UdpBind
-                            | SocketAddrUse::UdpConnect
-                            | SocketAddrUse::UdpOutgoingDatagram => "udp",
-                        };
-                        if !allowed_hosts
-                            .check_url(&addr.to_string(), scheme)
-                            .await
-                            .unwrap_or(
-                                // TODO: should this trap (somehow)?
-                                false,
-                            )
-                        {
-                            return false;
-                        }
-                        if blocked_networks.is_blocked(&addr) {
-                            tracing::error!(
-                                "error.type" = "destination_ip_prohibited",
-                                ?addr,
-                                "destination IP prohibited by runtime config"
-                            );
-                            return false;
-                        }
-                        true
-                    }
+                    socket_addr_use_allowed(
+                        allowed_hosts.clone(),
+                        blocked_networks.clone(),
+                        addr,
+                        addr_use,
+                    )
                 });
             }
             Err(Error::NoSuchFactor(_)) => (), // no WasiFactor to configure; that's OK
@@ -313,10 +289,10 @@ impl InstanceBuilder {
 }
 
 impl FactorInstanceBuilder for InstanceBuilder {
-    type InstanceState = ();
+    type InstanceState = Self;
 
     fn build(self) -> anyhow::Result<Self::InstanceState> {
-        Ok(())
+        Ok(self)
     }
 }
 
@@ -343,5 +319,56 @@ pub fn record_address_fields(address: &str) {
             otel_attribute::DB_NAMESPACE,
             url.path().trim_start_matches('/'),
         );
+    }
+}
+
+async fn socket_addr_use_allowed(
+    allowed_hosts: OutboundAllowedHosts,
+    blocked_networks: BlockedNetworks,
+    addr: SocketAddr,
+    addr_use: SocketAddrUse,
+) -> bool {
+    let scheme = match addr_use {
+        SocketAddrUse::TcpBind
+        | SocketAddrUse::TcpListen
+        | SocketAddrUse::TcpAccept
+        | SocketAddrUse::UdpReceive => return false,
+        SocketAddrUse::TcpConnect => "tcp",
+        SocketAddrUse::UdpBind | SocketAddrUse::UdpSend => "udp",
+    };
+    if !allowed_hosts
+        .check_url(&addr.to_string(), scheme)
+        .await
+        .unwrap_or(
+            // TODO: should this trap (somehow)?
+            false,
+        )
+    {
+        return false;
+    }
+    if blocked_networks.is_blocked(&addr) {
+        tracing::error!(
+            "error.type" = "destination_ip_prohibited",
+            ?addr,
+            "destination IP prohibited by runtime config"
+        );
+        return false;
+    }
+    true
+}
+
+pub async fn check_socket_addr_use(
+    allowed_hosts: OutboundAllowedHosts,
+    blocked_networks: BlockedNetworks,
+    addr: SocketAddr,
+    addr_use: SocketAddrUse,
+) -> std::io::Result<()> {
+    if socket_addr_use_allowed(allowed_hosts, blocked_networks, addr, addr_use).await {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "An address was not permitted by the socket address check.",
+        ))
     }
 }

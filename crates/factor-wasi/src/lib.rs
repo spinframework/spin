@@ -393,6 +393,7 @@ impl Factor for WasiFactor {
         ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<InstanceBuilder> {
         let mut wasi_ctx = WasiCtxBuilder::new();
+        wasi_ctx.allow_tcp(true).allow_udp(true);
 
         // Mount files
         let mount_ctx = MountFilesContext { ctx: &mut wasi_ctx };
@@ -451,8 +452,7 @@ impl MountFilesContext<'_> {
         } else {
             FsPerms::ReadOnly
         };
-        self.ctx
-            .preopened_dir(host_path, guest_path, perms)?;
+        self.ctx.preopened_dir(host_path, guest_path, perms)?;
         Ok(())
     }
 }
@@ -520,8 +520,7 @@ impl InstanceBuilder {
         } else {
             FsPerms::ReadOnly
         };
-        self.ctx
-            .preopened_dir(host_path, guest_path, perms)?;
+        self.ctx.preopened_dir(host_path, guest_path, perms)?;
         Ok(())
     }
 }
@@ -560,9 +559,9 @@ impl InstanceBuilder {
                     | SocketAddrUse::TcpListen
                     | SocketAddrUse::TcpAccept
                     | SocketAddrUse::UdpReceive => false,
-                    SocketAddrUse::TcpConnect
-                    | SocketAddrUse::UdpBind
-                    | SocketAddrUse::UdpSend => check(addr, addr_use).await,
+                    SocketAddrUse::TcpConnect | SocketAddrUse::UdpBind | SocketAddrUse::UdpSend => {
+                        check(addr, addr_use).await
+                    }
                 }
             })
         });
