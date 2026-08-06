@@ -14,7 +14,7 @@ Created: April 9, 2026
 
 [SIP 020](docs/content/sips/020-component-dependencies.md) introduced the concept of component dependencies in Spin, allowing developers to compose components together by declaring dependencies in `spin.toml`. [SIP 023](docs/content/sips/023-granular-capability-inheritance.md) extended this with per-dependency, granular capability inheritance — replacing the all-or-nothing `dependencies_inherit_configuration` boolean with a flexible `inherit_configuration` field that accepts `true`, `false`, or a list of specific capability keys.
 
-Spin also supports **HTTP middleware**: components that process an incoming request before it reaches the application component, and process the outgoing response on the way back out (for example, an authorisation middleware that inspects credentials and either passes the request through or short-circuits with a "not authorised" response). Unlike a component dependency, middleware is attached to an HTTP *trigger* — via the trigger's `dependencies.middleware` array — rather than to a component, and the entries form an ordered pipeline. See the [HTTP middleware documentation](https://github.com/spinframework/spin-docs/pull/235) for details.
+Spin also supports **HTTP middleware**: components that process an incoming request before it reaches the application component, and process the outgoing response on the way back out (for example, an authorization middleware that inspects credentials and either passes the request through or short-circuits with a "not authorised" response). Unlike a component dependency, middleware is attached to an HTTP *trigger* — via the trigger's `dependencies.middleware` array — rather than to a component, and the entries form an ordered pipeline. See the [HTTP middleware documentation](https://github.com/spinframework/spin-docs/pull/235) for details.
 
 However, authoring either kind of entry by hand requires understanding the TOML schema, knowing which exports a component offers (or that a component is middleware at all), and correctly configuring capability inheritance — all of which are error-prone.
 
@@ -41,18 +41,17 @@ The `<source>` positional argument accepts four forms:
 
 ### Options
 
-Only flags that identify or resolve the source — plus capability inheritance — are supported. All other decisions (which component to add the dependency to, which interface to import, and where to position middleware) are always interactive. Whether the source is a regular component dependency or HTTP middleware is auto-detected from its interface signatures.
+Only flags that identify or resolve the source are supported. All decisions — which component to add the dependency to, which interface to import, which capabilities to inherit, and where to position middleware — are always interactive. Whether the source is a regular component dependency or HTTP middleware is auto-detected from its interface signatures.
 
 | Flag | Description |
 |------|-------------|
 | `-f, --file <path>` | Path to the `spin.toml` manifest. Defaults to the current directory. |
 | `-d, --digest <sha256>` | SHA-256 digest for verifying HTTP downloads. Required for HTTP sources. |
 | `-r, --registry <url>` | Override the default registry. Only applies to registry sources. |
-| `--inherit <value>` | Capability inheritance: `true`/`all`, `false`/`none`, or individual capabilities (repeatable or comma-separated). Prompted if omitted and the dependency requires capabilities. |
 
-## Interactive Prompts
+## Interactive Flow
 
-When optional flags are omitted, `spin deps add` presents interactive prompts to guide the developer through each decision. The prompt flow depends on whether the resolved component is a regular component dependency or HTTP middleware; the command detects this automatically, as described next. Steps 1–4 cover the component-dependency flow, and the [Middleware flow](#middleware-flow) covers middleware.
+`spin deps add` is an interactive command. After resolving the source, it walks the developer through each decision — target component, interface to import, and capability inheritance — with a series of prompts, auto-selecting whenever there is only one valid choice. The flags in the previous section only affect how the source is located and resolved; they never gate or replace a prompt. The prompt flow depends on whether the resolved component is a regular component dependency or HTTP middleware; the command detects this automatically, as described next. Steps 1–4 cover the component-dependency flow, and the [Middleware flow](#middleware-flow) covers middleware.
 
 > **Note on `dependencies_inherit_configuration`:** If the target component already has the legacy `dependencies_inherit_configuration` field set, the command skips the capability inheritance prompt entirely and does not write a per-dependency `inherit_configuration` value — the blanket setting already covers all dependencies.
 
@@ -97,35 +96,23 @@ All available interfaces are presented in a single flat list. For each package t
   aws:client/s3@1.0.0
   aws:client/dynamodb@1.0.0
   aws:client/sqs@1.0.0
-  All from aws:util@1.0.0
-  aws:util/retry@1.0.0
 ```
 
 Selecting **"All from aws:client@1.0.0"** records `aws:client@1.0.0` as the dependency name (a package-level selector). Selecting a specific interface records that interface (e.g. `aws:client/s3@1.0.0`).
 
 ### Step 3: Select capability inheritance
 
-The command inspects the dependency's imports and matches them against known capability sets (e.g. `allowed_outbound_hosts`, `ai_models`, `key_value_stores`) using semver-compatible matching. If the dependency requires any capabilities and `--inherit` is omitted, the user is prompted:
+The command inspects the dependency's imports and matches them against known capability sets (e.g. `allowed_outbound_hosts`, `ai_models`, `key_value_stores`) using semver-compatible matching. If the dependency requires any capabilities, the user is prompted:
 
 ```
 This dependency requires the following capabilities: allowed_outbound_hosts, ai_models
 
 ? Select capabilities to inherit from the parent component
-> All
-  allowed_outbound_hosts
-  ai_models
+  [ ] allowed_outbound_hosts
+  [ ] ai_models
 ```
 
-Selecting **"All"** sets `inherit_configuration = true` in the manifest. Selecting individual capabilities records them as a list (e.g. `inherit_configuration = ["allowed_outbound_hosts"]`). Selecting nothing results in no inheritance.
-
-#### Explicit `--inherit` flag
-
-The flag can be repeated or comma-separated:
-
-- `--inherit true` or `--inherit all` → inherits all capabilities
-- `--inherit false` or `--inherit none` → inherits nothing
-- `--inherit allowed_outbound_hosts,ai_models` → inherits only those capabilities
-- `--inherit allowed_outbound_hosts --inherit ai_models` → equivalent to above
+The prompt is a multi-select (checkboxes). Selecting **all** listed capabilities sets `inherit_configuration = true` in the manifest. Selecting a subset records them as a list (e.g. `inherit_configuration = ["allowed_outbound_hosts"]`). Selecting nothing results in no inheritance.
 
 ### Step 4: Write to manifest and regenerate WIT
 
@@ -192,7 +179,7 @@ If the application has exactly one HTTP trigger, it is selected automatically.
 
 ### Step M2: Choose the pipeline position
 
-The `middleware` field is an ordered pipeline. A request flows through the middlewares from front to back before reaching the application component, and the response flows from back to front. For example, authentication middleware should sit ahead of authorisation middleware.
+The `middleware` field is an ordered pipeline. A request flows through the middlewares from front to back before reaching the application component, and the response flows from back to front. For example, authentication middleware should sit ahead of authorization middleware.
 
 If the selected trigger already has middleware, the command displays the current pipeline and lets the user position the new entry using arrow keys:
 
@@ -255,29 +242,12 @@ Added aws:client/s3@1.0.0 to component 'api-server'
 Run `spin build` to generate language bindings for the new dependency.
 ```
 
-### Registry source with capability inheritance supplied
-
-Component and interface selection remain interactive; `--inherit` skips the capability prompt:
-
-```
-$ spin deps add aws:client@1.0.0 --inherit allowed_outbound_hosts
-
-? Which component should the dependency be added to?
-> api-server
-
-? Which interface do you want to import?
-> aws:client/s3@1.0.0
-
-Added aws:client/s3@1.0.0 to component 'api-server'
-Run `spin build` to generate language bindings for the new dependency.
-```
-
 ### Local component, single-component app
 
-When the app has exactly one component and the dependency exports exactly one interface, both are auto-selected and no prompts appear:
+When the app has exactly one component, the dependency exports exactly one interface, and it requires no capabilities, everything is auto-selected and no prompts appear:
 
 ```
-$ spin deps add ./my-component.wasm --inherit all
+$ spin deps add ./my-component.wasm
 
 Added my-export to component 'worker'
 Run `spin build` to generate language bindings for the new dependency.
@@ -286,7 +256,7 @@ Run `spin build` to generate language bindings for the new dependency.
 ### HTTP source
 
 ```
-$ spin deps add https://example.com/component.wasm --digest sha256:abc123... --inherit false
+$ spin deps add https://example.com/component.wasm --digest sha256:abc123...
 
 ? Which component should the dependency be added to?
 > dashboard
@@ -366,7 +336,7 @@ route = "/admin/..."
 component = "admin-ops"
 dependencies.middleware = [{ component = "ensure-admin", inherit_configuration = ["allowed_outbound_hosts"] }]
 
-# A pipeline of two middlewares: authentication runs before authorisation
+# A pipeline of two middlewares: authentication runs before authorization
 [[trigger.http]]
 route = "/secure/..."
 component = "secure-ops"
@@ -377,7 +347,7 @@ dependencies.middleware = [
 
 # Because 'ensure-admin' inherits allowed_outbound_hosts, the trigger's component must grant it
 [component.admin-ops]
-allowed_outbound_hosts = ["https://authorisation.example.com"]
+allowed_outbound_hosts = ["https://authorization.example.com"]
 ```
 
 ## Capability Detection
@@ -392,7 +362,7 @@ In the current version of Spin, capabilities (network access, key-value stores, 
 
 ### Non-interactive flags for scripting
 
-Component selection, interface selection, and middleware placement are interactive-only in the initial implementation, keeping the flag surface small and prompting for each decision. If CI/scripting use cases emerge, future work could reintroduce these as flags (e.g. `--to <component-id>`, `--import <name>`, and `--route <route>` / `--position <index>` for middleware) so an invocation can run without prompts.
+Component selection, interface selection, capability inheritance, and middleware placement are interactive-only in the initial implementation, keeping the flag surface small and prompting for each decision. If CI/scripting use cases emerge, future work could reintroduce these as flags (e.g. `--to <component-id>`, `--import <name>`, `--inherit <value>`, and `--route <route>` / `--position <index>` for middleware) so an invocation can run without prompts.
 
 ### Multiple selections within a single package
 
