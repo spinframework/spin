@@ -4,9 +4,9 @@ date = "2026-04-09T00:00:00Z"
 
 ---
 
-Summary: A CLI command (`spin deps add`) for adding component dependencies to a Spin application, with interactive prompts for selecting components, exports, and capability inheritance. The command also detects when the resolved component is HTTP middleware and guides attaching it to a trigger selected by route.
+Summary: A CLI command (`spin deps add`) for adding component dependencies to a Spin application, with interactive prompts for selecting components, interfaces, and capability inheritance. The command also detects when the resolved component is HTTP middleware and guides attaching it to a trigger selected by route.
 
-Owner(s): [bhardock@akamai.com](mailto:bhardock@akamai.com)
+Owner(s): Brian Hardock
 
 Created: April 9, 2026
 
@@ -41,22 +41,20 @@ The `<source>` positional argument accepts four forms:
 
 ### Options
 
+Only flags that identify or resolve the source — plus capability inheritance — are supported. All other decisions (which component to add the dependency to, which interface to import, and where to position middleware) are always interactive. Whether the source is a regular component dependency or HTTP middleware is auto-detected from its interface signatures.
+
 | Flag | Description |
 |------|-------------|
-| `--to <component-id>` | Parent component to add the dependency to. Component dependencies only. Prompted if omitted and the app has multiple components. |
 | `-f, --file <path>` | Path to the `spin.toml` manifest. Defaults to the current directory. |
-| `--export <name>` | Export to use from the dependency. Component dependencies only. Prompted if omitted and the dependency has multiple exports. |
 | `-d, --digest <sha256>` | SHA-256 digest for verifying HTTP downloads. Required for HTTP sources. |
 | `-r, --registry <url>` | Override the default registry. Only applies to registry sources. |
-| `--inherit <value>` | Capability inheritance: `true`/`all`, `false`/`none`, or comma-separated capabilities. Prompted if omitted and the dependency requires capabilities. |
-| `--middleware` | Force treating the dependency as HTTP middleware. By default this is auto-detected from the component's imports and exports. |
-| `--route <route>` | HTTP route of the trigger to attach middleware to. Middleware only. Prompted if omitted and the app has multiple HTTP triggers. |
-| `--trigger <id>` | Target a trigger by its `id` instead of its route. Middleware only; useful for private endpoints, which have no route. |
-| `--before <ref>`, `--after <ref>` | Position the middleware before/after an existing entry in the trigger's pipeline. Middleware only. Defaults to appending to the end of the pipeline. |
+| `--inherit <value>` | Capability inheritance: `true`/`all`, `false`/`none`, or individual capabilities (repeatable or comma-separated). Prompted if omitted and the dependency requires capabilities. |
 
 ## Interactive Prompts
 
 When optional flags are omitted, `spin deps add` presents interactive prompts to guide the developer through each decision. The prompt flow depends on whether the resolved component is a regular component dependency or HTTP middleware; the command detects this automatically, as described next. Steps 1–4 cover the component-dependency flow, and the [Middleware flow](#middleware-flow) covers middleware.
+
+> **Note on `dependencies_inherit_configuration`:** If the target component already has the legacy `dependencies_inherit_configuration` field set, the command skips the capability inheritance prompt entirely and does not write a per-dependency `inherit_configuration` value — the blanket setting already covers all dependencies.
 
 ### Detecting the dependency kind
 
@@ -64,11 +62,11 @@ After resolving the source, `spin deps add` inspects the component to decide whe
 
 A component is treated as **middleware** when it both **imports and exports** the `wasi:http/handler` interface (matched semver-compatibly — currently `wasi:http/handler@0.3.0`). The exported `handler` is how the middleware receives a request; the imported `handler` is how it forwards that request to the next component in the pipeline. By contrast, a regular HTTP component only *exports* `handler`, and an ordinary component dependency exports some other interface to satisfy a parent import.
 
-When middleware is detected, the command follows the [Middleware flow](#middleware-flow): it skips export selection (middleware always uses the fixed `handler` interface) and prompts for a target trigger by route instead of a target component. The `--middleware` flag forces this behavior if detection is ever ambiguous.
+When middleware is detected, the command follows the [Middleware flow](#middleware-flow): it skips interface selection (middleware always uses the fixed `handler` interface) and prompts for a target trigger by route instead of a target component. Detection is based purely on the component's interface signatures, so no flag is required to opt in.
 
 ### Step 1: Select the target component
 
-If `--to` is omitted and the application has more than one component, the user is prompted:
+If the application has more than one component, the user is prompted:
 
 ```
 $ spin deps add aws:client@1.0.0
@@ -81,45 +79,29 @@ $ spin deps add aws:client@1.0.0
 
 If the application has exactly one component, it is selected automatically.
 
-### Step 2: Select the export
+### Step 2: Select the interface to import
 
-The command inspects the resolved Wasm component to enumerate its exports. If `--export` is omitted, the prompt flow depends on the number of packages and interfaces.
+The command inspects the resolved Wasm component to enumerate its exports. The prompt flow depends on the number of exports.
 
 #### Single export — auto-selected
 
 If the component exports only one interface, it is selected automatically with no prompt.
 
-#### Multiple packages — select a package first
+#### Multiple exports — flat list
 
-If the component exports interfaces from multiple packages, the user first selects a package:
-
-```
-? Which package should be used?
-> aws:client@1.0.0
-  aws:util@1.0.0
-```
-
-#### Within-package selection — all or a specific interface
-
-After a package is selected (or if there is only one), the user chooses between all exports from that package or a single specific interface:
+All available interfaces are presented in a single flat list. For each package that has multiple interfaces, an "All from …" entry is included so the user can select the entire package in one step:
 
 ```
-? Which export should be used?
+? Which interface do you want to import?
 > All from aws:client@1.0.0
   aws:client/s3@1.0.0
   aws:client/dynamodb@1.0.0
   aws:client/sqs@1.0.0
+  All from aws:util@1.0.0
+  aws:util/retry@1.0.0
 ```
 
 Selecting **"All from aws:client@1.0.0"** records `aws:client@1.0.0` as the dependency name (a package-level selector). Selecting a specific interface records that interface (e.g. `aws:client/s3@1.0.0`).
-
-#### Explicit `--export` flag
-
-The `--export` flag accepts the same forms:
-
-- **Specific interface:** `--export aws:client/s3@1.0.0`
-- **Package selector:** `--export aws:client@1.0.0` (selects all matching exports)
-- **Plain name:** `--export my-export`
 
 ### Step 3: Select capability inheritance
 
@@ -138,9 +120,12 @@ Selecting **"All"** sets `inherit_configuration = true` in the manifest. Selecti
 
 #### Explicit `--inherit` flag
 
+The flag can be repeated or comma-separated:
+
 - `--inherit true` or `--inherit all` → inherits all capabilities
 - `--inherit false` or `--inherit none` → inherits nothing
 - `--inherit allowed_outbound_hosts,ai_models` → inherits only those capabilities
+- `--inherit allowed_outbound_hosts --inherit ai_models` → equivalent to above
 
 ### Step 4: Write to manifest and regenerate WIT
 
@@ -148,22 +133,48 @@ After all selections are made, the command:
 
 1. Serializes the dependency into the `[component.<id>.dependencies]` table in `spin.toml`
 2. Regenerates `spin-dependencies.wit` in the component's build directory
-3. Prints a confirmation message
+3. Prints a confirmation message with contextual warnings
+
+The confirmation message varies based on whether the parent component already satisfies the dependency's capability requirements:
 
 ```
 Added aws:client@1.0.0 to component 'api-server'
 
-NOTE: This dependency requires the following capabilities: allowed_outbound_hosts, ai_models
-You may need to add configuration for these capabilities to your component.
+Run `spin build` to generate language bindings for the new dependency.
+```
+
+If capabilities were inherited but the parent component does not yet declare them:
+
+```
+Added aws:client@1.0.0 to component 'api-server'
+
+WARNING: This dependency inherits 'ai_models' but component 'api-server' does not
+currently declare any ai_models. The dependency will have no model access at runtime
+until you configure ai_models on the parent component.
+
+Run `spin build` to generate language bindings for the new dependency.
+```
+
+If the user declined to inherit a capability the dependency requires:
+
+```
+Added aws:client@1.0.0 to component 'api-server'
+
+WARNING: This dependency uses the LLM API but 'ai_models' was not inherited.
+The dependency will receive 'access denied' errors for model operations at runtime.
+
+Run `spin build` to generate language bindings for the new dependency.
 ```
 
 ## Middleware flow
 
-When the resolved component is [detected as middleware](#detecting-the-dependency-kind), `spin deps add` guides the developer through attaching it to an HTTP trigger. This flow replaces Steps 1 and 2 (target component and export selection) with trigger and pipeline-position selection; capability inheritance and writing the manifest then proceed as below.
+When the resolved component is [detected as middleware](#detecting-the-dependency-kind), `spin deps add` guides the developer through attaching it to an HTTP trigger. This flow replaces Steps 1 and 2 (target component and interface selection) with trigger and pipeline-position selection; capability inheritance and writing the manifest then proceed as below.
+
+The middleware flow is **interactive-only** in the initial implementation. Non-interactive flags (e.g. for CI/scripting scenarios) may be added in a future iteration once usage patterns are clear.
 
 ### Step M1: Select the target trigger by route
 
-Middleware is attached to a trigger, not a component. If `--route` is omitted and the application has more than one HTTP trigger, the user selects the trigger by its route:
+Middleware is attached to a trigger, not a component. If the application has more than one HTTP trigger, the user selects the trigger by its route:
 
 ```
 $ spin deps add ./ensure-admin.wasm
@@ -173,34 +184,37 @@ Detected HTTP middleware (imports and exports wasi:http/handler).
 ? Which HTTP route should the middleware be added to?
 > /admin/...
   /api/...
-  (private) [component: health-check]
 ```
 
-If the application has exactly one HTTP trigger, it is selected automatically. Private endpoints (which have no route) are listed by their component id and can be targeted non-interactively with `--trigger <id>`.
+If the application has exactly one HTTP trigger, it is selected automatically.
+
+> **Private endpoints are excluded.** Middleware is not offered for private (route-less) endpoints. Service-chaining requests go directly to the component without passing through a trigger, so trigger-attached middleware would not execute. If middleware-like behavior is needed between chained components, use a regular component dependency instead.
 
 ### Step M2: Choose the pipeline position
 
-The `middleware` field is an ordered pipeline. A request flows through the middlewares from front to back before reaching the application component, and the response flows from back to front. For example, authentication middleware should sit ahead of authorisation middleware. If the selected trigger already has middleware, the user chooses where the new entry goes:
+The `middleware` field is an ordered pipeline. A request flows through the middlewares from front to back before reaching the application component, and the response flows from back to front. For example, authentication middleware should sit ahead of authorisation middleware.
+
+If the selected trigger already has middleware, the command displays the current pipeline and lets the user position the new entry using arrow keys:
 
 ```
-? Where should this middleware run in the pipeline?
-> Last (closest to the component)
-  First (outermost — receives the request first)
-  Before ensure-admin
-  After ensure-admin
+? Position the middleware in the pipeline (use ↑↓ to move):
+  existing-auth
+▶ [ensure-admin]  ← new
+  existing-logger
+  ─── component ───
 ```
 
-By default — and whenever the trigger has no existing middleware — the entry is appended to the end of the pipeline. The `--before <ref>` and `--after <ref>` flags set the position non-interactively.
+By default — and whenever the trigger has no existing middleware — the entry is appended to the end of the pipeline (closest to the component).
 
 ### Step M3: Select capability inheritance
 
-Capability inheritance works exactly as for component dependencies (see [Step 3](#step-3-select-capability-inheritance)), producing an `inherit_configuration` value on the middleware entry. Because middleware is attached to a trigger rather than a component, the capabilities it inherits come from whichever component the trigger runs, so the command emphasises that **every** component served by the trigger must grant those capabilities:
+Capability inheritance works exactly as for component dependencies (see [Step 3](#step-3-select-capability-inheritance)), producing an `inherit_configuration` value on the middleware entry. Because middleware is attached to a trigger rather than a component, the capabilities it inherits come from the component the trigger routes to:
 
 ```
 This middleware requires the following capabilities: allowed_outbound_hosts
 
-? Select capabilities to inherit from the parent component
-> allowed_outbound_hosts
+? Select capabilities to inherit from the trigger's component
+  [x] allowed_outbound_hosts
 ```
 
 See [Middleware permissions](#middleware-permissions) for details.
@@ -209,16 +223,19 @@ See [Middleware permissions](#middleware-permissions) for details.
 
 The command appends the middleware entry to the selected trigger's `dependencies.middleware` array and prints a confirmation. Unlike the component-dependency flow, no `spin-dependencies.wit` is generated — middleware is composed onto the component by the HTTP trigger at load time and does not satisfy a component import.
 
+If the trigger's component does not currently declare the inherited capabilities, the command warns specifically:
+
 ```
 Added middleware './ensure-admin.wasm' to the trigger for route '/admin/...'
 
-NOTE: This middleware requires the following capabilities: allowed_outbound_hosts
-Ensure every component served by this route grants these capabilities.
+WARNING: This middleware inherits 'allowed_outbound_hosts' but component 'admin-ops'
+does not currently declare any allowed_outbound_hosts. The middleware will have no
+network access at runtime until you configure allowed_outbound_hosts on 'admin-ops'.
 ```
 
 ## End-to-End Examples
 
-### Fully interactive
+### Registry source, fully interactive
 
 ```
 $ spin deps add aws:client@1.0.0
@@ -226,58 +243,62 @@ $ spin deps add aws:client@1.0.0
 ? Which component should the dependency be added to?
 > api-server
 
-? Which package should be used?
-> aws:client@1.0.0
-
-? Which export should be used?
+? Which interface do you want to import?
 > aws:client/s3@1.0.0
 
 This dependency requires the following capabilities: allowed_outbound_hosts
 
 ? Select capabilities to inherit from the parent component
-> allowed_outbound_hosts
+  [x] allowed_outbound_hosts
 
 Added aws:client/s3@1.0.0 to component 'api-server'
-
-NOTE: This dependency requires the following capabilities: allowed_outbound_hosts
-You may need to add configuration for these capabilities to your component.
+Run `spin build` to generate language bindings for the new dependency.
 ```
 
-### Fully non-interactive
+### Registry source with capability inheritance supplied
+
+Component and interface selection remain interactive; `--inherit` skips the capability prompt:
 
 ```
-$ spin deps add aws:client@1.0.0 \
-    --to api-server \
-    --export aws:client/s3@1.0.0 \
-    --inherit allowed_outbound_hosts
+$ spin deps add aws:client@1.0.0 --inherit allowed_outbound_hosts
+
+? Which component should the dependency be added to?
+> api-server
+
+? Which interface do you want to import?
+> aws:client/s3@1.0.0
 
 Added aws:client/s3@1.0.0 to component 'api-server'
-
-NOTE: This dependency requires the following capabilities: allowed_outbound_hosts
-You may need to add configuration for these capabilities to your component.
+Run `spin build` to generate language bindings for the new dependency.
 ```
 
-### Local component with all capabilities
+### Local component, single-component app
+
+When the app has exactly one component and the dependency exports exactly one interface, both are auto-selected and no prompts appear:
 
 ```
-$ spin deps add ./my-component.wasm --to worker --export my-export --inherit all
+$ spin deps add ./my-component.wasm --inherit all
 
 Added my-export to component 'worker'
+Run `spin build` to generate language bindings for the new dependency.
 ```
 
 ### HTTP source
 
 ```
-$ spin deps add https://example.com/component.wasm \
-    --digest abc123... \
-    --to dashboard \
-    --export foo:bar/baz@0.1.0 \
-    --inherit false
+$ spin deps add https://example.com/component.wasm --digest sha256:abc123... --inherit false
+
+? Which component should the dependency be added to?
+> dashboard
+
+? Which interface do you want to import?
+> foo:bar/baz@0.1.0
 
 Added foo:bar/baz@0.1.0 to component 'dashboard'
+Run `spin build` to generate language bindings for the new dependency.
 ```
 
-### Middleware, fully interactive
+### Middleware (interactive)
 
 ```
 $ spin deps add ./ensure-admin.wasm
@@ -287,35 +308,27 @@ Detected HTTP middleware (imports and exports wasi:http/handler).
 ? Which HTTP route should the middleware be added to?
 > /admin/...
 
-? Where should this middleware run in the pipeline?
-> Last (closest to the component)
+? Position the middleware in the pipeline (use ↑↓ to move):
+▶ [ensure-admin]  ← new
+  ─── component ───
 
 This middleware requires the following capabilities: allowed_outbound_hosts
 
-? Select capabilities to inherit from the parent component
-> allowed_outbound_hosts
+? Select capabilities to inherit from the trigger's component
+  [x] allowed_outbound_hosts
 
 Added middleware './ensure-admin.wasm' to the trigger for route '/admin/...'
-
-NOTE: This middleware requires the following capabilities: allowed_outbound_hosts
-Ensure every component served by this route grants these capabilities.
 ```
 
-### Middleware, fully non-interactive
+### Middleware referencing an existing component
 
 ```
-$ spin deps add authn:ensure-admin@1.0.0 \
-    --middleware \
-    --route "/admin/..." \
-    --inherit allowed_outbound_hosts
+$ spin deps add ensure-admin
 
-Added middleware 'authn:ensure-admin@1.0.0' to the trigger for route '/admin/...'
-```
+Detected HTTP middleware (imports and exports wasi:http/handler).
 
-### Middleware referencing an existing component, positioned first
-
-```
-$ spin deps add ensure-admin --route "/admin/..." --before audit-log --inherit none
+? Which HTTP route should the middleware be added to?
+> /admin/...
 
 Added middleware 'ensure-admin' to the trigger for route '/admin/...'
 ```
@@ -373,9 +386,13 @@ The command detects required capabilities by inspecting the dependency's compone
 
 ### Middleware permissions
 
-In the current version of Spin, capabilities (network access, key-value stores, and so on) are owned by application components; a dependency — including middleware — can at best *inherit* them. Because middleware is attached to a trigger rather than a component, the capabilities it inherits come from whichever component the trigger runs. `spin deps add` therefore warns that **every** component served by a trigger carrying the middleware must grant the capabilities the middleware needs. For example, a GitHub-authentication middleware that needs outbound access to `api.github.com` requires every such component to declare that host in `allowed_outbound_hosts`, so that the middleware can inherit it. See the [HTTP middleware documentation](https://github.com/spinframework/spin-docs/pull/235)'s Middleware Permissions section for more information.
+In the current version of Spin, capabilities (network access, key-value stores, and so on) are owned by application components; a dependency — including middleware — can at best *inherit* them. Because middleware is attached to a trigger rather than a component, the capabilities it inherits come from the component the trigger routes to. `spin deps add` checks that component's manifest declarations and warns specifically when the component does not currently grant the capabilities the middleware needs. For example, a GitHub-authentication middleware that needs outbound access to `api.github.com` requires the trigger's component to declare that host in `allowed_outbound_hosts`, so that the middleware can inherit it. See the [HTTP middleware documentation](https://github.com/spinframework/spin-docs/pull/235)'s Middleware Permissions section for more information.
 
 ## Potential Future Work
+
+### Non-interactive flags for scripting
+
+Component selection, interface selection, and middleware placement are interactive-only in the initial implementation, keeping the flag surface small and prompting for each decision. If CI/scripting use cases emerge, future work could reintroduce these as flags (e.g. `--to <component-id>`, `--import <name>`, and `--route <route>` / `--position <index>` for middleware) so an invocation can run without prompts.
 
 ### Multiple selections within a single package
 
