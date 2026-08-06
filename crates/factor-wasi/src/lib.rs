@@ -556,11 +556,13 @@ impl InstanceBuilder {
             let check = check.clone();
             Box::pin(async move {
                 match addr_use {
-                    SocketAddrUse::TcpBind => false,
+                    SocketAddrUse::TcpBind
+                    | SocketAddrUse::TcpListen
+                    | SocketAddrUse::TcpAccept
+                    | SocketAddrUse::UdpReceive => false,
                     SocketAddrUse::TcpConnect
                     | SocketAddrUse::UdpBind
-                    | SocketAddrUse::UdpConnect
-                    | SocketAddrUse::UdpOutgoingDatagram => check(addr, addr_use).await,
+                    | SocketAddrUse::UdpSend => check(addr, addr_use).await,
                 }
             })
         });
