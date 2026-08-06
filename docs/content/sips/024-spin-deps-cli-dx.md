@@ -112,7 +112,9 @@ This dependency requires the following capabilities: allowed_outbound_hosts, ai_
   [ ] ai_models
 ```
 
-The prompt is a multi-select (checkboxes). Selecting **all** listed capabilities sets `inherit_configuration = true` in the manifest. Selecting a subset records them as a list (e.g. `inherit_configuration = ["allowed_outbound_hosts"]`). Selecting nothing results in no inheritance.
+The prompt is a multi-select (checkboxes). The selected capabilities are always recorded as an explicit list — for example, selecting both options writes `inherit_configuration = ["allowed_outbound_hosts", "ai_models"]`. Selecting nothing omits the field, resulting in no inheritance.
+
+The command never writes `inherit_configuration = true`, even when every currently-listed capability is selected. `true` is a wildcard that would also grant whatever capabilities a *future* version of the dependency imports. Recording the explicit list instead ensures that choosing `allowed_outbound_hosts` and `ai_models` today does not silently opt the dependency into, say, `key_value_stores` if a later release starts importing it. (The manifest schema still accepts `true` for users who deliberately want that behavior; `spin deps add` simply does not generate it.)
 
 ### Step 4: Write to manifest and regenerate WIT
 
@@ -188,10 +190,10 @@ If the selected trigger already has middleware, the command displays the current
   existing-auth
 ▶ [ensure-admin]  ← new
   existing-logger
-  ─── component ───
+  ─── application component ───
 ```
 
-By default — and whenever the trigger has no existing middleware — the entry is appended to the end of the pipeline (closest to the component).
+By default — and whenever the trigger has no existing middleware — the entry is appended to the end of the pipeline (closest to the application component).
 
 ### Step M3: Select capability inheritance
 
@@ -270,6 +272,8 @@ Run `spin build` to generate language bindings for the new dependency.
 
 ### Middleware (interactive)
 
+Here the `/admin/...` route already has an `authn` middleware, so the position prompt appears; the new authorization middleware is placed after it:
+
 ```
 $ spin deps add ./ensure-admin.wasm
 
@@ -279,8 +283,9 @@ Detected HTTP middleware (imports and exports wasi:http/handler).
 > /admin/...
 
 ? Position the middleware in the pipeline (use ↑↓ to move):
+  authn
 ▶ [ensure-admin]  ← new
-  ─── component ───
+  ─── application component ───
 
 This middleware requires the following capabilities: allowed_outbound_hosts
 
@@ -308,9 +313,9 @@ Added middleware 'ensure-admin' to the trigger for route '/admin/...'
 The command produces entries in `spin.toml` matching the schema defined in [SIP 020](docs/content/sips/020-component-dependencies.md) and the per-dependency `inherit_configuration` field introduced in [SIP 023](docs/content/sips/023-granular-capability-inheritance.md):
 
 ```toml
-# Package-level selector with full inheritance
+# Package-level selector inheriting explicitly-chosen capabilities
 [component.api-server.dependencies]
-"aws:client@1.0.0" = { version = "=1.0.0", package = "aws:client", inherit_configuration = true }
+"aws:client@1.0.0" = { version = "=1.0.0", package = "aws:client", inherit_configuration = ["allowed_outbound_hosts", "ai_models"] }
 
 # Specific interface with selective inheritance
 [component.api-server.dependencies]
