@@ -159,7 +159,15 @@ impl Store for SqliteStore {
     }
 
     async fn exists(&self, key: &str) -> Result<bool, Error> {
-        Ok(self.get(key, usize::MAX).await?.is_some())
+        task::block_in_place(|| {
+            self.connection
+                .lock()
+                .unwrap()
+                .prepare_cached("SELECT 1 FROM spin_key_value WHERE store=$1 AND key=$2 LIMIT 1")
+                .map_err(log_error)?
+                .exists([&self.name, key])
+                .map_err(log_error)
+        })
     }
 
     async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
