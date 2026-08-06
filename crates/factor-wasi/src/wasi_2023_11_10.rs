@@ -875,8 +875,7 @@ impl<T> wasi::sockets::tcp::HostTcpSocket for SpinSocketsView<'_, T> {
                 self_,
                 network,
                 remote_address.into(),
-            )
-            .await,
+            ),
         )
     }
 
@@ -1312,8 +1311,7 @@ impl<T> wasi::sockets::udp::HostOutgoingDatagramStream for SpinSocketsView<'_, T
                 self,
                 self_,
                 datagrams.into_iter().map(|d| d.into()).collect(),
-            )
-            .await,
+            ),
         )
     }
 
