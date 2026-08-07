@@ -916,9 +916,9 @@ dependencies = [
 
 [[package]]
 name = "azure_data_cosmos"
-version = "0.37.0"
+version = "0.37.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f9d01906458ceafb6cf34b2217b79bfa2c757f507f1942706e134916ba94b0c"
+checksum = "8f7ec933cc053259153c422d56084a9a7518a8244b600d785afdbd6ddeddd0e5"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -937,9 +937,9 @@ dependencies = [
 
 [[package]]
 name = "azure_data_cosmos_driver"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68790fbe29d23e2c28d2e80820701e5bb7646aff33473b3a975e9646c5726611"
+checksum = "81543d795ebd1af08da8f3f9a959ec61ad2388458f1c0ab1d6e2462b37a74f9a"
 dependencies = [
  "arc-swap",
  "async-lock",
