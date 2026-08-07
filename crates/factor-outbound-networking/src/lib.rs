@@ -329,12 +329,16 @@ async fn socket_addr_use_allowed(
     addr_use: SocketAddrUse,
 ) -> bool {
     let scheme = match addr_use {
-        SocketAddrUse::TcpBind
-        | SocketAddrUse::TcpListen
-        | SocketAddrUse::TcpAccept
-        | SocketAddrUse::UdpReceive => return false,
+        SocketAddrUse::TcpListen | SocketAddrUse::TcpAccept => {
+            return false;
+        }
+        SocketAddrUse::TcpBind => {
+            // As of Wasmtime 48, finishing an outgoing TCP connection requires
+            // permission to bind to an unspecified address:
+            return addr.ip().is_unspecified() && addr.port() == 0;
+        }
         SocketAddrUse::TcpConnect => "tcp",
-        SocketAddrUse::UdpBind | SocketAddrUse::UdpSend => "udp",
+        SocketAddrUse::UdpBind | SocketAddrUse::UdpReceive | SocketAddrUse::UdpSend => "udp",
     };
     if !allowed_hosts
         .check_url(&addr.to_string(), scheme)
