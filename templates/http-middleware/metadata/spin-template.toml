@@ -1,0 +1,17 @@
+manifest_version = "1"
+id = "http-middleware"
+description = "http middleware rust template"
+tags = []
+
+[new_application]
+supported = false
+
+[add_component]
+skip_files = ["spin.toml"]
+[add_component.snippets]
+component = "component.txt"
+
+[parameters]
+# These are placehodlers for the template parameters
+# You can add more parameters here, or remove them if you don't need them.
+project-description = { type = "string", prompt = "Description", default = "" }
