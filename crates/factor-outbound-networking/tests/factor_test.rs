@@ -96,18 +96,15 @@ async fn configures_wasi_socket_addr_check() -> anyhow::Result<()> {
             })?,
             ..Default::default()
         })?;
-    let mut state = env.build_instance_state().await?;
-    let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
+    let state = env.build_instance_state().await?;
 
-    let network_resource = sockets.instance_network()?;
-    let network = sockets.table.get(&network_resource)?;
-
-    network
-        .check_socket_addr(
-            "123.0.2.1:12345".parse().unwrap(),
-            SocketAddrUse::TcpConnect,
-        )
-        .await?;
+    spin_factor_outbound_networking::check_socket_addr_use(
+        state.networking.allowed_hosts(),
+        state.networking.blocked_networks(),
+        "123.0.2.1:12345".parse().unwrap(),
+        SocketAddrUse::TcpConnect,
+    )
+    .await?;
     for not_allowed in [
         // Blocked by allowed_outbound_hosts
         "123.0.2.1:25",
@@ -117,11 +114,15 @@ async fn configures_wasi_socket_addr_check() -> anyhow::Result<()> {
         "127.0.0.1:3000",
     ] {
         assert_eq!(
-            network
-                .check_socket_addr(not_allowed.parse().unwrap(), SocketAddrUse::TcpConnect)
-                .await
-                .unwrap_err()
-                .kind(),
+            spin_factor_outbound_networking::check_socket_addr_use(
+                state.networking.allowed_hosts(),
+                state.networking.blocked_networks(),
+                not_allowed.parse().unwrap(),
+                SocketAddrUse::TcpConnect
+            )
+            .await
+            .unwrap_err()
+            .kind(),
             std::io::ErrorKind::PermissionDenied
         );
     }
@@ -172,18 +173,17 @@ async fn socket_quota_blocks_excess_connections() -> anyhow::Result<()> {
     // First two connections should be accepted (non-blocking connect initiated)
     let net1 = sockets.instance_network()?;
     let sock1 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock1, net1, addr.into()).await?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock1, net1, addr.into())?;
 
     let net2 = sockets.instance_network()?;
     let sock2 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock2, net2, addr.into()).await?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock2, net2, addr.into())?;
 
     // Third should fail — quota exhausted
     let net3 = sockets.instance_network()?;
     let sock3 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock3, net3, addr.into())
-        .await
-        .unwrap_err();
+    let err =
+        p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock3, net3, addr.into()).unwrap_err();
     assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
     Ok(())
 }
@@ -234,7 +234,7 @@ async fn socket_quota_releases_on_instance_drop() -> anyhow::Result<()> {
         let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
         let net = sockets.instance_network()?;
         let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-        p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into()).await?;
+        p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into())?;
         // sockets state dropped here releasing the permit back to the semaphore
     }
 
@@ -244,7 +244,7 @@ async fn socket_quota_releases_on_instance_drop() -> anyhow::Result<()> {
     let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
     let net = sockets.instance_network()?;
     let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into()).await?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into())?;
     Ok(())
 }
 
@@ -268,7 +268,7 @@ async fn no_socket_quota_allows_unlimited() -> anyhow::Result<()> {
     for _ in 0..10 {
         let net = sockets.instance_network()?;
         let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-        p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into()).await?;
+        p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into())?;
     }
     Ok(())
 }
@@ -301,15 +301,20 @@ async fn socket_quota_still_enforces_allowed_hosts() -> anyhow::Result<()> {
     let net = sockets.instance_network()?;
     let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
     let allowed_addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
-    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, allowed_addr.into()).await?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, allowed_addr.into())?;
 
     // Disallowed host is rejected even with quota available
     let net = sockets.instance_network()?;
     let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+    let sock_rep = sock.rep();
     let disallowed_addr: std::net::SocketAddr = "1.2.3.4:80".parse().unwrap();
     assert!(
         p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, disallowed_addr.into())
-            .await
+            .is_err()
+            || p2_tcp::HostTcpSocket::finish_connect(
+                &mut sockets,
+                wasmtime::component::Resource::<wasmtime_wasi::p2::TcpSocket>::new_own(sock_rep)
+            )
             .is_err()
     );
     Ok(())
@@ -346,25 +351,24 @@ async fn socket_quota_releases_on_socket_drop() -> anyhow::Result<()> {
     let net1 = sockets.instance_network()?;
     let sock1 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
     let sock1_rep = sock1.rep();
-    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock1, net1, addr.into()).await?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock1, net1, addr.into())?;
 
     // A second start_connect should fail while the permit is held.
     let net2 = sockets.instance_network()?;
     let sock2 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock2, net2, addr.into())
-        .await
-        .unwrap_err();
+    let err =
+        p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock2, net2, addr.into()).unwrap_err();
     assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
 
     // Explicitly drop sock1 before finish_connect — this should release the permit.
     let sock1_handle =
-        wasmtime::component::Resource::<wasmtime_wasi::sockets::TcpSocket>::new_own(sock1_rep);
+        wasmtime::component::Resource::<wasmtime_wasi::p2::TcpSocket>::new_own(sock1_rep);
     p2_tcp::HostTcpSocket::drop(&mut sockets, sock1_handle)?;
 
     // After the drop the quota is free again, so a new start_connect must succeed.
     let net3 = sockets.instance_network()?;
     let sock3 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock3, net3, addr.into()).await?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock3, net3, addr.into())?;
 
     Ok(())
 }
@@ -394,12 +398,13 @@ async fn socket_quota_blocks_excess_udp_sockets() -> anyhow::Result<()> {
     let mut sockets = WasiFactor::get_sockets_impl(&mut state, get_sockets_view).unwrap();
 
     // First two UDP socket creations should succeed.
-    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).await?;
+    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).await?;
 
     // Third should fail — quota exhausted.
-    let err =
-        p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).unwrap_err();
+    let err = p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)
+        .await
+        .unwrap_err();
     assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
     Ok(())
 }
@@ -432,21 +437,21 @@ async fn socket_quota_shared_between_tcp_and_udp() -> anyhow::Result<()> {
     // Consume one permit with a TCP connection.
     let net = sockets.instance_network()?;
     let tcp_sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    p2_tcp::HostTcpSocket::start_connect(&mut sockets, tcp_sock, net, addr.into()).await?;
+    p2_tcp::HostTcpSocket::start_connect(&mut sockets, tcp_sock, net, addr.into())?;
 
     // Consume the second permit with a UDP socket — quota now full.
-    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
+    p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).await?;
 
     // Any further allocation must fail — shared quota exhausted.
     // UDP:
-    let err =
-        p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4).unwrap_err();
+    let err = p2_udp_create::Host::create_udp_socket(&mut sockets, IpAddressFamily::Ipv4)
+        .await
+        .unwrap_err();
     assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
     // TCP:
     let net = sockets.instance_network()?;
     let tcp_sock2 = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
     let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, tcp_sock2, net, addr.into())
-        .await
         .unwrap_err();
     assert_eq!(err.downcast_ref(), Some(&ErrorCode::NewSocketLimit));
     Ok(())
@@ -496,9 +501,8 @@ async fn global_connection_limit_enforced_across_factors() -> anyhow::Result<()>
     let addr: std::net::SocketAddr = "123.0.2.1:12345".parse().unwrap();
     let net = sockets.instance_network()?;
     let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
-    let err = p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into())
-        .await
-        .unwrap_err();
+    let err =
+        p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into()).unwrap_err();
     assert_eq!(
         err.downcast_ref(),
         Some(&ErrorCode::NewSocketLimit),
@@ -514,7 +518,6 @@ async fn global_connection_limit_enforced_across_factors() -> anyhow::Result<()>
     let net = sockets.instance_network()?;
     let sock = p2_tcp_create::Host::create_tcp_socket(&mut sockets, IpAddressFamily::Ipv4)?;
     p2_tcp::HostTcpSocket::start_connect(&mut sockets, sock, net, addr.into())
-        .await
         .expect("TCP socket should succeed after MQTT connection is released");
 
     Ok(())

@@ -12,7 +12,7 @@ edition = "2024"
 license = "Apache-2.0 WITH LLVM-exception"
 homepage = "https://spinframework.dev"
 repository = "https://github.com/spinframework/spin"
-rust-version = "1.94"
+rust-version = "1.95"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -203,9 +203,9 @@ wasm-metadata = "0.247.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 wasmparser = "0.247.0"
-wasmtime = "47.0.2"
-wasmtime-wasi = { version = "47.0.2", features = ["p3"] }
-wasmtime-wasi-http = { version = "47.0.2", features = ["p3", "component-model-async"] }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-48.0.0" }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-48.0.0", features = ["p3"] }
+wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", branch = "release-48.0.0", features = ["p3", "component-model-async"] }
 wit-component = "0.247.0"
 wit-parser = "0.247.0"
 

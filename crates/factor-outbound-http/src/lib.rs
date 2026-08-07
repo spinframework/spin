@@ -28,10 +28,8 @@ use spin_factors::{
 use wasmtime_wasi_http::WasiHttpCtx;
 
 pub use wasmtime_wasi_http::p2::{
-    HttpResult,
-    bindings::http::types::ErrorCode,
-    body::HyperOutgoingBody,
-    types::{HostFutureIncomingResponse, OutgoingRequestConfig},
+    HttpResult, bindings::http::types::ErrorCode, body::HyperOutgoingBody,
+    types::HostFutureIncomingResponse,
 };
 
 #[derive(Default)]

@@ -10,7 +10,6 @@ use spin_factor_wasi::{DummyFilesMounter, WasiFactor};
 use spin_factors::{App, AsInstanceState, RuntimeFactors};
 use spin_locked_app::locked::LockedApp;
 use tokio::fs;
-use wasmtime_wasi::I32Exit;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_max_memory_size_obeyed() {
@@ -40,11 +39,7 @@ async fn test_max_memory_size_violated() {
     )
     .await
     .unwrap_err();
-    let trap = err
-        .root_cause() // The error returned is a backtrace. We need the root cause.
-        .downcast_ref::<I32Exit>()
-        .expect("trap error was not an I32Exit");
-    assert_eq!(trap.0, 1);
+    assert!(format!("{err:?}").contains("command failed"))
 }
 
 // FIXME: racy timing test

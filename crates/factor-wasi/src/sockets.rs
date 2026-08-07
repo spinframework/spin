@@ -13,15 +13,16 @@ use std::{
 
 use spin_connection_semaphore::{ConnectionPermit, ConnectionSemaphore};
 use wasmtime::component::{HasData, Resource};
-use wasmtime_wasi::p2::bindings::sockets::network::{
-    ErrorCode as SocketErrorCode, Host as NetworkHost, Network,
-};
 use wasmtime_wasi::p2::bindings::sockets::tcp::{self as p2_tcp, IpSocketAddress, ShutdownType};
 use wasmtime_wasi::p2::bindings::sockets::tcp_create_socket as p2_tcp_create;
 use wasmtime_wasi::p2::bindings::sockets::udp as p2_udp;
 use wasmtime_wasi::p2::bindings::sockets::udp_create_socket as p2_udp_create;
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable};
-use wasmtime_wasi::sockets::{TcpSocket, UdpSocket, WasiSockets, WasiSocketsCtxView};
+use wasmtime_wasi::p2::{TcpSocket, UdpSocket};
+use wasmtime_wasi::{
+    p2::bindings::sockets::network::{ErrorCode as SocketErrorCode, Host as NetworkHost, Network},
+    sockets::{WasiSockets, WasiSocketsCtxView},
+};
 
 /// Shared state for tracking per-socket semaphore permits. Permits are
 /// acquired when a socket is allocated (at `start_connect` for TCP, at
@@ -134,7 +135,7 @@ impl<T> p2_tcp::HostTcpSocket for SpinSocketsView<'_, T> {
         p2_tcp::HostTcpSocket::finish_bind(&mut self.inner, this)
     }
 
-    async fn start_connect(
+    fn start_connect(
         &mut self,
         this: Resource<TcpSocket>,
         network: Resource<Network>,
@@ -150,8 +151,7 @@ impl<T> p2_tcp::HostTcpSocket for SpinSocketsView<'_, T> {
             return Err(SocketErrorCode::NewSocketLimit.into());
         };
         let result =
-            p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address)
-                .await;
+            p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address);
         if result.is_ok() {
             self.register_permit(socket_rep, permit);
         }
@@ -167,8 +167,11 @@ impl<T> p2_tcp::HostTcpSocket for SpinSocketsView<'_, T> {
         p2_tcp::HostTcpSocket::finish_connect(&mut self.inner, this)
     }
 
-    fn start_listen(&mut self, this: Resource<TcpSocket>) -> wasmtime_wasi::p2::SocketResult<()> {
-        p2_tcp::HostTcpSocket::start_listen(&mut self.inner, this)
+    async fn start_listen(
+        &mut self,
+        this: Resource<TcpSocket>,
+    ) -> wasmtime_wasi::p2::SocketResult<()> {
+        p2_tcp::HostTcpSocket::start_listen(&mut self.inner, this).await
     }
 
     fn finish_listen(&mut self, this: Resource<TcpSocket>) -> wasmtime_wasi::p2::SocketResult<()> {
@@ -508,12 +511,12 @@ impl<T> p2_udp::HostOutgoingDatagramStream for SpinSocketsView<'_, T> {
         p2_udp::HostOutgoingDatagramStream::check_send(&mut self.inner, this)
     }
 
-    async fn send(
+    fn send(
         &mut self,
         this: Resource<p2_udp::OutgoingDatagramStream>,
         datagrams: Vec<p2_udp::OutgoingDatagram>,
     ) -> wasmtime_wasi::p2::SocketResult<u64> {
-        p2_udp::HostOutgoingDatagramStream::send(&mut self.inner, this, datagrams).await
+        p2_udp::HostOutgoingDatagramStream::send(&mut self.inner, this, datagrams)
     }
 
     fn subscribe(
@@ -523,13 +526,16 @@ impl<T> p2_udp::HostOutgoingDatagramStream for SpinSocketsView<'_, T> {
         p2_udp::HostOutgoingDatagramStream::subscribe(&mut self.inner, this)
     }
 
-    fn drop(&mut self, this: Resource<p2_udp::OutgoingDatagramStream>) -> wasmtime::Result<()> {
-        p2_udp::HostOutgoingDatagramStream::drop(&mut self.inner, this)
+    async fn drop(
+        &mut self,
+        this: Resource<p2_udp::OutgoingDatagramStream>,
+    ) -> wasmtime::Result<()> {
+        p2_udp::HostOutgoingDatagramStream::drop(&mut self.inner, this).await
     }
 }
 
 impl<T> p2_udp_create::Host for SpinSocketsView<'_, T> {
-    fn create_udp_socket(
+    async fn create_udp_socket(
         &mut self,
         address_family: wasmtime_wasi::p2::bindings::sockets::network::IpAddressFamily,
     ) -> wasmtime_wasi::p2::SocketResult<Resource<UdpSocket>> {
@@ -540,7 +546,7 @@ impl<T> p2_udp_create::Host for SpinSocketsView<'_, T> {
             tracing::warn!("UDP socket creation refused: connection quota exhausted");
             return Err(SocketErrorCode::NewSocketLimit.into());
         };
-        let sock = p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family)?;
+        let sock = p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family).await?;
         self.register_permit(sock.rep(), permit);
         Ok(sock)
     }
@@ -744,7 +750,7 @@ impl<T> p3_HostUdpSocket for SpinSocketsView<'_, T> {
         p3_HostUdpSocket::connect(&mut self.inner, socket, remote_address).await
     }
 
-    fn create(
+    async fn create(
         &mut self,
         address_family: p3_IpAddressFamily,
     ) -> P3SocketResult<Resource<p3_types::UdpSocket>> {
@@ -755,7 +761,7 @@ impl<T> p3_HostUdpSocket for SpinSocketsView<'_, T> {
             tracing::warn!("UDP socket creation refused: connection quota exhausted");
             return Err(p3_ErrorCode::Other(Some("connection quota exhausted".into())).into());
         };
-        let sock = p3_HostUdpSocket::create(&mut self.inner, address_family)?;
+        let sock = p3_HostUdpSocket::create(&mut self.inner, address_family).await?;
         self.register_permit(sock.rep(), permit);
         Ok(sock)
     }
