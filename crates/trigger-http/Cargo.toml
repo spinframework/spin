@@ -21,6 +21,7 @@ pin-project-lite = { workspace = true }
 rand.workspace = true
 rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
+spin-tls = { path = "../tls" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 spin-app = { path = "../app" }
