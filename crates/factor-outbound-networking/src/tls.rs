@@ -120,7 +120,11 @@ impl TlsClientConfig {
             );
         }
 
-        let builder = rustls::ClientConfig::builder();
+        let builder = rustls::ClientConfig::builder_with_provider(
+            spin_tls::get_or_install_default_crypto_provider(),
+        )
+        .with_safe_default_protocol_versions()
+        .context("failed to configure default TLS protocol versions")?;
         let builder = if use_platform_roots {
             let verifier = rustls_platform_verifier::Verifier::new_with_extra_roots(
                 extra_roots,
