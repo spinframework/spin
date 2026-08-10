@@ -133,6 +133,7 @@ members = [
 
 [workspace.dependencies]
 anyhow = "1"
+astral-tokio-tar = "0.6"
 async-trait = "0.1"
 base64 = "0.22"
 bytes = "1.11.1"

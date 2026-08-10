@@ -206,6 +206,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
+name = "astral-tokio-tar"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b18457efd137254e016bbde5e1d88df61c4e1a5ae2223746e56123bac6af2463"
+dependencies = [
+ "futures-core",
+ "libc",
+ "portable-atomic",
+ "rustc-hash",
+ "rustix",
+ "tokio",
+ "tokio-stream",
+ "xattr",
+]
+
+[[package]]
 name = "async-broadcast"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9737,6 +9753,7 @@ name = "spin-oci"
 version = "4.1.0-pre0"
 dependencies = [
  "anyhow",
+ "astral-tokio-tar",
  "async-compression",
  "base64 0.22.1",
  "chrono",
@@ -9755,7 +9772,6 @@ dependencies = [
  "spin-compose",
  "spin-loader",
  "spin-locked-app",
- "tar",
  "tempfile",
  "tokio",
  "tokio-util",
