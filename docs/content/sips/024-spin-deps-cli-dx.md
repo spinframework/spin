@@ -12,7 +12,7 @@ Created: April 9, 2026
 
 # Background
 
-[SIP 020](docs/content/sips/020-component-dependencies.md) introduced the concept of component dependencies in Spin, allowing developers to compose components together by declaring dependencies in `spin.toml`. [SIP 023](docs/content/sips/023-granular-capability-inheritance.md) extended this with per-dependency, granular capability inheritance — replacing the all-or-nothing `dependencies_inherit_configuration` boolean with a flexible `inherit_configuration` field that accepts `true`, `false`, or a list of specific capability keys.
+[SIP 020](020-component-dependencies.md) introduced the concept of component dependencies in Spin, allowing developers to compose components together by declaring dependencies in `spin.toml`. [SIP 023](023-fine-grained-capability-inheritance.md) extended this with per-dependency, granular capability inheritance — replacing the all-or-nothing `dependencies_inherit_configuration` boolean with a flexible `inherit_configuration` field that accepts `true`, `false`, or a list of specific capability keys.
 
 Spin also supports **HTTP middleware**: components that process an incoming request before it reaches the application component, and process the outgoing response on the way back out (for example, an authorization middleware that inspects credentials and either passes the request through or short-circuits with a "not authorised" response). Unlike a component dependency, middleware is attached to an HTTP *trigger* — via the trigger's `dependencies.middleware` array — rather than to a component, and the entries form an ordered pipeline. See the [HTTP middleware documentation](https://github.com/spinframework/spin-docs/pull/235) for details.
 
