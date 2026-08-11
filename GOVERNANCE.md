@@ -27,25 +27,91 @@ The Spin project consists of several codebases with different release cycles. Th
 
 Each repository is subject to the same overall governance model, but has different teams of people (“maintainers”) with permissions and access to the repository. This is meant to increase diversity of maintainers in the Spin project and also increases the velocity of code changes. Major changes and features to the project including additions to the repository list above are to be proposed through the [Spin Improvement Proposal](docs/content/sips/index.md) process.
 
-## Spin Project Maintainers
+## Spin Project Roles
 
-Project maintainers are responsible for activities surrounding the development and release cycle of a specific repository they own. Technical decisions for code resides with the project maintainers, unless there is a decision related to cross maintainer groups that cannot be resolved by those groups. Those cases can be escalated to the Spin Governance Committee (discussed below).
+The Spin project is built and maintained by a community of contributors, maintainers, and core maintainers. These roles represent increasing levels of responsibility, ownership and trust within the project.
 
-Project maintainers do not need to be software developers. No explicit role is placed upon them, and they can be anyone appropriate for the work being produced.
+### Contributors
 
-Project maintainers and emeritus maintainers for each project should be outlined in the MAINTAINERS.md file in the corresponding GitHub repository.
+**Contributors** are community members who actively improve the project through code, documentation, issue reports, discussions, testing, community support or other meaningful contributions. 
 
-Changes to project maintainers use the following:
+Contributors are expected to follow project contribution guidelines, abide by the Code of Conduct, collaborate constructively with the community, and help improve the quality of the project.
 
-- A project maintainer may step down by emailing the mailing list. When a project maintainer steps down, they become an emeritus maintainer.
-- Project maintainers MUST remain active on the project. If they are unresponsive for > 3 months, they will lose project maintainer-ship, unless the remaining project maintainers of the given project and the Spin Governance Committee agree to extend the period to be greater than 3 months.
-- New maintainers MUST be nominated by existing maintainers. Maintainers are to discuss and agree in a private setting adding a new maintainer. Once a decision has been made, a maintainer may be added to the project via a pull request to the relevant MAINTAINERS.md file.
-- A maintainer may be removed for a [code of conduct](CODE_OF_CONDUCT.md) violation by the Spin Governance Committee. Code of conduct violations may be submitted to any member(s) on the Spin Governance Committee by email. See email information on MAINTAINERS.md.
-- When a project has no active maintainers, the maintainers of the [spinframework/spin Github repo](https://github.com/spinframework/spin) become responsible for it, and may archive the project, or find new maintainers.
+Contributors do not need to hold a formal project role to participate in the direction of Spin.
 
-## Spin Governance Committee
+### Maintainers
 
-The project maintainers for [github.com/spinframework/spin](https://github.com/spinframework/spin) also serve as the Spin Governance Committee and have the following additional responsibilities:
+Maintainers are trusted contributors who have demonstrated sustained involvement in the project and take responsibility beyond their individual contributions.
+
+Maintainers may:
+- Triage and manage issues
+- Review pull requests and provide technical feedback
+- Help maintain and improve code quality
+- Guide and mentor contributors
+- Participate in technical and project discussions
+- Take ownership of particular areas or components of the project
+- Help identify and prioritize work within the project
+
+Maintainers are expected to demonstrate sound technical and community judgement and a strong understanding of the project's standards and direction.
+
+The Maintainer role does not necessarily grant merge, release or administrative access. Maintainer is a meaningful project role in its own right and is not considered a probationary Core Maintainer position.
+
+### Core Maintainers
+
+**Core Maintainers** are Maintainers who have demonstrated sustained ownership of the project, sound technical and community judgement, and the ability to independently review and make decisions about changes entering the project.
+
+Core Maintainers are trusted with merge access and share responsibility for the project's technical direction, quality releases, and long-term health. Core Maintainers also serve as stewards of the project community. Their responsibilities include:
+- Reviewing and merging changes to the project
+- Helping establish and maintain the project's technical direction
+- Maintaining the quality, security, and stability of the project
+- Participating in releases and other project operations
+- Upholding the Code of Conduct and helping resolve community and contributor concerns
+- Fostering a welcoming, inclusive, and productive project community
+- Helping evolve project governance as the project and community grow
+- Identifying when project processes, roles, decision-making structures or contributor pathways need to change
+- Participating in decisions regarding the long-term health and sustainability of the project
+
+Core Maintainers are expected to exercise their authority in the interests of the Spin project and its community.
+
+### Repository Maintainer Teams
+
+Each repository within the Spin project may have its own Maintainers and Core Maintainers appropriate to the work being produced by that repository. Project roles are not limited to software developers.
+
+Maintainers, Core Maintainers and Emeritus Maintainers for each project should be outlined in the MAINTAINERS.md file in the corresponding GitHub repository.
+
+### Becoming a Maintainer
+
+New maintainers MUST be nominated by an existing Maintainer or Core Maintainer.
+
+Maintainers and Core Maintainers for the relevant repository should consider whether the nominee has demonstrated sustained and constructive participation in the project and is preared to take responsibility beyond their individual contributions. Once agreement has been reached, the Maintainer may be added via a pull request to the relevant MAINTAINERS.md file.
+
+### Becoming a Core Maintainer
+
+Core Maintainer status represents a higher level of project trust and responsibility is not granted solely based on the length or volume of an individual's contributions. 
+
+Candidates for Core Maintainer should have demonstrated:
+- Sustained ownership and involvement in the project
+- Sound technical judgement
+- Sound community judgement and constructive interactions with contributors
+- A strong understanding of the project's architecture, standards, and direction
+- The ability to independently review changes and determine whether they are appropriate to enter the project
+- A willingness to take responsibility for the long-term health of the project and its community
+
+New Core Maintainers MUST be nominated by an existing Core Maintainer. Core Maintainers for the relevant repository will discuss nomination and reach agreement in a private setting. Once a decision has been made, the new Core Maintainer may be added via a pull request to the relevant MAINTAINERS.md file and granted the appropriate repository permissions.
+
+### Inactivity and Emeritus Status
+
+Maintainers and Core Maintainers MUST remain active on the project. If a Maintainer or a Core Maintainer is unresponsive for more than three months, they may be moved to Emeritus Maintainer status unless the remaining Core Maintainers for the project and the Spin Governance Committee agree to extend that period.
+
+A Maintainer and Core Maintainer may also voluntarily step down and become an Emeritus Maintainer.
+
+A Maintainer or Core Maintainer may be removed for a Code of Conduct violation by the Spin Governance Committee using the contact information in MAINTAINERS.md.
+
+When a project has no active Core Maintainers, the Core Maintainers of the spinframework/spin repository become responsible for the project and may identify new maintainers or archive the project.
+
+### Spin Governance Committee
+
+The Core Maintainers for [github.com/spinframework/spin](https://github.com/spinframework/spin) also serve as the interim Spin Governance Committee and have the following additional responsibilities:
 
 - Maintaining the mission, vision, values, and scope of the project
 - Refining this governance document
