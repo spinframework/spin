@@ -46,6 +46,7 @@ subprocess = "0.2"
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }
+toml_edit = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 uuid = { version = "1.0", features = ["v4"] }
@@ -55,6 +56,7 @@ watchexec-filterer-globset = "8.0"
 
 spin-app = { path = "crates/app" }
 spin-build = { path = "crates/build" }
+spin-capabilities = { path = "crates/capabilities" }
 spin-common = { path = "crates/common" }
 spin-connection-semaphore = { path = "crates/connection-semaphore" }
 spin-dependency-wit = { path = "crates/dependency-wit" }
@@ -69,6 +71,7 @@ spin-manifest = { path = "crates/manifest" }
 spin-oci = { path = "crates/oci" }
 spin-plugins = { path = "crates/plugins" }
 spin-runtime-factors = { path = "crates/runtime-factors" }
+spin-serde = { path = "crates/serde" }
 spin-telemetry = { path = "crates/telemetry", features = [
   "tracing-log-compat",
 ] }
