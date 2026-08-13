@@ -1,4 +1,4 @@
-title = "SIP 022 - Target Environment Validation"
+title = "SIP 025 - Target Environment Validation"
 template = "main"
 date = "2025-08-07T00:00:00Z"
 ---
