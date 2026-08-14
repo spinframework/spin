@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use opentelemetry_otlp::WithHttpConfig;
+use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::{
     Resource,
     metrics::{
@@ -10,7 +10,7 @@ use opentelemetry_sdk::{
     runtime::Tokio,
 };
 
-use crate::{detector::SpinResourceDetector, env::OtlpProtocol};
+use crate::env::OtlpProtocol;
 
 /// Re-exported so the metric macros can refer to `$crate::opentelemetry::...`.
 #[doc(hidden)]
@@ -32,28 +32,45 @@ pub struct HistogramBuckets {
 
 /// Builds an [`SdkMeterProvider`] configured to export to an OTLP collector.
 ///
-/// It pulls OTEL configuration from the environment based on the variables defined
-/// [here](https://opentelemetry.io/docs/specs/otel/protocol/exporter/) and
+/// Aside from `endpoint`, it pulls OTEL configuration from the environment based on the
+/// variables defined [here](https://opentelemetry.io/docs/specs/otel/protocol/exporter/) and
 /// [here](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#general-sdk-configuration).
+///
+/// `endpoint` overrides the collector endpoint the environment would otherwise select (via
+/// `OTEL_EXPORTER_OTLP_ENDPOINT`/`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`), for callers that take
+/// their own explicit configuration (e.g. a CLI flag) rather than expecting operators to set
+/// OTel's environment variables directly. Pass `None` to use the environment as normal.
+///
+/// `resource_detectors` lets the caller contribute additional resource attributes.
+/// They run before this crate's own detectors, which set fields from `OTEL_RESOURCE_ATTRIBUTES`
+/// and `telemetry.sdk{name, language, version}`.
 ///
 /// The caller is responsible for registering the returned provider as the global one (e.g. via
 /// [`opentelemetry::global::set_meter_provider`]). Instruments created by the macros in this
 /// module (e.g. [`counter`](crate::counter)) bind to whatever meter
 /// provider is global *at the time they're first used*, and never rebind afterwards.
-pub(crate) fn metrics_provider(
-    spin_version: String,
+///
+/// Exposed publicly so embedders that manage their own [tracing::Subscriber] (and so can't call
+/// [`crate::init`], which also installs one) can still set up Spin's metrics: build a provider
+/// with this function and register it themselves, alongside their own, via
+/// [`opentelemetry::global::set_meter_provider`].
+pub fn metrics_provider(
+    endpoint: Option<String>,
+    resource_detectors: Vec<Box<dyn ResourceDetector>>,
     histogram_buckets: Vec<HistogramBuckets>,
 ) -> Result<SdkMeterProvider> {
     let resource = Resource::builder()
-        .with_detectors(&[
-            // Set service.name from env OTEL_SERVICE_NAME > env OTEL_RESOURCE_ATTRIBUTES > spin
-            // Set service.version from Spin metadata
-            Box::new(SpinResourceDetector::new(spin_version)) as Box<dyn ResourceDetector>,
-            // Sets fields from env OTEL_RESOURCE_ATTRIBUTES
-            Box::new(EnvResourceDetector::new()),
-            // Sets telemetry.sdk{name, language, version}
-            Box::new(TelemetryResourceDetector),
-        ])
+        .with_detectors(
+            &resource_detectors
+                .into_iter()
+                .chain([
+                    // Sets fields from env OTEL_RESOURCE_ATTRIBUTES
+                    Box::new(EnvResourceDetector::new()) as Box<dyn ResourceDetector>,
+                    // Sets telemetry.sdk{name, language, version}
+                    Box::new(TelemetryResourceDetector),
+                ])
+                .collect::<Vec<_>>(),
+        )
         .build();
 
     // This will configure the exporter based on the OTEL_EXPORTER_* environment variables. We
@@ -61,13 +78,22 @@ pub(crate) fn metrics_provider(
     // combination of OTEL_EXPORTER_OTLP_PROTOCOL and OTEL_EXPORTER_OTLP_TRACES_PROTOCOL to
     // determine whether we should use http/protobuf or grpc.
     let exporter = match OtlpProtocol::metrics_protocol_from_env() {
-        OtlpProtocol::Grpc => opentelemetry_otlp::MetricExporter::builder()
-            .with_tonic()
-            .build()?,
-        OtlpProtocol::HttpProtobuf => opentelemetry_otlp::MetricExporter::builder()
-            .with_http()
-            .with_http_client(crate::rustls_reqwest_client()?)
-            .build()?,
+        OtlpProtocol::Grpc => {
+            let mut builder = opentelemetry_otlp::MetricExporter::builder().with_tonic();
+            if let Some(endpoint) = endpoint {
+                builder = builder.with_endpoint(endpoint);
+            }
+            builder.build()?
+        }
+        OtlpProtocol::HttpProtobuf => {
+            let mut builder = opentelemetry_otlp::MetricExporter::builder()
+                .with_http()
+                .with_http_client(crate::rustls_reqwest_client()?);
+            if let Some(endpoint) = endpoint {
+                builder = builder.with_endpoint(endpoint);
+            }
+            builder.build()?
+        }
         OtlpProtocol::HttpJson => bail!("http/json OTLP protocol is not supported"),
     };
 
