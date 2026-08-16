@@ -64,7 +64,7 @@ pub struct Push {
     pub compose: bool,
 
     /// Specifies to perform `spin build` (with the default options) before pushing the application.
-    #[clap(long, env = ALWAYS_BUILD_ENV)]
+    #[clap(long, env = ALWAYS_BUILD_ENV, value_parser = clap::builder::BoolishValueParser::new())]
     pub build: bool,
 
     /// Reference in the registry of the Spin application.

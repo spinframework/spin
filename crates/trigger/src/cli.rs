@@ -73,6 +73,7 @@ pub struct FactorsTriggerCommand<T: Trigger<B::Factors>, B: RuntimeFactorsBuilde
         long = "disable-cache",
         env = DISABLE_WASMTIME_CACHE,
         conflicts_with = WASMTIME_CACHE_FILE,
+        value_parser = clap::builder::BoolishValueParser::new(),
     )]
     pub disable_cache: bool,
 
