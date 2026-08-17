@@ -182,7 +182,16 @@ impl TemplateNewCommandCore {
         }
 
         let name = match &name {
-            Some(name) => name.to_owned(),
+            Some(name) => {
+                if is_kebabbable(name) {
+                    name.to_owned()
+                } else {
+                    eprintln!(
+                        "Name must be kebab-cased, and each segment must begin with a letter."
+                    );
+                    prompt_name(&variant).await?
+                }
+            }
             None => prompt_name(&variant).await?,
         };
 
@@ -398,6 +407,10 @@ fn infer_target_env_from_file(
     }
 }
 
+fn is_kebabbable(name: &str) -> bool {
+    spin_manifest::schema::v2::KebabId::try_from(name.to_string()).is_ok()
+}
+
 #[derive(Clone, Debug)]
 pub struct ParameterValue {
     pub name: String,
@@ -519,6 +532,11 @@ async fn prompt_name(variant: &TemplateVariantInfo) -> anyhow::Result<String> {
             .interact_text()?;
         if result.trim().is_empty() {
             prompt = format!("Name is required. Try another {noun} name (or Crl+C to exit)");
+            continue;
+        } else if !is_kebabbable(&result) {
+            prompt = format!(
+                "Name must be kebab-cased, and each segment must start with a letter. Try another {noun} name (or Crl+C to exit)"
+            );
             continue;
         } else {
             return Ok(result);
