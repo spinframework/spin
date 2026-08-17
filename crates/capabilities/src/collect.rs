@@ -3,48 +3,42 @@ use std::collections::BTreeSet;
 use wac_graph::types::are_semver_compatible;
 use wasmparser::{Parser, Payload};
 
-use crate::{CAPABILITY_SETS, InheritConfiguration};
+use crate::CAPABILITY_SETS;
 
-impl InheritConfiguration {
-    /// Collect iterates the imports of a Wasm component source and determines where each import
-    /// is part of one of the capabilities sets (i.e. AI_MODELS, ALLOWED_OUTBOUND_HOSTS, etc.).
-    /// For whichever set it is matched to, the lowercase name is appended to `capabilities` which
-    /// is returned as `InheritConfiguration::Some(...)`. If nothing matches `InheritConfiguration::None`
-    /// is returned.
-    pub fn collect(source: &[u8]) -> anyhow::Result<Option<Self>> {
-        let mut capabilities = BTreeSet::new();
-        let mut depth: u32 = 0;
+/// Infer the Spin capability sets a component requires, by inspecting its
+/// top-level (component) imports.
+///
+/// Each import is matched against the known capability sets (`ai_models`,
+/// `allowed_outbound_hosts`, etc.); every set that matches contributes its name
+/// to the result. The returned set is deduplicated and sorted. An empty set
+/// means the component imports nothing that maps to a Spin capability.
+pub fn required_capabilities(source: &[u8]) -> anyhow::Result<BTreeSet<String>> {
+    let mut capabilities = BTreeSet::new();
+    let mut depth: u32 = 0;
 
-        for payload in Parser::new(0).parse_all(source) {
-            match payload? {
-                Payload::ModuleSection { .. } | Payload::ComponentSection { .. } => {
-                    depth += 1;
-                }
-                Payload::End(_) if depth > 0 => {
-                    depth -= 1;
-                }
-                Payload::ComponentImportSection(reader) if depth == 0 => {
-                    for import in reader {
-                        let name = import?.name.0;
-                        for &(capability, set) in CAPABILITY_SETS {
-                            if set.iter().any(|s| are_semver_compatible(name, s)) {
-                                capabilities.insert(capability);
-                            }
+    for payload in Parser::new(0).parse_all(source) {
+        match payload? {
+            Payload::ModuleSection { .. } | Payload::ComponentSection { .. } => {
+                depth += 1;
+            }
+            Payload::End(_) if depth > 0 => {
+                depth -= 1;
+            }
+            Payload::ComponentImportSection(reader) if depth == 0 => {
+                for import in reader {
+                    let name = import?.name.0;
+                    for &(capability, set) in CAPABILITY_SETS {
+                        if set.iter().any(|s| are_semver_compatible(name, s)) {
+                            capabilities.insert(capability.to_string());
                         }
                     }
                 }
-                _ => {}
             }
-        }
-
-        if capabilities.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(InheritConfiguration::Some(
-                capabilities.into_iter().map(String::from).collect(),
-            )))
+            _ => {}
         }
     }
+
+    Ok(capabilities)
 }
 
 #[cfg(test)]
@@ -73,56 +67,48 @@ mod tests {
         component.finish()
     }
 
-    #[test]
-    fn no_matching_imports_returns_none() {
-        let bytes = build_component(&["some:unknown/interface@1.0.0"]);
-        let result = InheritConfiguration::collect(&bytes).unwrap();
-        assert!(result.is_none());
+    fn caps(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
     }
 
     #[test]
-    fn empty_component_returns_none() {
-        let component = wasm_encoder::Component::new();
-        let bytes = component.finish();
-        let result = InheritConfiguration::collect(&bytes).unwrap();
-        assert!(result.is_none());
+    fn no_matching_imports_returns_empty() {
+        let bytes = build_component(&["some:unknown/interface@1.0.0"]);
+        assert!(required_capabilities(&bytes).unwrap().is_empty());
+    }
+
+    #[test]
+    fn empty_component_returns_empty() {
+        let bytes = wasm_encoder::Component::new().finish();
+        assert!(required_capabilities(&bytes).unwrap().is_empty());
     }
 
     #[test]
     fn single_ai_models_import() {
         let bytes = build_component(&["fermyon:spin/llm@2.0.0"]);
-        let result = InheritConfiguration::collect(&bytes).unwrap();
-        let InheritConfiguration::Some(caps) = result.unwrap() else {
-            panic!("expected Some capabilities");
-        };
-        assert_eq!(caps, vec!["ai_models"]);
+        assert_eq!(required_capabilities(&bytes).unwrap(), caps(&["ai_models"]));
     }
 
     #[test]
     fn single_allowed_outbound_hosts_import() {
         let bytes = build_component(&["wasi:http/outgoing-handler@0.2.6"]);
-        let result = InheritConfiguration::collect(&bytes).unwrap();
-        let InheritConfiguration::Some(caps) = result.unwrap() else {
-            panic!("expected Some capabilities");
-        };
-        assert_eq!(caps, vec!["allowed_outbound_hosts"]);
+        assert_eq!(
+            required_capabilities(&bytes).unwrap(),
+            caps(&["allowed_outbound_hosts"])
+        );
     }
 
     #[test]
-    fn multiple_capabilities_deduped_and_sorted() {
+    fn multiple_capabilities_deduped() {
         let bytes = build_component(&[
             "fermyon:spin/llm@2.0.0",
             "wasi:http/outgoing-handler@0.2.6",
             "wasi:sockets/tcp@0.2.6",
             "fermyon:spin/variables@2.0.0",
         ]);
-        let result = InheritConfiguration::collect(&bytes).unwrap();
-        let InheritConfiguration::Some(caps) = result.unwrap() else {
-            panic!("expected Some capabilities");
-        };
         assert_eq!(
-            caps,
-            vec!["ai_models", "allowed_outbound_hosts", "variables"]
+            required_capabilities(&bytes).unwrap(),
+            caps(&["ai_models", "allowed_outbound_hosts", "variables"])
         );
     }
 
@@ -137,13 +123,9 @@ mod tests {
             "fermyon:spin/sqlite@2.0.0",        // sqlite_databases
             "fermyon:spin/variables@2.0.0",     // variables
         ]);
-        let result = InheritConfiguration::collect(&bytes).unwrap();
-        let InheritConfiguration::Some(caps) = result.unwrap() else {
-            panic!("expected Some capabilities");
-        };
         assert_eq!(
-            caps,
-            vec![
+            required_capabilities(&bytes).unwrap(),
+            caps(&[
                 "ai_models",
                 "allowed_outbound_hosts",
                 "environment",
@@ -151,7 +133,7 @@ mod tests {
                 "key_value_stores",
                 "sqlite_databases",
                 "variables",
-            ]
+            ])
         );
     }
 
@@ -159,12 +141,11 @@ mod tests {
     fn duplicate_set_entries_are_deduped() {
         let bytes =
             build_component(&["wasi:http/outgoing-handler@0.2.6", "wasi:sockets/tcp@0.2.6"]);
-        let result = InheritConfiguration::collect(&bytes).unwrap();
-        let InheritConfiguration::Some(caps) = result.unwrap() else {
-            panic!("expected Some capabilities");
-        };
         // Both map to allowed_outbound_hosts — should appear once.
-        assert_eq!(caps, vec!["allowed_outbound_hosts"]);
+        assert_eq!(
+            required_capabilities(&bytes).unwrap(),
+            caps(&["allowed_outbound_hosts"])
+        );
     }
 
     #[test]
@@ -174,10 +155,9 @@ mod tests {
             "some:unknown/thing@1.0.0",
             "wasi:cli/environment@0.2.6",
         ]);
-        let result = InheritConfiguration::collect(&bytes).unwrap();
-        let InheritConfiguration::Some(caps) = result.unwrap() else {
-            panic!("expected Some capabilities");
-        };
-        assert_eq!(caps, vec!["ai_models", "environment"]);
+        assert_eq!(
+            required_capabilities(&bytes).unwrap(),
+            caps(&["ai_models", "environment"])
+        );
     }
 }
