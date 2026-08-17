@@ -1,3 +1,4 @@
+pub use collect::required_capabilities;
 pub use deny::apply_deny_adapter;
 mod collect;
 mod deny;
