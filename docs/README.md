@@ -1,6 +1,6 @@
 # The Spin documentation website
 
-**The Spin documentation website is deprecated.** We still run it, but only to redirect to new documentation.
+**The Spin documentation website is deprecated.** We still run it, but only to redirect to [new documentation](https://github.com/spinframework/spin-docs).
 
 To build and run the Spin documentation website:
 
