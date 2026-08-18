@@ -157,7 +157,7 @@ pub(crate) struct UpCommandInner {
     /// For local apps, specifies to perform `spin build` (with the default options) before running the application.
     ///
     /// This is ignored on remote applications, as they are already built.
-    #[clap(long, env = ALWAYS_BUILD_ENV)]
+    #[clap(long, env = ALWAYS_BUILD_ENV, value_parser = clap::builder::BoolishValueParser::new())]
     pub build: bool,
 
     /// [Experimental] Component ID to run. This can be specified multiple times. The default is all components.
