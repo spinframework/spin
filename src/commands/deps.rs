@@ -1,25 +1,34 @@
+mod source;
+
 use crate::opts::*;
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
+use source::{ParsedSource, ResolvedSource};
 use spin_common::paths::parent_dir;
 use spin_manifest::schema::v2::{
-    AppManifest, ComponentDependency, ComponentSpec, InheritConfiguration, Trigger,
+    AppManifest, Component, ComponentDependency, ComponentSpec, InheritConfiguration, Trigger,
     TriggerDependency,
 };
 use spin_serde::{DependencyName, DependencyPackageName, KebabId};
-use std::path::PathBuf;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+/// The manifest key under which a component's dependencies live.
+const DEPENDENCIES_KEY: &str = "dependencies";
+/// The trigger-dependencies key under which HTTP middleware entries live.
+const MIDDLEWARE_KEY: &str = "middleware";
 
 /// Commands for managing component dependencies.
 #[derive(Subcommand, Debug)]
-pub enum DepsCommands {
+pub enum DependenciesCommands {
     /// Add a component dependency to a component in the application.
     Add(AddCommand),
 }
 
-impl DepsCommands {
+impl DependenciesCommands {
     pub async fn run(self) -> Result<()> {
         match self {
-            DepsCommands::Add(cmd) => cmd.run().await,
+            DependenciesCommands::Add(cmd) => cmd.run().await,
         }
     }
 }
@@ -55,63 +64,11 @@ pub struct AddCommand {
     app_source: Option<PathBuf>,
 }
 
-/// Parsed representation of the user-supplied source string.
-#[derive(Clone, Debug)]
-enum ParsedSource {
-    /// A local filesystem path to a Wasm component.
-    Local(PathBuf),
-    /// An HTTP(S) URL pointing to a Wasm component.
-    Http(String),
-    /// A registry package reference with an optional version constraint.
-    Registry { package: DependencyPackageName },
-    /// A reference to a component already defined in the manifest, by id.
-    Component(String),
-}
-
-impl std::str::FromStr for ParsedSource {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        if s.starts_with("http://") || s.starts_with("https://") {
-            Ok(ParsedSource::Http(s.to_string()))
-        } else if s.contains('/') || s.contains('\\') || s.ends_with(".wasm") {
-            Ok(ParsedSource::Local(PathBuf::from(s)))
-        } else if s.contains(':') {
-            // A package reference is namespaced, e.g. `my:package@1.0.0`.
-            let package: DependencyPackageName = s
-                .parse()
-                .with_context(|| format!("failed to parse '{s}' as a dependency package name"))?;
-            Ok(ParsedSource::Registry { package })
-        } else {
-            // A bare token (no scheme, path, or namespace separator) is treated as
-            // a reference to a component defined in the manifest. It is validated
-            // against the manifest when the source is resolved.
-            Ok(ParsedSource::Component(s.to_string()))
-        }
-    }
-}
-
-/// Resolved source information needed to build the `ComponentDependency` value.
-enum ResolvedSource {
-    Local {
-        path: PathBuf,
-    },
-    Http {
-        url: String,
-        digest: String,
-    },
-    Registry {
-        version: String,
-        registry: Option<String>,
-        package: Option<String>,
-    },
-    Component {
-        id: String,
-    },
-}
-
 impl AddCommand {
     pub async fn run(self) -> Result<()> {
+        // These flows are interactive, so fail fast if there's no terminal to prompt on.
+        ensure_interactive()?;
+
         // Locate and parse the manifest.
         let (manifest_file, _) =
             spin_common::paths::find_manifest_file_path(self.app_source.as_ref())?;
@@ -124,393 +81,312 @@ impl AddCommand {
         let app_root = parent_dir(&manifest_file)?;
         let manifest = spin_manifest::manifest_from_file(&manifest_file)?;
 
-        // Resolve the source to Wasm bytes plus the metadata needed to record it.
-        let (wasm_bytes, dep_source) = self.resolve_source(&app_root, &manifest).await?;
+        // Resolve the source to Wasm bytes plus the metadata needed to record it,
+        // then inspect the bytes once for everything the steps below need.
+        let (wasm_bytes, dep_source) = self
+            .source
+            .resolve(
+                self.digest.as_deref(),
+                self.registry.as_deref(),
+                &app_root,
+                &manifest,
+            )
+            .await?;
+        let interfaces = spin_dependency_wit::ComponentInterfaces::from_component(&wasm_bytes)
+            .context("Failed to inspect the component's interfaces")?;
+        let required_caps = collect_required_capabilities(&wasm_bytes)?;
 
-        // A component that both imports and exports wasi:http/handler is HTTP
-        // middleware, which is attached to a trigger rather than a component.
-        if spin_dependency_wit::is_http_middleware(&wasm_bytes)
-            .context("Failed to inspect the component's interfaces")?
-        {
-            self.add_middleware(&manifest_file, &manifest, &wasm_bytes, dep_source)
-                .await
+        // Dispatch on what we're adding: a component that both imports and exports
+        // wasi:http/handler is HTTP middleware (attached to a trigger); anything
+        // else is a component dependency (attached to a component).
+        if interfaces.is_http_middleware() {
+            add_middleware(&manifest_file, &manifest, required_caps, dep_source)
         } else {
-            self.add_component_dependency(
+            add_component_dependency(
                 &manifest_file,
                 &app_root,
                 &manifest,
-                &wasm_bytes,
+                &interfaces,
+                required_caps,
                 dep_source,
             )
             .await
         }
     }
+}
 
-    /// Add the resolved source as a component dependency to a selected component.
-    async fn add_component_dependency(
-        &self,
-        manifest_file: &std::path::Path,
-        app_root: &std::path::Path,
-        manifest: &AppManifest,
-        wasm_bytes: &[u8],
-        dep_source: ResolvedSource,
-    ) -> Result<()> {
-        // Select the target component.
-        let component_id = self.resolve_component_id(manifest)?;
+/// Add the resolved source as a component dependency to a selected component.
+async fn add_component_dependency(
+    manifest_file: &Path,
+    app_root: &Path,
+    manifest: &AppManifest,
+    interfaces: &spin_dependency_wit::ComponentInterfaces,
+    required_caps: Vec<String>,
+    dep_source: ResolvedSource,
+) -> Result<()> {
+    let Some((component_id, component)) = select_target_component(manifest)? else {
+        return cancelled();
+    };
+    let Some(selected) = select_interface(interfaces)? else {
+        return cancelled();
+    };
+    let dep_name: DependencyName = selected.parse().with_context(|| {
+        format!("Failed to parse selected interface '{selected}' as a dependency name")
+    })?;
 
-        // Select the interface to import.
-        let selected = resolve_interface(wasm_bytes)?;
+    // Check for an existing entry before prompting about capabilities, so we
+    // don't badger the user over an entry we can't write.
+    ensure_dependency_absent(component, component_id, &dep_name)?;
 
-        // Determine capability inheritance.
-        let (inherit_config, required_caps) =
-            resolve_inherit_configuration(manifest, &component_id, wasm_bytes)?;
+    let target = format!("component '{component_id}'");
+    let Some(inheritance) = select_inheritance(required_caps, Some(component), &target)? else {
+        return cancelled();
+    };
 
-        // Build and write the dependency into the manifest.
-        let dep_name: DependencyName = selected.parse().with_context(|| {
-            format!("Failed to parse selected interface '{selected}' as a dependency name")
-        })?;
-        let dep_value = build_component_dependency(&dep_source, inherit_config.clone())?;
-        write_dependency_to_manifest(manifest_file, &component_id, &dep_name, &dep_value)?;
+    let dep_value = dep_source.to_component_dependency(inheritance.to_write.clone());
+    write_dependency_to_manifest(manifest_file, component_id, &dep_name, &dep_value)?;
+    regenerate_dependencies_wit(manifest_file, app_root, component_id).await?;
 
-        // Regenerate spin-dependencies.wit for the component.
-        let manifest = spin_manifest::manifest_from_file(manifest_file)?;
-        let component_kebab: KebabId = component_id
-            .clone()
-            .try_into()
-            .map_err(|e| anyhow!("{e}"))?;
-        let component = manifest
-            .components
-            .get(&component_kebab)
-            .with_context(|| format!("Component '{component_id}' not found after writing"))?;
+    println!("Added {selected} to {target}");
+    println!("Run `spin build` to generate language bindings for the new dependency.");
+    print_capability_guidance(&target, Some(component), &inheritance);
 
-        let component_dir = match component.build.as_ref().and_then(|b| b.workdir.as_ref()) {
-            None => app_root.to_owned(),
-            Some(d) => app_root.join(d),
-        };
-        let dest_file = component_dir.join("spin-dependencies.wit");
+    Ok(())
+}
 
-        spin_dependency_wit::extract_wits_into(
-            component.dependencies.inner.iter(),
-            app_root,
-            &dest_file,
-        )
-        .await
-        .context("Failed to regenerate spin-dependencies.wit")?;
+/// Attach the resolved source as HTTP middleware to a selected trigger.
+fn add_middleware(
+    manifest_file: &Path,
+    manifest: &AppManifest,
+    required_caps: Vec<String>,
+    dep_source: ResolvedSource,
+) -> Result<()> {
+    println!("Detected HTTP middleware.");
+    println!();
 
-        // Report success and any capability guidance.
-        println!("Added {selected} to component '{component_id}'");
-        println!("Run `spin build` to generate language bindings for the new dependency.");
-        print_capability_guidance(&component_id, &required_caps, inherit_config.as_ref());
+    let Some(trigger) = select_trigger(manifest)? else {
+        return cancelled();
+    };
+    let route = trigger_route(trigger)
+        .context("selected trigger has no route")?
+        .to_string();
+    let component = trigger_component(manifest, trigger);
+    let target = match &component {
+        Some((id, _)) => format!("component '{id}' (served by route '{route}')"),
+        None => format!("the component served by route '{route}'"),
+    };
 
+    let Some(index) = select_pipeline_position(trigger)? else {
+        return cancelled();
+    };
+
+    // A component's blanket `dependencies_inherit_configuration` does not cover
+    // trigger middleware, so always ask.
+    let Some(inheritance) = select_inheritance(required_caps, None, &target)? else {
+        return cancelled();
+    };
+
+    let entry = serialize_trigger_dependency(&dep_source, inheritance.to_write.as_ref());
+    write_middleware_to_manifest(manifest_file, &route, index, entry)?;
+
+    println!(
+        "Added middleware '{}' to the trigger for route '{route}'",
+        dep_source.label()
+    );
+    print_capability_guidance(&target, component.map(|(_, c)| c), &inheritance);
+
+    Ok(())
+}
+
+/// The add flows are interactive; make sure there's a terminal to prompt on.
+fn ensure_interactive() -> Result<()> {
+    use std::io::IsTerminal;
+    if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
         Ok(())
-    }
-
-    /// Attach the resolved source as HTTP middleware to a selected trigger.
-    async fn add_middleware(
-        &self,
-        manifest_file: &std::path::Path,
-        manifest: &AppManifest,
-        wasm_bytes: &[u8],
-        dep_source: ResolvedSource,
-    ) -> Result<()> {
-        println!("Detected HTTP middleware (imports and exports wasi:http/handler).");
-        println!();
-
-        // Enumerate HTTP triggers that have a route; private (route-less)
-        // endpoints are not eligible for middleware.
-        let http_triggers = manifest.triggers.get("http").cloned().unwrap_or_default();
-        let routed: Vec<&Trigger> = http_triggers
-            .iter()
-            .filter(|t| trigger_route(t).is_some())
-            .collect();
-
-        if routed.is_empty() {
-            bail!("The application has no routed HTTP triggers to attach middleware to.");
-        }
-
-        // Select the target trigger by route.
-        let trigger = if routed.len() == 1 {
-            routed[0]
-        } else {
-            let routes: Vec<&str> = routed.iter().filter_map(|t| trigger_route(t)).collect();
-            let sel = dialoguer::Select::new()
-                .with_prompt("Which HTTP route should the middleware be added to?")
-                .items(&routes)
-                .interact()
-                .context("Failed to select route")?;
-            routed[sel]
-        };
-        let route = trigger_route(trigger)
-            .context("selected trigger has no route")?
-            .to_string();
-
-        // Existing middleware entries on the trigger (used for positioning).
-        let existing_labels: Vec<String> = trigger
-            .dependencies
-            .get("middleware")
-            .map(|d| d.0.iter().map(trigger_dependency_label).collect())
-            .unwrap_or_default();
-
-        // Choose the pipeline position (append when the pipeline is empty).
-        let index = if existing_labels.is_empty() {
-            0
-        } else {
-            let mut items = vec!["At the end (closest to the application component)".to_string()];
-            for label in &existing_labels {
-                items.push(format!("Before {label}"));
-            }
-            let sel = dialoguer::Select::new()
-                .with_prompt("Where should this middleware run in the pipeline?")
-                .items(&items)
-                .default(0)
-                .interact()
-                .context("Failed to select pipeline position")?;
-            if sel == 0 {
-                existing_labels.len()
-            } else {
-                sel - 1
-            }
-        };
-
-        // Capability inheritance (from the component the trigger routes to).
-        let required_caps = collect_required_capabilities(wasm_bytes)?;
-        let inherit_config = if required_caps.is_empty() {
-            None
-        } else {
-            println!(
-                "This middleware requires the following capabilities: {}",
-                required_caps.join(", ")
-            );
-            let selections = dialoguer::MultiSelect::new()
-                .with_prompt("Select capabilities to inherit from the trigger's component")
-                .items(&required_caps)
-                .interact()
-                .context("Failed to select capabilities")?;
-            if selections.is_empty() {
-                None
-            } else {
-                let selected = selections
-                    .into_iter()
-                    .map(|i| required_caps[i].clone())
-                    .collect();
-                Some(InheritConfiguration::Some(selected))
-            }
-        };
-
-        // Build and write the middleware entry.
-        let entry = serialize_trigger_dependency(&dep_source, inherit_config.as_ref());
-        write_middleware_to_manifest(manifest_file, &route, index, entry)?;
-
-        println!(
-            "Added middleware '{}' to the trigger for route '{route}'",
-            source_label(&dep_source)
-        );
-
-        let component_id = match &trigger.component {
-            Some(ComponentSpec::Reference(k)) => Some(k.as_ref().to_string()),
-            _ => None,
-        };
-        print_middleware_capability_guidance(
-            component_id.as_deref(),
-            &required_caps,
-            inherit_config.as_ref(),
-        );
-
-        Ok(())
-    }
-
-    /// Determine which component to add the dependency to (interactive).
-    fn resolve_component_id(&self, manifest: &AppManifest) -> Result<String> {
-        let component_ids: Vec<String> = manifest
-            .components
-            .keys()
-            .map(|k| k.as_ref().to_string())
-            .collect();
-
-        if component_ids.is_empty() {
-            bail!("No components found in the manifest");
-        }
-
-        if component_ids.len() == 1 {
-            return Ok(component_ids.into_iter().next().unwrap());
-        }
-
-        let selection = dialoguer::Select::new()
-            .with_prompt("Which component should the dependency be added to?")
-            .items(&component_ids)
-            .interact()
-            .context("Failed to select component")?;
-
-        Ok(component_ids[selection].clone())
-    }
-
-    /// Resolve the source to Wasm bytes on disk and the metadata needed to record it.
-    async fn resolve_source(
-        &self,
-        app_root: &std::path::Path,
-        manifest: &AppManifest,
-    ) -> Result<(Vec<u8>, ResolvedSource)> {
-        match &self.source {
-            ParsedSource::Local(path) => {
-                // Resolve relative paths from the CWD (where the user typed the
-                // command), not from app_root (where the manifest lives).
-                let resolved = if path.is_absolute() {
-                    path.clone()
-                } else {
-                    std::env::current_dir()
-                        .context("Failed to get current directory")?
-                        .join(path)
-                };
-                if !resolved.exists() {
-                    bail!("Dependency not found: {}", resolved.display());
-                }
-                // Store the path relative to app_root for the manifest.
-                let rel_path = resolved
-                    .canonicalize()
-                    .unwrap_or(resolved.clone())
-                    .strip_prefix(app_root.canonicalize().unwrap_or(app_root.to_path_buf()))
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or(resolved.clone());
-
-                let bytes = tokio::fs::read(&resolved).await.with_context(|| {
-                    format!("Failed to read dependency at {}", resolved.display())
-                })?;
-
-                Ok((bytes, ResolvedSource::Local { path: rel_path }))
-            }
-            ParsedSource::Http(url) => {
-                let cache = spin_loader::cache::Cache::new(None).await?;
-                let digest = self
-                    .digest
-                    .clone()
-                    .map(|digest| format!("sha256:{digest}"))
-                    .ok_or_else(|| anyhow!("A digest must be specified for HTTP sources."))?;
-
-                if let Ok(path) = cache.wasm_file(&digest) {
-                    let bytes = tokio::fs::read(&path).await.with_context(|| {
-                        format!("Failed to read dependency at {}", path.display())
-                    })?;
-                    return Ok((
-                        bytes,
-                        ResolvedSource::Http {
-                            url: url.clone(),
-                            digest,
-                        },
-                    ));
-                }
-
-                let response = reqwest::get(url)
-                    .await
-                    .with_context(|| format!("Failed to download {url}"))?;
-                if !response.status().is_success() {
-                    bail!("Failed to download {}: HTTP {}", url, response.status());
-                }
-                let bytes = response
-                    .bytes()
-                    .await
-                    .with_context(|| format!("Failed to read response body from {url}"))?;
-
-                let actual_digest = {
-                    use sha2::Digest;
-                    let hash = sha2::Sha256::digest(&bytes);
-                    format!("sha256:{hash:x}")
-                };
-
-                anyhow::ensure!(
-                    actual_digest == digest,
-                    "invalid content digest; expected {digest}, downloaded {actual_digest}"
-                );
-
-                let dest = cache.wasm_path(&digest);
-                tokio::fs::write(dest, &bytes).await?;
-
-                Ok((
-                    bytes.to_vec(),
-                    ResolvedSource::Http {
-                        url: url.clone(),
-                        digest,
-                    },
-                ))
-            }
-            ParsedSource::Registry { package } => {
-                let loader = spin_loader::WasmLoader::new(app_root.to_owned(), None, None).await?;
-
-                let version_str = package
-                    .version
-                    .as_ref()
-                    .map(|v| format!("={v}"))
-                    .unwrap_or_else(|| "*".to_string());
-
-                let dep_name = DependencyName::Package(package.clone());
-                let temp_dep = ComponentDependency::Package {
-                    version: version_str.clone(),
-                    registry: self.registry.clone(),
-                    package: Some(package.package.to_string()),
-                    export: None,
-                    inherit_configuration: None,
-                };
-
-                let (wasm_path, _export) = loader
-                    .load_dependency_content(&dep_name, &temp_dep)
-                    .await
-                    .context("Failed to load dependency from registry")?;
-
-                let bytes = tokio::fs::read(&wasm_path).await.with_context(|| {
-                    format!("Failed to read dependency at {}", wasm_path.display())
-                })?;
-
-                Ok((
-                    bytes,
-                    ResolvedSource::Registry {
-                        version: version_str,
-                        registry: self.registry.clone(),
-                        package: Some(package.package.to_string()),
-                    },
-                ))
-            }
-            ParsedSource::Component(id) => {
-                let kebab: KebabId = id
-                    .clone()
-                    .try_into()
-                    .map_err(|e| anyhow!("'{id}' is not a valid component id: {e}"))?;
-                let component = manifest.components.get(&kebab).with_context(|| {
-                    format!("No component '{id}' found in the manifest to use as a dependency")
-                })?;
-                let loader = spin_loader::WasmLoader::new(app_root.to_owned(), None, None).await?;
-                let wasm_path = loader
-                    .load_component_source(id, &component.source)
-                    .await
-                    .with_context(|| format!("Failed to load component '{id}'"))?;
-                let bytes = tokio::fs::read(&wasm_path).await.with_context(|| {
-                    format!("Failed to read component '{id}' at {}", wasm_path.display())
-                })?;
-                Ok((bytes, ResolvedSource::Component { id: id.clone() }))
-            }
-        }
+    } else {
+        bail!("`spin dependencies add` is interactive and requires a terminal.");
     }
 }
 
-/// Determine which interface to import from the dependency component (interactive).
+/// Report that the user cancelled, leaving the manifest untouched.
+fn cancelled() -> Result<()> {
+    println!("No changes were made.");
+    Ok(())
+}
+
+/// Ask which component to add the dependency to. Returns `None` if cancelled.
+fn select_target_component(manifest: &AppManifest) -> Result<Option<(&KebabId, &Component)>> {
+    let components: Vec<(&KebabId, &Component)> = manifest.components.iter().collect();
+
+    if components.is_empty() {
+        bail!("No components found in the manifest");
+    }
+
+    if components.len() == 1 {
+        return Ok(Some(components[0]));
+    }
+
+    let ids: Vec<&str> = components.iter().map(|(id, _)| id.as_ref()).collect();
+    let Some(selection) = dialoguer::Select::new()
+        .with_prompt("Which component should the dependency be added to?")
+        .items(&ids)
+        .interact_opt()
+        .context("Failed to select component")?
+    else {
+        return Ok(None);
+    };
+
+    Ok(Some(components[selection]))
+}
+
+/// Bail out if the component already declares `dep_name`, so we don't prompt the
+/// user about capabilities for an entry we would refuse to overwrite.
+fn ensure_dependency_absent(
+    component: &Component,
+    component_id: &KebabId,
+    dep_name: &DependencyName,
+) -> Result<()> {
+    if component.dependencies.inner.contains_key(dep_name) {
+        bail!("Dependency '{dep_name}' already exists in component '{component_id}'");
+    }
+    Ok(())
+}
+
+/// Regenerate `spin-dependencies.wit` for a component after its dependencies change.
+async fn regenerate_dependencies_wit(
+    manifest_file: &Path,
+    app_root: &Path,
+    component_id: &KebabId,
+) -> Result<()> {
+    // Reload the manifest so we pick up the dependency we just wrote.
+    let manifest = spin_manifest::manifest_from_file(manifest_file)?;
+    let component = manifest
+        .components
+        .get(component_id)
+        .with_context(|| format!("Component '{component_id}' not found after writing"))?;
+
+    let component_dir = match component.build.as_ref().and_then(|b| b.workdir.as_ref()) {
+        None => app_root.to_owned(),
+        Some(d) => app_root.join(d),
+    };
+    let dest_file = component_dir.join("spin-dependencies.wit");
+
+    spin_dependency_wit::extract_wits_into(
+        component.dependencies.inner.iter(),
+        app_root,
+        &dest_file,
+    )
+    .await
+    .context("Failed to regenerate spin-dependencies.wit")
+}
+
+/// Ask which HTTP trigger (by route) to attach middleware to. Returns `None` if
+/// the user cancels. Private (route-less) endpoints are not eligible.
+fn select_trigger(manifest: &AppManifest) -> Result<Option<&Trigger>> {
+    let routed: Vec<&Trigger> = manifest
+        .triggers
+        .get("http")
+        .map(|triggers| {
+            triggers
+                .iter()
+                .filter(|t| trigger_route(t).is_some())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if routed.is_empty() {
+        bail!("The application has no routed HTTP triggers to attach middleware to.");
+    }
+    if routed.len() == 1 {
+        return Ok(Some(routed[0]));
+    }
+
+    let routes: Vec<&str> = routed.iter().filter_map(|t| trigger_route(t)).collect();
+    let Some(sel) = dialoguer::Select::new()
+        .with_prompt("Which HTTP route should the middleware be added to?")
+        .items(&routes)
+        .interact_opt()
+        .context("Failed to select route")?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(routed[sel]))
+}
+
+/// Ask where in the trigger's middleware pipeline to insert the new entry,
+/// returning the insertion index. Returns `None` if the user cancels.
+fn select_pipeline_position(trigger: &Trigger) -> Result<Option<usize>> {
+    let existing: Vec<String> = trigger
+        .dependencies
+        .get(MIDDLEWARE_KEY)
+        .map(|d| d.0.iter().map(trigger_dependency_label).collect())
+        .unwrap_or_default();
+
+    if existing.is_empty() {
+        return Ok(Some(0));
+    }
+
+    // List positions top-to-bottom in pipeline order: "before" each existing
+    // entry, then "at the end" last, so the on-screen order matches execution
+    // order (a request flows top to bottom).
+    let mut items: Vec<String> = existing
+        .iter()
+        .map(|label| format!("Before {label}"))
+        .collect();
+    items.push("At the end (closest to the application component)".to_string());
+    let end = items.len() - 1;
+
+    let Some(sel) = dialoguer::Select::new()
+        .with_prompt("Where should this middleware run in the pipeline?")
+        .items(&items)
+        .default(end)
+        .interact_opt()
+        .context("Failed to select pipeline position")?
+    else {
+        return Ok(None);
+    };
+
+    // `sel` in `0..existing.len()` inserts before that entry; the last item
+    // ("at the end") appends.
+    Ok(Some(sel.min(existing.len())))
+}
+
+/// The component a trigger routes to, if it is a simple reference to one defined
+/// in the manifest.
+fn trigger_component<'a>(
+    manifest: &'a AppManifest,
+    trigger: &'a Trigger,
+) -> Option<(&'a KebabId, &'a Component)> {
+    match &trigger.component {
+        Some(ComponentSpec::Reference(id)) => manifest.components.get_key_value(id),
+        _ => None,
+    }
+}
+
+/// Ask which interface to import from the dependency component. Returns `None`
+/// if the user cancels.
 ///
-/// Presents a single flat list of all interface exports. For each package that
-/// exposes more than one interface, an "All from <package>" entry is included so
-/// the whole package can be selected as a package-level dependency.
-fn resolve_interface(wasm_bytes: &[u8]) -> Result<String> {
-    let exports = spin_dependency_wit::list_exports(wasm_bytes)
-        .context("Failed to enumerate exports from the Wasm component")?;
+/// Presents a single alphabetical list of all interface exports, grouped by
+/// package. For each package that exposes more than one interface, an
+/// "All from <package>" entry is included so the whole package can be selected
+/// as a package-level dependency.
+fn select_interface(
+    interfaces: &spin_dependency_wit::ComponentInterfaces,
+) -> Result<Option<String>> {
+    let exports = interfaces.exports();
 
     if exports.is_empty() {
         bail!("The Wasm component has no exports to use as a dependency");
     }
 
     if exports.len() == 1 {
-        return Ok(exports[0].clone());
+        return Ok(Some(exports[0].clone()));
     }
 
-    // Group exports by package, preserving first-seen order. Plain-named exports
-    // (which have no package) are grouped under `None`.
-    let mut groups: Vec<(Option<String>, Vec<String>)> = Vec::new();
-    for export in &exports {
+    // Group exports by package. Plain-named exports (which have no package) are
+    // grouped under `None`, which sorts first.
+    let mut groups: BTreeMap<Option<String>, Vec<String>> = BTreeMap::new();
+    for export in exports {
         let pkg_key = export.parse::<DependencyPackageName>().ok().map(|p| {
             let mut key = p.package.to_string();
             if let Some(v) = &p.version {
@@ -518,188 +394,216 @@ fn resolve_interface(wasm_bytes: &[u8]) -> Result<String> {
             }
             key
         });
-        match groups.iter_mut().find(|(k, _)| *k == pkg_key) {
-            Some((_, v)) => v.push(export.clone()),
-            None => groups.push((pkg_key, vec![export.clone()])),
-        }
+        groups.entry(pkg_key).or_default().push(export.clone());
     }
 
     // Build a flat list of (label, value) items. `value` is the dependency-name
     // string recorded when that item is selected.
     let mut labels: Vec<String> = Vec::new();
     let mut values: Vec<String> = Vec::new();
-    for (pkg_key, interfaces) in &groups {
-        match pkg_key {
-            Some(pkg) if interfaces.len() > 1 => {
-                labels.push(format!("All from {pkg}"));
-                values.push(pkg.clone());
-                for itf in interfaces {
-                    labels.push(itf.clone());
-                    values.push(itf.clone());
-                }
-            }
-            _ => {
-                for itf in interfaces {
-                    labels.push(itf.clone());
-                    values.push(itf.clone());
-                }
-            }
+    for (pkg_key, mut interfaces) in groups {
+        interfaces.sort();
+        if let Some(pkg) = pkg_key
+            && interfaces.len() > 1
+        {
+            labels.push(format!("All from {pkg}"));
+            values.push(pkg);
+        }
+        for itf in interfaces {
+            labels.push(itf.clone());
+            values.push(itf);
         }
     }
 
-    let selection = dialoguer::Select::new()
+    let Some(selection) = dialoguer::Select::new()
         .with_prompt("Which interface do you want to import?")
         .items(&labels)
-        .interact()
-        .context("Failed to select interface")?;
+        .interact_opt()
+        .context("Failed to select interface")?
+    else {
+        return Ok(None);
+    };
 
-    Ok(values[selection].clone())
+    Ok(Some(values[selection].clone()))
 }
 
 /// Collect the capability sets the dependency requires, inferred from its imports.
 fn collect_required_capabilities(wasm_bytes: &[u8]) -> Result<Vec<String>> {
-    Ok(
-        match spin_capabilities::InheritConfiguration::collect(wasm_bytes)
-            .context("Failed to collect capability requirements from the dependency")?
-        {
-            Some(spin_capabilities::InheritConfiguration::Some(caps)) => caps,
-            _ => vec![],
-        },
-    )
+    Ok(spin_capabilities::required_capabilities(wasm_bytes)
+        .context("Failed to collect capability requirements from the dependency")?
+        .into_iter()
+        .collect())
 }
 
-/// Determine the `inherit_configuration` value for the dependency (interactive).
+/// The result of deciding what capabilities a dependency may inherit.
+struct Inheritance {
+    /// Every capability the dependency requires (used for post-add guidance).
+    required: Vec<String>,
+    /// The capabilities that will actually be inherited (a subset of `required`).
+    inherited: Vec<String>,
+    /// The `inherit_configuration` value to write into the manifest entry, if any.
+    ///
+    /// `None` means no `inherit_configuration` key is written — either because
+    /// nothing was inherited, or because the component already inherits
+    /// configuration for all its dependencies via
+    /// `dependencies_inherit_configuration`.
+    to_write: Option<InheritConfiguration>,
+}
+
+/// Decide which of the `required` capabilities the dependency may inherit from
+/// its parent (described by `parent_desc`, e.g. `"component 'api'"`), prompting
+/// the user where there is a choice to make. Returns `None` if the user cancels.
 ///
-/// Returns the value to record (never `All(true)` — always an explicit list) and
-/// the full set of capabilities the dependency requires (for post-add guidance).
-fn resolve_inherit_configuration(
-    manifest: &AppManifest,
-    component_id: &str,
-    wasm_bytes: &[u8],
-) -> Result<(Option<InheritConfiguration>, Vec<String>)> {
-    let required = collect_required_capabilities(wasm_bytes)?;
+/// We deliberately never emit `inherit_configuration = true`, even when every
+/// listed capability is selected, so that a future version of the dependency that
+/// imports a new capability does not silently inherit it.
+fn select_inheritance(
+    required: Vec<String>,
+    parent: Option<&Component>,
+    parent_desc: &str,
+) -> Result<Option<Inheritance>> {
     if required.is_empty() {
-        return Ok((None, vec![]));
+        return Ok(Some(Inheritance {
+            required,
+            inherited: vec![],
+            to_write: None,
+        }));
     }
 
-    // Edge case: if the component already sets the blanket
-    // `dependencies_inherit_configuration`, that covers all dependencies, so we
-    // neither prompt nor write a per-dependency `inherit_configuration`.
-    if let Ok(kebab) = TryInto::<KebabId>::try_into(component_id.to_string())
-        && let Some(component) = manifest.components.get(&kebab)
-        && component.dependencies_inherit_configuration.is_some()
-    {
-        return Ok((None, required));
+    // If the component already inherits configuration for all its dependencies,
+    // there's nothing to ask about and nothing to write — but everything is
+    // inherited, so record that for the guidance message.
+    if parent.is_some_and(|c| c.dependencies_inherit_configuration.is_some()) {
+        return Ok(Some(Inheritance {
+            inherited: required.clone(),
+            required,
+            to_write: None,
+        }));
     }
 
     println!(
-        "This dependency requires the following capabilities: {}",
+        "This dependency uses the following capabilities: {}",
         required.join(", ")
     );
+    println!("If inherited, it gets the same access to them as {parent_desc}.");
 
-    let selections = dialoguer::MultiSelect::new()
-        .with_prompt("Select capabilities to inherit from the parent component")
-        .items(&required)
-        .interact()
-        .context("Failed to select capabilities")?;
+    let choices = [
+        "Inherit all of them",
+        "Inherit none of them (the dependency's calls to them will fail at runtime)",
+        "Choose individually",
+    ];
+    let Some(choice) = dialoguer::Select::new()
+        .with_prompt("Which capabilities should the dependency inherit?")
+        .items(&choices)
+        .default(0)
+        .interact_opt()
+        .context("Failed to select capabilities")?
+    else {
+        return Ok(None);
+    };
 
-    if selections.is_empty() {
-        return Ok((None, required));
-    }
+    let inherited: Vec<String> = match choice {
+        0 => required.clone(),
+        1 => vec![],
+        _ => {
+            let Some(selections) = dialoguer::MultiSelect::new()
+                .with_prompt("Select the capabilities to inherit")
+                .items(&required)
+                .interact_opt()
+                .context("Failed to select capabilities")?
+            else {
+                return Ok(None);
+            };
+            selections
+                .into_iter()
+                .map(|i| required[i].clone())
+                .collect()
+        }
+    };
 
-    // Always record the explicit list of selected capabilities. We deliberately
-    // never emit `inherit_configuration = true`, even when every listed
-    // capability is selected, so that a future version of the dependency that
-    // imports a new capability does not silently inherit it.
-    let selected: Vec<String> = selections
-        .into_iter()
-        .map(|i| required[i].clone())
-        .collect();
-    Ok((Some(InheritConfiguration::Some(selected)), required))
+    let to_write = if inherited.is_empty() {
+        None
+    } else {
+        Some(InheritConfiguration::Some(inherited.clone()))
+    };
+    Ok(Some(Inheritance {
+        required,
+        inherited,
+        to_write,
+    }))
 }
 
-/// Print guidance about the capabilities the dependency needs.
-fn print_capability_guidance(
-    component_id: &str,
-    required_caps: &[String],
-    inherit_config: Option<&InheritConfiguration>,
-) {
-    if required_caps.is_empty() {
+/// The capability sets a component already declares in its manifest entry, by
+/// the same names as `spin_capabilities::required_capabilities` reports.
+fn declared_capabilities(component: &Component) -> Vec<&'static str> {
+    let mut declared = vec![];
+    if !component.ai_models.is_empty() {
+        declared.push("ai_models");
+    }
+    if !component.allowed_outbound_hosts.is_empty() {
+        declared.push("allowed_outbound_hosts");
+    }
+    if !component.environment.is_empty() {
+        declared.push("environment");
+    }
+    if !component.files.is_empty() {
+        declared.push("files");
+    }
+    if !component.key_value_stores.is_empty() {
+        declared.push("key_value_stores");
+    }
+    if !component.sqlite_databases.is_empty() {
+        declared.push("sqlite_databases");
+    }
+    if !component.variables.is_empty() {
+        declared.push("variables");
+    }
+    declared
+}
+
+/// Print follow-up guidance about the dependency's capabilities: inherited
+/// capabilities that the parent component does not yet declare, and required
+/// capabilities that were not inherited. `target` describes the parent
+/// component for the user; `parent` is its manifest entry, if known.
+fn print_capability_guidance(target: &str, parent: Option<&Component>, inheritance: &Inheritance) {
+    if inheritance.required.is_empty() {
         return;
     }
 
-    let inherited: Vec<String> = match inherit_config {
-        Some(InheritConfiguration::Some(list)) => list.clone(),
-        Some(InheritConfiguration::All(_)) => required_caps.to_vec(),
-        None => vec![],
-    };
-    let declined: Vec<String> = required_caps
+    let declared = parent.map(declared_capabilities).unwrap_or_default();
+    let undeclared: Vec<&str> = inheritance
+        .inherited
         .iter()
-        .filter(|c| !inherited.contains(c))
-        .cloned()
+        .map(String::as_str)
+        .filter(|c| !declared.contains(c))
+        .collect();
+    let declined: Vec<&str> = inheritance
+        .required
+        .iter()
+        .map(String::as_str)
+        .filter(|c| !inheritance.inherited.iter().any(|i| i == c))
         .collect();
 
-    println!();
-    if !inherited.is_empty() {
-        println!("NOTE: This dependency inherits: {}.", inherited.join(", "));
+    if !undeclared.is_empty() {
+        println!();
         println!(
-            "Ensure component '{component_id}' declares these capabilities so the dependency can use them."
+            "NOTE: {target} does not yet declare: {}. Add these so the dependency can use them.",
+            undeclared.join(", ")
         );
     }
     if !declined.is_empty() {
+        println!();
         println!(
-            "NOTE: The dependency also uses {} which was not inherited; it will be denied these at runtime.",
+            "NOTE: Not inherited: {}. The dependency's calls to these capabilities will fail at runtime.",
             declined.join(", ")
         );
     }
 }
 
-/// Build the `ComponentDependency` value from the resolved source.
-fn build_component_dependency(
-    source: &ResolvedSource,
-    inherit_config: Option<InheritConfiguration>,
-) -> Result<ComponentDependency> {
-    match source {
-        ResolvedSource::Local { path } => Ok(ComponentDependency::Local {
-            path: path.clone(),
-            export: None,
-            inherit_configuration: inherit_config,
-        }),
-        ResolvedSource::Http { url, digest } => Ok(ComponentDependency::HTTP {
-            url: url.clone(),
-            digest: digest.clone(),
-            export: None,
-            inherit_configuration: inherit_config,
-        }),
-        ResolvedSource::Registry {
-            version,
-            registry,
-            package,
-        } => Ok(ComponentDependency::Package {
-            version: version.clone(),
-            registry: registry.clone(),
-            package: package.clone(),
-            export: None,
-            inherit_configuration: inherit_config,
-        }),
-        ResolvedSource::Component { id } => {
-            let component: KebabId = id
-                .clone()
-                .try_into()
-                .map_err(|e| anyhow!("'{id}' is not a valid component id: {e}"))?;
-            Ok(ComponentDependency::AppComponent {
-                component,
-                export: None,
-                inherit_configuration: inherit_config,
-            })
-        }
-    }
-}
-
 /// Write the dependency into the spin.toml manifest, preserving formatting.
 fn write_dependency_to_manifest(
-    manifest_file: &std::path::Path,
-    component_id: &str,
+    manifest_file: &Path,
+    component_id: &KebabId,
     dep_name: &DependencyName,
     dep_value: &ComponentDependency,
 ) -> Result<()> {
@@ -718,30 +622,22 @@ fn write_dependency_to_manifest(
         .context("No [component] table in manifest")?;
 
     let component = component_table
-        .get_mut(component_id)
+        .get_mut(component_id.as_ref())
         .and_then(|c| c.as_table_like_mut())
         .with_context(|| format!("Component '{component_id}' not found in manifest"))?;
 
-    // Ensure [component.<id>.dependencies] exists.
-    if component.get("dependencies").is_none() {
-        component.insert("dependencies", Item::Table(Table::new()));
-    }
+    // Existence of the specific dependency is checked up front in
+    // `ensure_dependency_absent`, so here we can insert directly.
     let deps_table = component
-        .get_mut("dependencies")
-        .and_then(|d| d.as_table_like_mut())
+        .entry(DEPENDENCIES_KEY)
+        .or_insert(Item::Table(Table::new()))
+        .as_table_like_mut()
         .context("Failed to access dependencies table")?;
 
-    let dep_key = dep_name.to_string();
-    if deps_table.contains_key(&dep_key) {
-        bail!(
-            "Dependency '{}' already exists in component '{}'",
-            dep_key,
-            component_id
-        );
-    }
-
-    let dep_toml_value = serialize_component_dependency(dep_value)?;
-    deps_table.insert(&dep_key, dep_toml_value);
+    deps_table.insert(
+        &dep_name.to_string(),
+        serialize_component_dependency(dep_value),
+    );
 
     std::fs::write(manifest_file, doc.to_string()).context("Failed to write manifest file")?;
 
@@ -749,24 +645,23 @@ fn write_dependency_to_manifest(
 }
 
 /// Serialize a `ComponentDependency` into a `toml_edit::Item`.
-fn serialize_component_dependency(dep: &ComponentDependency) -> Result<toml_edit::Item> {
-    match dep {
-        ComponentDependency::Version(version) => Ok(toml_edit::value(version.as_str())),
+///
+/// This is the component-dependency analogue of [`serialize_trigger_dependency`];
+/// keep the two in sync.
+fn serialize_component_dependency(dep: &ComponentDependency) -> toml_edit::Item {
+    let mut table = toml_edit::InlineTable::new();
+    let (export, inherit_configuration) = match dep {
+        ComponentDependency::Version(version) => return toml_edit::value(version.as_str()),
         ComponentDependency::Local {
             path,
             export,
             inherit_configuration,
         } => {
-            let mut table = toml_edit::InlineTable::new();
             table.insert(
                 "path",
                 toml_edit::Value::from(path.to_string_lossy().as_ref()),
             );
-            if let Some(export) = export {
-                table.insert("export", toml_edit::Value::from(export.as_str()));
-            }
-            insert_inherit_configuration(&mut table, inherit_configuration);
-            Ok(toml_edit::Item::Value(toml_edit::Value::InlineTable(table)))
+            (export, inherit_configuration)
         }
         ComponentDependency::HTTP {
             url,
@@ -774,14 +669,9 @@ fn serialize_component_dependency(dep: &ComponentDependency) -> Result<toml_edit
             export,
             inherit_configuration,
         } => {
-            let mut table = toml_edit::InlineTable::new();
             table.insert("url", toml_edit::Value::from(url.as_str()));
             table.insert("digest", toml_edit::Value::from(digest.as_str()));
-            if let Some(export) = export {
-                table.insert("export", toml_edit::Value::from(export.as_str()));
-            }
-            insert_inherit_configuration(&mut table, inherit_configuration);
-            Ok(toml_edit::Item::Value(toml_edit::Value::InlineTable(table)))
+            (export, inherit_configuration)
         }
         ComponentDependency::Package {
             version,
@@ -790,7 +680,6 @@ fn serialize_component_dependency(dep: &ComponentDependency) -> Result<toml_edit
             export,
             inherit_configuration,
         } => {
-            let mut table = toml_edit::InlineTable::new();
             table.insert("version", toml_edit::Value::from(version.as_str()));
             if let Some(registry) = registry {
                 table.insert("registry", toml_edit::Value::from(registry.as_str()));
@@ -798,31 +687,66 @@ fn serialize_component_dependency(dep: &ComponentDependency) -> Result<toml_edit
             if let Some(package) = package {
                 table.insert("package", toml_edit::Value::from(package.as_str()));
             }
-            if let Some(export) = export {
-                table.insert("export", toml_edit::Value::from(export.as_str()));
-            }
-            insert_inherit_configuration(&mut table, inherit_configuration);
-            Ok(toml_edit::Item::Value(toml_edit::Value::InlineTable(table)))
+            (export, inherit_configuration)
         }
         ComponentDependency::AppComponent {
             component,
             export,
             inherit_configuration,
         } => {
-            let mut table = toml_edit::InlineTable::new();
             table.insert("component", toml_edit::Value::from(component.as_ref()));
-            if let Some(export) = export {
-                table.insert("export", toml_edit::Value::from(export.as_str()));
+            (export, inherit_configuration)
+        }
+    };
+    if let Some(export) = export {
+        table.insert("export", toml_edit::Value::from(export.as_str()));
+    }
+    insert_inherit_configuration(&mut table, inherit_configuration.as_ref());
+    toml_edit::Item::Value(toml_edit::Value::InlineTable(table))
+}
+
+/// Serialize the resolved source as an HTTP middleware entry (an inline table).
+///
+/// This is the trigger-dependency analogue of [`serialize_component_dependency`];
+/// keep the two in sync.
+fn serialize_trigger_dependency(
+    source: &ResolvedSource,
+    inherit: Option<&InheritConfiguration>,
+) -> toml_edit::Value {
+    let mut table = toml_edit::InlineTable::new();
+    match source {
+        ResolvedSource::Local { path } => {
+            table.insert(
+                "path",
+                toml_edit::Value::from(path.to_string_lossy().as_ref()),
+            );
+        }
+        ResolvedSource::Http { url, digest } => {
+            table.insert("url", toml_edit::Value::from(url.as_str()));
+            table.insert("digest", toml_edit::Value::from(digest.as_str()));
+        }
+        ResolvedSource::Registry {
+            version,
+            registry,
+            package,
+        } => {
+            table.insert("version", toml_edit::Value::from(version.as_str()));
+            if let Some(registry) = registry {
+                table.insert("registry", toml_edit::Value::from(registry.as_str()));
             }
-            insert_inherit_configuration(&mut table, inherit_configuration);
-            Ok(toml_edit::Item::Value(toml_edit::Value::InlineTable(table)))
+            table.insert("package", toml_edit::Value::from(package.as_str()));
+        }
+        ResolvedSource::Component { id } => {
+            table.insert("component", toml_edit::Value::from(id.as_ref()));
         }
     }
+    insert_inherit_configuration(&mut table, inherit);
+    toml_edit::Value::InlineTable(table)
 }
 
 fn insert_inherit_configuration(
     table: &mut toml_edit::InlineTable,
-    config: &Option<InheritConfiguration>,
+    config: Option<&InheritConfiguration>,
 ) {
     match config {
         None => {}
@@ -852,66 +776,13 @@ fn trigger_dependency_label(dep: &TriggerDependency) -> String {
         } => format!("{package}@{version}"),
         TriggerDependency::Local { path, .. } => path.display().to_string(),
         TriggerDependency::HTTP { url, .. } => url.clone(),
-        TriggerDependency::AppComponent { component, .. } => component.as_ref().to_string(),
+        TriggerDependency::AppComponent { component, .. } => component.to_string(),
     }
-}
-
-/// A short label for the source being added (for the confirmation message).
-fn source_label(source: &ResolvedSource) -> String {
-    match source {
-        ResolvedSource::Local { path } => path.display().to_string(),
-        ResolvedSource::Http { url, .. } => url.clone(),
-        ResolvedSource::Registry {
-            package, version, ..
-        } => match package {
-            Some(p) => format!("{p}@{version}"),
-            None => version.clone(),
-        },
-        ResolvedSource::Component { id } => id.clone(),
-    }
-}
-
-/// Serialize the resolved source as a middleware entry inline table.
-fn serialize_trigger_dependency(
-    source: &ResolvedSource,
-    inherit: Option<&InheritConfiguration>,
-) -> toml_edit::Value {
-    let mut table = toml_edit::InlineTable::new();
-    match source {
-        ResolvedSource::Local { path } => {
-            table.insert(
-                "path",
-                toml_edit::Value::from(path.to_string_lossy().as_ref()),
-            );
-        }
-        ResolvedSource::Http { url, digest } => {
-            table.insert("url", toml_edit::Value::from(url.as_str()));
-            table.insert("digest", toml_edit::Value::from(digest.as_str()));
-        }
-        ResolvedSource::Registry {
-            version,
-            registry,
-            package,
-        } => {
-            table.insert("version", toml_edit::Value::from(version.as_str()));
-            if let Some(package) = package {
-                table.insert("package", toml_edit::Value::from(package.as_str()));
-            }
-            if let Some(registry) = registry {
-                table.insert("registry", toml_edit::Value::from(registry.as_str()));
-            }
-        }
-        ResolvedSource::Component { id } => {
-            table.insert("component", toml_edit::Value::from(id.as_str()));
-        }
-    }
-    insert_inherit_configuration(&mut table, &inherit.cloned());
-    toml_edit::Value::InlineTable(table)
 }
 
 /// Insert a middleware entry into the matching HTTP trigger's pipeline.
 fn write_middleware_to_manifest(
-    manifest_file: &std::path::Path,
+    manifest_file: &Path,
     route: &str,
     index: usize,
     entry: toml_edit::Value,
@@ -937,22 +808,21 @@ fn write_middleware_to_manifest(
         .find(|t| t.get("route").and_then(|r| r.as_str()) == Some(route))
         .with_context(|| format!("No HTTP trigger found with route '{route}'"))?;
 
-    if table.get("dependencies").is_none() {
-        // Render as `dependencies.middleware = [...]` to match the manifest style.
-        let mut deps = Table::new();
-        deps.set_dotted(true);
-        table.insert("dependencies", Item::Table(deps));
-    }
     let deps = table
-        .get_mut("dependencies")
-        .and_then(|d| d.as_table_mut())
+        .entry(DEPENDENCIES_KEY)
+        .or_insert_with(|| {
+            // Render as `dependencies.middleware = [...]` to match the manifest style.
+            let mut deps = Table::new();
+            deps.set_dotted(true);
+            Item::Table(deps)
+        })
+        .as_table_mut()
         .context("Failed to access the trigger's dependencies table")?;
-    if deps.get("middleware").is_none() {
-        deps.insert("middleware", Item::Value(Value::Array(Array::new())));
-    }
+
     let middleware = deps
-        .get_mut("middleware")
-        .and_then(|m| m.as_array_mut())
+        .entry(MIDDLEWARE_KEY)
+        .or_insert(Item::Value(Value::Array(Array::new())))
+        .as_array_mut()
         .context("Failed to access the middleware array")?;
 
     let idx = index.min(middleware.len());
@@ -961,117 +831,4 @@ fn write_middleware_to_manifest(
     std::fs::write(manifest_file, doc.to_string()).context("Failed to write manifest file")?;
 
     Ok(())
-}
-
-/// Print guidance about the capabilities the middleware needs.
-fn print_middleware_capability_guidance(
-    component_id: Option<&str>,
-    required_caps: &[String],
-    inherit_config: Option<&InheritConfiguration>,
-) {
-    if required_caps.is_empty() {
-        return;
-    }
-
-    let inherited: Vec<String> = match inherit_config {
-        Some(InheritConfiguration::Some(list)) => list.clone(),
-        Some(InheritConfiguration::All(_)) => required_caps.to_vec(),
-        None => vec![],
-    };
-    let declined: Vec<String> = required_caps
-        .iter()
-        .filter(|c| !inherited.contains(c))
-        .cloned()
-        .collect();
-
-    println!();
-    if !inherited.is_empty() {
-        match component_id {
-            Some(cid) => println!(
-                "NOTE: This middleware inherits: {}. Ensure component '{cid}' (served by this route) declares these capabilities.",
-                inherited.join(", ")
-            ),
-            None => println!(
-                "NOTE: This middleware inherits: {}. Ensure the component served by this route declares these capabilities.",
-                inherited.join(", ")
-            ),
-        }
-    }
-    if !declined.is_empty() {
-        println!(
-            "NOTE: The middleware also uses {} which was not inherited; it will be denied these at runtime.",
-            declined.join(", ")
-        );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_http_sources() {
-        assert!(matches!(
-            "https://example.com/c.wasm"
-                .parse::<ParsedSource>()
-                .unwrap(),
-            ParsedSource::Http(_)
-        ));
-        assert!(matches!(
-            "http://example.com/c.wasm".parse::<ParsedSource>().unwrap(),
-            ParsedSource::Http(_)
-        ));
-    }
-
-    #[test]
-    fn parses_local_sources() {
-        assert!(matches!(
-            "./c.wasm".parse::<ParsedSource>().unwrap(),
-            ParsedSource::Local(_)
-        ));
-        assert!(matches!(
-            "path/to/c.wasm".parse::<ParsedSource>().unwrap(),
-            ParsedSource::Local(_)
-        ));
-        assert!(matches!(
-            "component.wasm".parse::<ParsedSource>().unwrap(),
-            ParsedSource::Local(_)
-        ));
-    }
-
-    #[test]
-    fn parses_registry_sources() {
-        let ParsedSource::Registry { package } =
-            "my:package@1.0.0".parse::<ParsedSource>().unwrap()
-        else {
-            panic!("expected registry source");
-        };
-        assert_eq!(package.package.to_string(), "my:package");
-        assert_eq!(package.version.map(|v| v.to_string()), Some("1.0.0".into()));
-    }
-
-    #[test]
-    fn registry_source_without_version() {
-        let ParsedSource::Registry { package } = "my:package".parse::<ParsedSource>().unwrap()
-        else {
-            panic!("expected registry source");
-        };
-        assert_eq!(package.package.to_string(), "my:package");
-        assert!(package.version.is_none());
-    }
-
-    #[test]
-    fn parses_component_reference() {
-        let ParsedSource::Component(id) = "ensure-admin".parse::<ParsedSource>().unwrap() else {
-            panic!("expected a component reference");
-        };
-        assert_eq!(id, "ensure-admin");
-    }
-
-    #[test]
-    fn invalid_registry_source_errors() {
-        // A namespaced-looking token that is not a valid package reference should
-        // error rather than be misclassified.
-        assert!("my:@@bad".parse::<ParsedSource>().is_err());
-    }
 }

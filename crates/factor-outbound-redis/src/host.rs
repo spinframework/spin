@@ -375,7 +375,7 @@ impl<T: Send> v3::HostConnectionWithStore<T> for crate::RedisFactorData {
     }
 
     #[instrument(name = "spin_outbound_redis.execute", skip(accessor, connection), err(level = Level::INFO),
-        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = format!("{}", command)))]
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "redis", otel.name = command.clone()))]
     async fn execute(
         accessor: &Accessor<T, Self>,
         connection: Resource<v3::Connection>,

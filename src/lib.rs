@@ -14,7 +14,7 @@ use commands::maintenance::MaintenanceCommands;
 use commands::{
     build::BuildCommand,
     cloud::{DeployCommand, LoginCommand},
-    deps::DepsCommands,
+    deps::DependenciesCommands,
     doctor::DoctorCommand,
     external::execute_external_subcommand,
     new::{AddCommand, NewCommand},
@@ -112,8 +112,8 @@ enum SpinApp {
     Registry(RegistryCommands),
     #[clap(alias = "b")]
     Build(BuildCommand),
-    #[clap(subcommand, alias = "dep")]
-    Deps(DepsCommands),
+    #[clap(subcommand, alias = "deps", alias = "dep")]
+    Dependencies(DependenciesCommands),
     #[clap(subcommand, alias = "plugin")]
     Plugins(PluginCommands),
     #[clap(subcommand, alias = "environments")]
@@ -150,7 +150,7 @@ impl SpinApp {
             Self::Login(cmd) => cmd.run().await,
             Self::Registry(cmd) => cmd.run().await,
             Self::Build(cmd) => cmd.run().await,
-            Self::Deps(cmd) => cmd.run().await,
+            Self::Dependencies(cmd) => cmd.run().await,
             Self::Trigger(TriggerCommands::Http(cmd)) => cmd.run().await,
             Self::Trigger(TriggerCommands::Redis(cmd)) => cmd.run().await,
             Self::Trigger(TriggerCommands::HelpArgsOnly(cmd)) => cmd.run().await,

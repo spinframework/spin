@@ -801,7 +801,9 @@ impl WasmLoader {
         Ok(path)
     }
 
-    async fn load_registry_source(
+    /// Load the best matching release of `package` from `registry` (or the
+    /// default registry) and return a path to the cached Wasm file.
+    pub async fn load_registry_source(
         &self,
         registry: Option<&wasm_pkg_client::Registry>,
         package: &wasm_pkg_client::PackageRef,
