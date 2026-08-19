@@ -1,6 +1,6 @@
 use crate::{directory_rels::notify_if_nondefault_rel, opts::*};
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use spin_common::arg_parser::parse_kv;
 use spin_oci::{Client, ComposeMode, client::InferPredefinedAnnotations};
@@ -60,7 +60,15 @@ pub struct Push {
     /// different Spin runtime hosts. Turning composition off can optimise
     /// bandwidth for shared dependencies, but makes the pushed image incompatible
     /// with hosts that cannot carry out composition themselves.
-    #[clap(long, default_value_t = true)]
+    #[clap(
+        long,
+        action = ArgAction::Set,
+        num_args = 0..=1,
+        require_equals = true,
+        default_value_t = true,
+        default_missing_value = "true",
+        value_parser = clap::builder::BoolishValueParser::new(),
+    )]
     pub compose: bool,
 
     /// Specifies to perform `spin build` (with the default options) before pushing the application.
