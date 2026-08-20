@@ -242,9 +242,8 @@ impl Client for PooledTokioClient {
         params: Vec<ParameterValue>,
         max_result_bytes: usize,
     ) -> Result<RowSet, v4::Error> {
-        let (cols_fut, mut results) = self.query_stream(statement, params).await?;
+        let (columns, mut results) = self.query_stream(statement, params).await?;
 
-        let mut columns = None;
         let mut byte_count = std::mem::size_of::<RowSet>();
         let mut rows = Vec::new();
 
@@ -256,16 +255,12 @@ impl Client for PooledTokioClient {
                 }
                 rows.push(row);
             }
-            columns = Some(cols_fut.await);
             Ok(())
         }
         .await
         .map_err(|e| v4::Error::QueryFailed(v4::QueryError::Text(format!("{e:?}"))))?;
 
-        Ok(RowSet {
-            columns: columns.unwrap_or_default(),
-            rows,
-        })
+        Ok(RowSet { columns, rows })
     }
 
     async fn query_async(
@@ -276,7 +271,7 @@ impl Client for PooledTokioClient {
     ) -> Result<QueryAsyncResult, v4::Error> {
         use futures::StreamExt;
 
-        let (cols_fut, mut rows) = self.query_stream(statement, params).await?;
+        let (columns, mut rows) = self.query_stream(statement, params).await?;
 
         let (rows_tx, rows_rx) = tokio::sync::mpsc::channel(4);
         let (err_tx, err_rx) = tokio::sync::oneshot::channel();
@@ -323,10 +318,8 @@ impl Client for PooledTokioClient {
             }
         });
 
-        let cols = cols_fut.await;
-
         Ok(QueryAsyncResult {
-            columns: cols,
+            columns,
             rows: rows_rx,
             error: err_rx,
         })
@@ -340,54 +333,38 @@ impl PooledTokioClient {
         params: Vec<ParameterValue>,
     ) -> Result<
         (
-            impl std::future::Future<Output = Vec<v4::Column>>,
+            Vec<v4::Column>,
             impl futures::Stream<Item = Result<Vec<DbValue>, v4::Error>> + 'static,
         ),
         v4::Error,
     > {
-        use futures::{FutureExt, StreamExt};
+        use futures::StreamExt;
 
         let params = to_sql_parameters(params)?;
+        let stmt = self
+            .as_ref()
+            .prepare(&statement)
+            .await
+            .map_err(query_failed)?;
+        let columns = stmt.columns().iter().map(infer_column).collect();
 
         let results = Box::pin(
             self.as_ref()
-                .query_raw(&statement, params)
+                .query_raw(&stmt, params)
                 .await
                 .map_err(query_failed)?,
         );
 
-        let (cols_tx, cols_rx) = tokio::sync::oneshot::channel();
-        let mut cols_tx_opt = Some(cols_tx);
-
-        let row_stm = results.enumerate().map(move |(index, row_res)| {
+        let row_stm = results.map(move |row_res| {
             let row_res = row_res.map_err(query_failed);
-            row_res.and_then(|r| {
-                if index == 0
-                    && let Some(cols_tx) = cols_tx_opt.take()
-                {
-                    let cols = infer_columns(&r);
-                    _ = cols_tx.send(cols);
-                }
-                convert_row(&r).map_err(query_failed_anyhow)
-            })
+            row_res.and_then(|r| convert_row(&r).map_err(query_failed_anyhow))
         });
 
-        let cols_rx = cols_rx.map(|result| result.unwrap_or_default());
-
-        Ok((cols_rx, Box::pin(row_stm)))
+        Ok((columns, Box::pin(row_stm)))
     }
 }
 
-fn infer_columns(row: &Row) -> Vec<Column> {
-    let mut result = Vec::with_capacity(row.len());
-    for index in 0..row.len() {
-        result.push(infer_column(row, index));
-    }
-    result
-}
-
-fn infer_column(row: &Row, index: usize) -> Column {
-    let column = &row.columns()[index];
+fn infer_column(column: &tokio_postgres::Column) -> Column {
     let name = column.name().to_owned();
     let data_type = convert_data_type(column.type_());
     Column { name, data_type }
