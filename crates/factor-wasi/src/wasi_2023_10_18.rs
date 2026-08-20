@@ -66,13 +66,15 @@ mod bindings {
             "wasi:io/streams.[method]output-stream.blocking-write-zeroes-and-flush": async | trappable,
             "wasi:io/poll.poll-list": async | trappable,
             "wasi:io/poll.poll-one": async | trappable,
-
             "wasi:sockets/tcp.[method]tcp-socket.start-bind": async | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-connect": async | trappable,
+            "wasi:sockets/tcp.[method]tcp-socket.start-listen": async | trappable,
+            "wasi:sockets/udp-create-socket.create-udp-socket": async | trappable,
             "wasi:sockets/udp.[method]udp-socket.finish-connect": async | trappable,
             "wasi:sockets/udp.[method]udp-socket.receive": async | trappable,
             "wasi:sockets/udp.[method]udp-socket.send": async | trappable,
             "wasi:sockets/udp.[method]udp-socket.start-bind": async | trappable,
+            "wasi:sockets/udp.[drop]udp-socket": async | trappable,
             default: trappable,
         },
         with: {
@@ -940,15 +942,12 @@ impl<T> wasi::sockets::tcp::HostTcpSocket for SpinSocketsView<'_, T> {
         // This snapshot uses the raw P2 TcpSocket type — the resource rep is the same at
         // start_connect and drop time — so the P2 impl's quota acquire/register/release
         // logic round-trips correctly without any wrapper-level bookkeeping here.
-        convert_result(
-            latest::sockets::tcp::HostTcpSocket::start_connect(
-                self,
-                self_,
-                network,
-                remote_address.into(),
-            )
-            .await,
-        )
+        convert_result(latest::sockets::tcp::HostTcpSocket::start_connect(
+            self,
+            self_,
+            network,
+            remote_address.into(),
+        ))
     }
 
     fn finish_connect(
@@ -961,13 +960,11 @@ impl<T> wasi::sockets::tcp::HostTcpSocket for SpinSocketsView<'_, T> {
         ))
     }
 
-    fn start_listen(
+    async fn start_listen(
         &mut self,
         self_: Resource<TcpSocket>,
     ) -> wasmtime::Result<Result<(), SocketErrorCode>> {
-        convert_result(latest::sockets::tcp::HostTcpSocket::start_listen(
-            self, self_,
-        ))
+        convert_result(latest::sockets::tcp::HostTcpSocket::start_listen(self, self_).await)
     }
 
     fn finish_listen(
@@ -1346,20 +1343,17 @@ impl<T> wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_, T> {
         }
 
         // Send off the datagrams.
-        convert_result(
-            latest::sockets::udp::HostOutgoingDatagramStream::send(
-                self,
-                outgoing,
-                datagrams
-                    .into_iter()
-                    .map(|d| latest::sockets::udp::OutgoingDatagram {
-                        data: d.data,
-                        remote_address: Some(d.remote_address.into()),
-                    })
-                    .collect(),
-            )
-            .await,
-        )
+        convert_result(latest::sockets::udp::HostOutgoingDatagramStream::send(
+            self,
+            outgoing,
+            datagrams
+                .into_iter()
+                .map(|d| latest::sockets::udp::OutgoingDatagram {
+                    data: d.data,
+                    remote_address: Some(d.remote_address.into()),
+                })
+                .collect(),
+        ))
     }
 
     fn local_address(
@@ -1484,7 +1478,7 @@ impl<T> wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_, T> {
         latest::sockets::udp::HostUdpSocket::subscribe(&mut self.inner, socket)
     }
 
-    fn drop(&mut self, rep: Resource<UdpSocket>) -> wasmtime::Result<()> {
+    async fn drop(&mut self, rep: Resource<UdpSocket>) -> wasmtime::Result<()> {
         let socket_rep = rep.rep();
         // Delete before releasing: the only error case that matters is `HasChildren`,
         // where the socket still exists and the permit must stay held. `NotPresent`
@@ -1501,7 +1495,8 @@ impl<T> wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_, T> {
                 outgoing,
             } => {
                 latest::sockets::udp::HostIncomingDatagramStream::drop(&mut self.inner, incoming)?;
-                latest::sockets::udp::HostOutgoingDatagramStream::drop(&mut self.inner, outgoing)?;
+                latest::sockets::udp::HostOutgoingDatagramStream::drop(&mut self.inner, outgoing)
+                    .await?;
                 socket
             }
             UdpSocket::Dummy => return Ok(()),
@@ -1512,7 +1507,7 @@ impl<T> wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_, T> {
 }
 
 impl<T> wasi::sockets::udp_create_socket::Host for SpinSocketsView<'_, T> {
-    fn create_udp_socket(
+    async fn create_udp_socket(
         &mut self,
         address_family: IpAddressFamily,
     ) -> wasmtime::Result<Result<Resource<UdpSocket>, SocketErrorCode>> {
@@ -1528,10 +1523,9 @@ impl<T> wasi::sockets::udp_create_socket::Host for SpinSocketsView<'_, T> {
             return Ok(Err(SocketErrorCode::NewSocketLimit));
         };
         // Create the inner P2 socket via self.inner to avoid charging quota at the P2 level.
-        let result = convert_result(p2_udp_create::Host::create_udp_socket(
-            &mut self.inner,
-            address_family.into(),
-        ))?;
+        let result = convert_result(
+            p2_udp_create::Host::create_udp_socket(&mut self.inner, address_family.into()).await,
+        )?;
         let socket = match result {
             Ok(socket) => socket,
             Err(e) => return Ok(Err(e)),

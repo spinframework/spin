@@ -24,7 +24,7 @@ use wasmtime_wasi::clocks::{WasiClocks, WasiClocksCtxView};
 use wasmtime_wasi::filesystem::{WasiFilesystem, WasiFilesystemCtxView};
 use wasmtime_wasi::random::{WasiRandom, WasiRandomCtx};
 use wasmtime_wasi::sockets::{WasiSockets, WasiSocketsCtxView};
-use wasmtime_wasi::{DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView};
+use wasmtime_wasi::{FsPerms, ResourceTable, WasiCtx, WasiCtxBuilder, WasiCtxView};
 
 pub use sockets::{SocketPermitState, SpinSockets, SpinSocketsView};
 pub use wasi_2023_10_18::convert_result;
@@ -393,6 +393,7 @@ impl Factor for WasiFactor {
         ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<InstanceBuilder> {
         let mut wasi_ctx = WasiCtxBuilder::new();
+        wasi_ctx.allow_tcp(true).allow_udp(true);
 
         // Mount files
         let mount_ctx = MountFilesContext { ctx: &mut wasi_ctx };
@@ -446,13 +447,12 @@ impl MountFilesContext<'_> {
         guest_path: impl AsRef<str>,
         writable: bool,
     ) -> anyhow::Result<()> {
-        let (dir_perms, file_perms) = if writable {
-            (DirPerms::all(), FilePerms::all())
+        let perms = if writable {
+            FsPerms::ReadWrite
         } else {
-            (DirPerms::READ, FilePerms::READ)
+            FsPerms::ReadOnly
         };
-        self.ctx
-            .preopened_dir(host_path, guest_path, dir_perms, file_perms)?;
+        self.ctx.preopened_dir(host_path, guest_path, perms)?;
         Ok(())
     }
 }
@@ -515,13 +515,12 @@ impl InstanceBuilder {
         guest_path: impl AsRef<str>,
         writable: bool,
     ) -> anyhow::Result<()> {
-        let (dir_perms, file_perms) = if writable {
-            (DirPerms::all(), FilePerms::all())
+        let perms = if writable {
+            FsPerms::ReadWrite
         } else {
-            (DirPerms::READ, FilePerms::READ)
+            FsPerms::ReadOnly
         };
-        self.ctx
-            .preopened_dir(host_path, guest_path, dir_perms, file_perms)?;
+        self.ctx.preopened_dir(host_path, guest_path, perms)?;
         Ok(())
     }
 }
@@ -556,11 +555,13 @@ impl InstanceBuilder {
             let check = check.clone();
             Box::pin(async move {
                 match addr_use {
-                    SocketAddrUse::TcpBind => false,
-                    SocketAddrUse::TcpConnect
+                    SocketAddrUse::TcpListen
+                    | SocketAddrUse::TcpAccept
+                    | SocketAddrUse::UdpReceive => false,
+                    SocketAddrUse::TcpBind
+                    | SocketAddrUse::TcpConnect
                     | SocketAddrUse::UdpBind
-                    | SocketAddrUse::UdpConnect
-                    | SocketAddrUse::UdpOutgoingDatagram => check(addr, addr_use).await,
+                    | SocketAddrUse::UdpSend => check(addr, addr_use).await,
                 }
             })
         });

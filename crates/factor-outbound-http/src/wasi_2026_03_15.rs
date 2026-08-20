@@ -1,7 +1,8 @@
 use spin_factor_wasi::{FutureReaderExt as _, convert, convert_result, reborrow};
 use wasmtime::AsContextMut;
 use wasmtime::component::{Access, Accessor, FutureReader, Linker, Resource, StreamReader};
-use wasmtime_wasi_http::p3::{WasiHttp, WasiHttpCtxView, bindings as latest};
+use wasmtime_wasi_http::p3::bindings as latest;
+use wasmtime_wasi_http::{WasiHttp, WasiHttpCtxView};
 
 mod bindings {
     use super::latest;

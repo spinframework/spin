@@ -39,15 +39,10 @@ use tokio_rustls::client::TlsStream;
 use tower_service::Service;
 use tracing::{Instrument, Span, field::Empty, instrument};
 use wasmtime::component::HasData;
-use wasmtime_wasi::TrappableError;
 use wasmtime_wasi_http::{
-    p2::{
-        self, HttpError, WasiHttpCtxView,
-        bindings::http::types::{self as p2_types, ErrorCode},
-        body::HyperOutgoingBody,
-        types::{HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
-    },
-    p3::{self, bindings::http::types as p3_types},
+    Error as WasiHttpError, RequestOptions, WasiHttp, WasiHttpCtxView, WasiHttpHooks,
+    p2::{bindings::http::types::ErrorCode, body::HyperOutgoingBody, types::IncomingResponse},
+    p3,
 };
 
 use spin_factor_outbound_networking::{ConnectionPermit, ConnectionSemaphore};
@@ -68,7 +63,13 @@ impl HasData for HasHttp {
     type Data<'a> = WasiHttpCtxView<'a>;
 }
 
-impl p3::WasiHttpHooks for InstanceHttpHooks {
+struct OutgoingRequestConfig {
+    use_tls: bool,
+    connect_timeout: Duration,
+    first_byte_timeout: Duration,
+}
+
+impl WasiHttpHooks for InstanceHttpHooks {
     #[instrument(
         name = "spin_outbound_http.send_request",
         skip_all,
@@ -86,17 +87,17 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
     #[allow(clippy::type_complexity)]
     fn send_request(
         &mut self,
-        request: http::Request<UnsyncBoxBody<Bytes, p3_types::ErrorCode>>,
-        options: Option<p3::RequestOptions>,
-        fut: Box<dyn Future<Output = Result<(), p3_types::ErrorCode>> + Send>,
+        request: http::Request<UnsyncBoxBody<Bytes, WasiHttpError>>,
+        options: Option<RequestOptions>,
+        fut: Box<dyn Future<Output = Result<(), WasiHttpError>> + Send>,
     ) -> Box<
         dyn Future<
                 Output = Result<
                     (
-                        http::Response<UnsyncBoxBody<Bytes, p3_types::ErrorCode>>,
-                        Box<dyn Future<Output = Result<(), p3_types::ErrorCode>> + Send>,
+                        http::Response<UnsyncBoxBody<Bytes, WasiHttpError>>,
+                        Box<dyn Future<Output = Result<(), WasiHttpError>> + Send>,
                     ),
-                    TrappableError<p3_types::ErrorCode>,
+                    WasiHttpError,
                 >,
             > + Send,
     > {
@@ -121,6 +122,9 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
             http_clients: self.wasi_http_clients.clone(),
             semaphore: self.semaphore.clone(),
         };
+        let between_bytes_timeout = options
+            .and_then(|v| v.between_bytes_timeout)
+            .unwrap_or(DEFAULT_TIMEOUT);
         let config = OutgoingRequestConfig {
             use_tls: request.uri().scheme() == Some(&Scheme::HTTPS),
             connect_timeout: options
@@ -129,24 +133,17 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
             first_byte_timeout: options
                 .and_then(|v| v.first_byte_timeout)
                 .unwrap_or(DEFAULT_TIMEOUT),
-            between_bytes_timeout: options
-                .and_then(|v| v.between_bytes_timeout)
-                .unwrap_or(DEFAULT_TIMEOUT),
         };
         Box::new(
-            async {
+            async move {
                 match request_sender
                     .send(
-                        request.map(|body| body.map_err(p2_types::ErrorCode::from).boxed_unsync()),
+                        request.map(|body| body.map_err(WasiHttpError::from).boxed_unsync()),
                         config,
                     )
                     .await
                 {
-                    Ok(IncomingResponse {
-                        resp,
-                        between_bytes_timeout,
-                        ..
-                    }) => Ok((
+                    Ok(IncomingResponse { resp, .. }) => Ok((
                         resp.map(|body| {
                             BetweenBytesTimeoutBody {
                                 body: Some(body),
@@ -164,12 +161,7 @@ impl p3::WasiHttpHooks for InstanceHttpHooks {
                             Ok(())
                         }) as Box<dyn Future<Output = _> + Send>,
                     )),
-                    Err(http_error) => match http_error.downcast() {
-                        Ok(error_code) => {
-                            Err(TrappableError::from(p3_types::ErrorCode::from(error_code)))
-                        }
-                        Err(trap) => Err(TrappableError::trap(trap)),
-                    },
+                    Err(http_error) => Err(http_error),
                 }
             }
             .in_current_span(),
@@ -189,9 +181,9 @@ pin_project_lite::pin_project! {
     }
 }
 
-impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutBody<B> {
+impl<B: Body<Error = WasiHttpError> + Unpin> Body for BetweenBytesTimeoutBody<B> {
     type Data = B::Data;
-    type Error = p3_types::ErrorCode;
+    type Error = B::Error;
 
     fn poll_frame(
         self: Pin<&mut Self>,
@@ -234,7 +226,7 @@ impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutB
                     }
                 }
 
-                Poll::Ready(value.map(|v| v.map_err(p3_types::ErrorCode::from)))
+                Poll::Ready(value)
             }
             Poll::Pending => {
                 if me.sleep.is_none() {
@@ -247,7 +239,7 @@ impl<B: Body<Error = p2_types::ErrorCode> + Unpin> Body for BetweenBytesTimeoutB
                 *me.body = None;
                 record_body_size_once(*me.byte_count);
 
-                Poll::Ready(Some(Err(p3_types::ErrorCode::ConnectionReadTimeout)))
+                Poll::Ready(Some(Err(WasiHttpError::ConnectionReadTimeout)))
             }
         }
     }
@@ -293,22 +285,22 @@ where
         get_http,
     )?;
 
-    fn get_http_p3<C>(store: &mut C::StoreData) -> p3::WasiHttpCtxView<'_>
+    fn get_http_p3<C>(store: &mut C::StoreData) -> WasiHttpCtxView<'_>
     where
         C: spin_factors::InitContext<OutboundHttpFactor>,
     {
         let (state, table) = C::get_data_with_table(store);
         let ctx = &mut state.wasi_http_ctx;
-        p3::WasiHttpCtxView {
+        WasiHttpCtxView {
             ctx,
             table,
             hooks: &mut state.hooks,
         }
     }
 
-    let get_http_p3 = get_http_p3::<C> as fn(&mut C::StoreData) -> p3::WasiHttpCtxView<'_>;
-    p3::bindings::http::client::add_to_linker::<_, p3::WasiHttp>(linker, get_http_p3)?;
-    p3::bindings::http::types::add_to_linker::<_, p3::WasiHttp>(linker, get_http_p3)?;
+    let get_http_p3 = get_http_p3::<C> as fn(&mut C::StoreData) -> WasiHttpCtxView<'_>;
+    p3::bindings::http::client::add_to_linker::<_, WasiHttp>(linker, get_http_p3)?;
+    p3::bindings::http::types::add_to_linker::<_, WasiHttp>(linker, get_http_p3)?;
 
     wasi_2023_10_18::add_to_linker(linker, get_http)?;
     wasi_2023_11_10::add_to_linker(linker, get_http)?;
@@ -329,68 +321,9 @@ impl OutboundHttpFactor {
             hooks: &mut state.hooks,
         })
     }
-
-    pub fn get_wasi_p3_http_impl(
-        runtime_instance_state: &mut impl RuntimeFactorsInstanceState,
-    ) -> Option<p3::WasiHttpCtxView<'_>> {
-        let (state, table) = runtime_instance_state.get_with_table::<OutboundHttpFactor>()?;
-        let ctx = &mut state.wasi_http_ctx;
-        Some(p3::WasiHttpCtxView {
-            ctx,
-            table,
-            hooks: &mut state.hooks,
-        })
-    }
 }
 
 type OutgoingRequest = http::Request<HyperOutgoingBody>;
-
-impl p2::WasiHttpHooks for InstanceHttpHooks {
-    #[instrument(
-        name = "spin_outbound_http.send_request",
-        skip_all,
-        fields(
-            otel.kind = "client",
-            {otel_attribute::URL_FULL} = Empty,
-            {otel_attribute::HTTP_REQUEST_METHOD} = %request.method(),
-            otel.name = %request.method(),
-            {otel_attribute::HTTP_RESPONSE_STATUS_CODE} = Empty,
-            {otel_attribute::SERVER_ADDRESS} = Empty,
-            {otel_attribute::SERVER_PORT} = Empty,
-        )
-    )]
-    fn send_request(
-        &mut self,
-        request: OutgoingRequest,
-        config: OutgoingRequestConfig,
-    ) -> Result<wasmtime_wasi_http::p2::types::HostFutureIncomingResponse, HttpError> {
-        self.otel.reparent_tracing_span();
-
-        let request_sender = RequestSender {
-            allowed_hosts: self.allowed_hosts.clone(),
-            component_tls_configs: self.component_tls_configs.clone(),
-            request_interceptor: self.request_interceptor.clone(),
-            self_request_origin: self.self_request_origin.clone(),
-            blocked_networks: self.blocked_networks.clone(),
-            http_clients: self.wasi_http_clients.clone(),
-            semaphore: self.semaphore.clone(),
-        };
-        Ok(HostFutureIncomingResponse::Pending(
-            wasmtime_wasi::runtime::spawn(
-                async {
-                    match request_sender.send(request, config).await {
-                        Ok(resp) => Ok(Ok(resp)),
-                        Err(http_error) => match http_error.downcast() {
-                            Ok(error_code) => Ok(Err(error_code)),
-                            Err(trap) => Err(trap),
-                        },
-                    }
-                }
-                .in_current_span(),
-            ),
-        ))
-    }
-}
 
 struct RequestSender {
     allowed_hosts: OutboundAllowedHosts,
@@ -407,7 +340,7 @@ impl RequestSender {
         self,
         mut request: OutgoingRequest,
         mut config: OutgoingRequestConfig,
-    ) -> Result<IncomingResponse, HttpError> {
+    ) -> Result<IncomingResponse, WasiHttpError> {
         self.prepare_request(&mut request, &mut config).await?;
 
         // If the current span has opentelemetry trace context, inject it into the request
@@ -417,17 +350,19 @@ impl RequestSender {
         let mut override_connect_addr = None;
         if let Some(interceptor) = &self.request_interceptor {
             let intercept_request = std::mem::take(&mut request).into();
-            match interceptor.intercept(intercept_request).await? {
+            match interceptor
+                .intercept(intercept_request)
+                .await
+                .map_err(|e| match e.downcast() {
+                    Ok(e) => WasiHttpError::from(e),
+                    Err(_) => WasiHttpError::InternalError(None),
+                })? {
                 InterceptOutcome::Continue(mut req) => {
                     override_connect_addr = req.override_connect_addr.take();
                     request = req.into_hyper_request();
                 }
                 InterceptOutcome::Complete(resp) => {
-                    let resp = IncomingResponse {
-                        resp,
-                        worker: None,
-                        between_bytes_timeout: config.between_bytes_timeout,
-                    };
+                    let resp = IncomingResponse { resp, worker: None };
                     return Ok(resp);
                 }
             }
@@ -537,7 +472,6 @@ impl RequestSender {
             use_tls,
             connect_timeout,
             first_byte_timeout,
-            between_bytes_timeout,
         } = config;
 
         let tls_client_config = if use_tls {
@@ -578,7 +512,11 @@ impl RequestSender {
             .await
             .map_err(|_| ErrorCode::ConnectionReadTimeout)?
             .map_err(hyper_legacy_request_error)?
-            .map(|body| body.map_err(hyper_request_error).boxed_unsync());
+            .map(|body| {
+                body.map_err(hyper_request_error)
+                    .map_err(WasiHttpError::from)
+                    .boxed_unsync()
+            });
 
         let span = tracing::Span::current();
         span.record(
@@ -588,11 +526,7 @@ impl RequestSender {
 
         record_content_length_header(&span, resp.headers(), "http.response.header.content-length");
 
-        Ok(IncomingResponse {
-            resp,
-            worker: None,
-            between_bytes_timeout,
-        })
+        Ok(IncomingResponse { resp, worker: None })
     }
 }
 
