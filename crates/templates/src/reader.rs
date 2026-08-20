@@ -120,7 +120,7 @@ pub(crate) fn parse_manifest_toml(text: impl AsRef<str>) -> anyhow::Result<RawTe
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", untagged)]
 pub(crate) enum RawInstalledFrom {
-    Git { git: String },
+    Git { git: String, branch: Option<String> },
     File { dir: String },
     RemoteTar { url: String },
 }
