@@ -30,3 +30,4 @@ Here is a list of accepted SIPs:
 - [Application-Internal Service Chaining](../sips/017-service-chaining.md)
 - [Adding OTel tracing to Spin](../sips/018-adding-otel-tracing-to-spin.md)
 - [Spin Governance](../sips/019-governance.md)
+- [Packaging Middleware Components](../sips/026-packaging-middleware.md)
