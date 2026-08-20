@@ -6,6 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+astral-tokio-tar = { workspace = true }
 async-compression = { version = "0.4", features = ["gzip", "tokio"] }
 base64 = { workspace = true }
 chrono = { workspace = true }
@@ -29,7 +30,6 @@ spin-common = { path = "../common" }
 spin-compose = { path = "../compose" }
 spin-loader = { path = "../loader" }
 spin-locked-app = { path = "../locked-app" }
-tar = "0.4"
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "rt"] }
 tokio-util = { version = "0.7", features = ["compat"] }
