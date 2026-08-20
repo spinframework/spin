@@ -63,15 +63,6 @@ pub struct CreateEmbeddingResponse {
     usage: EmbeddingUsage,
 }
 
-impl CreateEmbeddingResponse {
-    fn embeddings(&self) -> Vec<Vec<f32>> {
-        self.data
-            .iter()
-            .map(|embedding| embedding.embedding.clone())
-            .collect()
-    }
-}
-
 #[derive(Deserialize)]
 struct EmbeddingUsage {
     prompt_tokens: u32,
@@ -95,7 +86,7 @@ impl From<CreateChatCompletionResponse> for wasi_llm::InferencingResult {
 impl From<CreateEmbeddingResponse> for wasi_llm::EmbeddingsResult {
     fn from(value: CreateEmbeddingResponse) -> Self {
         Self {
-            embeddings: value.embeddings(),
+            embeddings: value.data.into_iter().map(|e| e.embedding).collect(),
             usage: wasi_llm::EmbeddingsUsage {
                 prompt_token_count: value.usage.prompt_tokens,
             },

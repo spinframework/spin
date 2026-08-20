@@ -26,7 +26,8 @@ pub fn handle_app_log(buf: &[u8], component_id: &str) {
 
 /// Forward the app log to OTel.
 fn app_log_to_otel(buf: &[u8], component_id: &str) {
-    if !otel_logs_enabled() {
+    static CELL: OnceLock<bool> = OnceLock::new();
+    if !*CELL.get_or_init(otel_logs_enabled) {
         return;
     }
 
