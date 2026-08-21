@@ -19,7 +19,9 @@ use spin_common::url::parse_file_url;
 use spin_compose::ComponentSourceLoaderFs;
 use spin_loader::FilesMountStrategy;
 use spin_loader::cache::Cache;
-use spin_locked_app::locked::{ContentPath, ContentRef, LockedApp, LockedComponent};
+use spin_locked_app::locked::{
+    ContentPath, ContentRef, LockedApp, LockedComponent, LockedComponentDependency,
+};
 use tokio::fs;
 use walkdir::WalkDir;
 
@@ -332,23 +334,9 @@ impl Client {
 
             layers.push(layer);
 
-            let mut deps = BTreeMap::default();
-            for (dep_name, mut dep) in c.dependencies {
-                let source = dep
-                    .source
-                    .content
-                    .source
-                    .context("dependency loaded from disk should contain a file source")?;
-                let source = parse_file_url(source.as_str())?;
-
-                let layer = Self::wasm_layer(&source).await?;
-
-                dep.source.content = self.content_ref_for_layer(&layer);
-                deps.insert(dep_name, dep);
-
-                layers.push(layer);
+            for dep in c.dependencies.values_mut() {
+                self.assemble_dependency_layer(dep, &mut layers).await?;
             }
-            c.dependencies = deps;
 
             c.files = self
                 .assemble_content_layers(assembly_mode, &mut layers, c.files.as_slice())
@@ -357,6 +345,29 @@ impl Client {
         }
 
         Ok((layers, components))
+    }
+
+    /// Push the Wasm module for a component dependency as a layer, and update the
+    /// dependency to refer to that layer rather than to its on-disk source.
+    async fn assemble_dependency_layer(
+        &self,
+        dep: &mut LockedComponentDependency,
+        layers: &mut Vec<ImageLayer>,
+    ) -> Result<()> {
+        let source = dep
+            .source
+            .content
+            .source
+            .as_ref()
+            .context("dependency loaded from disk should contain a file source")?;
+        let source = parse_file_url(source.as_str())?;
+
+        let layer = Self::wasm_layer(&source).await?;
+
+        dep.source.content = self.content_ref_for_layer(&layer);
+        layers.push(layer);
+
+        Ok(())
     }
 
     async fn assemble_layers_composed(
