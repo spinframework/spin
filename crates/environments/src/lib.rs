@@ -134,6 +134,9 @@ async fn validate_component_against_environments(
         if let Some(e) = validate_host_reqs(env, host_caps, component).err() {
             errs.push(e);
         }
+
+        let configuration_constraints = env.configuration_constraints();
+        validate_configuration_constraints(env, configuration_constraints, component, &mut errs);
     }
 
     if errs.is_empty() {
@@ -269,6 +272,46 @@ fn validate_host_reqs(
             unsatisfied.join(", ")
         ))
     }
+}
+
+fn validate_configuration_constraints(
+    env: &TargetEnvironment,
+    configuration_constraints: &environment::ConfigurationConstraints,
+    component: &ComponentToValidate,
+    errors: &mut Vec<anyhow::Error>,
+) {
+    let mut validate_only_permitted = |descriptor,
+                                       permitted_values: &Option<Vec<String>>,
+                                       required_values| {
+        if let Some(permitted_values) = permitted_values.as_ref() {
+            for required_value in required_values {
+                if !permitted_values.contains(required_value) {
+                    let error = anyhow!(
+                        "Component {} can't run in environment {} because it requires the '{required_value}' {descriptor} which the environment does not support",
+                        component.id(),
+                        env.name()
+                    );
+                    errors.push(error);
+                }
+            }
+        }
+    };
+
+    validate_only_permitted(
+        "key-value store",
+        &configuration_constraints.key_value_stores,
+        &component.manifest().key_value_stores,
+    );
+    validate_only_permitted(
+        "SQLite database",
+        &configuration_constraints.sqlite_databases,
+        &component.manifest().sqlite_databases,
+    );
+    validate_only_permitted(
+        "AI model",
+        &configuration_constraints.ai_models,
+        &component.manifest().ai_models,
+    );
 }
 
 fn satisfies(host_caps: &[String], host_req: &String) -> bool {

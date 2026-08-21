@@ -11,6 +11,7 @@ pub(crate) struct ComponentToValidate<'a> {
     source_description: String,
     wasm: Vec<u8>,
     host_requirements: Vec<String>,
+    manifest: spin_manifest::schema::v2::Component,
 }
 
 impl ComponentToValidate<'_> {
@@ -30,18 +31,24 @@ impl ComponentToValidate<'_> {
         &self.host_requirements
     }
 
+    pub fn manifest(&self) -> &spin_manifest::schema::v2::Component {
+        &self.manifest
+    }
+
     #[cfg(test)]
     pub(crate) fn new(
         id: &'static str,
         description: &str,
         wasm: Vec<u8>,
         host_requirements: Vec<String>,
+        manifest: spin_manifest::schema::v2::Component,
     ) -> Self {
         Self {
             id,
             source_description: description.to_owned(),
             wasm,
             host_requirements,
+            manifest,
         }
     }
 }
@@ -67,6 +74,29 @@ impl ApplicationToValidate {
             component_ids: component_ids.to_vec(),
             wasm_loader,
         })
+    }
+
+    fn component<'a>(
+        &'a self,
+        trigger: &'a spin_manifest::schema::v2::Trigger,
+    ) -> anyhow::Result<&'a spin_manifest::schema::v2::Component> {
+        let component_spec = trigger
+            .component
+            .as_ref()
+            .ok_or_else(|| anyhow!("No component specified for trigger {}", trigger.id))?;
+        match component_spec {
+            spin_manifest::schema::v2::ComponentSpec::Inline(c) => Ok(c.as_ref()),
+            spin_manifest::schema::v2::ComponentSpec::Reference(r) => {
+                let id = r.as_ref();
+                let Some(component) = self.manifest.components.get(r) else {
+                    anyhow::bail!(
+                        "Component {id} specified for trigger {} does not exist",
+                        trigger.id
+                    );
+                };
+                Ok(component)
+            }
+        }
     }
 
     fn component_source<'a>(
@@ -148,27 +178,32 @@ impl ApplicationToValidate {
         &'a self,
         trigger: &'a spin_manifest::schema::v2::Trigger,
     ) -> anyhow::Result<Option<ComponentToValidate<'a>>> {
-        let component = self.component_source(trigger)?;
-        if !self.component_ids.is_empty() && !self.component_ids.contains(&component.id.to_string())
+        let component = self.component(trigger)?;
+        let component_source = self.component_source(trigger)?;
+        if !self.component_ids.is_empty()
+            && !self
+                .component_ids
+                .contains(&component_source.id.to_string())
         {
             return Ok(None);
         }
 
         let loader = ComponentSourceLoader::new(&self.wasm_loader);
 
-        let wasm = spin_compose::compose(&loader, &component, async |data| Ok(data)).await.with_context(|| format!("Spin needed to compose dependencies for {} as part of target checking, but composition failed", component.id))?;
+        let wasm = spin_compose::compose(&loader, &component_source, async |data| Ok(data)).await.with_context(|| format!("Spin needed to compose dependencies for {} as part of target checking, but composition failed", component_source.id))?;
 
-        let host_requirements = if component.requires_service_chaining {
+        let host_requirements = if component_source.requires_service_chaining {
             vec!["local_service_chaining".to_string()]
         } else {
             vec![]
         };
 
         Ok(Some(ComponentToValidate {
-            id: component.id,
-            source_description: source_description(component.source),
+            id: component_source.id,
+            source_description: source_description(component_source.source),
             wasm,
             host_requirements,
+            manifest: component.clone(),
         }))
     }
 }

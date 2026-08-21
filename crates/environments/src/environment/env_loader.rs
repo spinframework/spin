@@ -226,6 +226,7 @@ async fn load_environment_from_env_def(
         trigger_capabilities,
         unknown_trigger,
         unknown_capabilities,
+        configuration_constraints: env_def.configuration_constraints().clone(),
     })
 }
 
