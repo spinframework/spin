@@ -24,6 +24,8 @@ pub struct EnvironmentDefinition {
     #[serde(default)]
     default: Option<TriggerEnvironment>,
     #[serde(default)]
+    configuration: ConfigurationConstraints,
+    #[serde(default)]
     metadata: Metadata,
 }
 
@@ -63,6 +65,10 @@ impl EnvironmentDefinition {
 
     pub fn plugins(&self) -> &[String] {
         &self.metadata.plugins
+    }
+
+    pub fn configuration_constraints(&self) -> &ConfigurationConstraints {
+        &self.configuration
     }
 }
 
@@ -162,6 +168,13 @@ impl std::fmt::Display for WorldName {
 
         Ok(())
     }
+}
+
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+pub struct ConfigurationConstraints {
+    pub key_value_stores: Option<Vec<String>>,
+    pub sqlite_databases: Option<Vec<String>>,
+    pub ai_models: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]

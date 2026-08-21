@@ -10,8 +10,8 @@ mod env_loader;
 mod lockfile;
 
 pub use catalogue::Catalogue;
-pub use definition::EnvironmentDefinition;
 use definition::WorldName;
+pub use definition::{ConfigurationConstraints, EnvironmentDefinition};
 pub use env_loader::load_environment_def;
 
 use crate::Targets;
@@ -27,6 +27,7 @@ pub struct TargetEnvironment {
     trigger_capabilities: HashMap<TriggerType, Vec<String>>,
     unknown_trigger: UnknownTrigger,
     unknown_capabilities: Vec<String>,
+    configuration_constraints: ConfigurationConstraints,
 }
 
 pub(crate) struct RealisedTargets {
@@ -95,6 +96,10 @@ impl TargetEnvironment {
         self.trigger_capabilities
             .get(trigger_type)
             .unwrap_or(&self.unknown_capabilities)
+    }
+
+    pub fn configuration_constraints(&self) -> &ConfigurationConstraints {
+        &self.configuration_constraints
     }
 }
 
@@ -278,6 +283,7 @@ mod test {
             trigger_capabilities: Default::default(),
             unknown_trigger: UnknownTrigger::Deny,
             unknown_capabilities: Default::default(),
+            configuration_constraints: Default::default(),
         }
     }
 
@@ -315,7 +321,12 @@ mod test {
             trigger_capabilities: Default::default(),
             unknown_trigger: UnknownTrigger::Allow(candidate_worlds),
             unknown_capabilities: Default::default(),
+            configuration_constraints: Default::default(),
         })
+    }
+
+    fn fake_component() -> spin_manifest::schema::v2::Component {
+        toml::from_str(r#"source = "dummy.wasm""#).unwrap()
     }
 
     #[tokio::test]
@@ -332,7 +343,8 @@ mod test {
         assert!(env.supports_trigger_type(&"s".to_owned()));
         assert!(!env.supports_trigger_type(&"t".to_owned()));
 
-        let component = crate::ComponentToValidate::new("scomp", "scomp.wasm", wasm, vec![]);
+        let component =
+            crate::ComponentToValidate::new("scomp", "scomp.wasm", wasm, vec![], fake_component());
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
                 .await;
@@ -554,7 +566,8 @@ mod test {
 
         assert!(env.supports_trigger_type(&non_existent_trigger));
 
-        let component = crate::ComponentToValidate::new("comp", "comp.wasm", wasm, vec![]);
+        let component =
+            crate::ComponentToValidate::new("comp", "comp.wasm", wasm, vec![], fake_component());
         let errs = crate::validate_component_against_environments(
             &[env],
             &non_existent_trigger,
@@ -591,6 +604,7 @@ mod test {
             "cscomp.wasm",
             wasm,
             vec!["nice_cup_of_tea".to_string()],
+            fake_component(),
         );
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
@@ -609,7 +623,13 @@ mod test {
 
         let env = target_simple_world(&wit_path);
 
-        let component = crate::ComponentToValidate::new("nscomp", "nscomp.wasm", wasm, vec![]);
+        let component = crate::ComponentToValidate::new(
+            "nscomp",
+            "nscomp.wasm",
+            wasm,
+            vec![],
+            fake_component(),
+        );
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
                 .await;
@@ -641,7 +661,13 @@ mod test {
 
         let env = target_simple_world(&wit_path);
 
-        let component = crate::ComponentToValidate::new("tdscomp", "tdscomp.wasm", wasm, vec![]);
+        let component = crate::ComponentToValidate::new(
+            "tdscomp",
+            "tdscomp.wasm",
+            wasm,
+            vec![],
+            fake_component(),
+        );
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
                 .await;
@@ -673,6 +699,7 @@ mod test {
             "cscomp.wasm",
             wasm,
             vec!["nice_cup_of_tea".to_string()],
+            fake_component(),
         );
         let errs =
             crate::validate_component_against_environments(&[env], &"s".to_owned(), &component)
@@ -685,6 +712,156 @@ mod test {
             "unexpected error {err}"
         );
         assert!(err.contains("nice_cup_of_tea"), "unexpected error {err}");
+    }
+
+    #[tokio::test]
+    async fn unsupported_kv_store_invalidates_component() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+
+        let mut env = target_simple_world_unarced(&wit_path);
+        env.configuration_constraints = ConfigurationConstraints {
+            key_value_stores: Some(vec!["the-only-kv".into()]),
+            sqlite_databases: None,
+            ai_models: None,
+        };
+
+        let mut manifest = fake_component();
+        manifest.key_value_stores = vec!["the-kv-i-need".into()];
+
+        let component =
+            crate::ComponentToValidate::new("cscomp", "cscomp.wasm", wasm, vec![], manifest);
+        let errs = crate::validate_component_against_environments(
+            &[Arc::new(env)],
+            &"s".to_owned(),
+            &component,
+        )
+        .await;
+        assert!(!errs.is_empty());
+
+        let err = errs[0].to_string();
+        assert!(
+            err.contains("Component cscomp can't run in environment test"),
+            "unexpected error {err}"
+        );
+        assert!(err.contains("key-value store"), "unexpected error {err}");
+        assert!(err.contains("the-kv-i-need"), "unexpected error {err}");
+    }
+
+    #[tokio::test]
+    async fn supported_kv_store_does_not_invalidates_component() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+
+        let mut env = target_simple_world_unarced(&wit_path);
+        env.configuration_constraints = ConfigurationConstraints {
+            key_value_stores: Some(vec!["default".into()]),
+            sqlite_databases: None,
+            ai_models: None,
+        };
+
+        let mut manifest = fake_component();
+        manifest.key_value_stores = vec!["default".into()];
+
+        let component =
+            crate::ComponentToValidate::new("cscomp", "cscomp.wasm", wasm, vec![], manifest);
+        let errs = crate::validate_component_against_environments(
+            &[Arc::new(env)],
+            &"s".to_owned(),
+            &component,
+        )
+        .await;
+        assert!(errs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn omitted_configuration_allows_all() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+
+        let mut env = target_simple_world_unarced(&wit_path);
+        env.configuration_constraints = ConfigurationConstraints {
+            key_value_stores: None,
+            sqlite_databases: None,
+            ai_models: None,
+        };
+
+        let mut manifest = fake_component();
+        manifest.key_value_stores = vec!["default".into()];
+        manifest.sqlite_databases = vec!["spork".into(), "floop".into()];
+        manifest.ai_models = vec!["beep-boop".into()];
+
+        let component =
+            crate::ComponentToValidate::new("cscomp", "cscomp.wasm", wasm, vec![], manifest);
+        let errs = crate::validate_component_against_environments(
+            &[Arc::new(env)],
+            &"s".to_owned(),
+            &component,
+        )
+        .await;
+        assert!(errs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn empty_configuration_allows_all() {
+        let wit_path = PathBuf::from(SIMPLE_WIT_DIR);
+
+        let wit_text = tokio::fs::read_to_string(wit_path.join("world.wit"))
+            .await
+            .unwrap();
+        let wasm = generate_dummy_component(&wit_text, "spin:test/simple@1.0.0");
+
+        let mut env = target_simple_world_unarced(&wit_path);
+        env.configuration_constraints = ConfigurationConstraints {
+            key_value_stores: Some(vec![]),
+            sqlite_databases: Some(vec![]),
+            ai_models: Some(vec![]),
+        };
+
+        let mut manifest = fake_component();
+        manifest.key_value_stores = vec!["default".into()];
+        manifest.sqlite_databases = vec!["spork".into(), "floop".into()];
+        manifest.ai_models = vec!["beep-boop".into()];
+
+        let component =
+            crate::ComponentToValidate::new("cscomp", "cscomp.wasm", wasm, vec![], manifest);
+        let errs = crate::validate_component_against_environments(
+            &[Arc::new(env)],
+            &"s".to_owned(),
+            &component,
+        )
+        .await;
+        assert!(!errs.is_empty());
+
+        let errs = errs.into_iter().map(|e| e.to_string()).collect::<Vec<_>>();
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("key-value store") && e.contains("default"))
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("SQLite database") && e.contains("spork"))
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("SQLite database") && e.contains("floop"))
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.contains("AI model") && e.contains("beep-boop"))
+        );
     }
 
     fn generate_dummy_component(wit: &str, world: &str) -> Vec<u8> {
