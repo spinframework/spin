@@ -16,5 +16,5 @@ component = "{{project-name | kebab_case}}"
 source = "main.wasm"
 allowed_outbound_hosts = []
 [component.{{project-name | kebab_case}}.build]
-command = "$WASI_SDK_PATH/bin/wasm32-wasip2-clang --sysroot=$WASI_SDK_PATH/share/wasi-sysroot main.c bindings/http_trigger.c bindings/http_trigger_component_type.o -mexec-model=reactor -o main.wasm"
-watch = ["**/*.c"]
+command = "$WASI_SDK_PATH/bin/clang++ --sysroot=$WASI_SDK_PATH/share/wasi-sysroot -fno-exceptions -std=c++23 -I bindings -target wasm32-wasip2 main.cpp bindings/http_trigger.cpp bindings/http_trigger_component_type.o -mexec-model=reactor -o main.wasm"
+watch = ["**/*.cpp"]
