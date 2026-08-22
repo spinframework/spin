@@ -212,6 +212,11 @@ wit-parser = "0.247.0"
 
 spin-componentize = { path = "crates/componentize" }
 
+[profile.bulk-test]
+inherits = "release"
+debug-assertions = true
+overflow-checks = true
+
 [workspace.lints.clippy]
 # TODO: Remove this once https://github.com/rust-lang/rust-clippy/issues/12281 is resolved
 blocks_in_conditions = "allow"
