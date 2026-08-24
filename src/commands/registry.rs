@@ -1,6 +1,6 @@
 use crate::{directory_rels::notify_if_nondefault_rel, opts::*};
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use spin_common::arg_parser::parse_kv;
 use spin_oci::{Client, ComposeMode, client::InferPredefinedAnnotations};
@@ -60,7 +60,19 @@ pub struct Push {
     /// different Spin runtime hosts. Turning composition off can optimise
     /// bandwidth for shared dependencies, but makes the pushed image incompatible
     /// with hosts that cannot carry out composition themselves.
-    #[clap(long, default_value_t = true)]
+    ///
+    /// To turn composition off, pass the value with an equals sign:
+    /// `--compose=false`. The space-separated form `--compose false` is not
+    /// accepted.
+    #[clap(
+        long,
+        action = ArgAction::Set,
+        num_args = 0..=1,
+        require_equals = true,
+        default_value_t = true,
+        default_missing_value = "true",
+        value_parser = clap::builder::BoolishValueParser::new(),
+    )]
     pub compose: bool,
 
     /// Specifies to perform `spin build` (with the default options) before pushing the application.
@@ -241,4 +253,44 @@ fn create_dotted_spinner(interval: u64, message: String) -> ProgressBar {
     );
     spinner.set_message(message);
     spinner
+}
+
+#[cfg(test)]
+mod test {
+    use super::Push;
+    use clap::Parser;
+
+    const REFERENCE: &str = "ghcr.io/example/test:v1";
+
+    fn push_from(args: &[&str]) -> Result<Push, clap::Error> {
+        Push::try_parse_from(std::iter::once("push").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn parses_every_accepted_compose_form() {
+        for (args, expected) in [
+            (vec![REFERENCE], true),
+            (vec!["--compose", REFERENCE], true),
+            (vec!["--compose=true", REFERENCE], true),
+            (vec!["--compose=false", REFERENCE], false),
+        ] {
+            let push = push_from(&args)
+                .unwrap_or_else(|e| panic!("Failed to parse {args:?}: {}", e.kind()));
+            assert_eq!(push.compose, expected, "wrong compose for {args:?}");
+            assert_eq!(
+                push.reference, REFERENCE,
+                "reference not intact for {args:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_space_separated_compose_value() {
+        for args in [
+            vec!["--compose", "true", REFERENCE],
+            vec!["--compose", "false", REFERENCE],
+        ] {
+            push_from(&args).expect_err(&format!("{args:?} should have been rejected"));
+        }
+    }
 }
