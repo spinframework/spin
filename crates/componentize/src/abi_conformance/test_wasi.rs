@@ -234,12 +234,11 @@ pub(crate) async fn test(
             let dir = tempfile::tempdir()?;
             let mut file = File::create(dir.path().join("foo.txt"))?;
             file.write_all(message.as_bytes())?;
-            let perms = wasmtime_wasi::DirPerms::all();
-            let file_perms = wasmtime_wasi::FilePerms::all();
+            let perms = wasmtime_wasi::FsPerms::ReadWrite;
 
             let mut store = super::create_store_with_wasi(engine, test_config.clone(), |wasi| {
                 wasi.stdout(stdout.clone())
-                    .preopened_dir(dir.path(), "/", perms, file_perms)
+                    .preopened_dir(dir.path(), "/", perms)
                     .unwrap();
             });
 
@@ -263,11 +262,10 @@ pub(crate) async fn test(
             for &name in &names {
                 File::create(dir.path().join(name))?;
             }
-            let perms = wasmtime_wasi::DirPerms::all();
-            let file_perms = wasmtime_wasi::FilePerms::all();
+            let perms = wasmtime_wasi::FsPerms::ReadWrite;
             let mut store = super::create_store_with_wasi(engine, test_config.clone(), |wasi| {
                 wasi.stdout(stdout.clone())
-                    .preopened_dir(dir.path(), "/", perms, file_perms)
+                    .preopened_dir(dir.path(), "/", perms)
                     .unwrap();
             });
 
@@ -292,12 +290,11 @@ pub(crate) async fn test(
             let mut file = File::create(dir.path().join("foo.txt"))?;
             file.write_all(message.as_bytes())?;
             let metadata = file.metadata()?;
-            let perms = wasmtime_wasi::DirPerms::all();
-            let file_perms = wasmtime_wasi::FilePerms::all();
+            let perms = wasmtime_wasi::FsPerms::ReadWrite;
 
             let mut store = super::create_store_with_wasi(engine, test_config.clone(), |wasi| {
                 wasi.stdout(stdout.clone())
-                    .preopened_dir(dir.path(), "/", perms, file_perms)
+                    .preopened_dir(dir.path(), "/", perms)
                     .unwrap();
             });
 

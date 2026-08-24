@@ -39,6 +39,7 @@ mod bindings {
             "wasi:sockets/types.[method]tcp-socket.listen": async | store | trappable,
             "wasi:sockets/types.[method]tcp-socket.send": store | trappable,
             "wasi:sockets/types.[method]tcp-socket.receive": store | trappable,
+            "wasi:sockets/types.[static]udp-socket.create": async | trappable,
             "wasi:sockets/types.[method]udp-socket.bind": async | trappable,
             "wasi:sockets/types.[method]udp-socket.connect": async | trappable,
             default: trappable,
@@ -699,16 +700,15 @@ impl<T> wasi::sockets::types::HostUdpSocket for SpinSocketsView<'_, T> {
         )
     }
 
-    fn create(
+    async fn create(
         &mut self,
         address_family: wasi::sockets::types::IpAddressFamily,
     ) -> wasmtime::Result<
         Result<Resource<wasi::sockets::types::UdpSocket>, wasi::sockets::types::ErrorCode>,
     > {
-        convert_result(latest::sockets::types::HostUdpSocket::create(
-            self,
-            address_family.into(),
-        ))
+        convert_result(
+            latest::sockets::types::HostUdpSocket::create(self, address_family.into()).await,
+        )
     }
 
     fn disconnect(
