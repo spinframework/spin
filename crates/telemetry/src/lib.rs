@@ -5,6 +5,7 @@ use env::otel_logs_enabled;
 use env::otel_metrics_enabled;
 use env::otel_tracing_enabled;
 use opentelemetry_sdk::propagation::TraceContextPropagator;
+use opentelemetry_sdk::resource::ResourceDetector;
 use tracing_subscriber::{EnvFilter, Layer, fmt, prelude::*, registry};
 
 mod alert_in_dev;
@@ -100,7 +101,11 @@ pub fn init(spin_version: String, histogram_buckets: Vec<HistogramBuckets>) -> a
     opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 
     if otel_metrics_enabled() {
-        let meter_provider = metrics::metrics_provider(spin_version.clone(), histogram_buckets)
+        // Initialize and register the global OTel meter provider.
+        let resource_detectors: Vec<Box<dyn ResourceDetector>> = vec![Box::new(
+            detector::SpinResourceDetector::new(spin_version.clone()),
+        )];
+        let meter_provider = metrics::metrics_provider(None, resource_detectors, histogram_buckets)
             .context("failed to initialize otel metrics")?;
         opentelemetry::global::set_meter_provider(meter_provider);
     }
