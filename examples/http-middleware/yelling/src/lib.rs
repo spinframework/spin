@@ -7,12 +7,6 @@ use futures::{SinkExt, StreamExt};
 /// A middleware component to (naively) convert all responses to upper case.
 #[http_service]
 async fn yell_it(request: Request) -> anyhow::Result<impl IntoResponse> {
-    // Certain headers are forbidden, so we need to remove them
-    let (mut parts, body) = request.into_parts();
-    parts.headers.remove("connection");
-    parts.headers.remove("host");
-    let request = Request::from_parts(parts, body);
-
     // Pass the request on down the middleware pipeline.
     let response = spin_sdk::http::next(request).await?;
 
