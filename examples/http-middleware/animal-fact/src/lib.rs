@@ -13,10 +13,7 @@ async fn add_animal_fact_header(
     let animal_fact: AnimalFact = serde_json::from_slice(&animal_fact_json).unwrap();
 
     // Add a header to the request being passed along the pipeline.
-    // Certain headers are forbidden, so we need to remove them as well.
     let (mut parts, body) = request.into_parts();
-    parts.headers.remove("connection");
-    parts.headers.remove("host");
     parts.headers.append(
         "animal-fact",
         HeaderValue::from_str(&animal_fact.fact).unwrap(),
