@@ -126,6 +126,16 @@ impl OciLoader {
             dep.source.content = content_ref(dep_wasm_path)?;
         }
 
+        // Applications pushed without composition carry their trigger dependencies
+        // (e.g. HTTP middleware) as layers of their own, so those need resolving too.
+        for deps in component.trigger_dependencies.values_mut() {
+            for dep in deps {
+                let dep_wasm_digest = content_digest(&dep.source.content)?;
+                let dep_wasm_path = cache.wasm_file(dep_wasm_digest)?;
+                dep.source.content = content_ref(dep_wasm_path)?;
+            }
+        }
+
         if !component.files.is_empty() {
             let mount_dir = self.working_dir.join("assets").join(&component.id);
             for file in &mut component.files {
