@@ -156,8 +156,8 @@ impl Client {
         )
         .await?;
 
-        // Ensure that all Spin components specify valid wasm binaries in both the `source`
-        // field and for each dependency.
+        // Ensure that all Spin components specify valid wasm binaries for the `source`
+        // field, each dependency, and each trigger dependency.
         for locked_component in &locked.components {
             validate::ensure_wasms(locked_component).await?;
         }
