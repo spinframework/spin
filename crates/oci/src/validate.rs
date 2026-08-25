@@ -2,8 +2,8 @@ use anyhow::{Context, Result, bail};
 use spin_common::{ui::quoted_path, url::parse_file_url};
 use spin_locked_app::locked::{LockedComponent, LockedComponentSource};
 
-/// Validate that all Spin components specify valid wasm binaries in both the `source`
-/// field and for each dependency.
+/// Validate that all Spin components specify valid wasm binaries in the `source`
+/// field and for each dependency and trigger dependency.
 pub async fn ensure_wasms(component: &LockedComponent) -> Result<()> {
     // Ensure that the component source is a valid wasm binary.
     let bytes = read_component_source(&component.source).await?;
@@ -23,6 +23,20 @@ pub async fn ensure_wasms(component: &LockedComponent) -> Result<()> {
                 dep_name,
                 component.id,
             );
+        }
+    }
+
+    // Ensure that each trigger dependency is a valid wasm binary.
+    for (role, deps) in &component.trigger_dependencies {
+        for dep in deps {
+            let bytes = read_component_source(&dep.source).await?;
+            if !is_wasm_binary(&bytes) {
+                bail!(
+                    "trigger dependency {} for component {} is not a valid .wasm file",
+                    role,
+                    component.id,
+                );
+            }
         }
     }
     Ok(())
@@ -93,6 +107,28 @@ mod test {
             };
         }
 
+        macro_rules! make_locked_with_trigger_dep {
+            ($source:literal, $role:literal=$dep_path:literal) => {
+                from_json!({
+                    "id": "jiggs",
+                    "source": {
+                        "content_type": "application/wasm",
+                        "source": file_url(working_dir.path().join($source)),
+                        "digest": "digest",
+                    },
+                    "trigger_dependencies": {
+                        $role: [{
+                            "source": {
+                                "content_type": "application/wasm",
+                                "source": file_url(working_dir.path().join($dep_path)),
+                                "digest": "digest",
+                            },
+                        }]
+                    }
+                })
+            };
+        }
+
         let make_file = async |name, content| {
             let path = working_dir.path().join(name);
 
@@ -156,6 +192,22 @@ mod test {
             TestCase {
                 name: "Valid Spin component with invalid wasm dependency",
                 locked_component: make_locked!("component.wasm", "test:comp2" = "invalid.wasm"),
+                valid: false,
+            },
+            TestCase {
+                name: "Valid Spin component with wasm trigger dependency",
+                locked_component: make_locked_with_trigger_dep!(
+                    "component.wasm",
+                    "middleware" = "component.wasm"
+                ),
+                valid: true,
+            },
+            TestCase {
+                name: "Valid Spin component with invalid wasm trigger dependency",
+                locked_component: make_locked_with_trigger_dep!(
+                    "component.wasm",
+                    "middleware" = "invalid.wasm"
+                ),
                 valid: false,
             },
         ];
