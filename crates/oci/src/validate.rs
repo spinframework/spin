@@ -32,8 +32,13 @@ pub async fn ensure_wasms(component: &LockedComponent) -> Result<()> {
             let bytes = read_component_source(&dep.source).await?;
             if !is_wasm_binary(&bytes) {
                 bail!(
-                    "trigger dependency {} for component {} is not a valid .wasm file",
+                    "{} trigger dependency {} for component {} is not a valid .wasm file",
                     role,
+                    dep.source
+                        .content
+                        .source
+                        .as_deref()
+                        .unwrap_or("<unknown source>"),
                     component.id,
                 );
             }
