@@ -19,7 +19,9 @@ use spin_common::url::parse_file_url;
 use spin_compose::ComponentSourceLoaderFs;
 use spin_loader::FilesMountStrategy;
 use spin_loader::cache::Cache;
-use spin_locked_app::locked::{ContentPath, ContentRef, LockedApp, LockedComponent};
+use spin_locked_app::locked::{
+    ContentPath, ContentRef, LockedApp, LockedComponent, LockedComponentDependency,
+};
 use tokio::fs;
 use walkdir::WalkDir;
 
@@ -154,8 +156,8 @@ impl Client {
         )
         .await?;
 
-        // Ensure that all Spin components specify valid wasm binaries in both the `source`
-        // field and for each dependency.
+        // Ensure that all Spin components specify valid wasm binaries for the `source`
+        // field, each dependency, and each trigger dependency.
         for locked_component in &locked.components {
             validate::ensure_wasms(locked_component).await?;
         }
@@ -332,23 +334,15 @@ impl Client {
 
             layers.push(layer);
 
-            let mut deps = BTreeMap::default();
-            for (dep_name, mut dep) in c.dependencies {
-                let source = dep
-                    .source
-                    .content
-                    .source
-                    .context("dependency loaded from disk should contain a file source")?;
-                let source = parse_file_url(source.as_str())?;
-
-                let layer = Self::wasm_layer(&source).await?;
-
-                dep.source.content = self.content_ref_for_layer(&layer);
-                deps.insert(dep_name, dep);
-
-                layers.push(layer);
+            for dep in c.dependencies.values_mut() {
+                self.assemble_dependency_layer(dep, &mut layers).await?;
             }
-            c.dependencies = deps;
+
+            for deps in c.trigger_dependencies.values_mut() {
+                for dep in deps {
+                    self.assemble_dependency_layer(dep, &mut layers).await?;
+                }
+            }
 
             c.files = self
                 .assemble_content_layers(assembly_mode, &mut layers, c.files.as_slice())
@@ -357,6 +351,29 @@ impl Client {
         }
 
         Ok((layers, components))
+    }
+
+    /// Push the Wasm module for a component dependency as a layer, and update the
+    /// dependency to refer to that layer rather than to its on-disk source.
+    async fn assemble_dependency_layer(
+        &self,
+        dep: &mut LockedComponentDependency,
+        layers: &mut Vec<ImageLayer>,
+    ) -> Result<()> {
+        let source = dep
+            .source
+            .content
+            .source
+            .as_ref()
+            .context("dependency loaded from disk should contain a file source")?;
+        let source = parse_file_url(source.as_str())?;
+
+        let layer = Self::wasm_layer(&source).await?;
+
+        dep.source.content = self.content_ref_for_layer(&layer);
+        layers.push(layer);
+
+        Ok(())
     }
 
     async fn assemble_layers_composed(
@@ -1280,6 +1297,33 @@ mod test {
                 compose_mode: ComposeMode::Skip,
             },
             TestCase {
+                name: "One component layer and one trigger dependency layer skipping composition",
+                opts: Some(ClientOpts {
+                    content_ref_inline_max_size: 0,
+                }),
+                locked_components: from_json!([{
+                "id": "component1",
+                "source": {
+                    "content_type": "application/wasm",
+                    "source": file_url(working_dir.path().join("component1.wasm")),
+                    "digest": "digest",
+                },
+                "trigger_dependencies": {
+                    "middleware": [{
+                        "source": {
+                            "content_type": "application/wasm",
+                            "source": file_url(working_dir.path().join("component2.wasm")),
+                            "digest": "digest",
+                        },
+                        "export": null,
+                    }]
+                }
+                }]),
+                expected_layer_count: 2,
+                expected_error: None,
+                compose_mode: ComposeMode::Skip,
+            },
+            TestCase {
                 name: "Component has no source",
                 opts: None,
                 locked_components: from_json!([{
@@ -1433,6 +1477,82 @@ mod test {
                 }
             }
         }
+    }
+
+    /// Regression test: when composition is skipped, a component's trigger dependencies
+    /// (e.g. HTTP middleware) must be pushed as layers in their own right. Previously
+    /// they were published still pointing at the pushing machine's filesystem, which made
+    /// the resulting image unusable anywhere else.
+    #[tokio::test]
+    async fn skipping_composition_pushes_trigger_dependency_layers() {
+        use tokio::io::AsyncWriteExt;
+
+        let working_dir = tempfile::tempdir().unwrap();
+
+        for name in ["component1.wasm", "middleware.wasm"] {
+            let mut f = tokio::fs::File::create(working_dir.path().join(name))
+                .await
+                .expect("should create wasm file");
+            f.write_all(name.as_bytes())
+                .await
+                .expect("should write wasm contents");
+        }
+
+        let mut locked = LockedApp {
+            spin_lock_version: Default::default(),
+            components: from_json!([{
+                "id": "component1",
+                "source": {
+                    "content_type": "application/wasm",
+                    "source": file_url(working_dir.path().join("component1.wasm")),
+                    "digest": "digest",
+                },
+                "trigger_dependencies": {
+                    "middleware": [{
+                        "source": {
+                            "content_type": "application/wasm",
+                            "source": file_url(working_dir.path().join("middleware.wasm")),
+                            "digest": "digest",
+                        },
+                        "export": null,
+                    }]
+                }
+            }]),
+            triggers: Default::default(),
+            metadata: Default::default(),
+            variables: Default::default(),
+            must_understand: Default::default(),
+            host_requirements: Default::default(),
+        };
+
+        let mut client = Client::new(false, Some(working_dir.path().to_path_buf()))
+            .await
+            .expect("should create new client");
+        client.opts = ClientOpts {
+            content_ref_inline_max_size: 0,
+        };
+
+        let layers = client
+            .assemble_layers(&mut locked, AssemblyMode::Simple, ComposeMode::Skip)
+            .await
+            .expect("should assemble layers");
+
+        assert_eq!(
+            2,
+            layers.len(),
+            "expected one layer for the component and one for its trigger dependency"
+        );
+
+        let dep = &locked.components[0].trigger_dependencies["middleware"][0];
+        assert!(
+            dep.source.content.source.is_none(),
+            "trigger dependency should no longer refer to a local file, but got {:?}",
+            dep.source.content.source
+        );
+        assert!(
+            dep.source.content.digest.is_some(),
+            "trigger dependency should refer to its pushed layer by digest"
+        );
     }
 
     fn generate_dummy_component(wit: &str, world: &str) -> Vec<u8> {
