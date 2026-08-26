@@ -261,9 +261,18 @@ jobs:
       - name: create GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
+          # Generate release notes, truncating to GitHub's 125,000 character limit
+          notes=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name=${{ github.ref_name }} \
+            --jq '.body')
+          max_chars=124000
+          if [ ${#notes} -gt $max_chars ]; then
+            notes="${notes:0:$max_chars}"$'\n\n_(Release notes truncated due to length limit)_'
+          fi
           gh release create ${{ github.ref_name }} _dist/* \
             --title ${{ github.ref_name }} \
-            --generate-notes ${{ env.PRERELEASE }}
+            --notes "$notes" \
+            ${{ env.PRERELEASE }}
 
   push-templates-tag:
     runs-on: ubuntu-latest
