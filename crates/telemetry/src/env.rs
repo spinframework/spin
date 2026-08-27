@@ -1,4 +1,4 @@
-use std::env::VarError;
+use std::{env::VarError, sync::OnceLock};
 
 use opentelemetry_otlp::{
     OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
@@ -47,11 +47,16 @@ pub fn otel_metrics_enabled() -> bool {
 /// - `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`
 ///
 /// Note that this is overridden if OTEL_SDK_DISABLED is set and not empty.
+///
+/// The result is cached after the first call because this is checked on every guest log write.
 pub fn otel_logs_enabled() -> bool {
-    any_vars_set(&[
-        OTEL_EXPORTER_OTLP_ENDPOINT,
-        OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
-    ]) && !otel_sdk_disabled()
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| {
+        any_vars_set(&[
+            OTEL_EXPORTER_OTLP_ENDPOINT,
+            OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+        ]) && !otel_sdk_disabled()
+    })
 }
 
 /// Returns a boolean indicating if the compatibility layer that emits tracing events from
