@@ -99,7 +99,7 @@ pub struct HttpServer<F: RuntimeFactors> {
     /// The app being triggered.
     trigger_app: Arc<TriggerApp<F>>,
     /// The application name, resolved once for use as the `app_id` telemetry attribute.
-    app_id: String,
+    app_id: Arc<str>,
     // Component ID -> component trigger config
     component_trigger_configs: HashMap<spin_http::routes::TriggerLookupKey, HttpTriggerConfig>,
     // Component ID -> handler type
@@ -160,10 +160,11 @@ impl<F: RuntimeFactors> HttpServer<F> {
 
         let trigger_app = Arc::new(trigger_app);
 
-        let app_id = trigger_app
+        let app_id: Arc<str> = trigger_app
             .app()
             .get_metadata(APP_NAME_KEY)?
-            .unwrap_or_else(|| "<unnamed>".into());
+            .unwrap_or_else(|| "<unnamed>".into())
+            .into();
 
         let component_handler_types = component_trigger_configs
             .iter()
