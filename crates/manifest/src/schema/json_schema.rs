@@ -30,6 +30,8 @@ pub struct HttpTriggerSchema {
     /// `components = { ... }`
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     pub components: Map<String, OneOrManyComponentSpecs>,
+    /// `static_response = { ... }`
+    pub static_response: Option<StaticResponseSchema>,
     /// `dependencies.middleware = { ... }`
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     pub dependencies: Map<String, TriggerDependencies>,
@@ -72,6 +74,19 @@ pub enum HttpRouteSchema {
 pub struct HttpPrivateEndpoint {
     /// Whether the private endpoint is private. This must be true.
     pub private: bool,
+}
+
+#[allow(dead_code)]
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct StaticResponseSchema {
+    /// The status code for the static response. Default is 200.
+    status_code: Option<u16>,
+    #[serde(default)]
+    /// The headers for the static response. Default is an empty map.
+    headers: Map<String, String>,
+    /// The body of the static response. Default is an empty body.
+    body: Option<String>,
 }
 
 #[allow(dead_code)]
