@@ -12,6 +12,10 @@ pub mod v2;
 pub(crate) mod common;
 mod json_schema;
 
+// Serde serialise-deserialise modules
+mod kebab_or_snake_case;
+mod one_or_many;
+
 #[derive(Deserialize)]
 pub(crate) struct VersionProbe {
     #[serde(alias = "spin_version")]
