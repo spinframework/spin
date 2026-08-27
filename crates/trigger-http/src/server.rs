@@ -363,7 +363,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         spin_telemetry::metrics::counter!(
             spin.request_count = 1,
             trigger_type = "http",
-            app_id = self.app_id.as_str(),
+            app_id = self.app_id.clone(),
             component_id = lookup_key.to_string()
         );
 
