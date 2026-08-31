@@ -10,6 +10,8 @@ use thiserror::Error;
 use wac_graph::types::{Package, SubtypeChecker, WorldId};
 use wac_graph::{CompositionGraph, NodeId};
 
+pub mod middleware;
+
 pub use spin_capabilities::InheritConfiguration;
 
 /// Composes a Spin AppComponent using the dependencies specified in the
