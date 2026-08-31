@@ -8,6 +8,7 @@ license = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 spin-common = { path = "../common" }
 spin-dependency-wit = { path = "../dependency-wit" }
 spin-environments = { path = "../environments" }

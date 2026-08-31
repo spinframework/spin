@@ -4,7 +4,11 @@ use clap::{ArgAction, Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use spin_common::arg_parser::parse_kv;
 use spin_oci::{Client, ComposeMode, client::InferPredefinedAnnotations};
-use std::{io::Read, path::PathBuf, time::Duration};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 /// Commands for working with OCI registries to distribute applications.
 #[derive(Subcommand, Debug)]
@@ -81,12 +85,22 @@ pub struct Push {
 
     /// Reference in the registry of the Spin application.
     /// This is a string whose format is defined by the registry standard, and generally consists of <registry>/<username>/<application-name>:<version>. E.g. ghcr.io/ogghead/spin-test-app:0.1.0
+    ///
+    /// When pushing a standalone component manifest (component.toml), the
+    /// reference is derived from the manifest (`namespace:name@version`) and
+    /// this argument is not required.
     #[clap()]
-    pub reference: String,
+    pub reference: Option<String>,
 
     /// Cache directory for downloaded registry data.
     #[clap(long, value_hint = clap::ValueHint::DirPath)]
     pub cache_dir: Option<PathBuf>,
+
+    /// The registry to publish to, overriding the namespace-to-registry mapping
+    /// in the wasm-pkg configuration. Only applies when pushing a standalone
+    /// component manifest (component.toml). E.g. ghcr.io
+    #[clap(long)]
+    pub registry: Option<String>,
 
     /// Specifies the OCI image manifest annotations (in key=value format).
     /// Any existing value will be overwritten. Can be used multiple times.
@@ -97,7 +111,7 @@ pub struct Push {
 impl Push {
     pub async fn run(self) -> Result<()> {
         let (app_file, distance) =
-            spin_common::paths::find_manifest_file_path(self.app_source.as_ref())?;
+            spin_common::paths::find_app_or_component_manifest_file_path(self.app_source.as_ref())?;
         notify_if_nondefault_rel(&app_file, distance);
 
         if self.build {
@@ -106,11 +120,31 @@ impl Push {
             spin_build::warn_if_not_latest_build(&app_file, self.profile());
         }
 
+        // A standalone component manifest (component.toml) is published as a
+        // wasm-pkg component package rather than as a Spin application.
+        let manifest_text = std::fs::read_to_string(&app_file)
+            .with_context(|| format!("failed to read manifest from {}", app_file.display()))?;
+        if spin_manifest::is_component_manifest(&manifest_text) {
+            return self.push_component(&app_file).await;
+        }
+
         let annotations = if self.annotations.is_empty() {
             None
         } else {
             Some(self.annotations.iter().cloned().collect())
         };
+
+        anyhow::ensure!(
+            self.registry.is_none(),
+            "`--registry` is only supported when pushing a component manifest; \
+             for a Spin application, include the registry in the reference \
+             (for example `ghcr.io/example/app:0.1.0`)"
+        );
+
+        let reference = self.reference.as_deref().context(
+            "a registry reference is required when pushing a Spin application \
+             (for example `ghcr.io/example/app:0.1.0`)",
+        )?;
 
         let mut client = spin_oci::Client::new(self.insecure, self.cache_dir.clone()).await?;
 
@@ -126,16 +160,60 @@ impl Push {
             .push(
                 &app_file,
                 self.profile(),
-                &self.reference,
+                reference,
                 annotations,
                 InferPredefinedAnnotations::All,
                 compose_mode,
             )
             .await?;
         match digest {
-            Some(digest) => println!("Pushed with digest {digest}"),
+            Some(digest) => println!("Pushed app with digest {digest}"),
             None => println!("Pushed; the registry did not return the digest"),
         };
+
+        Ok(())
+    }
+
+    /// Publish a standalone component manifest (`component.toml`) as a
+    /// wasm-pkg component package.
+    async fn push_component(&self, manifest_path: &Path) -> Result<()> {
+        anyhow::ensure!(
+            self.reference.is_none(),
+            "a registry reference must not be supplied when pushing a component manifest; \
+             the package reference is derived from the manifest's `namespace`, `name`, and \
+             `version`"
+        );
+
+        let manifest = spin_manifest::component_manifest_from_file(manifest_path)
+            .context("failed to load component manifest")?;
+
+        let source_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+        let source_path = source_dir.join(&manifest.component.source);
+        anyhow::ensure!(
+            source_path.is_file(),
+            "component source {} does not exist; build the component first (for example `spin registry push --build`)",
+            source_path.display()
+        );
+
+        let _spinner =
+            create_dotted_spinner(2000, "Pushing component to the Registry".to_owned());
+
+        let registry = self.registry.as_deref().context(
+            "a registry is required when pushing a component manifest; pass `--registry` \
+             with the namespace as the last path segment (for example \
+             `--registry ghcr.io/my-namespace`)",
+        )?;
+
+        let pushed = spin_oci::publish_component(
+            &manifest.component.name,
+            &manifest.component.version,
+            registry,
+            &source_path,
+        )
+        .await
+        .context("failed to push component to the registry")?;
+
+        println!("Pushed component {pushed}");
 
         Ok(())
     }
@@ -144,6 +222,7 @@ impl Push {
         self.profile.as_deref()
     }
 }
+
 
 #[derive(Parser, Debug)]
 pub struct Pull {

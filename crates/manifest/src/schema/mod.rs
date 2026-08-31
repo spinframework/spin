@@ -1,7 +1,10 @@
-//! Serialization types for the Spin manifest file format (spin.toml).
+//! Serialization types for the Spin manifest file formats: the application
+//! manifest (`spin.toml`) and the standalone component manifest (`component.toml`).
 
 use serde::Deserialize;
 
+/// Serialization types for a standalone component manifest (`component.toml`).
+pub mod component;
 /// Serialization types for the Spin manifest V1.
 pub mod v1;
 /// Serialization types for the Spin manifest V2.

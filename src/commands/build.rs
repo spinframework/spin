@@ -58,7 +58,7 @@ pub struct BuildCommand {
 impl BuildCommand {
     pub async fn run(self) -> Result<()> {
         let (manifest_file, distance) =
-            spin_common::paths::find_manifest_file_path(self.app_source.as_ref())?;
+            spin_common::paths::find_app_or_component_manifest_file_path(self.app_source.as_ref())?;
         notify_if_nondefault_rel(&manifest_file, distance);
 
         spin_build::build(
