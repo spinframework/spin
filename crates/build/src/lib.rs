@@ -2,6 +2,7 @@
 
 //! A library for building Spin components.
 
+mod embed;
 mod manifest;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -82,6 +83,13 @@ pub async fn build(
     // If the build failed, exit with an error at this point.
     build_result?;
 
+    // For a standalone component manifest, embed the manifest (as JSON) into a
+    // custom section of the built Wasm so the metadata travels with the artifact.
+    if let Err(e) = embed_component_manifest(manifest_file, &app_dir).await {
+        terminal::warn!("Could not embed the component manifest into the built Wasm.");
+        tracing::warn!("Embedding component manifest failed: {e:#}");
+    }
+
     if let Err(e) = save_last_build_profile(&app_dir, profile) {
         tracing::warn!("Failed to save build profile: {e:?}");
     }
@@ -140,6 +148,33 @@ pub async fn build_default(
         cache_root,
     )
     .await
+}
+
+/// If `manifest_file` is a standalone component manifest (`component.toml`),
+/// serialize it to JSON and embed it into a custom section of its built Wasm
+/// artifact. Does nothing for application manifests, or if the built artifact
+/// does not (yet) exist.
+async fn embed_component_manifest(manifest_file: &Path, app_dir: &Path) -> Result<()> {
+    let manifest_text = tokio::fs::read_to_string(manifest_file).await?;
+    if !spin_manifest::is_component_manifest(&manifest_text) {
+        return Ok(());
+    }
+
+    let manifest = spin_manifest::component_manifest_from_str(&manifest_text)?;
+    let source = app_dir.join(&manifest.component.source);
+    if !source.is_file() {
+        // Nothing was built (for example, a manifest with no build command and
+        // no pre-built artifact), so there is nothing to embed into.
+        return Ok(());
+    }
+
+    embed::embed_component_manifest(&manifest, &source)?;
+    terminal::step!(
+        "Embedded",
+        "component manifest into {}",
+        quoted_path(&source)
+    );
+    Ok(())
 }
 
 fn components_to_build(

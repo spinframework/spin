@@ -3,11 +3,13 @@
 
 mod auth;
 pub mod client;
+pub mod component;
 mod loader;
 pub mod utils;
 mod validate;
 
 pub use client::{Client, ComposeMode};
+pub use component::publish_component;
 pub use loader::{ExecutableArtifact, OciLoader};
 
 /// URL scheme used for the locked app "origin" metadata field for OCI-sourced apps.
