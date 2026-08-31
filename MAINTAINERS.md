@@ -4,19 +4,20 @@
 
 _Listed in alphabetical order by first name_
 
-| Name | GitHub Username |
-| --- | --- |
-| Brian Hardock | fibonacci1729 |
-| Caleb Schoepp | calebschoepp |
-| Ivan Towlson | itowlson |
-| Joel Dice | dicej |
-| Kate Goldenring | kate-goldenring |
-| Lann Martin | lann |
-| Michelle Dhanani | michelleN |
-| Radu Matei | radu-matei |
-| Rajat Jindal | rajatjindal |
-| Ryan Levick | rylev |
-| Alex Crichton | alexcrichton |
+| Name | GitHub Username | Maintainer Type |
+| --- | --- | --- |
+| Alex Crichton | alexcrichton | Core Maintainer |
+| Brian Hardock | fibonacci1729 | Core Maintainer |
+| Caleb Schoepp | calebschoepp | Core Maintainer |
+| Ivan Towlson | itowlson | Core Maintainer |
+| Joel Dice | dicej | Core Maintainer |
+| Kate Goldenring | kate-goldenring | Core Maintainer |
+| Lann Martin | lann | Core Maintainer |
+| Michelle Dhanani | michelleN | Core Maintainer |
+| Radu Matei | radu-matei | Core Maintainer |
+| Rajat Jindal | rajatjindal | Core Maintainer |
+| Ryan Levick | rylev | Core Maintainer |
+| Zhiwei Liang | ChihweiLHBird | Maintainer |
 
 ## Emeritus Maintainers
 
