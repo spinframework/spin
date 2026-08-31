@@ -24,8 +24,6 @@ rustls-pki-types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 spin-app = { path = "../app" }
-spin-capabilities = { path = "../capabilities" }
-spin-componentize = { path = "../componentize" }
 spin-compose = { path = "../compose" }
 spin-core = { path = "../core" }
 spin-factor-otel = { path = "../factor-otel" }
@@ -42,7 +40,6 @@ terminal = { path = "../terminal" }
 tokio = { workspace = true, features = ["full"] }
 tokio-rustls = { workspace = true }
 tracing = { workspace = true }
-wac-graph = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
