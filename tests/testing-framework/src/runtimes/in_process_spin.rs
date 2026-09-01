@@ -50,6 +50,11 @@ impl InProcessSpin {
         Self { server }
     }
 
+    /// Return a weak reference to the in-process HTTP server.
+    pub fn weak_server(&self) -> std::sync::Weak<HttpServer<TriggerFactors>> {
+        Arc::downgrade(&self.server)
+    }
+
     /// Make an HTTP request to the Spin instance
     pub fn make_http_request(&self, req: Request<'_, &[u8]>) -> anyhow::Result<Response> {
         tokio::runtime::Runtime::new()?.block_on(async {

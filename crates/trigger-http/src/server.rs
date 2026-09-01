@@ -4,7 +4,7 @@ use std::{
     marker::PhantomData,
     net::SocketAddr,
     pin::Pin,
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, Weak},
     task::{Context, Poll},
     time::{Duration, Instant},
 };
@@ -799,13 +799,13 @@ impl<F: RuntimeFactors> WorkerState for HttpWorkerState<F> {
 pub(crate) struct HttpHandlerState<F: RuntimeFactors> {
     component_id: String,
     reuse_config: InstanceReuseConfig,
-    server: OnceLock<Arc<HttpServer<F>>>,
+    server: OnceLock<Weak<HttpServer<F>>>,
     self_scheme: OnceLock<Scheme>,
 }
 
 impl<F: RuntimeFactors> HttpHandlerState<F> {
     pub(crate) fn init_once(&self, server: &Arc<HttpServer<F>>, first_uri: &Uri) {
-        self.server.get_or_init(|| server.clone());
+        self.server.get_or_init(|| Arc::downgrade(server));
         if let Some(scheme) = first_uri.scheme() {
             self.self_scheme.get_or_init(|| scheme.clone());
         }
@@ -821,10 +821,13 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
         &self,
     ) -> wasmtime::Result<Instance<Self::StoreData, Self::WorkerExpiration, Self::WorkerState>>
     {
-        let (instance, mut store) = self
+        let server = self
             .server
             .get()
             .expect("server should have been set")
+            .upgrade()
+            .ok_or_else(|| wasmtime::format_err!("HTTP server is no longer available"))?;
+        let (instance, mut store) = server
             .trigger_instance_builder(&self.component_id, self.self_scheme.get())
             .to_wasmtime_result()?
             .instantiate(())
