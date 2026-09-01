@@ -121,7 +121,7 @@ These mirror the capability fields of a `spin.toml` component:
 | --- | --- |
 | `variables` | Configuration variables the component consumes. Each entry is a bare name, or `{ name, default, secret }`. |
 | `key_value_stores` | Key-value store labels the component accesses. |
-| `sql_variables` | SQLite database labels the component accesses. |
+| `sqlite_databases` | SQLite database labels the component accesses. |
 | `ai_models` | AI models the component accesses. |
 | `allowed_outbound_hosts` | Outbound network destinations the component is allowed to reach. |
 | `environments_variables` | Environment variables the component needs. Each entry is a bare name, or `{ name, default }`. |
