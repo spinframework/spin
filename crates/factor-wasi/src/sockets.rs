@@ -25,8 +25,8 @@ use wasmtime_wasi::{
 };
 
 /// Shared state for tracking per-socket semaphore permits. Permits are
-/// acquired when a socket is allocated (at `start_connect` for TCP, at
-/// `create_udp_socket` for UDP) and released when the socket resource is dropped.
+/// acquired when a socket is allocated and released when the socket resource
+/// is dropped.
 pub struct SocketPermitState {
     semaphore: ConnectionSemaphore,
     /// Active permits keyed by socket resource rep, released when the resource is dropped.
@@ -64,7 +64,7 @@ impl<T> std::ops::DerefMut for SpinSocketsView<'_, T> {
 }
 
 /// [`HasData`] accessor for [`SpinSocketsView`], used in place of [`WasiSockets`]
-/// when registering TCP socket bindings so that `start_connect` and `drop` can
+/// when registering TCP socket bindings so that socket creation and `drop` can
 /// participate in socket quota tracking.
 pub struct SpinSockets<T>(PhantomData<fn() -> T>);
 
@@ -141,22 +141,7 @@ impl<T> p2_tcp::HostTcpSocket for SpinSocketsView<'_, T> {
         network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> wasmtime_wasi::p2::SocketResult<()> {
-        let socket_rep = this.rep();
-        // Unlike outbound HTTP (which queues when its permit pool is exhausted),
-        // sockets fail immediately. Waiting would risk deadlock if a component
-        // holds sockets open across async yield points, and raw-socket callers
-        // are better positioned to implement their own retry logic.
-        let Ok(permit) = self.try_acquire() else {
-            tracing::warn!("TCP socket connection refused: connection quota exhausted");
-            return Err(SocketErrorCode::NewSocketLimit.into());
-        };
-        let result =
-            p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address);
-        if result.is_ok() {
-            self.register_permit(socket_rep, permit);
-        }
-        // On error, `permit` is dropped here, automatically releasing the semaphore slot.
-        result
+        p2_tcp::HostTcpSocket::start_connect(&mut self.inner, this, network, remote_address)
     }
 
     fn finish_connect(
@@ -369,7 +354,15 @@ impl<T> p2_tcp_create::Host for SpinSocketsView<'_, T> {
         &mut self,
         address_family: wasmtime_wasi::p2::bindings::sockets::network::IpAddressFamily,
     ) -> wasmtime_wasi::p2::SocketResult<Resource<TcpSocket>> {
-        p2_tcp_create::Host::create_tcp_socket(&mut self.inner, address_family)
+        // Unlike outbound HTTP, socket creation fails immediately when the
+        // quota is full. Waiting could deadlock a guest that keeps sockets open.
+        let Ok(permit) = self.try_acquire() else {
+            tracing::warn!("TCP socket creation refused: connection quota exhausted");
+            return Err(SocketErrorCode::NewSocketLimit.into());
+        };
+        let socket = p2_tcp_create::Host::create_tcp_socket(&mut self.inner, address_family)?;
+        self.register_permit(socket.rep(), permit);
+        Ok(socket)
     }
 }
 
@@ -539,9 +532,8 @@ impl<T> p2_udp_create::Host for SpinSocketsView<'_, T> {
         &mut self,
         address_family: wasmtime_wasi::p2::bindings::sockets::network::IpAddressFamily,
     ) -> wasmtime_wasi::p2::SocketResult<Resource<UdpSocket>> {
-        // Check quota before allocating the socket resource.
-        // See the analogous comment in `start_connect` for why we fail
-        // immediately rather than waiting (as outbound HTTP does).
+        // Fail immediately rather than wait. Waiting could deadlock a guest
+        // that keeps sockets open.
         let Ok(permit) = self.try_acquire() else {
             tracing::warn!("UDP socket creation refused: connection quota exhausted");
             return Err(SocketErrorCode::NewSocketLimit.into());
@@ -586,7 +578,13 @@ impl<T> p3_HostTcpSocket for SpinSocketsView<'_, T> {
         &mut self,
         address_family: p3_IpAddressFamily,
     ) -> P3SocketResult<Resource<p3_types::TcpSocket>> {
-        p3_HostTcpSocket::create(&mut self.inner, address_family)
+        let Ok(permit) = self.try_acquire() else {
+            tracing::warn!("TCP socket creation refused: connection quota exhausted");
+            return Err(p3_ErrorCode::Other(Some("connection quota exhausted".into())).into());
+        };
+        let socket = p3_HostTcpSocket::create(&mut self.inner, address_family)?;
+        self.register_permit(socket.rep(), permit);
+        Ok(socket)
     }
 
     fn get_local_address(
@@ -754,9 +752,8 @@ impl<T> p3_HostUdpSocket for SpinSocketsView<'_, T> {
         &mut self,
         address_family: p3_IpAddressFamily,
     ) -> P3SocketResult<Resource<p3_types::UdpSocket>> {
-        // Check quota before allocating the socket resource.
-        // See the analogous comment in `start_connect` for why we fail
-        // immediately rather than waiting (as outbound HTTP does).
+        // Fail immediately rather than wait. Waiting could deadlock a guest
+        // that keeps sockets open.
         let Ok(permit) = self.try_acquire() else {
             tracing::warn!("UDP socket creation refused: connection quota exhausted");
             return Err(p3_ErrorCode::Other(Some("connection quota exhausted".into())).into());
@@ -848,30 +845,10 @@ impl<T: Send + 'static> HostTcpSocketWithStore<T> for SpinSockets<T> {
         socket: Resource<p3_types::TcpSocket>,
         remote_address: p3_IpSocketAddress,
     ) -> P3SocketResult<()> {
-        let socket_rep = socket.rep();
-        // Unlike outbound HTTP (which queues when its permit pool is exhausted),
-        // sockets fail immediately. See p2 `start_connect` for rationale.
-        let permit = match store.with(|mut access| access.get().try_acquire()) {
-            Ok(p) => p,
-            Err(()) => {
-                tracing::warn!("TCP socket connection refused: connection quota exhausted");
-                return Err(p3_ErrorCode::Other(Some("connection quota exhausted".into())).into());
-            }
-        };
         let getter = store.with(|mut store| store.get().getter);
         let wasi_accessor = store.with_getter::<WasiSockets>(getter);
-        let result: P3SocketResult<()> = <WasiSockets as HostTcpSocketWithStore<T>>::connect(
-            &wasi_accessor,
-            socket,
-            remote_address,
-        )
-        .await;
-        if result.is_ok() {
-            store.with(|mut access| {
-                access.get().register_permit(socket_rep, permit);
-            });
-        }
-        result
+        <WasiSockets as HostTcpSocketWithStore<T>>::connect(&wasi_accessor, socket, remote_address)
+            .await
     }
 
     async fn listen(
