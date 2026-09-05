@@ -1,4 +1,6 @@
+pub use collect::required_capabilities;
 pub use deny::apply_deny_adapter;
+mod collect;
 mod deny;
 
 /// Specifies which host capabilities a component dependency is allowed to inherit
