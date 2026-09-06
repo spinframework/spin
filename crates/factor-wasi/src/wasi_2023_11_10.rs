@@ -55,6 +55,7 @@ mod bindings {
             "wasi:io/poll.[method]pollable.ready": async | trappable,
             "wasi:io/poll.poll": async | trappable,
 
+            "wasi:sockets/ip-name-lookup.[drop]resolve-address-stream": async | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-bind": async | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-connect": async | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-listen": async | trappable,
@@ -62,6 +63,7 @@ mod bindings {
             "wasi:sockets/udp.[method]udp-socket.start-bind": async | trappable,
             "wasi:sockets/udp.[method]udp-socket.stream": async | trappable,
             "wasi:sockets/udp.[method]outgoing-datagram-stream.send": async | trappable,
+            "wasi:sockets/udp.[drop]incoming-datagram-stream": async | trappable,
             "wasi:sockets/udp.[drop]outgoing-datagram-stream": async | trappable,
             default: trappable,
         },
@@ -1345,8 +1347,8 @@ impl<T> wasi::sockets::udp::HostIncomingDatagramStream for SpinSocketsView<'_, T
         latest::sockets::udp::HostIncomingDatagramStream::subscribe(self, self_)
     }
 
-    fn drop(&mut self, rep: Resource<IncomingDatagramStream>) -> wasmtime::Result<()> {
-        latest::sockets::udp::HostIncomingDatagramStream::drop(self, rep)
+    async fn drop(&mut self, rep: Resource<IncomingDatagramStream>) -> wasmtime::Result<()> {
+        latest::sockets::udp::HostIncomingDatagramStream::drop(self, rep).await
     }
 }
 
@@ -1414,8 +1416,8 @@ impl<T> wasi::sockets::ip_name_lookup::HostResolveAddressStream for SpinSocketsV
         latest::sockets::ip_name_lookup::HostResolveAddressStream::subscribe(&mut self.inner, self_)
     }
 
-    fn drop(&mut self, rep: Resource<ResolveAddressStream>) -> wasmtime::Result<()> {
-        latest::sockets::ip_name_lookup::HostResolveAddressStream::drop(&mut self.inner, rep)
+    async fn drop(&mut self, rep: Resource<ResolveAddressStream>) -> wasmtime::Result<()> {
+        latest::sockets::ip_name_lookup::HostResolveAddressStream::drop(&mut self.inner, rep).await
     }
 }
 

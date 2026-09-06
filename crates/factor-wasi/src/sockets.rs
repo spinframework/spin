@@ -491,8 +491,11 @@ impl<T> p2_udp::HostIncomingDatagramStream for SpinSocketsView<'_, T> {
         p2_udp::HostIncomingDatagramStream::subscribe(&mut self.inner, this)
     }
 
-    fn drop(&mut self, this: Resource<p2_udp::IncomingDatagramStream>) -> wasmtime::Result<()> {
-        p2_udp::HostIncomingDatagramStream::drop(&mut self.inner, this)
+    async fn drop(
+        &mut self,
+        this: Resource<p2_udp::IncomingDatagramStream>,
+    ) -> wasmtime::Result<()> {
+        p2_udp::HostIncomingDatagramStream::drop(&mut self.inner, this).await
     }
 }
 
