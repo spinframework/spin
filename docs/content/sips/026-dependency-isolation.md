@@ -84,26 +84,32 @@ interface:
 ## Named imports and capability sets
 
 The actual name of the named import doesn't matter: it is a private contract between the capabilities
-composer and the host trait. What matters is:
+composer and the host trait. What matters is that Spin must be able to map the import name - which is,
+roughly, what we get at the host trait - to a capability set defined in the manifest. 
 
-1. Dependencies should not be able to forge import names. If a malicious developer crafts a component
-   which named-imports `super-secret-db-password`, and persuades me to use it in a composition,
-   Spin should not mistake the crafted import for an application-granted permission to the
-   super secret DB password.
-2. Spin must be able to map the import name - which is, roughly, what we get at the host trait - to
-   a capability set defined in the manifest. 
+> What if a dependency has named imports? What if it names an import to look
+> like one that Spin had synthesised? We will need to deny-adapt all named imports of Spin
+> interfaces before creating our own named imports.
 
-So as an initial proposal, I suggest that we name the imports using everybody's favourite highly
-readable keys, GUIDs. That said, we may want something more debuggable in the vanishingly unlikely
-event that this doesn't work infallibly first time - perhaps a combination of a GUID for unpredictability
-with an identifying string for tracing back to what it actually represents. We can iterate on this.
+There are several possible strategies for generating names:
 
-My initial sense is that a key will correspond to a capability and be dependency scoped - for example,
-a key for the `sqlite_databases` capability on the `foo` dependency, a key for the the `key_value_stores`
-capability on the `foo` dependency, a key for the `sqlite_databases` capability on the `bar` dependency.
-This makes point 2, mapping keys to capability sets, easier. But because a capability
-(`allowed_outbound_hosts`) can enable multiple interfaces, we will need
-to further distinguish named imports by interface.  We therefore end up with:
+1. GUIDs: these have the disadvantage of resulting in non-deterministic lockfiles
+2. Digests: these will work: they require the capabilities associated with each digest
+   to be retained separately
+3. Reversible encoding of the capability: I like that this is debuggable but oof
+   the idea of coming up with a reversible kebab-encoding of a map involving arbitrary strings
+   and globs does not spark joy
+
+I have used the digest approach in a proof of concept and it seems to work. I currently have
+the keys capability- and dependency-scoped: that is, a key for the `sqlite_databases`
+capability on the `foo` dependency, a key for the the `key_value_stores` capability on
+the `foo` dependency, a key for the `sqlite_databases` capability on the `bar` dependency.
+This means the capability name and dependency name need to be included in the digest,
+to ensure that distinctness even if two capabilities share the same values (e.g. KV and SQLite
+both having the value `["default]`).
+
+But because a capability (`allowed_outbound_hosts`) can enable multiple interfaces, we
+will need to further distinguish named imports by interface.  We therefore end up with:
 
 * capability set key (CSK): identifies a specific capability set (AOH on `foo`, sqlite on `bar`)
 * named import key: identifies a specific named import (`foo`'s import of `spin:postgres`)
@@ -112,7 +118,7 @@ The host trait will receive the _named import key_.  Therefore, it must be possi
 the capability set key from the named import key (as the capability set key is what we use to
 look up capability sets).
 
-Because the CSKs are not predictable ones like database names, we will need to maintain a separate
+Because the CSKs are not reversible, we will need to maintain a separate
 map of CSKs to capability sets. The flow here is something like:
 
 * When loading a component, generate a CSK for each combination of dep and capability,
@@ -172,10 +178,8 @@ types which is separate from the `wasmtime_wasi_http` ones. And we have to link 
 which is a bit of a dark art in itself given `WasiCtx` and `WasiCtxView` and Uncle Tom Cobbley
 and all.
 
-My proposed solution to this is to go cap in hand to Wasmtime and ask them to do it. We
-won't be the only host to hit this problem: it's better addressed in the crates, where
-they can share types and include methods in hooks and all the stuff that we'd have to
-replicate to make it work.
+There is a Wasmtime PR to add named import capability to these crates: we will adopt that when
+ready.
 
 ## Other considerations
 
