@@ -14,5 +14,8 @@ wac-graph = { workspace = true }
 wasm-encoder = { workspace = true }
 wasmparser = { workspace = true }
 
+[dev-dependencies]
+wat = "1"
+
 [lints]
 workspace = true
