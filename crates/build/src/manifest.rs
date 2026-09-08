@@ -16,6 +16,11 @@ pub enum ManifestBuildInfo {
         has_deployment_targets: bool,
         load_error: spin_manifest::Error,
     },
+    /// A standalone component manifest (`component.toml`) describing a single
+    /// buildable component rather than a full application.
+    Component {
+        components: Vec<ComponentBuildInfo>,
+    },
 }
 
 impl ManifestBuildInfo {
@@ -23,6 +28,7 @@ impl ManifestBuildInfo {
         match self {
             Self::Loadable { components, .. } => components.clone(),
             Self::Unloadable { components, .. } => components.clone(),
+            Self::Component { components, .. } => components.clone(),
         }
     }
 
@@ -30,6 +36,7 @@ impl ManifestBuildInfo {
         match self {
             Self::Loadable { .. } => None,
             Self::Unloadable { load_error, .. } => Some(load_error),
+            Self::Component { .. } => None,
         }
     }
 
@@ -50,6 +57,7 @@ impl ManifestBuildInfo {
                 }
             }
             Self::Unloadable { .. } => Default::default(),
+            Self::Component { .. } => Default::default(),
         }
     }
 
@@ -62,6 +70,7 @@ impl ManifestBuildInfo {
                 has_deployment_targets,
                 ..
             } => *has_deployment_targets,
+            Self::Component { .. } => false,
         }
     }
 
@@ -69,6 +78,7 @@ impl ManifestBuildInfo {
         match self {
             Self::Loadable { manifest, .. } => Some(manifest),
             Self::Unloadable { .. } => None,
+            Self::Component { .. } => None,
         }
     }
 }
@@ -81,6 +91,15 @@ pub async fn component_build_configs(
     manifest_file: impl AsRef<Path>,
     profile: Option<&str>,
 ) -> Result<ManifestBuildInfo> {
+    // A standalone component manifest (component.toml) describes a single
+    // buildable component rather than a full application, so handle it separately.
+    let manifest_text = tokio::fs::read_to_string(&manifest_file).await?;
+    if spin_manifest::is_component_manifest(&manifest_text) {
+        let component_manifest = spin_manifest::component_manifest_from_str(&manifest_text)?;
+        let components = vec![component_build_info(&component_manifest)];
+        return Ok(ManifestBuildInfo::Component { components });
+    }
+
     let manifest = spin_manifest::manifest_from_file(&manifest_file);
     match manifest {
         Ok(mut manifest) => {
@@ -135,6 +154,18 @@ fn deployment_targets_from_manifest(
     manifest: &spin_manifest::schema::v2::AppManifest,
 ) -> Vec<spin_manifest::schema::v2::TargetEnvironmentRef> {
     manifest.application.targets.clone()
+}
+
+fn component_build_info(
+    manifest: &spin_manifest::schema::component::ComponentManifest,
+) -> ComponentBuildInfo {
+    ComponentBuildInfo {
+        id: manifest.component.name.clone(),
+        build: manifest.build.as_ref().map(|b| b.to_build_config()),
+        source: Some(manifest.component.source()),
+        dependencies: Default::default(),
+        targets: None,
+    }
 }
 
 async fn fallback_load_build_configs(
