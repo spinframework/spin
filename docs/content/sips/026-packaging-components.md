@@ -133,7 +133,7 @@ work](#future-work)) rather than at build time.
 
 ### Building a component
 
-`spin build` recognizes a component manifest, runs its `[build].command`, and embeds
+`spin build` recognizes a component manifest by file name and manifest version declaration, runs its `[build].command`, and embeds
 the component manifest (omitted the `[build]` section) as JSON in a custom section of the built binary:
 
 ```console
@@ -210,8 +210,9 @@ Pulled component to github-oauth.wasm
 - **`component.toml` discovery for more commands.** Only `spin build` and `spin
   registry` recognise component manifests today; `spin watch` and others could
   follow if there is demand.
-- **Enabling composition** for standalone components. Components should be able to
-  consume dependencies the same as a component in a Spin application manifest.
+- **Enabling composition** for standalone components. Standalone components today
+  cannot have dependencies but components should be able to consume dependencies
+  the same as a component in a Spin application manifest.
 
 ## Alternatives considered
 
