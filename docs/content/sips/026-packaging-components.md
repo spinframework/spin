@@ -68,7 +68,7 @@ allowed_outbound_hosts = ["https://github.com", "https://api.github.com"]
 key_value_stores = ["default"]
 sqlite_databases = ["default"]
 ai_models = ["llama2-chat"]
-environment_variables = ["staging", { name = "region", default = "us" }]
+environment = ["staging", { name = "region", default = "us" }]
 files = ["assets/**/*", { source = "local/path", destination = "/mounted/path" }]
 ```
 
