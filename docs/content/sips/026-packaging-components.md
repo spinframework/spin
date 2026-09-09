@@ -26,7 +26,7 @@ DX)](../sips/024-spin-deps-cli-dx.md) makes wiring one up interactive. The gap i
 on the *author* side: there is no way to describe a single component, build it,
 and publish it so that others can depend on it.
 
-Tools such as wkg can already push and pull a bare component wasm to a registry. But a component alone advertises only its WIT world — the imports and exports it declares — not the operational configuration a consuming application must grant it: variables and secrets, allowed outbound hosts, key-value stores, SQLite databases, AI models, or mounted files. Spin needs a manifest that travels with the component so tooling can determine programmatically what a consumer must provide.
+A bare component wasm can already be pushed to / pulled from an OCI registry (i.e. wkg). But a component alone advertises only its WIT world — the imports and exports it declares — not the operational configuration a consuming application must grant it: variables and secrets, allowed outbound hosts, key-value stores, SQLite databases, AI models, or mounted files. Spin needs a manifest that travels with the component so tooling can determine programmatically what a consumer must provide.
 
 An earlier draft proposed a manifest dedicated to packaging *middleware*. But
 nothing about building and distributing a component is specific to middleware: a
@@ -40,7 +40,7 @@ Introduce a standalone component manifest, `component.toml`, that describes a
 single component: its identity, how to build it, and the host capabilities and
 configuration it requires. Extend `spin build` to build from a component manifest and
 embed required configuration in component binary (see [Alternatives considered](#alternatives-considered)), and extend `spin registry` to
-publish and fetch components as registry packages.
+publish and fetch components to and from an OCI registry.
 
 ### The component manifest (`component.toml`)
 
@@ -48,7 +48,7 @@ publish and fetch components as registry packages.
 component_manifest_version = 1
 
 [component]
-name = "github-oauth"
+name = "mycomponents:github-oauth"
 source = "target/wasm32-wasip2/release/github_oauth.wasm"
 version = "0.1.0"
 description = "HTTP middleware that gates requests behind GitHub OAuth"
@@ -85,7 +85,7 @@ value is a fixed `1`; future revisions will bump it.
 
 | Field | Required | Description |
 | --- | --- | --- |
-| `name` | yes | The component's identifier. |
+| `name` | yes | The component's package identity, `<namespace>:<name>` (for example `mycomponents:github-oauth`). Both `<namespace>` and `<name>` must be valid [package identifier](https://component-model.bytecodealliance.org/design/packages.html) segments. This is the identity under which the component is published and by which consumers depend on it. |
 | `source` | yes | Path to the built Wasm artifact. Required because it is the file that is published and packaged. |
 | `version` | for publishing | Semver version. Used as the version when publishing. |
 | `description`, `authors`, `repository`, `license` | no | Human-readable metadata. |
@@ -115,7 +115,6 @@ component manifests (see [Future work](#future-work)).
 #### `[requires]` — host capabilities (optional)
 
 Declares the capabilities the component expects the host application to grant it.
-These mirror the capability fields of a `spin.toml` component:
 
 | Field | Description |
 | --- | --- |
@@ -154,22 +153,25 @@ component has no trigger and cannot be run on its own.
 
 ### Publishing and fetching components
 
-Reusable components are distributed as
-[wasm-pkg](https://github.com/bytecodealliance/wasm-pkg-tools) component packages
-— the same package format Spin already resolves when a component declares a
-registry dependency (SIP 020). This makes a published component immediately
+Reusable components are published to and pulled from an OCI registry — the same
+registries Spin already resolves against when a component declares a registry
+dependency (SIP 020). Publishing a component this way makes it immediately
 consumable as a dependency by other applications.
 
 #### `spin registry push`
 
 ```console
-$ spin registry push -f component.toml --registry ghcr.io/michellen/spin-components
-Pushed component spin-components:github-oauth@0.1.0
+$ spin registry push -f component.toml --registry ghcr.io/michellen
+Pushed component mycomponents:github-oauth@0.1.0 to ghcr.io/michellen/github-oauth:0.1.0
 ```
 
-- The published **package reference** is `namespace:name` where namespace is derived from
-registry or is overriden by the `--package-namespace` flag, name is `[component].name` and
-the version is `[component].version`.
+- To be consumable as a registry dependency, a component is published under the
+  package identity `<namespace>:<name>` declared by `[component].name`. The
+  package identity is metadata carried with the component; it does not dictate
+  the registry path.
+- The published **reference** is `<registry>/<name>:<version>`, where
+  `<registry>` is the value of `--registry`, `<name>` is the `<name>` segment of
+  `[component].name`, and `<version>` is `[component].version`.
 - The component's built `source` must exist; otherwise Spin reports an error and
   suggests building first (`spin registry push --build`).
 - `--build` performs a default `spin build` (component-aware) before publishing.
@@ -180,12 +182,12 @@ the version is `[component].version`.
 #### `spin registry pull`
 
 ```console
-$ spin registry pull ghcr.io/michellen/spin-components/github-oauth:0.1.0 --output github-oauth.wasm
-Pulled component to github-oauth.wasm
+$ spin registry pull ghcr.io/michellen/github-oauth:0.1.0 --output github-oauth.wasm
+Pulled component mycomponents:github-oauth@0.1.0 to github-oauth.wasm
 ```
 
 - The version portion is a semver requirement; when omitted, the latest
-  non-yanked release is pulled.
+  release is pulled.
 - `--output` selects where the component Wasm is written; it defaults to
   `<name>.wasm` in the current directory.
 
@@ -210,6 +212,7 @@ Pulled component to github-oauth.wasm
 - **`component.toml` discovery for more commands.** Only `spin build` and `spin
   registry` recognise component manifests today; `spin watch` and others could
   follow if there is demand.
+- **Fetching and inspecting components** with the spin deps CLI.
 - **Enabling composition** for standalone components. Standalone components today
   cannot have dependencies but components should be able to consume dependencies
   the same as a component in a Spin application manifest.
@@ -227,5 +230,7 @@ Pulled component to github-oauth.wasm
   only. Since building and distributing a component is not middleware-specific,
   a general component manifest serves middleware and all other reusable
   components with one mechanism.
-- **Using OCI annotations** to relay the `[requires]` information was considered rather
-  than embedding component manifest in the component binary but that would lock component packages to OCI registries and we may want the option to distribute via github releases or other distribution platforms. 
+- **Using OCI annotations** to relay the `[requires]` information was considered
+  rather than embedding component manifest in the component binary but that would
+  lock component packages to OCI registries and we may want the option to distribute
+  via github releases or other distribution platforms.
