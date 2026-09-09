@@ -69,7 +69,7 @@ key_value_stores = ["default"]
 sqlite_databases = ["default"]
 ai_models = ["llama2-chat"]
 environment = ["staging", { name = "region", default = "us" }]
-files = ["assets/**/*", { source = "local/path", destination = "/mounted/path" }]
+files = [{ destination = "/mounted/path" }]
 ```
 
 The manifest is intentionally close to a single `[component.<id>]` entry in
@@ -124,7 +124,7 @@ Declares the capabilities the component expects the host application to grant it
 | `ai_models` | AI models the component accesses. |
 | `allowed_outbound_hosts` | Outbound network destinations the component is allowed to reach. |
 | `environments_variables` | Environment variables the component needs. Each entry is a bare name, or `{ name, default }`. |
-| `files` | Files the component may read: a glob, or `{ source, destination }` mount. |
+| `files` | Guest paths the component reads, each `{ destination }`. The component declares only the path it expects to find files at; the consuming application decides what to mount there. |
 
 `[requires]` is descriptive: it documents what an application must provide when it
 adopts the component. It is consumed at application-assembly time (see [Future
