@@ -144,7 +144,7 @@ impl TryFrom<String> for WorldName {
         let package = wit_parser::PackageName {
             namespace: itf.namespace().to_string(),
             name: itf.package().to_string(),
-            version: itf.version(),
+            version: itf.version(None)?,
         };
 
         let world = itf.interface().to_string();

@@ -219,7 +219,7 @@ fn retarget_imports_and_get_exports(target: &str, module: &[u8]) -> Result<(Vec<
                 if let Some((id, range)) = payload.as_section() {
                     result.section(&RawSection {
                         id,
-                        data: &module[range],
+                        data: &module[range.start as usize..range.end as usize],
                     });
                 }
             }
@@ -236,7 +236,7 @@ fn add_custom_section(name: &str, data: &[u8], module: &[u8]) -> Result<Vec<u8>>
         if let Some((id, range)) = payload?.as_section() {
             result.section(&RawSection {
                 id,
-                data: &module[range],
+                data: &module[range.start as usize..range.end as usize],
             });
         }
     }

@@ -141,6 +141,8 @@ pub async fn extract_wits(
                 id: mapped_iid,
                 stability: wit_parser::Stability::Unknown,
                 span: Span::default(),
+                docs: Default::default(),
+                external_id: None,
             };
             let previous_world_item = aggregating_resolve
                 .worlds
@@ -499,11 +501,12 @@ mod test {
         )
         .expect("should embed component metadata");
 
-        let mut encoder = wit_component::ComponentEncoder::default()
+        wit_component::ComponentEncoder::default()
             .validate(true)
             .module(&wasm)
-            .expect("should set module");
-        encoder.encode().expect("should encode component")
+            .expect("should set module")
+            .encode()
+            .expect("should encode component")
     }
 
     #[tokio::test]
@@ -592,6 +595,8 @@ mod test {
             id: regex_itf_id,
             stability: wit_parser::Stability::Unknown,
             span: Span::default(),
+            docs: Default::default(),
+            external_id: None,
         };
         let import = world.imports.values().next().unwrap();
         assert_eq!(&expected_import, import);
