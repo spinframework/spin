@@ -17,7 +17,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: '1.95'
+  RUST_VERSION: '1.96'
 
 jobs:
   dependency-review:
