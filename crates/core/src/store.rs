@@ -105,7 +105,14 @@ impl StoreBuilder {
     /// See [`wasmtime::ResourceLimiter::memory_growing`] (`maximum`) for
     /// details on how this limit is enforced.
     pub fn max_memory_size(&mut self, max_memory_size: usize) {
-        self.store_limits = StoreLimitsAsync::new(Some(max_memory_size), None);
+        self.store_limits.set_max_memory_size(max_memory_size);
+    }
+
+    /// Registers a policy that is consulted (in addition to `max_memory_size`) on every
+    /// memory growth attempt, letting an embedder deny growth for reasons of its own (e.g.
+    /// the host process as a whole is under memory pressure).
+    pub fn set_growth_limiter(&mut self, limiter: std::sync::Arc<dyn crate::limits::GrowthLimiter>) {
+        self.store_limits.set_growth_limiter(limiter);
     }
 
     /// Builds a [`Store`] from this builder with given host state data.

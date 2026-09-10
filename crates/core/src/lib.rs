@@ -24,6 +24,7 @@ pub use wasmtime::{
     component::{Component, Instance, InstancePre, Linker},
 };
 
+pub use limits::GrowthLimiter;
 pub use store::{AsState, Store, StoreBuilder};
 
 /// The default [`EngineBuilder::epoch_tick_interval`].

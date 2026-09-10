@@ -1,5 +1,21 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use wasmtime::ResourceLimiterAsync;
+
+/// An externally-supplied policy consulted on every memory growth attempt, in addition to
+/// the store's static [`StoreLimitsAsync::max_memory_size`] ceiling.
+///
+/// This lets an embedder deny growth for reasons it alone knows about (e.g. the host process
+/// as a whole is under memory pressure), without `StoreLimitsAsync` needing to know anything
+/// about those reasons itself.
+#[async_trait]
+pub trait GrowthLimiter: Send + Sync {
+    /// `current_total` is the store's total memory already consumed (summed across all of its
+    /// memories); `desired_total` is the total that would result if this particular grow is
+    /// allowed. Returns whether the grow should be permitted.
+    async fn allow_growth(&self, current_total: u64, desired_total: u64) -> bool;
+}
 
 /// Async implementation of wasmtime's `StoreLimits`: https://github.com/bytecodealliance/wasmtime/blob/main/crates/wasmtime/src/limits.rs
 /// Used to limit the memory use and table size of each Instance
@@ -8,6 +24,7 @@ pub struct StoreLimitsAsync {
     max_memory_size: Option<usize>,
     max_table_elements: Option<usize>,
     memory_consumed: u64,
+    growth_limiter: Option<Arc<dyn GrowthLimiter>>,
 }
 
 #[async_trait]
@@ -18,22 +35,35 @@ impl ResourceLimiterAsync for StoreLimitsAsync {
         desired: usize,
         maximum: Option<usize>,
     ) -> wasmtime::Result<bool> {
-        let can_grow = if let Some(limit) = self.max_memory_size {
+        let within_configured_limit = if let Some(limit) = self.max_memory_size {
             desired <= limit
         } else {
             true
         };
+        let current_total = self.memory_consumed;
+        let desired_total =
+            (current_total as i64 + (desired as i64 - current as i64)) as u64;
+        let allowed_by_limiter = match &self.growth_limiter {
+            Some(limiter) => limiter.allow_growth(current_total, desired_total).await,
+            None => true,
+        };
+        let can_grow = within_configured_limit && allowed_by_limiter;
         if can_grow {
-            self.memory_consumed =
-                (self.memory_consumed as i64 + (desired as i64 - current as i64)) as u64;
+            self.memory_consumed = desired_total;
         } else {
             tracing::warn!(
-                "error.type" = "memory_limit_exceeded",
+                "error.type" = if within_configured_limit {
+                    "growth_limiter_denied"
+                } else {
+                    "memory_limit_exceeded"
+                },
                 current,
                 desired,
                 maximum,
                 max_memory_size = self.max_memory_size,
-                "instance memory limit exceeded",
+                current_total,
+                desired_total,
+                "instance memory growth denied",
             );
         }
         Ok(can_grow)
@@ -55,17 +85,20 @@ impl ResourceLimiterAsync for StoreLimitsAsync {
 }
 
 impl StoreLimitsAsync {
-    pub fn new(max_memory_size: Option<usize>, max_table_elements: Option<usize>) -> Self {
-        Self {
-            max_memory_size,
-            max_table_elements,
-            memory_consumed: 0,
-        }
-    }
-
     /// How much memory has been consumed in bytes
     pub fn memory_consumed(&self) -> u64 {
         self.memory_consumed
+    }
+
+    /// Sets the maximum memory allocation limit, leaving other settings untouched.
+    pub fn set_max_memory_size(&mut self, max_memory_size: usize) {
+        self.max_memory_size = Some(max_memory_size);
+    }
+
+    /// Registers a [`GrowthLimiter`] that is consulted (in addition to the static
+    /// `max_memory_size` ceiling) on every memory growth attempt.
+    pub fn set_growth_limiter(&mut self, growth_limiter: Arc<dyn GrowthLimiter>) {
+        self.growth_limiter = Some(growth_limiter);
     }
 }
 
@@ -93,6 +126,51 @@ mod tests {
         };
         assert!(limits.table_growing(9, 10, None).await.unwrap());
         assert!(!limits.table_growing(10, 11, None).await.unwrap());
+    }
+
+    struct FlagGrowthLimiter {
+        threshold: u64,
+        deny: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait]
+    impl GrowthLimiter for FlagGrowthLimiter {
+        async fn allow_growth(&self, current_total: u64, _desired_total: u64) -> bool {
+            !(current_total >= self.threshold
+                && self.deny.load(std::sync::atomic::Ordering::Relaxed))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_growth_limiter() {
+        let limiter = Arc::new(FlagGrowthLimiter {
+            threshold: 100,
+            deny: std::sync::atomic::AtomicBool::new(false),
+        });
+        let mut limits = StoreLimitsAsync::default();
+        limits.set_growth_limiter(limiter.clone());
+
+        // Below the threshold: allowed regardless of the deny flag.
+        assert!(limits.memory_growing(0, 50, None).await.unwrap());
+        assert_eq!(limits.memory_consumed(), 50);
+
+        // Crosses the threshold, but the deny flag isn't set yet: still allowed.
+        assert!(limits.memory_growing(50, 150, None).await.unwrap());
+        assert_eq!(limits.memory_consumed(), 150);
+
+        // Now flip the flag: further growth while over threshold is denied.
+        limiter
+            .deny
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(!limits.memory_growing(150, 200, None).await.unwrap());
+        assert_eq!(limits.memory_consumed(), 150);
+
+        // Flip it back off: growth is allowed again immediately (no latching).
+        limiter
+            .deny
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        assert!(limits.memory_growing(150, 200, None).await.unwrap());
+        assert_eq!(limits.memory_consumed(), 200);
     }
 
     #[tokio::test]
