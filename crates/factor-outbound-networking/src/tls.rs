@@ -1,4 +1,8 @@
-use std::{collections::HashMap, ops::Deref, sync::Arc};
+use std::{
+    collections::HashMap,
+    ops::Deref,
+    sync::{Arc, LazyLock},
+};
 
 use anyhow::{Context, ensure};
 
@@ -164,7 +168,11 @@ impl Deref for TlsClientConfig {
 
 impl Default for TlsClientConfig {
     fn default() -> Self {
-        Self::new(true, true, vec![], None).expect("default client config should be valid")
+        static ONCE: LazyLock<TlsClientConfig> = LazyLock::new(|| {
+            TlsClientConfig::new(true, true, vec![], None)
+                .expect("default client config should be valid")
+        });
+        ONCE.clone()
     }
 }
 
