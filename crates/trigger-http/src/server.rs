@@ -470,7 +470,7 @@ impl<F: RuntimeFactors> HttpServer<F> {
         component_id: &str,
         self_scheme: Option<&Scheme>,
     ) -> anyhow::Result<TriggerInstanceBuilder<'_, F>> {
-        let mut instance_builder = self.trigger_app.prepare(component_id)?;
+        let mut instance_builder = self.trigger_app.prepare(component_id, )?;
 
         // Set up outbound HTTP request origin and service chaining
         // The outbound HTTP factor is required since both inbound and outbound wasi HTTP

@@ -11,10 +11,15 @@ use wasmtime::ResourceLimiterAsync;
 /// about those reasons itself.
 #[async_trait]
 pub trait GrowthLimiter: Send + Sync {
-    /// `current_total` is the store's total memory already consumed (summed across all of its
-    /// memories); `desired_total` is the total that would result if this particular grow is
-    /// allowed. Returns whether the grow should be permitted.
-    async fn allow_growth(&self, current_total: u64, desired_total: u64) -> bool;
+    /// Ask to reserve memory for a potential growth.
+    ///
+    /// Returns whether the reservation is allowed. `current_total` is the store's total memory
+    /// already consumed (summed across all of its memories); `desired_total` is the total that
+    /// would result if this particular grow is allowed.
+    async fn reserve(&self, current_total: u64, desired_total: u64) -> bool;
+
+    /// Release a previously reserved amount of memory.
+    fn release(&self, amount: usize);
 }
 
 /// Async implementation of wasmtime's `StoreLimits`: https://github.com/bytecodealliance/wasmtime/blob/main/crates/wasmtime/src/limits.rs
@@ -44,7 +49,7 @@ impl ResourceLimiterAsync for StoreLimitsAsync {
         let desired_total =
             (current_total as i64 + (desired as i64 - current as i64)) as u64;
         let allowed_by_limiter = match &self.growth_limiter {
-            Some(limiter) => limiter.allow_growth(current_total, desired_total).await,
+            Some(limiter) => limiter.reserve(current_total, desired_total).await,
             None => true,
         };
         let can_grow = within_configured_limit && allowed_by_limiter;
@@ -102,6 +107,14 @@ impl StoreLimitsAsync {
     }
 }
 
+impl Drop for StoreLimitsAsync {
+    fn drop(&mut self) {
+        if let Some(limiter) = &mut self.growth_limiter {
+            limiter.release(self.memory_consumed as usize);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,6 +123,7 @@ mod tests {
     async fn test_store_limits_memory() {
         let mut limits = StoreLimitsAsync {
             max_memory_size: Some(65536),
+            growth_limiter: None,
             ..Default::default()
         };
         assert!(limits.memory_growing(0, 65536, None).await.unwrap());
@@ -122,6 +136,7 @@ mod tests {
     async fn test_store_limits_table() {
         let mut limits = StoreLimitsAsync {
             max_table_elements: Some(10),
+            growth_limiter: None,
             ..Default::default()
         };
         assert!(limits.table_growing(9, 10, None).await.unwrap());
@@ -135,9 +150,13 @@ mod tests {
 
     #[async_trait]
     impl GrowthLimiter for FlagGrowthLimiter {
-        async fn allow_growth(&self, current_total: u64, _desired_total: u64) -> bool {
+        async fn reserve(&self, current_total: u64, _desired_total: u64) -> bool {
             !(current_total >= self.threshold
                 && self.deny.load(std::sync::atomic::Ordering::Relaxed))
+        }
+
+        fn release(&self, _amount: usize) {
+            // No-op for this simple flag-based limiter
         }
     }
 
