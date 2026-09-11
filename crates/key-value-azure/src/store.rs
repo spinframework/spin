@@ -1,20 +1,33 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
+use azure_core::credentials::Secret;
+use azure_core::http::Etag;
+use azure_data_cosmos::models::{PatchInstructions, PatchOperation};
+use azure_data_cosmos::options::{ItemWriteOptions, Precondition, Region};
 use azure_data_cosmos::{
-    CosmosEntity,
-    prelude::{
-        AuthorizationToken, CollectionClient, CosmosClient, CosmosClientBuilder, Operation, Query,
-    },
+    AccountReference, ContainerClient, CosmosClient, FeedScope, Query, RoutingStrategy,
 };
-use futures::StreamExt;
+use futures::TryStreamExt;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use spin_factor_key_value::{
-    Cas, Error, Store, StoreManager, SwapError, log_cas_error, log_error, log_error_v3, v3,
+    Cas, Error, Store, StoreManager, SwapError, log_error, log_error_v3, v3,
 };
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::auth::KeyValueAzureCosmosAuthOptions;
+
 pub struct KeyValueAzureCosmos {
-    client: CollectionClient,
+    /// Parameters for initializing the Cosmos DB client
+    account_ref: AccountReference,
+
+    database: String,
+    container: String,
+    region: Region,
+
+    /// The Cosmos DB client
+    client: tokio::sync::OnceCell<ContainerClient>,
     /// An optional app id
     ///
     /// If provided, the store will handle multiple stores per container using a
@@ -23,101 +36,63 @@ pub struct KeyValueAzureCosmos {
     app_id: Option<String>,
 }
 
-/// Azure Cosmos Key / Value runtime config literal options for authentication
-#[derive(Clone, Debug)]
-pub struct KeyValueAzureCosmosRuntimeConfigOptions {
-    key: String,
-}
-
-impl KeyValueAzureCosmosRuntimeConfigOptions {
-    pub fn new(key: String) -> Self {
-        Self { key }
-    }
-}
-
-/// Azure Cosmos Key / Value enumeration for the possible authentication options
-#[derive(Clone, Debug)]
-pub enum KeyValueAzureCosmosAuthOptions {
-    /// Runtime Config values indicates the account and key have been specified directly
-    RuntimeConfigValues(KeyValueAzureCosmosRuntimeConfigOptions),
-    /// Environmental indicates that the environment variables of the process should be used to
-    /// create the TokenCredential for the Cosmos client. This will use the Azure Rust SDK's
-    /// DefaultCredentialChain to derive the TokenCredential based on what environment variables
-    /// have been set.
-    ///
-    /// Service Principal with client secret:
-    /// - `AZURE_TENANT_ID`: ID of the service principal's Azure tenant.
-    /// - `AZURE_CLIENT_ID`: the service principal's client ID.
-    /// - `AZURE_CLIENT_SECRET`: one of the service principal's secrets.
-    ///
-    /// Service Principal with certificate:
-    /// - `AZURE_TENANT_ID`: ID of the service principal's Azure tenant.
-    /// - `AZURE_CLIENT_ID`: the service principal's client ID.
-    /// - `AZURE_CLIENT_CERTIFICATE_PATH`: path to a PEM or PKCS12 certificate file including the private key.
-    /// - `AZURE_CLIENT_CERTIFICATE_PASSWORD`: (optional) password for the certificate file.
-    ///
-    /// Workload Identity (Kubernetes, injected by the Workload Identity mutating webhook):
-    /// - `AZURE_TENANT_ID`: ID of the service principal's Azure tenant.
-    /// - `AZURE_CLIENT_ID`: the service principal's client ID.
-    /// - `AZURE_FEDERATED_TOKEN_FILE`: TokenFilePath is the path of a file containing a Kubernetes service account token.
-    ///
-    /// Managed Identity (User Assigned or System Assigned identities):
-    /// - `AZURE_CLIENT_ID`: (optional) if using a user assigned identity, this will be the client ID of the identity.
-    ///
-    /// Azure CLI:
-    /// - `AZURE_TENANT_ID`: (optional) use a specific tenant via the Azure CLI.
-    ///
-    /// Common across each:
-    /// - `AZURE_AUTHORITY_HOST`: (optional) the host for the identity provider. For example, for Azure public cloud the host defaults to "https://login.microsoftonline.com".
-    ///   See also: https://github.com/Azure/azure-sdk-for-rust/blob/main/sdk/identity/README.md
-    Environmental,
-}
-
 impl KeyValueAzureCosmos {
     pub fn new(
         account: String,
         database: String,
         container: String,
         auth_options: KeyValueAzureCosmosAuthOptions,
+        region: Region,
         app_id: Option<String>,
     ) -> Result<Self> {
-        let token = match auth_options {
+        let endpoint: azure_data_cosmos::AccountEndpoint =
+            format!("https://{account}.documents.azure.com/")
+                .parse()
+                .map_err(log_error)?;
+
+        let account_ref = match auth_options {
             KeyValueAzureCosmosAuthOptions::RuntimeConfigValues(config) => {
-                AuthorizationToken::primary_key(config.key).map_err(log_error)?
+                AccountReference::with_authentication_key(endpoint, Secret::from(config.key))
             }
-            KeyValueAzureCosmosAuthOptions::Environmental => {
-                AuthorizationToken::from_token_credential(
-                    azure_identity::create_default_credential()?,
-                )
+            KeyValueAzureCosmosAuthOptions::AadCredential(kind) => {
+                let credential = kind.credential().map_err(log_error)?;
+                AccountReference::with_credential(endpoint, credential)
             }
         };
-        let cosmos_client = cosmos_client(account, token)?;
-        let database_client = cosmos_client.database_client(database);
-        let client = database_client.collection_client(container);
 
-        Ok(Self { client, app_id })
-    }
-}
-
-fn cosmos_client(account: impl Into<String>, token: AuthorizationToken) -> Result<CosmosClient> {
-    if cfg!(feature = "connection-pooling") {
-        let client = reqwest::ClientBuilder::new()
-            .build()
-            .context("failed to build reqwest client")?;
-        let transport_options = azure_core::TransportOptions::new(std::sync::Arc::new(client));
-        Ok(CosmosClientBuilder::new(account, token)
-            .transport(transport_options)
-            .build())
-    } else {
-        Ok(CosmosClient::new(account, token))
+        Ok(Self {
+            account_ref,
+            database,
+            container,
+            region,
+            client: tokio::sync::OnceCell::new(),
+            app_id,
+        })
     }
 }
 
 #[async_trait]
 impl StoreManager for KeyValueAzureCosmos {
     async fn get(&self, name: &str) -> Result<Arc<dyn Store>, Error> {
+        let client = self
+            .client
+            .get_or_try_init(|| async {
+                return CosmosClient::builder()
+                    .build(
+                        self.account_ref.clone(),
+                        RoutingStrategy::ProximityTo(self.region.clone()),
+                    )
+                    .await
+                    .map_err(log_error)?
+                    .database_client(&self.database)
+                    .container_client(&self.container)
+                    .await
+                    .map_err(log_error);
+            })
+            .await?
+            .clone();
         Ok(Arc::new(AzureCosmosStore {
-            client: self.client.clone(),
+            client,
             store_id: self.app_id.as_ref().map(|i| format!("{i}/{name}")),
         }))
     }
@@ -127,17 +102,16 @@ impl StoreManager for KeyValueAzureCosmos {
     }
 
     fn summary(&self, _store_name: &str) -> Option<String> {
-        let database = self.client.database_client().database_name();
-        let collection = self.client.collection_name();
         Some(format!(
-            "Azure CosmosDB database: {database}, collection: {collection}"
+            "Azure CosmosDB database: {}, container: {}",
+            self.database, self.container
         ))
     }
 }
 
 #[derive(Clone)]
 struct AzureCosmosStore {
-    client: CollectionClient,
+    client: ContainerClient,
     /// An optional store id to use as a partition key for all operations.
     ///
     /// If the store ID is not set, the store will use `/id` (the row key) as
@@ -151,18 +125,18 @@ struct AzureCosmosStore {
 #[async_trait]
 impl Store for AzureCosmosStore {
     async fn get(&self, key: &str, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
-        let pair = self.get_entity::<Pair>(key).await?;
-        let value = pair.map(|p| p.value);
+        let partition_key = partition_key(self.store_id.as_deref(), key);
+        let value = match self.client.read_item(partition_key, key, None).await {
+            Ok(response) => Some(response.into_model::<Pair>().map_err(log_error)?.value),
+            Err(e) if e.status().is_not_found() => None,
+            Err(e) => return Err(log_error(e)),
+        };
 
-        // Currently there's no way to stream a single query result using the
-        // `azure_data_cosmos` crate without buffering, so the damage (in terms
-        // of host memory usage) is already done, but we can still enforce the
-        // limit:
-        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(Vec::len).unwrap_or(0)
             > max_result_bytes
         {
             Err(Error::Other(format!(
-                "query result exceeds limit of {max_result_bytes} bytes"
+                "read result exceeds limit of {max_result_bytes} bytes"
             )))
         } else {
             Ok(value)
@@ -184,44 +158,63 @@ impl Store for AzureCosmosStore {
             value: value.to_vec(),
             store_id: self.store_id.clone(),
         };
+
+        let partition_key = partition_key(self.store_id.as_deref(), key);
         self.client
-            .create_document(pair)
-            .is_upsert(true)
+            .upsert_item(partition_key, key, pair, None)
             .await
             .map_err(log_error)?;
         Ok(())
     }
 
     async fn delete(&self, key: &str) -> Result<(), Error> {
-        let document_client = self
-            .client
-            .document_client(key, &self.store_id.clone().unwrap_or(key.to_string()))
-            .map_err(log_error)?;
-        if let Err(e) = document_client.delete_document().await
-            && e.as_http_error().map(|e| e.status() != 404).unwrap_or(true)
-        {
-            return Err(log_error(e));
+        let partition_key = partition_key(self.store_id.as_deref(), key);
+
+        match self.client.delete_item(partition_key, key, None).await {
+            Ok(_) => Ok(()),
+            Err(e) if e.status().is_not_found() => Ok(()),
+            Err(e) => Err(log_error(e)),
         }
-        Ok(())
     }
 
     async fn exists(&self, key: &str) -> Result<bool, Error> {
         let mut stream = self
             .client
-            .query_documents(Query::new(self.get_id_query(key)))
-            .query_cross_partition(true)
-            .max_item_count(1)
-            .into_stream::<Key>();
-
-        match stream.next().await {
-            Some(Ok(res)) => Ok(!res.results.is_empty()),
-            Some(Err(e)) => Err(log_error(e)),
-            None => Ok(false),
-        }
+            .query_items::<Key>(
+                Query::from(self.get_id_query(key)),
+                FeedScope::partition(partition_key(self.store_id.as_deref(), key)),
+                None,
+            )
+            .await
+            .map_err(log_error)?;
+        Ok(stream.try_next().await.map_err(log_error)?.is_some())
     }
 
     async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
-        self.get_keys(max_result_bytes).await
+        let mut stream = self
+            .client
+            .query_items::<Key>(
+                Query::from(self.get_keys_query()),
+                FeedScope::full_container(),
+                None,
+            )
+            .await
+            .map_err(log_error)?;
+
+        let mut result = Vec::new();
+        let mut byte_count = std::mem::size_of::<Vec<String>>();
+
+        while let Some(key) = stream.try_next().await.map_err(log_error)? {
+            byte_count += std::mem::size_of::<String>() + key.id.len();
+            if byte_count > max_result_bytes {
+                return Err(Error::Other(format!(
+                    "query result exceeds limit of {max_result_bytes} bytes"
+                )));
+            }
+            result.push(key.id);
+        }
+
+        Ok(result)
     }
 
     async fn get_keys_async(
@@ -234,25 +227,25 @@ impl Store for AzureCosmosStore {
         let (keys_tx, keys_rx) = tokio::sync::mpsc::channel(4);
         let (err_tx, err_rx) = tokio::sync::oneshot::channel();
 
-        let query = self
-            .client
-            .query_documents(Query::new(self.get_keys_query()))
-            .query_cross_partition(true);
+        let client = self.client.clone();
+        let query = self.get_keys_query();
 
         let the_work = async move {
-            let mut stream = query.into_stream::<Key>();
-            while let Some(resp) = stream.next().await {
-                let resp = resp.map_err(log_error_v3)?;
+            let mut stream = client
+                .query_items::<Key>(Query::from(query), FeedScope::full_container(), None)
+                .await
+                .map_err(log_error_v3)?;
 
-                if resp.results.iter().map(|(k, _)| k.id.len()).sum::<usize>() > max_result_bytes {
+            let mut byte_count = std::mem::size_of::<Vec<String>>();
+            while let Some(key) = stream.try_next().await.map_err(log_error_v3)? {
+                byte_count += std::mem::size_of::<String>() + key.id.len();
+                if byte_count > max_result_bytes {
                     return Err(v3::Error::Other(format!(
                         "query exceeds limit of {max_result_bytes} bytes"
                     )));
                 }
 
-                for (key, _) in resp.results {
-                    keys_tx.send(key.id).await.map_err(log_error_v3)?;
-                }
+                keys_tx.send(key.id).await.map_err(log_error_v3)?;
             }
             Ok(())
         };
@@ -269,36 +262,41 @@ impl Store for AzureCosmosStore {
         keys: Vec<String>,
         max_result_bytes: usize,
     ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
-        let stmt = Query::new(self.get_in_query(keys));
-        let query = self
-            .client
-            .query_documents(stmt)
-            .query_cross_partition(true);
+        // Deduplicate first: a repeated key would otherwise be counted once
+        // against `max_result_bytes` but returned once per occurrence.
+        let keys: Vec<String> = keys.into_iter().unique().collect();
 
-        let mut res = Vec::new();
-        let mut stream = query.into_stream::<Pair>();
+        let mut stream = self
+            .client
+            .query_items::<Pair>(
+                Query::from(self.get_in_query(&keys)),
+                FeedScope::full_container(),
+                None,
+            )
+            .await
+            .map_err(log_error)?;
+
+        let mut found = HashMap::new();
         let mut byte_count = std::mem::size_of::<Vec<(String, Option<Vec<u8>>)>>();
-        while let Some(resp) = stream.next().await {
-            let resp = resp.map_err(log_error)?.results;
-            byte_count += resp
-                .iter()
-                .map(|(pair, _)| {
-                    std::mem::size_of::<(String, Option<Vec<u8>>)>()
-                        + pair.id.len()
-                        + pair.value.len()
-                })
-                .sum::<usize>();
+        while let Some(pair) = stream.try_next().await.map_err(log_error)? {
+            byte_count +=
+                std::mem::size_of::<(String, Option<Vec<u8>>)>() + pair.id.len() + pair.value.len();
+
             if byte_count > max_result_bytes {
                 return Err(Error::Other(format!(
                     "query result exceeds limit of {max_result_bytes} bytes"
                 )));
             }
-            res.extend(
-                resp.into_iter()
-                    .map(|(pair, _)| (pair.id, Some(pair.value))),
-            );
+            found.insert(pair.id, pair.value);
         }
-        Ok(res)
+
+        Ok(keys
+            .into_iter()
+            .map(|key| {
+                let value = found.remove(&key);
+                (key, value)
+            })
+            .collect())
     }
 
     async fn set_many(&self, key_values: Vec<(String, Vec<u8>)>) -> Result<(), Error> {
@@ -320,53 +318,34 @@ impl Store for AzureCosmosStore {
     /// The initial value for the item must be set through this interface, as this sets the
     /// number value if it does not exist. If the value was previously set using
     /// the `set` interface, this will fail due to a type mismatch.
-    // TODO: The function should parse the new value from the return response
-    // rather than sending an additional new request. However, the current SDK
-    // version does not support this.
     async fn increment(&self, key: String, delta: i64) -> Result<i64, Error> {
-        let operations = vec![Operation::incr("/value", delta).map_err(log_error)?];
+        let patch =
+            PatchInstructions::default().with_operation(PatchOperation::increment("/value", delta));
+        let partition_key = partition_key(self.store_id.as_deref(), &key);
+
         match self
             .client
-            .document_client(&key, &self.store_id.clone().unwrap_or(key.to_string()))
-            .map_err(log_error)?
-            .patch_document(operations)
+            .patch_item(partition_key.clone(), &key, patch, None)
             .await
         {
-            Err(e) => {
-                if e.as_http_error()
-                    .map(|e| e.status() == 404)
-                    .unwrap_or(false)
+            Err(e) if e.status().is_not_found() => {
+                let counter = Counter {
+                    id: key.clone(),
+                    value: delta,
+                    store_id: self.store_id.clone(),
+                };
+                match self
+                    .client
+                    .create_item(partition_key, &key, counter, None)
+                    .await
                 {
-                    let counter = Counter {
-                        id: key.clone(),
-                        value: delta,
-                        store_id: self.store_id.clone(),
-                    };
-                    if let Err(e) = self.client.create_document(counter).is_upsert(false).await {
-                        if e.as_http_error()
-                            .map(|e| e.status())
-                            .unwrap_or(azure_core::StatusCode::Continue)
-                            == 409
-                        {
-                            // Conflict trying to create counter, retry increment
-                            self.increment(key, delta).await?;
-                        } else {
-                            return Err(log_error(e));
-                        }
-                    }
-                    Ok(delta)
-                } else {
-                    Err(log_error(e))
+                    Ok(_) => Ok(delta),
+                    Err(e) if e.status().is_conflict() => self.increment(key, delta).await,
+                    Err(e) => Err(log_error(e)),
                 }
             }
-            Ok(_) => self
-                .get_entity::<Counter>(key.as_ref())
-                .await?
-                .map(|c| c.value)
-                .ok_or(Error::Other(
-                    "increment returned an empty value after patching, which indicates a bug"
-                        .to_string(),
-                )),
+            Err(e) => Err(log_error(e)),
+            Ok(response) => Ok(response.into_model::<Counter>().map_err(log_error)?.value),
         }
     }
 
@@ -387,22 +366,10 @@ impl Store for AzureCosmosStore {
 
 struct CompareAndSwap {
     key: String,
-    client: CollectionClient,
+    client: ContainerClient,
     bucket_rep: u32,
-    etag: Mutex<Option<String>>,
+    etag: Mutex<Option<Etag>>,
     store_id: Option<String>,
-}
-
-impl CompareAndSwap {
-    fn get_query(&self) -> String {
-        let mut query = format!("SELECT * FROM c WHERE c.id='{}'", self.key);
-        self.append_store_id(&mut query, true);
-        query
-    }
-
-    fn append_store_id(&self, query: &mut String, condition_already_exists: bool) {
-        append_store_id_condition(query, self.store_id.as_deref(), condition_already_exists);
-    }
 }
 
 #[async_trait]
@@ -410,40 +377,22 @@ impl Cas for CompareAndSwap {
     /// `current` will fetch the current value for the key and store the etag for the record. The
     /// etag will be used to perform and optimistic concurrency update using the `if-match` header.
     async fn current(&self, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
-        let mut stream = self
-            .client
-            .query_documents(Query::new(self.get_query()))
-            .query_cross_partition(true)
-            .max_item_count(1)
-            .into_stream::<Pair>();
+        let partition_key = partition_key(self.store_id.as_deref(), &self.key);
+        let result = self.client.read_item(partition_key, &self.key, None).await;
 
-        let current_value: Option<(Vec<u8>, Option<String>)> = match stream.next().await {
-            Some(r) => {
-                let r = r.map_err(log_error)?;
-                match r.results.first() {
-                    Some((item, Some(attr))) => {
-                        Some((item.clone().value, Some(attr.etag().to_string())))
-                    }
-                    Some((item, None)) => Some((item.clone().value, None)),
-                    _ => None,
-                }
+        let value = match result {
+            Ok(response) => {
+                *self.etag.lock().unwrap() = response.headers().etag().cloned();
+                Some(response.into_model::<Pair>().map_err(log_error)?.value)
             }
-            None => None,
+            Err(e) if e.status().is_not_found() => {
+                *self.etag.lock().unwrap() = None;
+                None
+            }
+            Err(e) => return Err(log_error(e)),
         };
 
-        let value = match current_value {
-            Some((value, etag)) => {
-                self.etag.lock().unwrap().clone_from(&etag);
-                Some(value)
-            }
-            None => None,
-        };
-
-        // Currently there's no way to stream a single query result using the
-        // `azure_data_cosmos` crate without buffering, so the damage (in terms
-        // of host memory usage) is already done, but we can still enforce the
-        // limit:
-        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(|v| v.len()).unwrap_or(0)
+        if std::mem::size_of::<Option<Vec<u8>>>() + value.as_ref().map(Vec::len).unwrap_or(0)
             > max_result_bytes
         {
             Err(Error::Other(format!(
@@ -463,31 +412,37 @@ impl Cas for CompareAndSwap {
             store_id: self.store_id.clone(),
         };
 
-        let doc_client = self
-            .client
-            .document_client(&self.key, &pair.partition_key())
-            .map_err(log_cas_error)?;
+        let partition_key = partition_key(self.store_id.as_deref(), &self.key);
+        let etag = self.etag.lock().unwrap().clone();
+        let had_etag = etag.is_some();
 
-        let etag_value = self.etag.lock().unwrap().clone();
-        match etag_value {
+        let response = match etag {
             Some(etag) => {
-                // attempt to replace the document if the etag matches
-                doc_client
-                    .replace_document(pair)
-                    .if_match_condition(azure_core::request_options::IfMatchCondition::Match(etag))
+                let opts =
+                    ItemWriteOptions::default().with_precondition(Precondition::IfMatch(etag));
+                self.client
+                    .replace_item(partition_key, &self.key, &pair, Some(opts))
                     .await
-                    .map_err(|e| SwapError::CasFailed(format!("{e:?}")))
-                    .map(drop)
             }
             None => {
-                // if we have no etag, then we assume the document does not yet exist and must insert; no upserts.
                 self.client
-                    .create_document(pair)
+                    .create_item(partition_key, &self.key, &pair, None)
                     .await
-                    .map_err(|e| SwapError::CasFailed(format!("{e:?}")))
-                    .map(drop)
             }
-        }
+        };
+
+        response.map(drop).map_err(|e| {
+            let msg = format!("{e:?}");
+            let status = e.status();
+            if status.is_precondition_failed()
+                || status.is_conflict()
+                || (had_etag && status.is_not_found())
+            {
+                SwapError::CasFailed(msg)
+            } else {
+                SwapError::Other(msg)
+            }
+        })
     }
 
     async fn bucket_rep(&self) -> u32 {
@@ -500,87 +455,31 @@ impl Cas for CompareAndSwap {
 }
 
 impl AzureCosmosStore {
-    async fn get_entity<F>(&self, key: &str) -> Result<Option<F>, Error>
-    where
-        F: CosmosEntity + Send + Sync + serde::de::DeserializeOwned + Clone,
-    {
-        let query = self
-            .client
-            .query_documents(Query::new(self.get_query(key)))
-            .query_cross_partition(true)
-            .max_item_count(1);
-
-        // There can be no duplicated keys, so we create the stream and only take the first result.
-        let mut stream = query.into_stream::<F>();
-        let Some(res) = stream.next().await else {
-            return Ok(None);
-        };
-        Ok(res
-            .map_err(log_error)?
-            .results
-            .first()
-            .map(|(p, _)| p.clone()))
-    }
-
-    async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
-        let query = self
-            .client
-            .query_documents(Query::new(self.get_keys_query()))
-            .query_cross_partition(true);
-        let mut res = Vec::new();
-
-        let mut stream = query.into_stream::<Key>();
-        let mut byte_count = std::mem::size_of::<Vec<String>>();
-        while let Some(resp) = stream.next().await {
-            let resp = resp.map_err(log_error)?.results;
-            byte_count += resp
-                .iter()
-                .map(|(key, _)| std::mem::size_of::<String>() + key.id.len())
-                .sum::<usize>();
-            if byte_count > max_result_bytes {
-                return Err(Error::Other(format!(
-                    "query result exceeds limit of {max_result_bytes} bytes"
-                )));
-            }
-            res.extend(resp.into_iter().map(|(key, _)| key.id));
-        }
-
-        Ok(res)
-    }
-
-    fn get_query(&self, key: &str) -> String {
-        let mut query = format!("SELECT * FROM c WHERE c.id='{key}'");
-        self.append_store_id(&mut query, true);
-        query
-    }
-
     fn get_id_query(&self, key: &str) -> String {
         let mut query = format!("SELECT c.id, c.store_id FROM c WHERE c.id='{key}'");
-        self.append_store_id(&mut query, true);
+        append_store_id_condition(&mut query, self.store_id.as_deref(), true);
         query
     }
 
     fn get_keys_query(&self) -> String {
         let mut query = "SELECT c.id, c.store_id FROM c".to_owned();
-        self.append_store_id(&mut query, false);
+        append_store_id_condition(&mut query, self.store_id.as_deref(), false);
         query
     }
 
-    fn get_in_query(&self, keys: Vec<String>) -> String {
-        let in_clause: String = keys
-            .into_iter()
-            .map(|k| format!("'{k}'"))
-            .collect::<Vec<String>>()
-            .join(", ");
+    fn get_in_query(&self, keys: &[String]) -> String {
+        let in_clause = keys.iter().map(|k| format!("'{k}'")).join(", ");
 
         let mut query = format!("SELECT * FROM c WHERE c.id IN ({in_clause})");
-        self.append_store_id(&mut query, true);
+        append_store_id_condition(&mut query, self.store_id.as_deref(), true);
         query
     }
+}
 
-    fn append_store_id(&self, query: &mut String, condition_already_exists: bool) {
-        append_store_id_condition(query, self.store_id.as_deref(), condition_already_exists);
-    }
+fn partition_key(store_id: Option<&str>, key: &str) -> String {
+    store_id
+        .map(str::to_string)
+        .unwrap_or_else(|| key.to_string())
 }
 
 /// Appends an option store id condition to the query.
@@ -601,7 +500,7 @@ fn append_store_id_condition(
     }
 }
 
-// Pair structure for key value operations
+/// Pair structure for key value operations
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Pair {
     pub id: String,
@@ -609,16 +508,7 @@ pub struct Pair {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub store_id: Option<String>,
 }
-
-impl CosmosEntity for Pair {
-    type Entity = String;
-
-    fn partition_key(&self) -> Self::Entity {
-        self.store_id.clone().unwrap_or_else(|| self.id.clone())
-    }
-}
-
-// Counter structure for increment operations
+/// Counter structure for increment operations
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Counter {
     pub id: String,
@@ -627,26 +517,10 @@ pub struct Counter {
     pub store_id: Option<String>,
 }
 
-impl CosmosEntity for Counter {
-    type Entity = String;
-
-    fn partition_key(&self) -> Self::Entity {
-        self.store_id.clone().unwrap_or_else(|| self.id.clone())
-    }
-}
-
-// Key structure for operations with generic value types
+/// Key structure for operations with generic value types
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Key {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub store_id: Option<String>,
-}
-
-impl CosmosEntity for Key {
-    type Entity = String;
-
-    fn partition_key(&self) -> Self::Entity {
-        self.store_id.clone().unwrap_or_else(|| self.id.clone())
-    }
 }
