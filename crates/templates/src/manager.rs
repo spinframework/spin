@@ -25,20 +25,32 @@ pub trait ProgressReporter {
 #[derive(Debug)]
 pub struct InstallOptions {
     exists_behaviour: ExistsBehaviour,
+    skip_if_all_match: bool,
 }
 
 impl InstallOptions {
     /// Sets the option to update existing templates. If `update` is true,
     /// existing templates are updated. If false, existing templates are
     /// skipped.
-    pub fn update(self, update: bool) -> Self {
+    pub fn update(mut self, update: bool) -> Self {
         let exists_behaviour = if update {
             ExistsBehaviour::Update
         } else {
             ExistsBehaviour::Skip
         };
 
-        Self { exists_behaviour }
+        self.exists_behaviour = exists_behaviour;
+        self
+    }
+
+    /// If set, the installer will skip if the manager has templates,
+    /// and all templates were installed from the install source.
+    /// This allows a consumer to avoid downloading from a
+    /// remote source, at the expense of missing an update if the
+    /// source is mutable (such as a Git tag or branch).
+    pub fn skip_if_all_match(mut self, skip_if_all_match: bool) -> Self {
+        self.skip_if_all_match = skip_if_all_match;
+        self
     }
 }
 
@@ -46,6 +58,7 @@ impl Default for InstallOptions {
     fn default() -> Self {
         Self {
             exists_behaviour: ExistsBehaviour::Skip,
+            skip_if_all_match: false,
         }
     }
 }
@@ -133,6 +146,18 @@ impl TemplateManager {
         options: &InstallOptions,
         reporter: &impl ProgressReporter,
     ) -> anyhow::Result<InstallationResults> {
+        if options.skip_if_all_match && self.all_match(source).await {
+            let existing = self.list().await.map(|lr| lr.templates).unwrap_or_default(); // don't fail if we can't list
+            return Ok(InstallationResults {
+                installed: Default::default(),
+                skipped: existing
+                    .into_iter()
+                    .map(|t| (t.id().to_string(), SkippedReason::AlreadyExists))
+                    .collect(),
+                removed: Default::default(),
+            });
+        }
+
         if source.requires_copy() {
             reporter.report("Copying remote template source");
         }
@@ -316,6 +341,23 @@ impl TemplateManager {
             .get_layout(id)
             .map(|l| Template::load_from(&l))
             .transpose()
+    }
+
+    async fn all_match(&self, source: &TemplateSource) -> bool {
+        let existing = self.list().await.map(|lr| lr.templates).unwrap_or_default();
+        if existing.is_empty() {
+            // We don't expect a template source to be empty. If the manager is empty, count it as no match.
+            return false;
+        }
+
+        let (expected_repo, expected_tag) = match source {
+            TemplateSource::Git(g) => (g.repo(), g.branch()),
+            _ => return false, // other sources are too mutable
+        };
+
+        existing
+            .iter()
+            .all(|template| template.is_installed_from_git_ref(expected_repo, expected_tag))
     }
 }
 
