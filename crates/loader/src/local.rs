@@ -91,6 +91,7 @@ impl LocalLoader {
     ) -> Result<LockedApp> {
         spin_manifest::normalize::normalize_manifest(&mut manifest, profile)?;
 
+        manifest.validate_required_fields()?;
         manifest.validate_dependencies()?;
 
         let AppManifest {
