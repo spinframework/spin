@@ -1,3 +1,5 @@
+#:schema https://schemas.spinframework.dev/spin/manifest-v2/latest.json
+
 spin_manifest_version = 2
 
 [application]

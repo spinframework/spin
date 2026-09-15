@@ -46,6 +46,7 @@ pub struct AppManifest {
     ///
     /// Example: `[[trigger.http]]`
     #[serde(rename = "trigger")]
+    #[serde(default)]
     #[schemars(with = "json_schema::TriggerSchema")]
     pub triggers: Map<String, Vec<Trigger>>,
     /// `[component.<id>]`
@@ -55,6 +56,15 @@ pub struct AppManifest {
 }
 
 impl AppManifest {
+    /// Ensures that required fields (where not enforced in the schema) are populated.
+    pub fn validate_required_fields(&self) -> anyhow::Result<()> {
+        if self.triggers.is_empty() {
+            anyhow::bail!("The application must have at least one trigger");
+        }
+
+        Ok(())
+    }
+
     /// This method ensures that the dependencies of each component are valid.
     pub fn validate_dependencies(&self) -> anyhow::Result<()> {
         for (component_id, component) in &self.components {

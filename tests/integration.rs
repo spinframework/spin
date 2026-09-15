@@ -597,8 +597,8 @@ mod integration_tests {
             },
         )?;
 
-        let expected = "Error: No triggers in app\n";
-        assert_eq!(env.runtime_mut().stderr(), expected);
+        let expected = "application must have at least one trigger";
+        assert!(env.runtime_mut().stderr().contains(expected));
 
         Ok(())
     }
