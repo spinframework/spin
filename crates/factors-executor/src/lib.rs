@@ -372,7 +372,7 @@ pub struct InstanceState<T, U> {
     factors: T,
     executor: U,
     /// The component ID.
-    component_id: String,
+    component_id: Arc<str>,
 
     /// The last time guest code started running in this instance.
     cpu_time_last_entry: Option<Instant>,

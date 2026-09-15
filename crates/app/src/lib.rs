@@ -312,7 +312,7 @@ impl<'a> AppTrigger<'a> {
         let component_id = common_config.component.ok_or_else(|| {
             Error::MetadataError(format!("trigger {id:?} missing 'component' config field"))
         })?;
-        self.app.get_component(&component_id).ok_or_else(|| {
+        self.app.get_component(component_id).ok_or_else(|| {
             Error::MetadataError(format!(
                 "missing component {component_id:?} configured for trigger {id:?}"
             ))
@@ -321,8 +321,8 @@ impl<'a> AppTrigger<'a> {
 }
 
 #[derive(Deserialize)]
-struct CommonTriggerConfig {
-    component: Option<String>,
+struct CommonTriggerConfig<'a> {
+    component: Option<&'a str>,
 }
 
 /// Scrubs the locked app to only contain the given list of components
