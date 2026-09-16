@@ -11,19 +11,17 @@ rust-version.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-azure_core = "0.21.0"
-azure_data_cosmos = "0.21.0"
-azure_identity = "0.21.0"
+azure_core = { version = "1.0", default-features = false }
+# Use native-tls (OpenSSL) rather than the SDK-default rustls. The default
+# `rustls` feature drags in reqwest's aws-lc-rs provider, which collides with
+# Spin's workspace-pinned `ring` provider and panics at runtime.
+azure_data_cosmos = { version = "0.37", default-features = false, features = ["key_auth", "native_tls", "hmac_rust"] }
+azure_identity = { version = "1.0", default-features = false, features = ["tokio"] }
 futures = { workspace = true }
-reqwest = { version = "0.12", default-features = false }
+itertools = { workspace = true }
 serde = { workspace = true }
 spin-factor-key-value = { path = "../factor-key-value" }
 tokio = { workspace = true, features = ["rt", "sync"] }
 
 [lints]
 workspace = true
-
-[features]
-# Enables reusing connections to the Azure Cosmos DB service.
-connection-pooling = []
-default = ["connection-pooling"]
