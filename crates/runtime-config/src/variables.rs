@@ -5,7 +5,7 @@ use spin_factors::runtime_config::toml::GetTomlValue;
 use spin_variables_azure::{AzureKeyVaultProvider, AzureKeyVaultVariablesConfig};
 use spin_variables_env::{EnvVariablesConfig, EnvVariablesProvider};
 use spin_variables_static::StaticVariablesProvider;
-use spin_variables_vault::VaultVariablesProvider;
+use spin_variables_vault::{OpenBaoVariableProvider, VaultVariablesProvider};
 
 /// Resolves a runtime configuration for the variables factor from a TOML table.
 pub fn runtime_config_from_toml(table: &impl GetTomlValue) -> anyhow::Result<RuntimeConfig> {
@@ -39,6 +39,8 @@ pub enum VariableProviderConfiguration {
     Static(StaticVariablesProvider),
     /// A provider that uses HashiCorp Vault.
     Vault(VaultVariablesProvider),
+    /// A provider that uses OpenBao.
+    OpenBao(OpenBaoVariableProvider),
     /// An environment variable provider.
     Env(EnvVariablesConfig),
 }
@@ -54,6 +56,7 @@ impl VariableProviderConfiguration {
                 config.dotenv_path,
             )),
             VariableProviderConfiguration::Vault(provider) => Box::new(provider),
+            VariableProviderConfiguration::OpenBao(provider) => Box::new(provider),
             VariableProviderConfiguration::AzureKeyVault(config) => Box::new(
                 AzureKeyVaultProvider::create(config.vault_url.clone(), config.try_into()?)?,
             ),
