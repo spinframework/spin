@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use azure_data_cosmos::{
     CosmosEntity,
     prelude::{
-        AuthorizationToken, CollectionClient, CosmosClient, CosmosClientBuilder, Operation, Query,
+        AuthorizationToken, CollectionClient, CosmosClient, CosmosClientBuilder, Operation, Param,
+        Query,
     },
 };
 use futures::StreamExt;
@@ -208,7 +209,7 @@ impl Store for AzureCosmosStore {
     async fn exists(&self, key: &str) -> Result<bool, Error> {
         let mut stream = self
             .client
-            .query_documents(Query::new(self.get_id_query(key)))
+            .query_documents(get_id_query(key, self.store_id.as_deref()))
             .query_cross_partition(true)
             .max_item_count(1)
             .into_stream::<Key>();
@@ -236,7 +237,7 @@ impl Store for AzureCosmosStore {
 
         let query = self
             .client
-            .query_documents(Query::new(self.get_keys_query()))
+            .query_documents(get_keys_query(self.store_id.as_deref()))
             .query_cross_partition(true);
 
         let the_work = async move {
@@ -269,7 +270,7 @@ impl Store for AzureCosmosStore {
         keys: Vec<String>,
         max_result_bytes: usize,
     ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
-        let stmt = Query::new(self.get_in_query(keys));
+        let stmt = get_in_query(keys, self.store_id.as_deref());
         let query = self
             .client
             .query_documents(stmt)
@@ -393,18 +394,6 @@ struct CompareAndSwap {
     store_id: Option<String>,
 }
 
-impl CompareAndSwap {
-    fn get_query(&self) -> String {
-        let mut query = format!("SELECT * FROM c WHERE c.id='{}'", self.key);
-        self.append_store_id(&mut query, true);
-        query
-    }
-
-    fn append_store_id(&self, query: &mut String, condition_already_exists: bool) {
-        append_store_id_condition(query, self.store_id.as_deref(), condition_already_exists);
-    }
-}
-
 #[async_trait]
 impl Cas for CompareAndSwap {
     /// `current` will fetch the current value for the key and store the etag for the record. The
@@ -412,7 +401,7 @@ impl Cas for CompareAndSwap {
     async fn current(&self, max_result_bytes: usize) -> Result<Option<Vec<u8>>, Error> {
         let mut stream = self
             .client
-            .query_documents(Query::new(self.get_query()))
+            .query_documents(get_query(&self.key, self.store_id.as_deref()))
             .query_cross_partition(true)
             .max_item_count(1)
             .into_stream::<Pair>();
@@ -506,7 +495,7 @@ impl AzureCosmosStore {
     {
         let query = self
             .client
-            .query_documents(Query::new(self.get_query(key)))
+            .query_documents(get_query(key, self.store_id.as_deref()))
             .query_cross_partition(true)
             .max_item_count(1);
 
@@ -525,7 +514,7 @@ impl AzureCosmosStore {
     async fn get_keys(&self, max_result_bytes: usize) -> Result<Vec<String>, Error> {
         let query = self
             .client
-            .query_documents(Query::new(self.get_keys_query()))
+            .query_documents(get_keys_query(self.store_id.as_deref()))
             .query_cross_partition(true);
         let mut res = Vec::new();
 
@@ -547,58 +536,64 @@ impl AzureCosmosStore {
 
         Ok(res)
     }
-
-    fn get_query(&self, key: &str) -> String {
-        let mut query = format!("SELECT * FROM c WHERE c.id='{key}'");
-        self.append_store_id(&mut query, true);
-        query
-    }
-
-    fn get_id_query(&self, key: &str) -> String {
-        let mut query = format!("SELECT c.id, c.store_id FROM c WHERE c.id='{key}'");
-        self.append_store_id(&mut query, true);
-        query
-    }
-
-    fn get_keys_query(&self) -> String {
-        let mut query = "SELECT c.id, c.store_id FROM c".to_owned();
-        self.append_store_id(&mut query, false);
-        query
-    }
-
-    fn get_in_query(&self, keys: Vec<String>) -> String {
-        let in_clause: String = keys
-            .into_iter()
-            .map(|k| format!("'{k}'"))
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        let mut query = format!("SELECT * FROM c WHERE c.id IN ({in_clause})");
-        self.append_store_id(&mut query, true);
-        query
-    }
-
-    fn append_store_id(&self, query: &mut String, condition_already_exists: bool) {
-        append_store_id_condition(query, self.store_id.as_deref(), condition_already_exists);
-    }
 }
 
-/// Appends an option store id condition to the query.
-fn append_store_id_condition(
-    query: &mut String,
+fn get_query(key: &str, store_id: Option<&str>) -> Query {
+    build_query(
+        "SELECT * FROM c",
+        vec!["c.id=@id"],
+        vec![Param::new("@id".to_owned(), key)],
+        store_id,
+    )
+}
+
+fn get_id_query(key: &str, store_id: Option<&str>) -> Query {
+    build_query(
+        "SELECT c.id, c.store_id FROM c",
+        vec!["c.id=@id"],
+        vec![Param::new("@id".to_owned(), key)],
+        store_id,
+    )
+}
+
+fn get_keys_query(store_id: Option<&str>) -> Query {
+    build_query("SELECT c.id, c.store_id FROM c", vec![], vec![], store_id)
+}
+
+fn get_in_query(keys: Vec<String>, store_id: Option<&str>) -> Query {
+    let params: Vec<Param> = keys
+        .into_iter()
+        .enumerate()
+        .map(|(i, key)| Param::new(format!("@id{i}"), key))
+        .collect();
+    let names = params.iter().map(Param::name).collect::<Vec<&str>>();
+    let in_condition = format!("c.id IN ({})", names.join(", "));
+    build_query(
+        "SELECT * FROM c",
+        vec![in_condition.as_str()],
+        params,
+        store_id,
+    )
+}
+
+/// Builds a parameterized query from a select clause and `AND`-joined conditions, adding a
+/// `c.store_id=@store_id` condition when a store id is set.
+fn build_query(
+    select: &str,
+    mut conditions: Vec<&str>,
+    mut params: Vec<Param>,
     store_id: Option<&str>,
-    condition_already_exists: bool,
-) {
-    if let Some(s) = store_id {
-        if condition_already_exists {
-            query.push_str(" AND");
-        } else {
-            query.push_str(" WHERE");
-        }
-        query.push_str(" c.store_id='");
-        query.push_str(s);
-        query.push('\'')
+) -> Query {
+    if let Some(store_id) = store_id {
+        conditions.push("c.store_id=@store_id");
+        params.push(Param::new("@store_id".to_owned(), store_id));
     }
+    let mut sql = select.to_owned();
+    if !conditions.is_empty() {
+        sql.push_str(" WHERE ");
+        sql.push_str(&conditions.join(" AND "));
+    }
+    Query::with_params(sql, params)
 }
 
 // Pair structure for key value operations
