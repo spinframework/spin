@@ -1,7 +1,7 @@
 manifest_version = "1"
-id = "http-c"
-description = "HTTP request handler using WASI P2, C and the WASI-SDK toolchain"
-tags = ["http", "c"]
+id = "http-cpp"
+description = "HTTP request handler using WASI P2, C++ and the WASI-SDK toolchain"
+tags = ["http", "cpp", "c++"]
 
 [parameters]
 project-description = { type = "string",  prompt = "Description", default = "" }
