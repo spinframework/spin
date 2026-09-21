@@ -26,7 +26,7 @@ pub fn required_capabilities(source: &[u8]) -> anyhow::Result<BTreeSet<String>> 
             }
             Payload::ComponentImportSection(reader) if depth == 0 => {
                 for import in reader {
-                    let name = import?.name.0;
+                    let name = import?.name.name;
                     for &(capability, set) in CAPABILITY_SETS {
                         if set.iter().any(|s| are_semver_compatible(name, s)) {
                             capabilities.insert(capability.to_string());
@@ -60,7 +60,7 @@ mod tests {
 
         let mut imports = ComponentImportSection::new();
         for name in import_names {
-            imports.import(name, ComponentTypeRef::Instance(0));
+            imports.import(*name, ComponentTypeRef::Instance(0));
         }
         component.section(&imports);
 
