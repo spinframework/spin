@@ -1575,11 +1575,12 @@ mod test {
         )
         .expect("should embed component metadata");
 
-        let mut encoder = wit_component::ComponentEncoder::default()
+        wit_component::ComponentEncoder::default()
             .validate(true)
             .module(&wasm)
-            .expect("should set module");
-        encoder.encode().expect("should encode component")
+            .expect("should set module")
+            .encode()
+            .expect("should encode component")
     }
 
     fn annotatable_app() -> LockedApp {

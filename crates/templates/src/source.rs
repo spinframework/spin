@@ -46,6 +46,16 @@ pub struct GitTemplateSource {
     spin_version: String,
 }
 
+impl GitTemplateSource {
+    pub(crate) fn repo(&self) -> &str {
+        self.url.as_str()
+    }
+
+    pub(crate) fn branch(&self) -> Option<&str> {
+        self.branch.as_deref()
+    }
+}
+
 impl TemplateSource {
     /// Creates a `TemplateSource` referring to the specified Git repository
     /// and branch.
@@ -68,6 +78,7 @@ impl TemplateSource {
         match self {
             Self::Git(g) => Some(crate::reader::RawInstalledFrom::Git {
                 git: g.url.to_string(),
+                branch: g.branch.clone(),
             }),
             Self::File(p) => {
                 // Saving a relative path would be meaningless (but should never happen)

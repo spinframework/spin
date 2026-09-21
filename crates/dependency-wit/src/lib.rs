@@ -141,6 +141,8 @@ pub async fn extract_wits(
                 id: mapped_iid,
                 stability: wit_parser::Stability::Unknown,
                 span: Span::default(),
+                docs: Default::default(),
+                external_id: None,
             };
             let previous_world_item = aggregating_resolve
                 .worlds
@@ -385,11 +387,21 @@ fn as_func(wi: &wit_parser::WorldItem) -> Option<&wit_parser::Function> {
 }
 
 fn one_import(wasm: &DecodedWasm, name: &str) -> anyhow::Result<Vec<wit_parser::InterfaceId>> {
+    fn find_interface(
+        resolve: &wit_parser::Resolve,
+        iid: wit_parser::InterfaceId,
+    ) -> Option<(wit_parser::InterfaceId, &wit_parser::Interface)> {
+        resolve.interfaces.get(iid).map(|itf| (iid, itf))
+    }
+
     let id = wasm
         .resolve()
-        .interfaces
+        .worlds
         .iter()
-        .find(|i| i.1.name == Some(name.to_string()))
+        .flat_map(|(_wid, w)| w.imports.values())
+        .flat_map(as_interface)
+        .flat_map(|iid| find_interface(wasm.resolve(), iid))
+        .find(|itf| itf.1.name.as_deref() == Some(name))
         .map(|t| t.0)
         .with_context(|| format!("interface {name} not found in component binary"))?;
     Ok(vec![id])
@@ -480,7 +492,20 @@ mod test {
     }
 
     fn generate_dummy_component(wit: &str, world: &str) -> Vec<u8> {
+        generate_dummy_component_dep_has_imports(wit, world, &[])
+    }
+
+    fn generate_dummy_component_dep_has_imports(
+        wit: &str,
+        world: &str,
+        dep_imports_wits: &[&str],
+    ) -> Vec<u8> {
         let mut resolve = wit_parser::Resolve::default();
+        for (index, dep_import_wit) in dep_imports_wits.iter().enumerate() {
+            resolve
+                .push_str(format!("test{index}"), dep_import_wit)
+                .expect("should parse dep import WIT");
+        }
         let package_id = resolve.push_str("test", wit).expect("should parse WIT");
         let world_id = resolve
             .select_world(&[package_id], Some(world))
@@ -499,11 +524,12 @@ mod test {
         )
         .expect("should embed component metadata");
 
-        let mut encoder = wit_component::ComponentEncoder::default()
+        wit_component::ComponentEncoder::default()
             .validate(true)
             .module(&wasm)
-            .expect("should set module");
-        encoder.encode().expect("should encode component")
+            .expect("should set module")
+            .encode()
+            .expect("should encode component")
     }
 
     #[tokio::test]
@@ -592,6 +618,8 @@ mod test {
             id: regex_itf_id,
             stability: wit_parser::Stability::Unknown,
             span: Span::default(),
+            docs: Default::default(),
+            external_id: None,
         };
         let import = world.imports.values().next().unwrap();
         assert_eq!(&expected_import, import);
@@ -832,6 +860,95 @@ world colors {
             "expected enum param to be Type::Id"
         );
         assert_eq!(wit_parser::Type::String, func.result.unwrap());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn we_do_not_mix_up_dep_exports_with_same_named_dep_imports() -> anyhow::Result<()> {
+        let tempdir = tempfile::TempDir::new()?;
+        let dep_file = tempdir.path().join("impexp.wasm");
+
+        let dep_wit = r#"
+            package my:impexp@1.0.0;
+            
+            interface zounds {
+                fie: func() -> bool;
+            }
+            
+            world tester {
+                export zounds;
+                import clever:clogs/zounds@1.2.3;
+            }"#;
+
+        let dep_imports_another_zounds = r#"
+            package clever:clogs@1.2.3;
+
+            interface zounds {
+                pshaw: func() -> u32;
+            }
+        "#;
+
+        let dep_wasm = generate_dummy_component_dep_has_imports(
+            dep_wit,
+            "tester",
+            &[dep_imports_another_zounds],
+        );
+        tokio::fs::write(&dep_file, &dep_wasm).await?;
+
+        let dep_name =
+            DependencyName::Package("my:impexp/zounds@1.0.0".to_string().try_into().unwrap());
+        let dep_src = ComponentDependency::Local {
+            path: dep_file,
+            export: None,
+            inherit_configuration: None,
+        };
+        let deps = std::iter::once((&dep_name, &dep_src));
+
+        let wit = extract_wits(deps, ".").await?;
+
+        let resolve = parse_wit(&wit).expect("should have emitted valid WIT");
+
+        assert_eq!(3, resolve.packages.len()); // root:component and my:regex
+        let (_rc_pkg_id, rc_pkg) = resolve
+            .packages
+            .iter()
+            .find(|(_, p)| p.name.to_string() == "root:component")
+            .expect("should have had `root:component`");
+        let (_mi_pkg_id, _mi_pkg) = resolve
+            .packages
+            .iter()
+            .find(|(_, p)| p.name.to_string() == "my:impexp@1.0.0")
+            .expect("should have had `my:impexp`");
+        let (_cc_pkg_id, _cc_pkg) = resolve
+            .packages
+            .iter()
+            .find(|(_, p)| p.name.to_string() == "clever:clogs@1.2.3")
+            .expect("should have had `clever:clogs`");
+
+        assert_eq!(2, rc_pkg.worlds.len()); // root and synthetic "impo*" wart
+        let root_world_id = rc_pkg
+            .worlds
+            .iter()
+            .find(|w| w.0 == "root")
+            .expect("should have had `root` world")
+            .1;
+
+        let world = resolve.worlds.get(*root_world_id).unwrap();
+        assert_eq!(1, world.imports.len());
+        let (_, the_import) = world.imports.iter().next().unwrap();
+        let the_import = as_interface(the_import).expect("the import was not an interface");
+        let the_import_itf = resolve
+            .interfaces
+            .get(the_import)
+            .expect("the import id failed at get");
+        assert_eq!("zounds", the_import_itf.name.as_ref().unwrap());
+        let the_import_pkg = resolve
+            .packages
+            .get(the_import_itf.package.unwrap())
+            .expect("the import package failed at get");
+        assert_eq!("my", the_import_pkg.name.namespace);
+        assert_eq!("impexp", the_import_pkg.name.name);
 
         Ok(())
     }

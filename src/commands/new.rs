@@ -336,7 +336,9 @@ async fn env_templates_and_plugins(
                 if let Err(e) = template_manager
                     .install(
                         &source,
-                        &spin_templates::InstallOptions::default().update(true),
+                        &spin_templates::InstallOptions::default()
+                            .update(true)
+                            .skip_if_all_match(true),
                         &DiscardingReporter,
                     )
                     .await

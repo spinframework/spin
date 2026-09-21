@@ -35,7 +35,7 @@ pub struct Template {
 
 #[derive(Debug)]
 enum InstalledFrom {
-    Git(String),
+    Git { url: String, branch: Option<String> },
     Directory(String),
     RemoteTar(String),
     Unknown,
@@ -244,7 +244,7 @@ impl Template {
         // TODO: this is kind of specialised - should we do the discarding of
         // non-Git sources at the application layer?
         match &self.installed_from {
-            InstalledFrom::Git(url) => Some(url),
+            InstalledFrom::Git { url, .. } => Some(url),
             _ => None,
         }
     }
@@ -254,11 +254,31 @@ impl Template {
             .is_some_and(|r| r == source_repo.as_str())
     }
 
+    /// Determines if the template was installed from the expected repo and
+    /// branch. This does not prove that the template is up to date, as the
+    /// tag or branch may have moved in the interim.
+    pub fn is_installed_from_git_ref(
+        &self,
+        expected_repo: &str,
+        expected_tag: Option<&str>,
+    ) -> bool {
+        match &self.installed_from {
+            // If either the install record _or_ the env has None for the branch/tag, then
+            // we must assume the worst, because that is the inherently mutable "use the Spin
+            // CLI version."
+            InstalledFrom::Git {
+                url,
+                branch: Some(br),
+            } => url == expected_repo && expected_tag.is_some_and(|t| t == br),
+            _ => false,
+        }
+    }
+
     /// A human-readable description of where the template was installed
     /// from.
     pub fn installed_from_or_empty(&self) -> &str {
         match &self.installed_from {
-            InstalledFrom::Git(repo) => repo,
+            InstalledFrom::Git { url, .. } => url,
             InstalledFrom::Directory(path) => path,
             InstalledFrom::RemoteTar(url) => url,
             InstalledFrom::Unknown => "",
@@ -599,7 +619,7 @@ fn read_install_record(layout: &TemplateLayout) -> InstalledFrom {
 
     let installed_from_text = std::fs::read_to_string(layout.installation_record_file()).ok();
     match installed_from_text.and_then(parse_installed_from) {
-        Some(RawInstalledFrom::Git { git }) => InstalledFrom::Git(git),
+        Some(RawInstalledFrom::Git { git, branch }) => InstalledFrom::Git { url: git, branch },
         Some(RawInstalledFrom::File { dir }) => InstalledFrom::Directory(dir),
         Some(RawInstalledFrom::RemoteTar { url }) => InstalledFrom::RemoteTar(url),
         None => InstalledFrom::Unknown,
