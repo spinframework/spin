@@ -66,6 +66,7 @@ mod bindings {
             "wasi:io/streams.[method]output-stream.blocking-write-zeroes-and-flush": async | trappable,
             "wasi:io/poll.poll-list": async | trappable,
             "wasi:io/poll.poll-one": async | trappable,
+            "wasi:sockets/ip-name-lookup.[drop]resolve-address-stream": async | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-bind": async | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-connect": async | trappable,
             "wasi:sockets/tcp.[method]tcp-socket.start-listen": async | trappable,
@@ -1494,7 +1495,8 @@ impl<T> wasi::sockets::udp::HostUdpSocket for SpinSocketsView<'_, T> {
                 incoming,
                 outgoing,
             } => {
-                latest::sockets::udp::HostIncomingDatagramStream::drop(&mut self.inner, incoming)?;
+                latest::sockets::udp::HostIncomingDatagramStream::drop(&mut self.inner, incoming)
+                    .await?;
                 latest::sockets::udp::HostOutgoingDatagramStream::drop(&mut self.inner, outgoing)
                     .await?;
                 socket
@@ -1587,8 +1589,8 @@ impl<T> wasi::sockets::ip_name_lookup::HostResolveAddressStream for SpinSocketsV
         latest::sockets::ip_name_lookup::HostResolveAddressStream::subscribe(&mut self.inner, self_)
     }
 
-    fn drop(&mut self, rep: Resource<ResolveAddressStream>) -> wasmtime::Result<()> {
-        latest::sockets::ip_name_lookup::HostResolveAddressStream::drop(&mut self.inner, rep)
+    async fn drop(&mut self, rep: Resource<ResolveAddressStream>) -> wasmtime::Result<()> {
+        latest::sockets::ip_name_lookup::HostResolveAddressStream::drop(&mut self.inner, rep).await
     }
 }
 
