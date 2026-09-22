@@ -126,6 +126,11 @@ impl NetworkedMqttClient {
         password: String,
         keep_alive_interval: Duration,
     ) -> Result<Self, v3::Error> {
+        // rumqttc builds a rustls `ClientConfig` while parsing an `mqtts://` URL.
+        // With more than one rustls provider feature compiled in, that panics
+        // unless a process-wide provider is already installed, which callers
+        // that bypass Spin's entrypoints (embedders, tests) have not done.
+        spin_tls::get_or_install_default_crypto_provider();
         let mut conn_opts = rumqttc::MqttOptions::parse_url(address).map_err(|e| {
             tracing::error!("MQTT URL parse error: {e:?}");
             v3::Error::InvalidAddress

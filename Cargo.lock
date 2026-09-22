@@ -9402,6 +9402,7 @@ dependencies = [
  "spin-factors",
  "spin-factors-test",
  "spin-resource-table",
+ "spin-tls",
  "spin-world",
  "tokio",
  "tracing",
