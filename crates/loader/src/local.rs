@@ -774,9 +774,9 @@ impl WasmLoader {
         Ok(content)
     }
 
-    // Load a Wasm source from the given HTTP ContentRef source URL and
-    // return a ContentRef an absolute path to the local copy.
-    async fn load_http_source(&self, url: &str, digest: &str) -> Result<PathBuf> {
+    /// Load a Wasm source from `url`, verifying it against `digest`
+    /// (`sha256:...`), and return a path to the cached local copy.
+    pub async fn load_http_source(&self, url: &str, digest: &str) -> Result<PathBuf> {
         ensure!(
             digest.starts_with("sha256:"),
             "invalid `digest` {digest:?}; must start with 'sha256:'"
@@ -801,7 +801,9 @@ impl WasmLoader {
         Ok(path)
     }
 
-    async fn load_registry_source(
+    /// Load the best matching release of `package` from `registry` (or the
+    /// default registry) and return a path to the cached Wasm file.
+    pub async fn load_registry_source(
         &self,
         registry: Option<&wasm_pkg_client::Registry>,
         package: &wasm_pkg_client::PackageRef,

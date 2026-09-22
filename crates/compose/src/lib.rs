@@ -162,7 +162,7 @@ pub enum ComposeError {
     )]
     UnmatchedDependencyName {
         component_id: String,
-        dependency_name: DependencyName,
+        dependency_name: Box<DependencyName>,
     },
     /// A component has dependency conflicts.
     #[error("component '{component_id}' has dependency conflicts: {}", format_conflicts(.conflicts))]
@@ -175,7 +175,7 @@ pub enum ComposeError {
         "dependency '{dependency_name}' doesn't export '{export_name}' to satisfy import '{import_name}'"
     )]
     MissingExport {
-        dependency_name: DependencyName,
+        dependency_name: Box<DependencyName>,
         export_name: String,
         import_name: String,
     },
@@ -287,7 +287,7 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
             if matched.is_empty() {
                 return Err(ComposeError::UnmatchedDependencyName {
                     component_id: component.id().to_owned(),
-                    dependency_name: dependency_name.clone(),
+                    dependency_name: Box::new(dependency_name.clone()),
                 });
             }
 
@@ -354,7 +354,7 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
                         .get(&export_name)
                     else {
                         return Err(ComposeError::MissingExport {
-                            dependency_name: dependency_info.manifest_name,
+                            dependency_name: Box::new(dependency_info.manifest_name),
                             export_name,
                             import_name: import_name.clone(),
                         });
@@ -368,7 +368,7 @@ impl<'a, L: ComponentSourceLoader> Composer<'a, L> {
                         .get(&import_name)
                     else {
                         return Err(ComposeError::MissingExport {
-                            dependency_name: dependency_info.manifest_name,
+                            dependency_name: Box::new(dependency_info.manifest_name),
                             export_name: import_name.clone(),
                             import_name: import_name.clone(),
                         });
