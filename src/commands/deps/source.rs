@@ -63,10 +63,32 @@ pub(super) enum ResolvedSource {
 }
 
 impl ParsedSource {
+    /// Check that `--digest` and `--registry` were given if and only if the source
+    /// kind uses them, so bad invocations fail before any other work is done.
+    pub(super) fn validate_options(
+        &self,
+        digest: Option<&str>,
+        registry: Option<&str>,
+    ) -> Result<()> {
+        match self {
+            ParsedSource::Http(_) if digest.is_none() => {
+                bail!("HTTP sources require a SHA-256 digest; pass one with `--digest`")
+            }
+            ParsedSource::Http(_) => {}
+            _ if digest.is_some() => {
+                bail!("`--digest` only applies to HTTP sources")
+            }
+            _ => {}
+        }
+        if registry.is_some() && !matches!(self, ParsedSource::Registry { .. }) {
+            bail!("`--registry` only applies to registry package sources");
+        }
+        Ok(())
+    }
+
     /// Resolve the source to Wasm bytes plus the metadata needed to record it.
     ///
-    /// `digest` is required for HTTP sources; `registry` only applies to registry
-    /// sources. Both are ignored otherwise.
+    /// `digest` and `registry` must already have passed [`Self::validate_options`].
     pub(super) async fn resolve(
         &self,
         digest: Option<&str>,
@@ -74,13 +96,17 @@ impl ParsedSource {
         app_root: &Path,
         manifest: &AppManifest,
     ) -> Result<(Vec<u8>, ResolvedSource)> {
+        let loader = spin_loader::WasmLoader::new(app_root.to_owned(), None, None).await?;
         match self {
             ParsedSource::Local(path) => resolve_local(path, app_root).await,
-            ParsedSource::Http(url) => resolve_http(url, digest).await,
-            ParsedSource::Registry { package } => {
-                resolve_registry(package, registry, app_root).await
+            ParsedSource::Http(url) => {
+                let digest = digest.context("HTTP sources require a digest")?;
+                resolve_http(url, digest, &loader).await
             }
-            ParsedSource::Component(id) => resolve_component(id, app_root, manifest).await,
+            ParsedSource::Registry { package } => {
+                resolve_registry(package, registry, &loader).await
+            }
+            ParsedSource::Component(id) => resolve_component(id, manifest, &loader).await,
         }
     }
 }
@@ -113,53 +139,30 @@ async fn resolve_local(path: &Path, app_root: &Path) -> Result<(Vec<u8>, Resolve
     Ok((bytes, ResolvedSource::Local { path: rel_path }))
 }
 
-async fn resolve_http(url: &str, digest: Option<&str>) -> Result<(Vec<u8>, ResolvedSource)> {
-    let cache = spin_loader::cache::Cache::new(None).await?;
-    let digest = digest
-        .map(|digest| format!("sha256:{digest}"))
-        .ok_or_else(|| anyhow!("A digest must be specified for HTTP sources."))?;
-    let source = ResolvedSource::Http {
-        url: url.to_string(),
-        digest: digest.clone(),
-    };
-
-    if let Ok(path) = cache.wasm_file(&digest) {
-        let bytes = tokio::fs::read(&path)
-            .await
-            .with_context(|| format!("Failed to read dependency at {}", path.display()))?;
-        return Ok((bytes, source));
-    }
-
-    let response = reqwest::get(url)
+async fn resolve_http(
+    url: &str,
+    digest: &str,
+    loader: &spin_loader::WasmLoader,
+) -> Result<(Vec<u8>, ResolvedSource)> {
+    let digest = format!("sha256:{digest}");
+    let wasm_path = loader
+        .load_http_source(url, &digest)
         .await
         .with_context(|| format!("Failed to download {url}"))?;
-    if !response.status().is_success() {
-        bail!("Failed to download {}: HTTP {}", url, response.status());
-    }
-    let bytes = response
-        .bytes()
-        .await
-        .with_context(|| format!("Failed to read response body from {url}"))?;
-
-    let actual_digest = {
-        use sha2::Digest;
-        let hash = sha2::Sha256::digest(&bytes);
-        format!("sha256:{hash:x}")
-    };
-    anyhow::ensure!(
-        actual_digest == digest,
-        "invalid content digest; expected {digest}, downloaded {actual_digest}"
-    );
-
-    tokio::fs::write(cache.wasm_path(&digest), &bytes).await?;
-
-    Ok((bytes.to_vec(), source))
+    let bytes = read_wasm(&wasm_path).await?;
+    Ok((
+        bytes,
+        ResolvedSource::Http {
+            url: url.to_string(),
+            digest,
+        },
+    ))
 }
 
 async fn resolve_registry(
     package: &DependencyPackageName,
     registry: Option<&str>,
-    app_root: &Path,
+    loader: &spin_loader::WasmLoader,
 ) -> Result<(Vec<u8>, ResolvedSource)> {
     let version_req = match &package.version {
         Some(v) => semver::VersionReq::parse(&format!("={v}"))?,
@@ -172,15 +175,11 @@ async fn resolve_registry(
         })
         .transpose()?;
 
-    let loader = spin_loader::WasmLoader::new(app_root.to_owned(), None, None).await?;
     let wasm_path = loader
         .load_registry_source(registry_ref.as_ref(), &package.package, &version_req)
         .await
         .context("Failed to load dependency from registry")?;
-
-    let bytes = tokio::fs::read(&wasm_path)
-        .await
-        .with_context(|| format!("Failed to read dependency at {}", wasm_path.display()))?;
+    let bytes = read_wasm(&wasm_path).await?;
 
     Ok((
         bytes,
@@ -194,21 +193,24 @@ async fn resolve_registry(
 
 async fn resolve_component(
     id: &KebabId,
-    app_root: &Path,
     manifest: &AppManifest,
+    loader: &spin_loader::WasmLoader,
 ) -> Result<(Vec<u8>, ResolvedSource)> {
     let component = manifest.components.get(id).with_context(|| {
         format!("No component '{id}' found in the manifest to use as a dependency")
     })?;
-    let loader = spin_loader::WasmLoader::new(app_root.to_owned(), None, None).await?;
     let wasm_path = loader
         .load_component_source(id.as_ref(), &component.source)
         .await
         .with_context(|| format!("Failed to load component '{id}'"))?;
-    let bytes = tokio::fs::read(&wasm_path)
-        .await
-        .with_context(|| format!("Failed to read component '{id}' at {}", wasm_path.display()))?;
+    let bytes = read_wasm(&wasm_path).await?;
     Ok((bytes, ResolvedSource::Component { id: id.clone() }))
+}
+
+async fn read_wasm(path: &Path) -> Result<Vec<u8>> {
+    tokio::fs::read(path)
+        .await
+        .with_context(|| format!("Failed to read dependency at {}", path.display()))
 }
 
 impl ResolvedSource {
@@ -334,5 +336,24 @@ mod tests {
         // A namespaced-looking token that is not a valid package reference should
         // error rather than be misclassified.
         assert!("my:@@bad".parse::<ParsedSource>().is_err());
+    }
+
+    #[test]
+    fn options_must_match_source_kind() {
+        let http: ParsedSource = "https://example.com/c.wasm".parse().unwrap();
+        let local: ParsedSource = "./c.wasm".parse().unwrap();
+        let registry: ParsedSource = "my:package".parse().unwrap();
+
+        assert!(http.validate_options(Some("abc"), None).is_ok());
+        assert!(http.validate_options(None, None).is_err());
+        assert!(http.validate_options(Some("abc"), Some("reg")).is_err());
+
+        assert!(local.validate_options(None, None).is_ok());
+        assert!(local.validate_options(Some("abc"), None).is_err());
+        assert!(local.validate_options(None, Some("reg")).is_err());
+
+        assert!(registry.validate_options(None, Some("reg")).is_ok());
+        assert!(registry.validate_options(None, None).is_ok());
+        assert!(registry.validate_options(Some("abc"), None).is_err());
     }
 }

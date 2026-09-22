@@ -12,7 +12,7 @@ use crate::CAPABILITY_SETS;
 /// `allowed_outbound_hosts`, etc.); every set that matches contributes its name
 /// to the result. The returned set is deduplicated and sorted. An empty set
 /// means the component imports nothing that maps to a Spin capability.
-pub fn required_capabilities(source: &[u8]) -> anyhow::Result<BTreeSet<String>> {
+pub fn required_capabilities(source: &[u8]) -> anyhow::Result<BTreeSet<&'static str>> {
     let mut capabilities = BTreeSet::new();
     let mut depth: u32 = 0;
 
@@ -29,7 +29,7 @@ pub fn required_capabilities(source: &[u8]) -> anyhow::Result<BTreeSet<String>> 
                     let name = import?.name.name;
                     for &(capability, set) in CAPABILITY_SETS {
                         if set.iter().any(|s| are_semver_compatible(name, s)) {
-                            capabilities.insert(capability.to_string());
+                            capabilities.insert(capability);
                         }
                     }
                 }
@@ -67,10 +67,6 @@ mod tests {
         component.finish()
     }
 
-    fn caps(names: &[&str]) -> BTreeSet<String> {
-        names.iter().map(|s| s.to_string()).collect()
-    }
-
     #[test]
     fn no_matching_imports_returns_empty() {
         let bytes = build_component(&["some:unknown/interface@1.0.0"]);
@@ -86,7 +82,10 @@ mod tests {
     #[test]
     fn single_ai_models_import() {
         let bytes = build_component(&["fermyon:spin/llm@2.0.0"]);
-        assert_eq!(required_capabilities(&bytes).unwrap(), caps(&["ai_models"]));
+        assert_eq!(
+            required_capabilities(&bytes).unwrap(),
+            BTreeSet::from(["ai_models"])
+        );
     }
 
     #[test]
@@ -94,7 +93,7 @@ mod tests {
         let bytes = build_component(&["wasi:http/outgoing-handler@0.2.6"]);
         assert_eq!(
             required_capabilities(&bytes).unwrap(),
-            caps(&["allowed_outbound_hosts"])
+            BTreeSet::from(["allowed_outbound_hosts"])
         );
     }
 
@@ -108,7 +107,7 @@ mod tests {
         ]);
         assert_eq!(
             required_capabilities(&bytes).unwrap(),
-            caps(&["ai_models", "allowed_outbound_hosts", "variables"])
+            BTreeSet::from(["ai_models", "allowed_outbound_hosts", "variables"])
         );
     }
 
@@ -125,7 +124,7 @@ mod tests {
         ]);
         assert_eq!(
             required_capabilities(&bytes).unwrap(),
-            caps(&[
+            BTreeSet::from([
                 "ai_models",
                 "allowed_outbound_hosts",
                 "environment",
@@ -144,7 +143,7 @@ mod tests {
         // Both map to allowed_outbound_hosts — should appear once.
         assert_eq!(
             required_capabilities(&bytes).unwrap(),
-            caps(&["allowed_outbound_hosts"])
+            BTreeSet::from(["allowed_outbound_hosts"])
         );
     }
 
@@ -157,7 +156,7 @@ mod tests {
         ]);
         assert_eq!(
             required_capabilities(&bytes).unwrap(),
-            caps(&["ai_models", "environment"])
+            BTreeSet::from(["ai_models", "environment"])
         );
     }
 }

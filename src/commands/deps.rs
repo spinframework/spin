@@ -66,8 +66,11 @@ pub struct AddCommand {
 
 impl AddCommand {
     pub async fn run(self) -> Result<()> {
-        // These flows are interactive, so fail fast if there's no terminal to prompt on.
+        // Fail fast on a bad invocation: these flows are interactive, and the
+        // source options must make sense before we go near the manifest.
         ensure_interactive()?;
+        self.source
+            .validate_options(self.digest.as_deref(), self.registry.as_deref())?;
 
         // Locate and parse the manifest.
         let (manifest_file, _) =
@@ -121,7 +124,7 @@ async fn add_component_dependency(
     app_root: &Path,
     manifest: &AppManifest,
     interfaces: &spin_dependency_wit::ComponentInterfaces,
-    required_caps: Vec<String>,
+    required_caps: Vec<&'static str>,
     dep_source: ResolvedSource,
 ) -> Result<()> {
     let Some((component_id, component)) = select_target_component(manifest)? else {
@@ -158,11 +161,11 @@ async fn add_component_dependency(
 fn add_middleware(
     manifest_file: &Path,
     manifest: &AppManifest,
-    required_caps: Vec<String>,
+    required_caps: Vec<&'static str>,
     dep_source: ResolvedSource,
 ) -> Result<()> {
-    println!("Detected HTTP middleware.");
-    println!();
+    eprintln!("Detected HTTP middleware.");
+    eprintln!();
 
     let Some(trigger) = select_trigger(manifest)? else {
         return cancelled();
@@ -199,9 +202,10 @@ fn add_middleware(
 }
 
 /// The add flows are interactive; make sure there's a terminal to prompt on.
+/// `dialoguer` prompts on stderr, so that is the stream that matters.
 fn ensure_interactive() -> Result<()> {
     use std::io::IsTerminal;
-    if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
+    if std::io::stderr().is_terminal() {
         Ok(())
     } else {
         bail!("`spin dependencies add` is interactive and requires a terminal.");
@@ -210,7 +214,7 @@ fn ensure_interactive() -> Result<()> {
 
 /// Report that the user cancelled, leaving the manifest untouched.
 fn cancelled() -> Result<()> {
-    println!("No changes were made.");
+    eprintln!("No changes were made.");
     Ok(())
 }
 
@@ -428,7 +432,7 @@ fn select_interface(
 }
 
 /// Collect the capability sets the dependency requires, inferred from its imports.
-fn collect_required_capabilities(wasm_bytes: &[u8]) -> Result<Vec<String>> {
+fn collect_required_capabilities(wasm_bytes: &[u8]) -> Result<Vec<&'static str>> {
     Ok(spin_capabilities::required_capabilities(wasm_bytes)
         .context("Failed to collect capability requirements from the dependency")?
         .into_iter()
@@ -438,9 +442,9 @@ fn collect_required_capabilities(wasm_bytes: &[u8]) -> Result<Vec<String>> {
 /// The result of deciding what capabilities a dependency may inherit.
 struct Inheritance {
     /// Every capability the dependency requires (used for post-add guidance).
-    required: Vec<String>,
+    required: Vec<&'static str>,
     /// The capabilities that will actually be inherited (a subset of `required`).
-    inherited: Vec<String>,
+    inherited: Vec<&'static str>,
     /// The `inherit_configuration` value to write into the manifest entry, if any.
     ///
     /// `None` means no `inherit_configuration` key is written — either because
@@ -458,7 +462,7 @@ struct Inheritance {
 /// listed capability is selected, so that a future version of the dependency that
 /// imports a new capability does not silently inherit it.
 fn select_inheritance(
-    required: Vec<String>,
+    required: Vec<&'static str>,
     parent: Option<&Component>,
     parent_desc: &str,
 ) -> Result<Option<Inheritance>> {
@@ -481,15 +485,15 @@ fn select_inheritance(
         }));
     }
 
-    println!(
+    eprintln!(
         "This dependency uses the following capabilities: {}",
         required.join(", ")
     );
-    println!("If inherited, it gets the same access to them as {parent_desc}.");
+    eprintln!("If inherited, it gets the same access to them as {parent_desc}.");
 
     let choices = [
         "Inherit all of them",
-        "Inherit none of them (the dependency's calls to them will fail at runtime)",
+        "Inherit none of them (the dependency will fail if it tries to use them)",
         "Choose individually",
     ];
     let Some(choice) = dialoguer::Select::new()
@@ -502,29 +506,21 @@ fn select_inheritance(
         return Ok(None);
     };
 
-    let inherited: Vec<String> = match choice {
+    let inherited = match choice {
         0 => required.clone(),
         1 => vec![],
-        _ => {
-            let Some(selections) = dialoguer::MultiSelect::new()
-                .with_prompt("Select the capabilities to inherit")
-                .items(&required)
-                .interact_opt()
-                .context("Failed to select capabilities")?
-            else {
-                return Ok(None);
-            };
-            selections
-                .into_iter()
-                .map(|i| required[i].clone())
-                .collect()
-        }
+        _ => match select_individual_capabilities(&required)? {
+            Some(chosen) => chosen,
+            None => return Ok(None),
+        },
     };
 
     let to_write = if inherited.is_empty() {
         None
     } else {
-        Some(InheritConfiguration::Some(inherited.clone()))
+        Some(InheritConfiguration::Some(
+            inherited.iter().map(|c| c.to_string()).collect(),
+        ))
     };
     Ok(Some(Inheritance {
         required,
@@ -533,36 +529,54 @@ fn select_inheritance(
     }))
 }
 
-/// The capability sets a component already declares in its manifest entry, by
-/// the same names as `spin_capabilities::required_capabilities` reports.
-fn declared_capabilities(component: &Component) -> Vec<&'static str> {
-    let mut declared = vec![];
+/// The "choose individually" branch of [`select_inheritance`]: multi-select
+/// from `required`. Returns `None` if the user cancels.
+fn select_individual_capabilities(required: &[&'static str]) -> Result<Option<Vec<&'static str>>> {
+    let Some(selections) = dialoguer::MultiSelect::new()
+        .with_prompt("Select the capabilities to inherit")
+        .items(required)
+        .interact_opt()
+        .context("Failed to select capabilities")?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(selections.into_iter().map(|i| required[i]).collect()))
+}
+
+/// The capability sets that `component`'s manifest entry configures — that is,
+/// has a non-empty value for (e.g. a non-empty `allowed_outbound_hosts` list).
+/// Uses the same names as `spin_capabilities::required_capabilities` reports.
+///
+/// Inheriting a capability the parent has not configured is a no-op, so this
+/// drives the post-add guidance.
+fn configured_capabilities(component: &Component) -> Vec<&'static str> {
+    let mut configured = vec![];
     if !component.ai_models.is_empty() {
-        declared.push("ai_models");
+        configured.push("ai_models");
     }
     if !component.allowed_outbound_hosts.is_empty() {
-        declared.push("allowed_outbound_hosts");
+        configured.push("allowed_outbound_hosts");
     }
     if !component.environment.is_empty() {
-        declared.push("environment");
+        configured.push("environment");
     }
     if !component.files.is_empty() {
-        declared.push("files");
+        configured.push("files");
     }
     if !component.key_value_stores.is_empty() {
-        declared.push("key_value_stores");
+        configured.push("key_value_stores");
     }
     if !component.sqlite_databases.is_empty() {
-        declared.push("sqlite_databases");
+        configured.push("sqlite_databases");
     }
     if !component.variables.is_empty() {
-        declared.push("variables");
+        configured.push("variables");
     }
-    declared
+    configured
 }
 
 /// Print follow-up guidance about the dependency's capabilities: inherited
-/// capabilities that the parent component does not yet declare, and required
+/// capabilities that the parent component has not configured yet, and required
 /// capabilities that were not inherited. `target` describes the parent
 /// component for the user; `parent` is its manifest entry, if known.
 fn print_capability_guidance(target: &str, parent: Option<&Component>, inheritance: &Inheritance) {
@@ -570,31 +584,32 @@ fn print_capability_guidance(target: &str, parent: Option<&Component>, inheritan
         return;
     }
 
-    let declared = parent.map(declared_capabilities).unwrap_or_default();
-    let undeclared: Vec<&str> = inheritance
+    let configured = parent.map(configured_capabilities).unwrap_or_default();
+    let unconfigured: Vec<&str> = inheritance
         .inherited
         .iter()
-        .map(String::as_str)
-        .filter(|c| !declared.contains(c))
+        .copied()
+        .filter(|c| !configured.contains(c))
         .collect();
     let declined: Vec<&str> = inheritance
         .required
         .iter()
-        .map(String::as_str)
-        .filter(|c| !inheritance.inherited.iter().any(|i| i == c))
+        .copied()
+        .filter(|c| !inheritance.inherited.contains(c))
         .collect();
 
-    if !undeclared.is_empty() {
-        println!();
-        println!(
-            "NOTE: {target} does not yet declare: {}. Add these so the dependency can use them.",
-            undeclared.join(", ")
+    if !unconfigured.is_empty() {
+        eprintln!();
+        terminal::warn!(
+            "The dependency inherits {} from {target}, but {target} has none configured in spin.toml. Configure them on {target} so the dependency can use them.",
+            unconfigured.join(", ")
         );
     }
     if !declined.is_empty() {
-        println!();
-        println!(
-            "NOTE: Not inherited: {}. The dependency's calls to these capabilities will fail at runtime.",
+        eprintln!();
+        terminal::einfo!(
+            "Note:",
+            "The dependency also uses {}, which you chose not to inherit. If it tries to use them at runtime, those calls will fail.",
             declined.join(", ")
         );
     }
