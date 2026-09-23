@@ -11,9 +11,10 @@ use wac_graph::{CompositionGraph, types::Package};
 /// Given the raw bytes of a Wasm component (`source`) and an [`InheritConfiguration`]
 /// describing which capability sets should remain accessible, this function uses
 /// `wac-graph` to wire a bundled deny-all adapter into the component's imports.
-/// Interfaces listed in the allow set (derived from `inherits`) are left untouched
-/// so the host can satisfy them at runtime; all other matching imports are fulfilled
-/// by the deny adapter, which traps on any call.
+/// Interfaces on the same semver track as an entry in the allow set (derived from
+/// `inherits`) are left untouched so the host can satisfy them at runtime. All other
+/// matching imports are fulfilled by the deny adapter, which refuses every call
+/// (typically with an access-denied error).
 ///
 /// Imports are matched on the interface they implement, so a named import such as
 /// `primary (implements spin:key-value/key-value@3.0.0)` is treated the same as a
@@ -62,7 +63,10 @@ pub fn apply_deny_adapter(
         let iface_name = types[*iface].id.as_deref().unwrap_or(import_name);
 
         // Skip interfaces that should be allowed (inherited from host).
-        if allow.contains(&iface_name) {
+        if allow
+            .iter()
+            .any(|allowed| are_semver_compatible(allowed, iface_name))
+        {
             continue;
         }
 
@@ -147,6 +151,12 @@ mod tests {
 
     const KV: &str = "spin:key-value/key-value@3.0.0";
     const ENV: &str = "wasi:cli/environment@0.2.6";
+    // Versions that real toolchains emit on the tracks the capability lists pin:
+    // Rust's `wasm32-wasip2` target imports WASI 0.2.9 where the lists carry 0.2.6,
+    // and spin-sdk 5.2.0 imports `spin:postgres/postgres@4.0.0` where the list
+    // carries 4.2.0.
+    const ENV_NEWER: &str = "wasi:cli/environment@0.2.9";
+    const SDK_PG4: &str = "spin:postgres/postgres@4.0.0";
 
     // Imports use an empty instance type, which any adapter export trivially satisfies.
     fn component(imports: &[(&str, Option<&str>)]) -> Vec<u8> {
@@ -249,6 +259,21 @@ mod tests {
     fn inherit_all_is_passthrough() {
         let source = component(&[(KV, None), ("primary", Some(KV)), ("env", Some(ENV))]);
         let out = apply_deny_adapter(&source, InheritConfiguration::All).unwrap();
+        assert_eq!(out, source);
+    }
+
+    // Inheritance must match by semver track, exactly as the deny side already does.
+    #[test]
+    fn plain_import_at_compatible_version_is_allowed_when_inherited() {
+        let source = component(&[(SDK_PG4, None)]);
+        let out = apply_deny_adapter(&source, some(&["allowed_outbound_hosts"])).unwrap();
+        assert_eq!(out, source);
+    }
+
+    #[test]
+    fn named_import_at_compatible_version_is_allowed_when_inherited() {
+        let source = component(&[("env", Some(ENV_NEWER))]);
+        let out = apply_deny_adapter(&source, some(&["environment"])).unwrap();
         assert_eq!(out, source);
     }
 }
