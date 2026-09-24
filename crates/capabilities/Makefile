@@ -1,14 +1,16 @@
-# Deliberately not wasm32-wasip2: std's WASI imports are toolchain-dependent and can
-# collide with the adapter's own exports (e.g. sockets/udp@0.2.9 vs @0.2.6), rebinding
-# exported resources to the host's and breaking composition. Guarded by tests in deny.rs.
 ADAPTER_OUT ?= deny_adapter.wasm
 CHECK_DIR := deny-adapter/target/check
 
+# Deliberately not wasm32-wasip2: std's WASI imports are toolchain-dependent and can
+# collide with the adapter's own exports (e.g. sockets/udp@0.2.9 vs @0.2.6), rebinding
+# exported resources to the host's and breaking composition. Guarded by tests in deny.rs.
 .PHONY: adapter
 adapter:
 	cargo build --release --target wasm32-unknown-unknown --manifest-path deny-adapter/Cargo.toml
 	wasm-tools component new deny-adapter/target/wasm32-unknown-unknown/release/deny_adapter.wasm -o $(ADAPTER_OUT)
 
+# Verifies that the deny adapter is up to date.
+# CI runs this when WITs or the capabilities crate change.
 # Compares WIT rather than bytes, since codegen differs across rustc versions.
 .PHONY: check-adapter
 check-adapter:
