@@ -5,6 +5,8 @@ use crate::{
 use wac_graph::types::{ItemKind, SubtypeChecker, are_semver_compatible};
 use wac_graph::{CompositionGraph, types::Package};
 
+const SPIN_DENY_ADAPTER_BYTES: &[u8] = include_bytes!("../deny_adapter.wasm");
+
 /// Composes a deny adapter into a Wasm component to block host capabilities that
 /// are not explicitly inherited.
 ///
@@ -27,8 +29,6 @@ pub fn apply_deny_adapter(
     inherits: InheritConfiguration,
 ) -> anyhow::Result<Vec<u8>> {
     let allow = allow_list(inherits);
-
-    const SPIN_DENY_ADAPTER_BYTES: &[u8] = include_bytes!("../deny_adapter.wasm");
 
     let mut graph = CompositionGraph::new();
 
@@ -147,6 +147,7 @@ fn allow_list(inherits: InheritConfiguration) -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use wac_graph::types::Types;
 
     const KV: &str = "spin:key-value/key-value@3.0.0";
@@ -253,6 +254,67 @@ mod tests {
         let source = component(&[("thing", Some("example:unknown/iface@1.0.0"))]);
         let out = apply_deny_adapter(&source, InheritConfiguration::None).unwrap();
         assert_eq!(out, source);
+    }
+
+    // Such an import rewires the export's resources to the host's, breaking composition.
+    #[test]
+    fn adapter_does_not_import_what_it_exports() {
+        let mut types = Types::default();
+        let package = Package::from_bytes("adapter", None, SPIN_DENY_ADAPTER_BYTES, &mut types)
+            .expect("valid deny adapter");
+        let world = &types[package.ty()];
+        let conflicts: Vec<_> = world
+            .imports
+            .keys()
+            .filter(|import| {
+                world
+                    .exports
+                    .keys()
+                    .any(|export| are_semver_compatible(import, export))
+            })
+            .collect();
+        assert!(
+            conflicts.is_empty(),
+            "deny adapter imports interfaces it also exports: {conflicts:?}"
+        );
+    }
+
+    // Anything else is a capability the adapter could reach, e.g. std's WASI imports.
+    #[test]
+    fn adapter_imports_only_types_used_by_its_exports() {
+        let mut types = Types::default();
+        let package = Package::from_bytes("adapter", None, SPIN_DENY_ADAPTER_BYTES, &mut types)
+            .expect("valid deny adapter");
+        let world = &types[package.ty()];
+
+        let mut used = HashSet::new();
+        let mut pending: Vec<_> = world
+            .exports
+            .values()
+            .filter_map(|kind| match kind {
+                ItemKind::Instance(id) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        while let Some(id) = pending.pop() {
+            for used_type in types[id].uses.values() {
+                if let Some(name) = &types[used_type.interface].id
+                    && used.insert(name.as_str())
+                {
+                    pending.push(used_type.interface);
+                }
+            }
+        }
+
+        let unused: Vec<_> = world
+            .imports
+            .keys()
+            .filter(|import| !used.contains(import.as_str()))
+            .collect();
+        assert!(
+            unused.is_empty(),
+            "deny adapter imports interfaces its exports don't use: {unused:?}"
+        );
     }
 
     #[test]
