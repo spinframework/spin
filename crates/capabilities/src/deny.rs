@@ -276,4 +276,13 @@ mod tests {
         let out = apply_deny_adapter(&source, some(&["environment"])).unwrap();
         assert_eq!(out, source);
     }
+
+    // Semver matching is per interface: an inherited set must not admit a
+    // compatible version of an interface that belongs to another set.
+    #[test]
+    fn compatible_version_from_another_set_is_still_denied() {
+        let source = component(&[("env", Some(ENV_NEWER))]);
+        let out = apply_deny_adapter(&source, some(&["key_value_stores"])).unwrap();
+        assert_denied(&out, &["env"]);
+    }
 }
