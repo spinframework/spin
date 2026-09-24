@@ -75,6 +75,8 @@ const KEY_VALUE_STORES: &[&str] = &[
     "fermyon:spin/key-value@2.0.0",
     "spin:key-value/key-value@3.0.0",
     "wasi:keyvalue/store@0.2.0-draft2",
+    "wasi:keyvalue/atomics@0.2.0-draft2",
+    "wasi:keyvalue/batch@0.2.0-draft2",
 ];
 
 const SQLITE_DATABASES: &[&str] = &[

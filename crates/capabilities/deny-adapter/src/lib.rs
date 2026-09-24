@@ -48,6 +48,8 @@ wit_bindgen::generate!({
         export fermyon:spin/key-value@2.0.0;
         export fermyon:spin/variables@2.0.0;
         export wasi:keyvalue/store@0.2.0-draft2;
+        export wasi:keyvalue/atomics@0.2.0-draft2;
+        export wasi:keyvalue/batch@0.2.0-draft2;
     }
     "#,
 });
@@ -1729,5 +1731,55 @@ impl exports::wasi::keyvalue::store::Guest for Adapter {
         identifier: _rt::String,
     ) -> Result<exports::wasi::keyvalue::store::Bucket, exports::wasi::keyvalue::store::Error> {
         Err(exports::wasi::keyvalue::store::Error::AccessDenied)
+    }
+}
+
+impl exports::wasi::keyvalue::atomics::Guest for Adapter {
+    type Cas = Adapter;
+
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn increment(bucket: exports::wasi::keyvalue::atomics::BucketBorrow<'_>, key: _rt::String, delta: i64,) ->  ::core::result::Result<i64, exports::wasi::keyvalue::atomics::Error> {
+        unreachable!()
+    }
+
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn swap(cas: exports::wasi::keyvalue::atomics::Cas, value: _rt::Vec::<u8>,) ->  ::core::result::Result<(), exports::wasi::keyvalue::atomics::CasError> {
+        unreachable!()
+    }
+}
+
+impl exports::wasi::keyvalue::atomics::GuestCas for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn new(bucket: exports::wasi::keyvalue::atomics::BucketBorrow<'_>, key: _rt::String,) ->  ::core::result::Result<exports::wasi::keyvalue::atomics::Cas, exports::wasi::keyvalue::atomics::Error> {
+        unreachable!()
+    }
+
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn current(&self,) ->  ::core::result::Result<::core::option::Option<_rt::Vec::<u8>>, exports::wasi::keyvalue::atomics::Error> {
+        unreachable!()
+    }
+}
+
+impl exports::wasi::keyvalue::batch::Guest for Adapter {
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn get_many(bucket: exports::wasi::keyvalue::batch::BucketBorrow<'_>, keys: _rt::Vec::<_rt::String>,) ->  ::core::result::Result<_rt::Vec::<(_rt::String, ::core::option::Option<_rt::Vec::<u8>>,)>, exports::wasi::keyvalue::batch::Error> {
+        unreachable!()
+    }
+
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn set_many(bucket: exports::wasi::keyvalue::batch::BucketBorrow<'_>, key_values: _rt::Vec::<(_rt::String, _rt::Vec::<u8>,)>,) ->  ::core::result::Result<(), exports::wasi::keyvalue::batch::Error> {
+        unreachable!()
+    }
+
+    #[allow(unused_variables)]
+    #[allow(async_fn_in_trait)]
+    fn delete_many(bucket: exports::wasi::keyvalue::batch::BucketBorrow<'_>, keys: _rt::Vec::<_rt::String>,) ->  ::core::result::Result<(), exports::wasi::keyvalue::batch::Error> {
+        unreachable!()
     }
 }
