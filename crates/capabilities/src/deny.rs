@@ -5,6 +5,8 @@ use crate::{
 use wac_graph::types::{ItemKind, SubtypeChecker, are_semver_compatible};
 use wac_graph::{CompositionGraph, types::Package};
 
+const SPIN_DENY_ADAPTER_BYTES: &[u8] = include_bytes!("../deny_adapter.wasm");
+
 /// Composes a deny adapter into a Wasm component to block host capabilities that
 /// are not explicitly inherited.
 ///
@@ -243,6 +245,29 @@ mod tests {
         let source = component(&[("thing", Some("example:unknown/iface@1.0.0"))]);
         let out = apply_deny_adapter(&source, InheritConfiguration::None).unwrap();
         assert_eq!(out, source);
+    }
+
+    // Such an import rewires the export's resources to the host's, breaking composition.
+    #[test]
+    fn adapter_does_not_import_what_it_exports() {
+        let mut types = Types::default();
+        let package = Package::from_bytes("adapter", None, SPIN_DENY_ADAPTER_BYTES, &mut types)
+            .expect("valid deny adapter");
+        let world = &types[package.ty()];
+        let conflicts: Vec<_> = world
+            .imports
+            .keys()
+            .filter(|import| {
+                world
+                    .exports
+                    .keys()
+                    .any(|export| are_semver_compatible(import, export))
+            })
+            .collect();
+        assert!(
+            conflicts.is_empty(),
+            "deny adapter imports interfaces it also exports: {conflicts:?}"
+        );
     }
 
     #[test]
