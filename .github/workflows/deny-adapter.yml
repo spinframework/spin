@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Deny adapter
+on:
+  push:
+    branches: ["main", "v*"]
+    paths:
+      - "crates/capabilities/**"
+      - "wit/**"
+      - ".github/workflows/deny-adapter.yml"
+  pull_request:
+    branches: ["main", "v*"]
+    paths:
+      - "crates/capabilities/**"
+      - "wit/**"
+      - ".github/workflows/deny-adapter.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check-deny-adapter:
+    name: Check deny adapter is up to date
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: setup dependencies
+        uses: ./.github/actions/spin-ci-dependencies
+        with:
+          rust: true
+          rust-wasm: true
+
+      - name: Install wasm-tools
+        run: cargo install --locked wasm-tools
+
+      - name: Check deny_adapter.wasm matches its source
+        run: make -C crates/capabilities check-adapter
