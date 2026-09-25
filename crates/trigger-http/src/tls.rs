@@ -23,10 +23,14 @@ impl TlsConfig {
         let certs = load_certs(&self.cert_path)?;
         let private_key = load_key(&self.key_path)?;
 
-        let cfg = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(certs, private_key)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let cfg = rustls::ServerConfig::builder_with_provider(
+            spin_tls::get_or_install_default_crypto_provider(),
+        )
+        .with_safe_default_protocol_versions()
+        .context("failed to configure default TLS protocol versions")?
+        .with_no_client_auth()
+        .with_single_cert(certs, private_key)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         Ok(Arc::new(cfg).into())
     }

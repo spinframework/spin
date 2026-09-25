@@ -13,6 +13,7 @@ ip_network = "0.4.1"
 rustls = { workspace = true }
 rustls-pki-types = { workspace = true }
 rustls-platform-verifier = { workspace = true }
+spin-tls = { path = "../tls" }
 serde = { workspace = true }
 spin-connection-semaphore = { path = "../connection-semaphore" }
 spin-factor-variables = { path = "../factor-variables" }
