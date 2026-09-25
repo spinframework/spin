@@ -249,7 +249,8 @@ jobs:
       - name: create GitHub release (canary)
         if: github.ref == 'refs/heads/main'
         run: |
-          gh release delete canary --cleanup-tag
+          # Delete may fail if e.g. previous create failed
+          gh release delete canary --cleanup-tag || true
           gh release create canary _dist/* \
             --title canary \
             --prerelease \
