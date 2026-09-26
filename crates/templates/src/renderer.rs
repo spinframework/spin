@@ -89,15 +89,16 @@ impl TemplateContent {
         raw: Vec<u8>,
         parser: &liquid::Parser,
     ) -> anyhow::Result<TemplateContent> {
-        match string_from_bytes(&raw) {
-            None => Ok(TemplateContent::Binary(raw)),
-            Some(s) => {
+        match String::from_utf8(raw) {
+            Err(e) => Ok(TemplateContent::Binary(e.into_bytes())), // TODO: try other encodings!
+            Ok(s) => {
                 match parser.parse(&s) {
                     Ok(t) => Ok(TemplateContent::Template(t)),
                     Err(e) => match understand_liquid_error(e) {
                         TemplateParseFailure::Other(_e) => {
                             // TODO: emit a warning?
-                            Ok(TemplateContent::Binary(raw))
+                            // `s` owns the original bytes, so the file passes through unchanged
+                            Ok(TemplateContent::Binary(s.into_bytes()))
                         }
                         TemplateParseFailure::UnknownFilter(id) => {
                             Err(anyhow!("internal error in template: unknown filter '{id}'"))
@@ -112,19 +113,10 @@ impl TemplateContent {
         match self {
             Self::Template(t) => {
                 let text = t.render(globals)?;
-                Ok(text.bytes().collect())
+                Ok(text.into_bytes())
             }
             Self::Binary(v) => Ok(v),
         }
-    }
-}
-
-// TODO: this doesn't truly belong in a module that claims to be about
-// rendering but the only thing that uses it is the TemplateContent ctor
-fn string_from_bytes(bytes: &[u8]) -> Option<String> {
-    match std::str::from_utf8(bytes) {
-        Ok(s) => Some(s.to_owned()),
-        Err(_) => None, // TODO: try other encodings!
     }
 }
 
