@@ -97,7 +97,6 @@ impl TemplateContent {
                     Err(e) => match understand_liquid_error(e) {
                         TemplateParseFailure::Other(_e) => {
                             // TODO: emit a warning?
-                            // `s` owns the original bytes, so the file passes through unchanged
                             Ok(TemplateContent::Binary(s.into_bytes()))
                         }
                         TemplateParseFailure::UnknownFilter(id) => {
