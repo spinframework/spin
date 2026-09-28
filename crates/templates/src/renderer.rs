@@ -90,6 +90,7 @@ impl TemplateContent {
         parser: &liquid::Parser,
     ) -> anyhow::Result<TemplateContent> {
         match String::from_utf8(raw) {
+            // `into_bytes` hands back the original bytes that failed UTF-8 validation
             Err(e) => Ok(TemplateContent::Binary(e.into_bytes())), // TODO: try other encodings!
             Ok(s) => {
                 match parser.parse(&s) {
