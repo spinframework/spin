@@ -39,7 +39,6 @@ impl Provider for VaultVariablesProvider {
             Some(prefix) => format!("{}/{}", prefix, key.as_str()),
             None => key.as_str().to_string(),
         };
-
         #[derive(Deserialize, Serialize)]
         struct Secret {
             value: String,

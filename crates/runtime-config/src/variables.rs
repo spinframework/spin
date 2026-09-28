@@ -37,7 +37,8 @@ pub enum VariableProviderConfiguration {
     AzureKeyVault(AzureKeyVaultVariablesConfig),
     /// A static provider of variables.
     Static(StaticVariablesProvider),
-    /// A provider that uses HashiCorp Vault.
+    /// A provider that uses HashiCorp Vault or OpenBao.
+    #[serde(alias = "open_bao")]
     Vault(VaultVariablesProvider),
     /// An environment variable provider.
     Env(EnvVariablesConfig),
