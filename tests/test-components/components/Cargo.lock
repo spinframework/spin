@@ -441,6 +441,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-no-trailing-slash"
+version = "0.1.0"
+dependencies = [
+ "helper",
+ "wit-bindgen 0.61.1",
+]
+
+[[package]]
 name = "http-routing"
 version = "0.1.0"
 dependencies = [

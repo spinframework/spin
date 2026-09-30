@@ -153,7 +153,7 @@ futures = "0.3"
 futures-util = "0.3"
 glob = "0.3"
 heck = "0.5"
-http = "1"
+http = "=1.4.0"
 http-body = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["full"] }
