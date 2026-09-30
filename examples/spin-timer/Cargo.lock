@@ -326,7 +326,7 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "hex",
- "http 1.5.0",
+ "http 1.4.0",
  "sha1",
  "time",
  "tokio",
@@ -364,7 +364,7 @@ dependencies = [
  "bytes",
  "bytes-utils",
  "fastrand 2.5.0",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "percent-encoding",
  "pin-project-lite",
@@ -393,7 +393,7 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "regex-lite",
  "tracing",
  "url",
@@ -420,7 +420,7 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "regex-lite",
  "tracing",
 ]
@@ -446,7 +446,7 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "regex-lite",
  "tracing",
 ]
@@ -473,7 +473,7 @@ dependencies = [
  "aws-types",
  "fastrand 2.5.0",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "regex-lite",
  "tracing",
 ]
@@ -493,7 +493,7 @@ dependencies = [
  "hex",
  "hmac 0.13.0",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "percent-encoding",
  "sha2 0.11.0",
  "time",
@@ -523,7 +523,7 @@ dependencies = [
  "bytes-utils",
  "futures-core",
  "futures-util",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "http-body-util",
  "percent-encoding",
@@ -603,7 +603,7 @@ dependencies = [
  "bytes",
  "fastrand 2.5.0",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 0.4.6",
  "http-body 1.1.0",
  "http-body-util",
@@ -624,7 +624,7 @@ dependencies = [
  "aws-smithy-types",
  "bytes",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "pin-project-lite",
  "tokio",
  "tracing",
@@ -650,7 +650,7 @@ checksum = "7d56e0a4e53127a632224e43633b0fe045fa9e1e3cfc68b9830f1115e103f910"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
- "http 1.5.0",
+ "http 1.4.0",
 ]
 
 [[package]]
@@ -664,7 +664,7 @@ dependencies = [
  "bytes-utils",
  "futures-core",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 0.4.6",
  "http-body 1.1.0",
  "http-body-util",
@@ -2174,7 +2174,7 @@ dependencies = [
  "fnv",
  "futures-core",
  "futures-sink",
- "http 1.5.0",
+ "http 1.4.0",
  "indexmap 2.14.0",
  "slab",
  "tokio",
@@ -2277,9 +2277,9 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.5.0"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "918d3568bebf352712bc2ef3d46a8bcf1a75b373be6539de198e9105cbbf9ce0"
+checksum = "e3ba2a386d7f85a81f119ad7498ebe444d2e22c2af0b86b069416ace48b3311a"
 dependencies = [
  "bytes",
  "itoa",
@@ -2303,7 +2303,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca2a8f2913ee65f60facd6a5905613afaa448497a0230cc41ce022d93290bc2c"
 dependencies = [
  "bytes",
- "http 1.5.0",
+ "http 1.4.0",
 ]
 
 [[package]]
@@ -2314,7 +2314,7 @@ checksum = "23169fe34a5fbcdd3f3862e78fb9b6fccd5f02a6dc6f732547005d45631ce71c"
 dependencies = [
  "bytes",
  "futures-core",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "pin-project-lite",
 ]
@@ -2395,7 +2395,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "h2 0.4.18",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "httparse",
  "httpdate",
@@ -2445,7 +2445,7 @@ version = "0.27.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33ca68d021ef39cf6463ab54c1d0f5daf03377b70561305bb89a8f83aab66e0f"
 dependencies = [
- "http 1.5.0",
+ "http 1.4.0",
  "hyper 1.11.0",
  "hyper-util",
  "rustls 0.23.43",
@@ -2495,7 +2495,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "hyper 1.11.0",
  "ipnet",
@@ -3421,7 +3421,7 @@ checksum = "46d7ab32b827b5b495bd90fa95a6cb65ccc293555dcc3199ae2937d2d237c8ed"
 dependencies = [
  "async-trait",
  "bytes",
- "http 1.5.0",
+ "http 1.4.0",
  "opentelemetry",
  "reqwest",
  "tracing",
@@ -3434,7 +3434,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d899720fe06916ccba71c01d04ecd77312734e2de3467fd30d9d580c8ce85656"
 dependencies = [
  "futures-core",
- "http 1.5.0",
+ "http 1.4.0",
  "opentelemetry",
  "opentelemetry-http",
  "opentelemetry-proto",
@@ -4261,7 +4261,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "h2 0.4.18",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "http-body-util",
  "hyper 1.11.0",
@@ -4423,7 +4423,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
- "http 1.5.0",
+ "http 1.4.0",
  "reqwest",
  "rustify_derive",
  "serde",
@@ -4999,7 +4999,7 @@ dependencies = [
 
 [[package]]
 name = "spin-app"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -5009,7 +5009,7 @@ dependencies = [
 
 [[package]]
 name = "spin-capabilities"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "wac-graph",
@@ -5019,7 +5019,7 @@ dependencies = [
 
 [[package]]
 name = "spin-common"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -5032,7 +5032,7 @@ dependencies = [
 
 [[package]]
 name = "spin-componentize"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "tracing",
@@ -5045,7 +5045,7 @@ dependencies = [
 
 [[package]]
 name = "spin-compose"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5064,7 +5064,7 @@ dependencies = [
 
 [[package]]
 name = "spin-connection-semaphore"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "spin-telemetry",
@@ -5074,7 +5074,7 @@ dependencies = [
 
 [[package]]
 name = "spin-core"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5084,7 +5084,7 @@ dependencies = [
 
 [[package]]
 name = "spin-expressions"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5095,7 +5095,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-key-value"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -5116,7 +5116,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-llm"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5135,7 +5135,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-otel"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
@@ -5153,12 +5153,12 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-http"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "bytes",
  "futures",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "http-body-util",
  "hyper 1.11.0",
@@ -5187,7 +5187,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-mqtt"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "rumqttc",
@@ -5204,7 +5204,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-mysql"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "futures",
@@ -5226,11 +5226,11 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-networking"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "futures-util",
- "http 1.5.0",
+ "http 1.4.0",
  "ip_network",
  "opentelemetry-semantic-conventions",
  "rustls 0.23.43",
@@ -5253,7 +5253,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-pg"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "bytes",
@@ -5288,7 +5288,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-redis"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "opentelemetry-semantic-conventions",
@@ -5306,7 +5306,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-sqlite"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "async-trait",
  "opentelemetry-semantic-conventions",
@@ -5324,7 +5324,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-variables"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "spin-core",
  "spin-expressions",
@@ -5337,7 +5337,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-wasi"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5354,7 +5354,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factors"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -5367,7 +5367,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factors-derive"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5376,7 +5376,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factors-executor"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "spin-app",
@@ -5389,7 +5389,7 @@ dependencies = [
 
 [[package]]
 name = "spin-key-value-aws"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -5404,7 +5404,7 @@ dependencies = [
 
 [[package]]
 name = "spin-key-value-azure"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5420,7 +5420,7 @@ dependencies = [
 
 [[package]]
 name = "spin-key-value-redis"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "redis",
@@ -5433,7 +5433,7 @@ dependencies = [
 
 [[package]]
 name = "spin-key-value-spin"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "rusqlite",
@@ -5447,7 +5447,7 @@ dependencies = [
 
 [[package]]
 name = "spin-llm-remote-http"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "futures",
@@ -5461,7 +5461,7 @@ dependencies = [
 
 [[package]]
 name = "spin-locked-app"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5474,7 +5474,7 @@ dependencies = [
 
 [[package]]
 name = "spin-manifest"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
@@ -5492,11 +5492,11 @@ dependencies = [
 
 [[package]]
 name = "spin-outbound-networking-config"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "futures-util",
- "http 1.5.0",
+ "http 1.4.0",
  "ip_network",
  "ip_network_table",
  "spin-expressions",
@@ -5507,11 +5507,11 @@ dependencies = [
 
 [[package]]
 name = "spin-resource-table"
-version = "4.2.0"
+version = "4.2.1"
 
 [[package]]
 name = "spin-runtime-config"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "serde",
@@ -5545,7 +5545,7 @@ dependencies = [
 
 [[package]]
 name = "spin-runtime-factors"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -5573,7 +5573,7 @@ dependencies = [
 
 [[package]]
 name = "spin-serde"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5585,7 +5585,7 @@ dependencies = [
 
 [[package]]
 name = "spin-sqlite"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "serde",
  "spin-factor-sqlite",
@@ -5597,7 +5597,7 @@ dependencies = [
 
 [[package]]
 name = "spin-sqlite-inproc"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5611,7 +5611,7 @@ dependencies = [
 
 [[package]]
 name = "spin-sqlite-libsql"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5623,11 +5623,11 @@ dependencies = [
 
 [[package]]
 name = "spin-telemetry"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "http 0.2.12",
- "http 1.5.0",
+ "http 1.4.0",
  "opentelemetry",
  "opentelemetry-appender-tracing",
  "opentelemetry-otlp",
@@ -5642,14 +5642,14 @@ dependencies = [
 
 [[package]]
 name = "spin-tls"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "rustls 0.23.43",
 ]
 
 [[package]]
 name = "spin-trigger"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -5678,7 +5678,7 @@ dependencies = [
 
 [[package]]
 name = "spin-variables-azure"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "azure_core 0.20.0",
  "azure_identity 0.20.0",
@@ -5692,7 +5692,7 @@ dependencies = [
 
 [[package]]
 name = "spin-variables-env"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "dotenvy",
  "serde",
@@ -5705,7 +5705,7 @@ dependencies = [
 
 [[package]]
 name = "spin-variables-static"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -5717,7 +5717,7 @@ dependencies = [
 
 [[package]]
 name = "spin-variables-vault"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "serde",
  "spin-expressions",
@@ -5728,7 +5728,7 @@ dependencies = [
 
 [[package]]
 name = "spin-wasi-async"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "spin-core",
@@ -5737,7 +5737,7 @@ dependencies = [
 
 [[package]]
 name = "spin-world"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5922,7 +5922,7 @@ dependencies = [
 
 [[package]]
 name = "terminal"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "termcolor",
 ]
@@ -6276,7 +6276,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bytes",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "http-body-util",
  "hyper 1.11.0",
@@ -6345,7 +6345,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-util",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "http-body-util",
  "pin-project-lite",
@@ -6602,7 +6602,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "derive_builder",
- "http 1.5.0",
+ "http 1.4.0",
  "reqwest",
  "rustify",
  "rustify_derive",
@@ -6841,7 +6841,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "futures-util",
- "http 1.5.0",
+ "http 1.4.0",
  "semver",
  "serde",
  "serde_json",
@@ -7157,7 +7157,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures",
- "http 1.5.0",
+ "http 1.4.0",
  "http-body 1.1.0",
  "http-body-util",
  "hyper 1.11.0",
