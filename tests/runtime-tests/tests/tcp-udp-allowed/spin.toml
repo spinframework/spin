@@ -1,0 +1,14 @@
+spin_manifest_version = 2
+
+[application]
+name = "tcp-udp-allowed"
+version = "0.1.0"
+
+[[trigger.http]]
+route = "/..."
+component = "tcp-udp-allowed"
+
+[component.tcp-udp-allowed]
+source = "%{source=tcp-udp-allowed}"
+environment = { EXPECTED_TO_ALLOW = "true" }
+allowed_outbound_hosts = ["https://example.com"]

@@ -1502,6 +1502,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tcp-udp-allowed"
+version = "0.1.0"
+dependencies = [
+ "helper",
+ "wit-bindgen 0.61.1",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
