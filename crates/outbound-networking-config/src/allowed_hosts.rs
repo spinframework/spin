@@ -19,6 +19,7 @@ pub type SharedFutureResult<T> = Shared<BoxFuture<'static, Result<Arc<T>, Arc<an
 pub struct OutboundAllowedHosts {
     allowed_hosts_future: SharedFutureResult<AllowedHostsConfig>,
     disallowed_host_handler: Option<Arc<dyn DisallowedHostHandler>>,
+    is_empty: bool, // saves needing to resolve the future to do the "network needed" check
 }
 
 impl OutboundAllowedHosts {
@@ -26,10 +27,12 @@ impl OutboundAllowedHosts {
     pub fn new(
         allowed_hosts_future: SharedFutureResult<AllowedHostsConfig>,
         disallowed_host_handler: Option<Arc<dyn DisallowedHostHandler>>,
+        is_empty: bool,
     ) -> Self {
         Self {
             allowed_hosts_future,
             disallowed_host_handler,
+            is_empty,
         }
     }
 
@@ -87,6 +90,13 @@ impl OutboundAllowedHosts {
         if let Some(handler) = &self.disallowed_host_handler {
             handler.handle_disallowed_host(scheme, authority);
         }
+    }
+
+    /// Whether the allowed hosts collection is empty.
+    /// This enables "is the network needed" checks to run synchronously,
+    /// without having to resolve the future.
+    pub fn is_empty(&self) -> bool {
+        self.is_empty
     }
 }
 

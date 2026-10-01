@@ -393,7 +393,6 @@ impl Factor for WasiFactor {
         ctx: PrepareContext<T, Self>,
     ) -> anyhow::Result<InstanceBuilder> {
         let mut wasi_ctx = WasiCtxBuilder::new();
-        wasi_ctx.allow_tcp(true).allow_udp(true);
 
         // Mount files
         let mount_ctx = MountFilesContext { ctx: &mut wasi_ctx };
@@ -522,6 +521,10 @@ impl InstanceBuilder {
         };
         self.ctx.preopened_dir(host_path, guest_path, perms)?;
         Ok(())
+    }
+
+    pub fn allow_tcp_udp(&mut self, enable: bool) {
+        self.ctx.allow_tcp(enable).allow_udp(enable);
     }
 }
 
