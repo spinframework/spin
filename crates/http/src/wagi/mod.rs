@@ -110,7 +110,7 @@ pub fn build_headers(
     // PATH_INFO is any path information after SCRIPT_NAME
     //
     // I am intentionally ignoring the PATH_INFO rule that says that a PATH_INFO
-    // cannot have a path seperator in it. If it becomes important to distinguish
+    // cannot have a path separator in it. If it becomes important to distinguish
     // between what was decoded out of the path and what is encoded in the path,
     // the X_RAW_PATH_INFO can be used.
     //

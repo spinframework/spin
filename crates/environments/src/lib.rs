@@ -52,7 +52,7 @@ impl TargetEnvironmentValidation {
     }
 }
 
-/// Validates *all* application components against the list of referenced target enviroments. Each component must conform
+/// Validates *all* application components against the list of referenced target environments. Each component must conform
 /// to *all* environments to pass.
 ///
 /// If the return value is `Ok(...)`, this means only that we were able to perform the validation.
@@ -74,7 +74,7 @@ pub async fn validate_application_against_environment_ids<'a>(
     validate_application_against_environments(application, &envs).await
 }
 
-/// Validates *all* application components against the list of (realised) target enviroments. Each component must conform
+/// Validates *all* application components against the list of (realised) target environments. Each component must conform
 /// to *all* environments to pass.
 ///
 /// For the slightly funky return type, see [validate_application_against_environment_ids].
@@ -107,7 +107,7 @@ async fn validate_application_against_environments(
     Ok(TargetEnvironmentValidation(errs))
 }
 
-/// Validates the component against the list of target enviroments. The component must conform
+/// Validates the component against the list of target environments. The component must conform
 /// to *all* environments to pass.
 ///
 /// The return value contains the list of validation errors.
