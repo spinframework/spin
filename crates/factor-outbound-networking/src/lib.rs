@@ -132,6 +132,7 @@ impl Factor for OutboundNetworkingFactor {
             .get(ctx.app_component().id())
             .cloned()
             .context("missing component allowed hosts")?;
+        let is_empty = hosts.is_empty();
         let resolver = ctx
             .instance_builder::<VariablesFactor>()?
             .expression_resolver()
@@ -162,6 +163,7 @@ impl Factor for OutboundNetworkingFactor {
         let allowed_hosts = OutboundAllowedHosts::new(
             allowed_hosts_future.clone(),
             self.disallowed_host_handler.clone(),
+            is_empty,
         );
         let blocked_networks = ctx.app_state().blocked_networks.clone();
         let permit_state = ctx
@@ -177,6 +179,9 @@ impl Factor for OutboundNetworkingFactor {
                 }
 
                 let allowed_hosts = allowed_hosts.clone();
+
+                wasi_builder.allow_tcp_udp(!allowed_hosts.is_empty());
+
                 wasi_builder.outbound_socket_addr_check(move |addr, addr_use| {
                     socket_addr_use_allowed(
                         allowed_hosts.clone(),
