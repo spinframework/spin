@@ -42,7 +42,7 @@ use tokio::{
     task,
 };
 use tracing::Instrument;
-use wasmtime::{Store, StoreContextMut, ToWasmtimeResult, component::GuestTaskId};
+use wasmtime::{Store, StoreContextMut, ToWasmtimeResult, component::TaskGroupId};
 use wasmtime_wasi::p2::bindings::CommandIndices;
 use wasmtime_wasi_http::Error as WasiHttpError;
 use wasmtime_wasi_http::handler::{
@@ -782,7 +782,7 @@ impl<F: RuntimeFactors> WorkerState for HttpWorkerState<F> {
         &self,
         _: StoreContextMut<'_, Self::StoreData>,
         _: Self::RequestData,
-        _: GuestTaskId,
+        _: TaskGroupId,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>> {
         Box::pin(tokio::time::sleep(self.request_timeout))
     }

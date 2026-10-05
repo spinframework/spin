@@ -13,7 +13,7 @@ jobs:
     steps:
       # Checkout the repository
       - uses: actions/checkout@v4
-      
+
       # Run script to update the templates
       - name: Bump Rust Templates SDK Dependency
         shell: bash
