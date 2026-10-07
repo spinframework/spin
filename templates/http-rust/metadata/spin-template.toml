@@ -11,3 +11,7 @@ component = "component.txt"
 [parameters]
 project-description = { type = "string",  prompt = "Description", default = "" }
 http-path = { type = "string", prompt = "HTTP path", default = "/...", pattern = "^/\\S*$" }
+http-router = { type = "string", prompt = "HTTP router", default = "none", allowed_values = [
+    "axum",
+    "none",
+] }
