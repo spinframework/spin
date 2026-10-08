@@ -319,6 +319,52 @@ Pulled component mycomponents:github-oauth@0.1.0 to github-oauth.wasm
 - `--output` selects where the component Wasm is written; it defaults to
   `<name>.wasm` in the current directory.
 
+# Open question: integration with `spin.toml`
+
+There are two scenarios for referencing component manifests from `spin.toml`:
+
+1. **Testing:** I want to use a component manifest in `spin.toml`, but this is
+   primarily to give me a local dev experience for the standalone component.
+2. **Modularisation:** I want to use a component manifest to move information out of
+   a long `spin.toml`, so that my `spin.toml` gets shorter (and I have no
+   plans to publish the moved-out component as a standalone).
+
+In the standalone test scenario, the application does not fully trust
+the component (or at least pretends not to fully trust it), and so permission grants
+are reserved to the application: the component cannot grant itself permissions, only
+advertise the permissions it needs.
+
+In the modularisation scenario, the application and component are both within
+the trust boundary. It's purely a matter of convenience to break up a big
+manifest (ease of reading, history/diffing, etc.). The component can grant itself
+permissions just as it could if it was inline in `spin.toml`.
+
+I am not sure that the current proposal can be readily reconciled with the
+modularisation requirement, because the current proposal would require a separate
+document (either `spin.toml` or some other modularisation helper) to fulfil
+the `[requires]` section: the developer writes the same things twice, first as
+requirements and then as grants. This is onerous.
+
+That said, there is something to be said for a trust boundary. Suppose I build
+an app and write an auth component using modularisation style. Later, I need
+an auth component for another app: oh, I already wrote that, let me copy the
+directory across. If my auth component grants itself permissions, I've accidentally
+copied those permissions into my new app. But I'm not sure if this is truly a huge concern:
+copying and pasting without reviewing is always going to risk an "oops I forgot
+it did that."
+
+It has been suggested that a `[requires]` style component manifest could provide
+defaults, which a modularisation use case could accept or override. I am suspicious
+of this because it provides a binary component with a way to smuggle self-granted
+permissions past a developer who is not on the lookout for such things (and really,
+who is). The same commenter noted this, and suggested that defaults could be offered
+as part of an interactive `spin deps add` rather than granted automatically. But
+then the modularisation use case is back to "the application has to recapitulate
+what it says in the component" and our main `spin.toml` barely gets shorter at all.
+
+TLDR: I don't think we have a good answer to this yet. The two scenarios seem
+naggingly similar but... maybe they're not?
+
 # Relationship to other SIPs
 
 - **[SIP 020 — Component Dependencies](../sips/020-component-dependencies.md):**
