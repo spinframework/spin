@@ -82,7 +82,9 @@ fn component_package_ref(
          section of the component manifest (for example `version = \"1.0.0\"`)"
     );
     let version = version.parse::<Version>().with_context(|| {
-        format!("invalid component version {version:?} (expected a semver version, for example 1.0.0)")
+        format!(
+            "invalid component version {version:?} (expected a semver version, for example 1.0.0)"
+        )
     })?;
 
     Ok((package, version, registry))

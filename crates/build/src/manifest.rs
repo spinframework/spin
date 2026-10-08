@@ -18,9 +18,7 @@ pub enum ManifestBuildInfo {
     },
     /// A standalone component manifest (`component.toml`) describing a single
     /// buildable component rather than a full application.
-    Component {
-        components: Vec<ComponentBuildInfo>,
-    },
+    Component { components: Vec<ComponentBuildInfo> },
 }
 
 impl ManifestBuildInfo {

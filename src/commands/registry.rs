@@ -195,8 +195,7 @@ impl Push {
             source_path.display()
         );
 
-        let _spinner =
-            create_dotted_spinner(2000, "Pushing component to the Registry".to_owned());
+        let _spinner = create_dotted_spinner(2000, "Pushing component to the Registry".to_owned());
 
         let registry = self.registry.as_deref().context(
             "a registry is required when pushing a component manifest; pass `--registry` \
@@ -222,7 +221,6 @@ impl Push {
         self.profile.as_deref()
     }
 }
-
 
 #[derive(Parser, Debug)]
 pub struct Pull {
@@ -357,7 +355,8 @@ mod test {
                 .unwrap_or_else(|e| panic!("Failed to parse {args:?}: {}", e.kind()));
             assert_eq!(push.compose, expected, "wrong compose for {args:?}");
             assert_eq!(
-                push.reference.unwrap(), REFERENCE,
+                push.reference.unwrap(),
+                REFERENCE,
                 "reference not intact for {args:?}"
             );
         }

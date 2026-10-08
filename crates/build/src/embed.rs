@@ -30,8 +30,13 @@ pub fn embed_component_manifest(manifest: &ComponentManifest, wasm_path: &Path) 
     let wasm = std::fs::read(wasm_path)
         .with_context(|| format!("failed to read Wasm file {}", wasm_path.display()))?;
 
-    let updated = write_custom_section(&wasm, COMPONENT_MANIFEST_SECTION, &json)
-        .with_context(|| format!("failed to embed the component manifest into {}", wasm_path.display()))?;
+    let updated =
+        write_custom_section(&wasm, COMPONENT_MANIFEST_SECTION, &json).with_context(|| {
+            format!(
+                "failed to embed the component manifest into {}",
+                wasm_path.display()
+            )
+        })?;
 
     std::fs::write(wasm_path, updated)
         .with_context(|| format!("failed to write Wasm file {}", wasm_path.display()))?;
@@ -221,7 +226,8 @@ command = "echo build"
         .unwrap();
 
         let json = serde_json::to_vec(&manifest).unwrap();
-        let out = write_custom_section(&minimal_module(), COMPONENT_MANIFEST_SECTION, &json).unwrap();
+        let out =
+            write_custom_section(&minimal_module(), COMPONENT_MANIFEST_SECTION, &json).unwrap();
 
         let payload = custom_sections(&out, COMPONENT_MANIFEST_SECTION)[0];
         let decoded: ComponentManifest = serde_json::from_slice(payload).unwrap();
