@@ -3,13 +3,12 @@ template = "main"
 date = "2026-08-25T00:00:00Z"
 ---
 
-Summary: This SIP introduces a standalone component manifest (`component.toml`) and the CLI support to build and distribute an individual Spin component on its own, independent of any application. Reusable components — HTTP middleware being the prime example — can then be built, versioned, published to a registry, and pulled back down.
+Summary: This SIP introduces a standalone component manifest (`component.toml`) and the
+CLI support to build and distribute an individual Spin component on its own, independent
+of any application. Reusable components — HTTP middleware being the prime example — can
+then be built, versioned, published to a registry, and pulled back down.
 
-Owner(s): Michelle Dhanani <mdhanani@akamai.com>
-
-Created: August 25, 2026
-
-## Background
+# Background
 
 A Spin application is, today, always a *runnable* unit: the manifest is required
 to declare one or more triggers, and the tooling (`spin up`, `spin build`,
@@ -17,32 +16,50 @@ to declare one or more triggers, and the tooling (`spin up`, `spin build`,
 services, but it does not describe a component that is meant to be *consumed by
 other applications* rather than run on its own (i.e. dependencies)
 
-The motivating case is HTTP middleware. A component such as a GitHub OAuth gate
-is not an application — it has no trigger and does nothing on its own — yet it is
-highly reusable across applications. [SIP 020 (Component
-Dependencies)](../sips/020-component-dependencies.md) already lets an application
-consume such a component from a registry, and [SIP 024 (`spin deps` CLI
-DX)](../sips/024-spin-deps-cli-dx.md) makes wiring one up interactive. The gap is
-on the *author* side: there is no way to describe a single component, build it,
-and publish it so that others can depend on it.
+A component such as a GitHub OAuth gate is not an application — it
+has no trigger and does nothing on its own — yet it is highly reusable
+across applications. [SIP 020 (Component Dependencies)](../sips/020-component-dependencies.md)
+already lets an application consume such a component from a registry, and
+[SIP 024 (`spin deps` CLI DX)](../sips/024-spin-deps-cli-dx.md) makes wiring
+one up interactive. The gap is on the *author* side: there is no way to describe
+and build a single component.
 
-A bare component wasm can already be pushed to / pulled from an OCI registry (i.e. wkg). But a component alone advertises only its WIT world — the imports and exports it declares — not the operational configuration a consuming application must grant it: variables and secrets, allowed outbound hosts, key-value stores, SQLite databases, AI models, or mounted files. Spin needs a manifest that travels with the component so tooling can determine programmatically what a consumer must provide.
+A Wasm component binary can already be pushed to / pulled from an OCI registry (i.e. wkg).
+But a component binary alone advertises only its WIT world — the imports and exports it declares.
+To be convenient to consume, a component also needs to describe its operational requirements:
+that is, the configuration a consuming application must grant it. Such configuration includes
+the variables and secrets the component needs to access, the network hosts it needs to make
+calls to, storage, or mounted files.
 
-An earlier draft proposed a manifest dedicated to packaging *middleware*. But
-nothing about building and distributing a component is specific to middleware: a
-plain library component, a trigger-less utility, and a piece of HTTP middleware
-all share the same needs. This SIP therefore supersedes that middleware-only
-proposal with a general **component manifest** that applies to any component.
+In addition, it would be nice to be able to use the Spin `build-up-push` workflow for
+library component development.
 
-## Proposal
+# Describing components
 
-Introduce a standalone component manifest, `component.toml`, that describes a
+Describing operational requirements falls into two halves:
+
+1. Authoring the requirements, e.g. using a TOML file
+2. Embedding the requirement, e.g. using a custom section in the Wasm binary (see [Alternatives considered](#alternatives-considered))
+
+# Authoring components
+
+We propose to a standalone component manifest, `component.toml`, that describes a
 single component: its identity, how to build it, and the host capabilities and
-configuration it requires. Extend `spin build` to build from a component manifest and
-embed required configuration in component binary (see [Alternatives considered](#alternatives-considered)), and extend `spin registry` to
-publish and fetch components to and from an OCI registry.
+configuration it requires.  `spin build` will understand the component manifest
+format and will:
 
-### The component manifest (`component.toml`)
+1. Build the component as a standalone Wasm file
+2. Embed required configuration in component binary
+
+In addition, `spin registry push` will be updated to publish and fetch components
+to an OCI registry. The registry behaviour should interoperate with `wkg` based
+workflows because the file is just a Wasm binary, albeit potentially with a custom
+section.
+
+(Note that `spin up` cannot, in general, run components directly: the component
+needs to be included in an application for that to work, e.g. for testing.)
+
+## The component manifest (`component.toml`)
 
 ```toml
 component_manifest_version = 1
@@ -75,13 +92,13 @@ files = [{ destination = "/mounted/path" }]
 The manifest is intentionally close to a single `[component.<id>]` entry in
 `spin.toml`, but reorganised so a component can stand on its own.
 
-#### `component_manifest_version`
+### `component_manifest_version`
 
 `component_manifest_version = 1` identifies the file as a component manifest and
 distinguishes it from an application manifest (`spin_manifest_version`). The
 value is a fixed `1`; future revisions will bump it.
 
-#### `[component]` — identity and artifact
+### `[component]` — identity and artifact
 
 | Field | Required | Description |
 | --- | --- | --- |
@@ -97,7 +114,7 @@ artifact — the thing that is packaged — and exists whether or not the compon
 is built locally (for example, a pre-built component that is only being
 republished).
 
-#### `[build]` — how to build (optional)
+### `[build]` — how to build (optional)
 
 Mirrors the `[component.<id>.build]` table in `spin.toml`:
 
@@ -112,7 +129,7 @@ included yet — `spin watch` does not operate on component manifests, so the fi
 would have no effect. It will be added together with `spin watch` support for
 component manifests (see [Future work](#future-work)).
 
-#### `[requires]` — host capabilities (optional)
+### `[requires]` — host capabilities (optional)
 
 Declares the capabilities the component expects the host application to grant it.
 
@@ -123,14 +140,35 @@ Declares the capabilities the component expects the host application to grant it
 | `sqlite_databases` | SQLite database labels the component accesses. |
 | `ai_models` | AI models the component accesses. |
 | `allowed_outbound_hosts` | Outbound network destinations the component is allowed to reach. |
-| `environments_variables` | Environment variables the component needs. Each entry is a bare name, or `{ name, default }`. |
-| `files` | Guest paths the component reads, each `{ destination }`. The component declares only the path it expects to find files at; the consuming application decides what to mount there. |
+| `environment` | Environment variables the component needs. Each entry is a bare name, or `{ name, default }`. |
+| `files` | Guest paths the component reads. The component declares only the path it expects to find files at; the consuming application decides what to mount there. |
 
 `[requires]` is descriptive: it documents what an application must provide when it
 adopts the component. It is consumed at application-assembly time (see [Future
 work](#future-work)) rather than at build time.
 
-### Building a component
+# Self-describing component binaries
+
+When we build one of these component manifests, the result is a standalone binary which can
+be included in an application, consumed by `spin deps`, etc.  However, we want the binary to
+describe its requirements independently of the TOML manifest.
+
+When `spin build` builds a standalone component (as opposed to an application component),
+it will add a custom section named `spin:requires`.  The contents of the section are a
+JSON document, equivalent to serialising the `[requires]` section of the manifest:
+
+| Key                   | Type             | Value  |
+|-----------------------|------------------|--------|
+| `format_version`      | Number           | The `component_manifest_version` that should be used to interpret the remaining fields. Currently must be `1` |
+| `variables`           | Array (strings or tables) | Variables the component consumes. Table entries are `{ name, default, secret }` |
+| `key_value_stores`    | Array of strings | Key-value store labels the component accesses. |
+| `sqlite_databases`    | Array of strings | SQLite database labels the component accesses. |
+| `ai_models`           | Array of strings | LLMs the component accesses. |
+| `allowed_outbound_hosts` | Array of strings | Outbound network destinations the component wants to be able reach. |
+| `environment`         | Array (strings or tables) | Environment variables the component needs. Table entries are `{ name, default }` |
+| `files`               | Array of strings | Guest paths the component reads. |
+
+# Building components
 
 `spin build` recognizes a component manifest by file name and manifest version declaration, runs its `[build].command`, and embeds
 the component manifest (omitted the `[build]` section) as JSON in a custom section of the built binary:
@@ -147,18 +185,34 @@ application manifest (`spin.toml`) and falling back to a component manifest
 build` reports that there is nothing to build (the component is treated as
 pre-built).
 
-Only `spin build` operates on component manifests. `spin up`, `spin deploy`, and
-similar commands continue to require an application manifest, because a lone
-component has no trigger and cannot be run on its own.
+After running the build commands, `spin build` embeds the requirements in a custom
+section as discussed above.
 
-### Publishing and fetching components
+# Local experience
+
+Again, `spin up` cannot be used with component manifests: it continues to require
+an application manifest, because a lone component has no trigger and cannot be run on its own.
+(We _could_ allow `spin up` to operate as if on a bare Wasm file, but given that
+component manifests are typically for building middleware or libraries, this is
+likely to produce confusing errors about WASI interfaces: by disallowing it, we
+can provide meaningful errors.)
+
+So the current test story is "build the component separately and then reference
+it in your test app" (as a component, middleware or a dependency).
+
+Future work could allow for referencing component manifests in a `spin.toml`,
+bringing us closer to the much-longed-for manifest modularisation story.
+But we will need to think about how to handle component `requires` and app
+fulfilment of `requires`, in a way that is not too onerous.
+
+# Distributing components
 
 Reusable components are published to and pulled from an OCI registry — the same
 registries Spin already resolves against when a component declares a registry
 dependency (SIP 020). Publishing a component this way makes it immediately
 consumable as a dependency by other applications.
 
-#### `spin registry push`
+## `spin registry push`
 
 ```console
 $ spin registry push -f component.toml --registry ghcr.io/michellen
@@ -179,7 +233,7 @@ Pushed component mycomponents:github-oauth@0.1.0 to ghcr.io/michellen/github-oau
   an application manifest continues to be pushed as a Spin application OCI
   artifact (with its registry reference argument), unchanged.
 
-#### `spin registry pull`
+## `spin registry pull`
 
 ```console
 $ spin registry pull ghcr.io/michellen/github-oauth:0.1.0 --output github-oauth.wasm
@@ -191,7 +245,7 @@ Pulled component mycomponents:github-oauth@0.1.0 to github-oauth.wasm
 - `--output` selects where the component Wasm is written; it defaults to
   `<name>.wasm` in the current directory.
 
-## Relationship to other SIPs
+# Relationship to other SIPs
 
 - **[SIP 020 — Component Dependencies](../sips/020-component-dependencies.md):**
   this SIP is the producer side of that consumer feature. A component published
@@ -204,27 +258,27 @@ Pulled component mycomponents:github-oauth@0.1.0 to github-oauth.wasm
   Component distribution uses wasm-pkg component packages so components are
   resolvable as dependencies.
 
-## Future work
+# Future work
 
 - **Assembling an application from `[requires]`.** Tooling like `spin deps` could
   read `[requires]` and scaffold or validate the host application's grants when a
   component is adopted.
-- **`component.toml` discovery for more commands.** Only `spin build` and `spin
-  registry` recognise component manifests today; `spin watch` and others could
-  follow if there is demand.
 - **Fetching and inspecting components** with the spin deps CLI.
 - **Enabling composition** for standalone components. Standalone components today
   cannot have dependencies but components should be able to consume dependencies
   the same as a component in a Spin application manifest.
+- **Split out the requirements embedder.** So that developers can build the Wasm
+  binary with their favourite build tool, then add the requirements from the manifest,
+  rather than being forced to use `spin build`.
 
-## Alternatives considered
+# Alternatives considered
 
 - **Publish a component as a single-component Spin application.** A component
   could be wrapped in a synthetic `spin.toml` and pushed as an application OCI
   artifact. This reuses the application pipeline but produces an artifact that is
   semantically an *application* (with no trigger) and is **not** resolvable as a
   component dependency, defeating the primary purpose. Publishing a wasm-pkg
-  component package instead makes the result directly consumable by spin, wkg and
+  component package instead makes the result directly consumable by Spin, wkg and
   potentially other tools.
 - **A middleware-specific manifest.** The original draft targeted middleware
   only. Since building and distributing a component is not middleware-specific,
@@ -234,3 +288,8 @@ Pulled component mycomponents:github-oauth@0.1.0 to github-oauth.wasm
   rather than embedding component manifest in the component binary but that would
   lock component packages to OCI registries and we may want the option to distribute
   via github releases or other distribution platforms.
+- **Embed the requirements section at push time** instead of build time. This
+  would mean that the binary pushed to OCI was not the binary you tested, which
+  seems undesirable. (It would also, as above, tie us to OCI. Doing it at build
+  time means it still works if you serve it as a GitHub release asset.)
+ 

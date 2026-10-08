@@ -357,7 +357,7 @@ mod test {
                 .unwrap_or_else(|e| panic!("Failed to parse {args:?}: {}", e.kind()));
             assert_eq!(push.compose, expected, "wrong compose for {args:?}");
             assert_eq!(
-                push.reference, REFERENCE,
+                push.reference.unwrap(), REFERENCE,
                 "reference not intact for {args:?}"
             );
         }
