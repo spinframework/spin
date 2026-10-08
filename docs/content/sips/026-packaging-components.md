@@ -92,6 +92,14 @@ files = [{ destination = "/mounted/path" }]
 The manifest is intentionally close to a single `[component.<id>]` entry in
 `spin.toml`, but reorganised so a component can stand on its own.
 
+### Open questions on manifest format
+
+1. Is `license` meaningful in this context? We are referring to a binary
+   distribution.
+2. Is it worth having a separate URL for docs or other information, as
+   distinct from the source code repository?
+3. Should `component.toml` support build profiles?
+
 ### `component_manifest_version`
 
 `component_manifest_version = 1` identifies the file as a component manifest and
@@ -147,7 +155,68 @@ Declares the capabilities the component expects the host application to grant it
 adopts the component. It is consumed at application-assembly time (see [Future
 work](#future-work)) rather than at build time.
 
-# Self-describing component binaries
+### Open question: Variables interpolation in `requires` fields
+
+Spin applications allow variables to be interpolated in some fields - for example,
+`allowed_outbound_hosts = ["https://{{ auth_server }}"]`. Spin app interpolation uses
+application variables (operator-facing configuration knobs) rather than component variables
+(guest-facing values). But the author of a standalone component doesn't know
+what configuration knobs the application will define.
+
+Options:
+
+1. Standalone components cannot use interpolation. This seems like a frustrating
+   limitation. For example, an authentication middleware may be designed to be reusable
+   across different auth services.
+2. Interpolation uses component variables. This might work. It does mix concerns -
+   it means that any string used for interpolation will also be available to the
+   guest. But perhaps that's okay.
+3. Have two variables sections - configuration knobs and guest-facing variables.
+   Config knobs could be set only by the application (or defaulted); guest-facing
+   variables could be derived from config knobs or set directly by
+   the application. This replicates the app/component variables distinction that
+   Spin draws, but perhaps it's onerous and confusing?
+4. A variation of 2 and 3 is to have a single variables section but have a new
+   variable field "do/don't surface to the guest."
+
+### Open question: `files` and static assets
+
+The current specification for `files` says "these are the directories I'm gonna look
+at, put stuff there if you want me to find it." It is on the application to populate
+these directories. But what the component depends on static assets, e.g. a geolocation
+component that depends on a database, or an auth component which wants to return a
+cheerfully coloured SVG of a raised middle finger?
+
+This can be handled in Rust by using `include_*` macros, and maybe that's enough for
+now.
+
+An alternative is to embed static files in another custom section, in which case we
+need a way for the manifest to specify files to be included at build time
+(and upacked at run time), as opposed to being supplied by the application.
+If we want to allow for this, it would be good to define it now so we don't need
+to rev the manifest in three weeks' time.
+
+# Building components
+
+`spin build` recognizes a component manifest by file name and manifest version declaration, runs its `[build].command`, and embeds
+the component manifest (omitted the `[build]` section) as JSON in a custom section of the built binary:
+
+```console
+$ spin build -f component.toml
+Building component github-oauth with `cargo build --target wasm32-wasip2 --release`
+Finished building all Spin components
+```
+
+When invoked without `-f`, `spin build` searches for a manifest, preferring an
+application manifest (`spin.toml`) and falling back to a component manifest
+(`component.toml`). If the component manifest has no `[build]` section, `spin
+build` reports that there is nothing to build (the component is treated as
+pre-built).
+
+After running the build commands, `spin build` embeds the requirements in a custom
+section as discussed in the next section.
+
+## Self-describing binary format
 
 When we build one of these component manifests, the result is a standalone binary which can
 be included in an application, consumed by `spin deps`, etc.  However, we want the binary to
@@ -168,25 +237,22 @@ JSON document, equivalent to serialising the `[requires]` section of the manifes
 | `environment`         | Array (strings or tables) | Environment variables the component needs. Table entries are `{ name, default }` |
 | `files`               | Array of strings | Guest paths the component reads. |
 
-# Building components
+## Open question: `spin build` is optional
 
-`spin build` recognizes a component manifest by file name and manifest version declaration, runs its `[build].command`, and embeds
-the component manifest (omitted the `[build]` section) as JSON in a custom section of the built binary:
+We have previously avoided requiring people to run `spin build`, so that they can use
+more _cough_ fully-featured build systems instead. If `spin build` embeds the
+`requires` section, then developers are forced to use `spin build`.  Options:
 
-```console
-$ spin build -f component.toml
-Building component github-oauth with `cargo build --target wasm32-wasip2 --release`
-Finished building all Spin components
-```
-
-When invoked without `-f`, `spin build` searches for a manifest, preferring an
-application manifest (`spin.toml`) and falling back to a component manifest
-(`component.toml`). If the component manifest has no `[build]` section, `spin
-build` reports that there is nothing to build (the component is treated as
-pre-built).
-
-After running the build commands, `spin build` embeds the requirements in a custom
-section as discussed above.
+1. This is acceptable for now. Developers can call `spin build` from their fancy
+   schmancy build systems for now, and we will listen for feedback on if
+   this works for them or if we need to do more.
+2. Embed the custom section during `spin registry push`. But this ties us to OCI
+   for distribution: a component referenced via a GitHub release asset URL could
+   not be self-describing. Additionally, it means that the binary being deployed
+   is not the one you tested with, and that could be a mare to debug if something
+   went wrong (heaven forfend).
+3. Provide a command (or command option) to inject the custom section into an
+   existing Wasm file built by another source. E.g. `spin build self-describe foo.wasm -f component.toml`
 
 # Local experience
 
@@ -211,6 +277,14 @@ Reusable components are published to and pulled from an OCI registry — the sam
 registries Spin already resolves against when a component declares a registry
 dependency (SIP 020). Publishing a component this way makes it immediately
 consumable as a dependency by other applications.
+
+## Open question: OCI reference or `wkg` package name?
+
+The Spin manifest allows users to reference registry packages by registry and
+package name - that is, a `wkg` style reference. The current `spin registry push`
+code deals only in OCI-style references (`ghcr.io/itowlson/myapp:1`). While
+a `wkg` registry can be - and normally is - backed by OCI, we need to define
+which is these naming formats we want to use.
 
 ## `spin registry push`
 
@@ -288,8 +362,4 @@ Pulled component mycomponents:github-oauth@0.1.0 to github-oauth.wasm
   rather than embedding component manifest in the component binary but that would
   lock component packages to OCI registries and we may want the option to distribute
   via github releases or other distribution platforms.
-- **Embed the requirements section at push time** instead of build time. This
-  would mean that the binary pushed to OCI was not the binary you tested, which
-  seems undesirable. (It would also, as above, tie us to OCI. Doing it at build
-  time means it still works if you serve it as a GitHub release asset.)
  
