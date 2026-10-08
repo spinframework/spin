@@ -31,6 +31,35 @@ pub fn manifest_from_str(v1_or_v2_toml: &str) -> Result<AppManifest, Error> {
     }
 }
 
+/// Returns whether the given TOML content is a standalone component manifest
+/// (`component.toml`) rather than an application manifest (`spin.toml`).
+pub fn is_component_manifest(s: &str) -> bool {
+    #[derive(serde::Deserialize)]
+    struct ComponentManifestProbe {
+        #[allow(dead_code)]
+        component_manifest_version: toml::Value,
+    }
+
+    toml::from_str::<ComponentManifestProbe>(s).is_ok()
+}
+
+/// Parses a standalone component manifest (`component.toml`) file into a
+/// [`ComponentManifest`](schema::component::ComponentManifest).
+pub fn component_manifest_from_file(
+    path: impl AsRef<Path>,
+) -> Result<schema::component::ComponentManifest, Error> {
+    let manifest_str = std::fs::read_to_string(path)?;
+    component_manifest_from_str(&manifest_str)
+}
+
+/// Parses a standalone component manifest (`component.toml`) into a
+/// [`ComponentManifest`](schema::component::ComponentManifest).
+pub fn component_manifest_from_str(
+    toml_str: &str,
+) -> Result<schema::component::ComponentManifest, Error> {
+    Ok(toml::from_str(toml_str)?)
+}
+
 /// A Spin manifest schema version.
 #[derive(Debug, PartialEq)]
 pub enum ManifestVersion {

@@ -1,0 +1,26 @@
+component_manifest_version = 1
+
+[component]
+name = "github-oauth-middleware"
+version = "0.1.0"
+authors = ["Michelle Dhanani <mdhanani@akamai.com>"]
+description = "github-oauth-middleware"
+repository = "https://github.com/michellen/github-oauth-middleware"
+license = "apache2"
+homepage = "https://homepage.com"
+source = "something/something.wasm"
+
+[build]
+command = "cargo build --target wasm32-wasip2 --release"
+
+[requires]
+variables = [ 
+    "name of instance of capability",
+    {name = "variable_2", default ="foo,bar", secret = true }
+] 
+key_value_stores = ["store1", "store2"]
+sql_variables = ["sql1", "sql2"]
+environments = [{name = "env1", default = "something"}, "env2"]
+ai_models = ["some-ai"]
+allowed_outbound_hosts = ["https://example.com:443", "redis://redis.example.com:6379"]
+files = ["assets/**/*", {source = "local/path", destination = "/mounted/path"}]
