@@ -1572,6 +1572,7 @@ mod test {
             &resolve,
             world_id,
             wit_component::StringEncoding::UTF8,
+            false,
         )
         .expect("should embed component metadata");
 

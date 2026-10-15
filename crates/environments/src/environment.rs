@@ -233,7 +233,7 @@ impl CandidateWorld {
             })?
             .clone();
 
-        let bytes = wit_component::encode(decoded.resolve(), package_id)?;
+        let bytes = wit_component::encode(decoded.resolve(), package_id, false)?;
 
         Ok(Self {
             world: world.to_owned(),
@@ -261,7 +261,7 @@ mod test {
             .push_dir(wit_path)
             .expect("should have pushed WIT dir");
         let package_bytes =
-            wit_component::encode(&resolve, id).expect("should have encoded world package");
+            wit_component::encode(&resolve, id, false).expect("should have encoded world package");
 
         let world_name = WorldName::try_from(world.to_owned()).unwrap();
         let simple_world = CandidateWorld::from_package_bytes(&world_name, package_bytes)
@@ -881,6 +881,7 @@ mod test {
             &resolve,
             world_id,
             wit_component::StringEncoding::UTF8,
+            false,
         )
         .expect("should embed component metadata");
 

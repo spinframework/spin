@@ -204,16 +204,18 @@ tracing-opentelemetry = { version = "0.30", default-features = false, features =
 walkdir = "2"
 wac-graph = "0.11.0"
 wac-types = "0.11.0"
-wasm-encoder = "0.258.0"
-wasm-metadata = "0.258.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
-wasmparser = "0.258.0"
+# Dependencies from bytecodealliance/wasmtime
 wasmtime = "49.0.3"
 wasmtime-wasi = { version = "49.0.3", features = ["p3"] }
 wasmtime-wasi-http = { version = "49.0.3", features = ["p3", "component-model-async"] }
-wit-component = "0.258.0"
-wit-parser = "0.258.0"
+# Dependencies from bytecodealliance/wasm-tools
+wasm-encoder = "0.262.0"
+wasm-metadata = "0.262.0"
+wasmparser = "0.262.0"
+wit-component = "0.262.0"
+wit-parser = "0.262.0"
 
 spin-componentize = { path = "crates/componentize" }
 

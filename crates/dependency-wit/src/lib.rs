@@ -622,6 +622,7 @@ mod test {
             &resolve,
             world_id,
             wit_component::StringEncoding::UTF8,
+            false,
         )
         .expect("should embed component metadata");
 
@@ -972,11 +973,11 @@ world colors {
 
         let dep_wit = r#"
             package my:impexp@1.0.0;
-            
+
             interface zounds {
                 fie: func() -> bool;
             }
-            
+
             world tester {
                 export zounds;
                 import clever:clogs/zounds@1.2.3;

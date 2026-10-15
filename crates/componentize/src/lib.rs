@@ -161,6 +161,7 @@ pub fn componentize_old_bindgen(module: &[u8]) -> Result<Vec<u8>> {
         world,
         wit_component::StringEncoding::UTF8,
         None,
+        false,
     )?;
 
     let adapter = add_custom_section(CUSTOM_SECTION_NAME, &body, &adapter)?;
