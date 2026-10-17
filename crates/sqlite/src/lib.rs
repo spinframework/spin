@@ -157,10 +157,7 @@ impl InProcDatabase {
         self,
         base_dir: &Path,
     ) -> anyhow::Result<impl ConnectionCreator + 'static> {
-        let path = self
-            .path
-            .as_ref()
-            .map(|p| resolve_relative_path(p, base_dir));
+        let path = self.path.as_ref().map(|p| base_dir.join(p));
         let location = InProcDatabaseLocation::from_path(path)?;
         let factory = move || {
             let connection = spin_sqlite_inproc::InProcConnection::new(
@@ -171,16 +168,6 @@ impl InProcDatabase {
         };
         Ok(factory)
     }
-}
-
-/// Resolve a relative path against a base dir.
-///
-/// If the path is absolute, it is returned as is. Otherwise, it is resolved against the base dir.
-fn resolve_relative_path(path: &Path, base_dir: &Path) -> PathBuf {
-    if path.is_absolute() {
-        return path.to_owned();
-    }
-    base_dir.join(path)
 }
 
 /// Configuration for a libSQL database.

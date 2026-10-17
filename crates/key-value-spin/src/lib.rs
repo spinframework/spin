@@ -1,9 +1,6 @@
 mod store;
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
 use anyhow::Context as _;
 use serde::{Deserialize, Serialize};
@@ -40,10 +37,7 @@ impl MakeKeyValueStore for SpinKeyValueStore {
     ) -> anyhow::Result<Self::StoreManager> {
         let location = match (&self.base_path, &runtime_config.path) {
             // If both the base path and the path are specified, resolve the path against the base path
-            (Some(base_path), Some(path)) => {
-                let path = resolve_relative_path(path, base_path);
-                DatabaseLocation::Path(path)
-            }
+            (Some(base_path), Some(path)) => DatabaseLocation::Path(base_path.join(path)),
             // If the base path is `None` but use the path without resolving relative to the base path.
             (None, Some(path)) => DatabaseLocation::Path(path.clone()),
             // Otherwise, use an in-memory database
@@ -77,14 +71,4 @@ impl SpinKeyValueRuntimeConfig {
     pub fn new(path: Option<PathBuf>) -> Self {
         Self { path }
     }
-}
-
-/// Resolve a relative path against a base dir.
-///
-/// If the path is absolute, it is returned as is. Otherwise, it is resolved against the base dir.
-fn resolve_relative_path(path: &Path, base_dir: &Path) -> PathBuf {
-    if path.is_absolute() {
-        return path.to_owned();
-    }
-    base_dir.join(path)
 }
