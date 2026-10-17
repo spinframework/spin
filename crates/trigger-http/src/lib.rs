@@ -113,6 +113,11 @@ pub struct CliArgs {
 
     /// Request timeout to enforce.
     ///
+    /// This bounds the time a component instance has to produce each response.
+    /// Once all of an instance's requests have produced responses, further work
+    /// such as streaming a response body is bounded by `--post-return-timeout`
+    /// instead.
+    ///
     /// As of this writing, this only affects WASIp3 components.
     ///
     /// A number with no suffix or with an `s` suffix is interpreted as seconds;
@@ -124,6 +129,32 @@ pub struct CliArgs {
     /// at random for each new instance.
     #[clap(long, value_parser = parse_duration_range)]
     pub request_timeout: Option<Range<Duration>>,
+
+    /// Maximum time a component instance may keep running after all of its
+    /// requests have produced responses or timed out, for example while it is
+    /// still streaming a response body or running tasks it spawned.
+    ///
+    /// The time is measured from the moment the instance's last outstanding
+    /// request produced its response or timed out, so it starts over whenever a
+    /// reused instance finishes another request. It also bounds how long the
+    /// handler of a timed-out request keeps running in the background. If it
+    /// elapses, the whole instance is dropped, which cuts off every response
+    /// body it is still streaming.
+    ///
+    /// Defaults to the value of `--request-timeout`, or no limit if that is not
+    /// set either.
+    ///
+    /// As of this writing, this only affects WASIp3 components.
+    ///
+    /// A number with no suffix or with an `s` suffix is interpreted as seconds;
+    /// other accepted suffixes include `ms` (milliseconds), `us` or `μs`
+    /// (microseconds), and `ns` (nanoseconds).
+    ///
+    /// This may be specified either as a single time value or as a range,
+    /// e.g. 1..8s.  If it's a range, a value will be selected from that range
+    /// at random for each new instance.
+    #[clap(long, value_parser = parse_duration_range)]
+    pub post_return_timeout: Option<Range<Duration>>,
 
     /// Time to hold an idle component instance for possible reuse before
     /// dropping it.
@@ -239,6 +270,7 @@ pub struct InstanceReuseConfig {
     max_instance_reuse_count: Range<usize>,
     max_instance_concurrent_reuse_count: Range<usize>,
     request_timeout: Option<Range<Duration>>,
+    post_return_timeout: Option<Range<Duration>>,
     request_deadline: Option<Duration>,
     idle_instance_timeout: Range<Duration>,
 }
@@ -251,6 +283,7 @@ impl Default for InstanceReuseConfig {
                 DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT,
             ),
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
+            post_return_timeout: None,
             request_deadline: None,
             idle_instance_timeout: DEFAULT_IDLE_INSTANCE_TIMEOUT,
         }
@@ -270,6 +303,7 @@ impl InstanceReuseConfig {
             max_instance_reuse_count: Range::Value(1),
             max_instance_concurrent_reuse_count: Range::Value(1),
             request_timeout: Some(Range::Value(timeout)),
+            post_return_timeout: None,
             request_deadline: Some(timeout),
             idle_instance_timeout: DEFAULT_IDLE_INSTANCE_TIMEOUT,
         }
@@ -310,6 +344,7 @@ impl<F: RuntimeFactors> Trigger<F> for HttpTrigger {
                     DEFAULT_WASIP3_MAX_INSTANCE_CONCURRENT_REUSE_COUNT,
                 )),
             request_timeout: cli_args.request_timeout,
+            post_return_timeout: cli_args.post_return_timeout,
             request_deadline: None,
             idle_instance_timeout: cli_args.idle_instance_timeout,
         };

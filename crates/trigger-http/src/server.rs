@@ -723,6 +723,7 @@ pin_project! {
     pub(crate) struct HttpWorkerExpiration {
         idle_timeout: Duration,
         request_timeout: Duration,
+        post_return_timeout: Duration,
         #[pin]
         sleep: tokio::time::Sleep,
     }
@@ -739,10 +740,8 @@ impl WorkerExpiration for HttpWorkerExpiration {
 
         let timeout = match status {
             WorkerStatus::Idle => *me.idle_timeout,
-            // TODO: add a dedicated `post_return_timeout` config setting
-            // instead of reusing `request_timeout` for
-            // `WorkerStatus::PostReturn` here
-            WorkerStatus::Requests | WorkerStatus::PostReturn => *me.request_timeout,
+            WorkerStatus::Requests => *me.request_timeout,
+            WorkerStatus::PostReturn => *me.post_return_timeout,
         };
 
         if let Some(deadline) = start.checked_add(timeout) {
@@ -844,6 +843,11 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
             .request_timeout
             .map(|range| rand::rng().random_range(range))
             .unwrap_or(Duration::MAX);
+        let post_return_timeout = self
+            .reuse_config
+            .post_return_timeout
+            .map(|range| rand::rng().random_range(range))
+            .unwrap_or(request_timeout);
 
         Ok(Instance {
             store,
@@ -857,6 +861,7 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
             expiration: HttpWorkerExpiration {
                 idle_timeout: rand::rng().random_range(self.reuse_config.idle_instance_timeout),
                 request_timeout,
+                post_return_timeout,
                 sleep: tokio::time::sleep(Duration::MAX),
             },
             state: HttpWorkerState {
@@ -868,5 +873,30 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
                 _phantom: PhantomData,
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::task::Waker;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn post_return_timeout_is_independent_of_request_timeout() {
+        let mut expiration = Box::pin(HttpWorkerExpiration {
+            idle_timeout: Duration::from_secs(60),
+            request_timeout: Duration::from_secs(10),
+            post_return_timeout: Duration::from_secs(1),
+            sleep: tokio::time::sleep(Duration::MAX),
+        });
+        let start = Instant::now() - Duration::from_secs(2);
+        let mut is_expired = |status| {
+            let mut cx = Context::from_waker(Waker::noop());
+            expiration.as_mut().poll(&mut cx, status, start).is_ready()
+        };
+
+        assert!(!is_expired(WorkerStatus::Requests));
+        assert!(is_expired(WorkerStatus::PostReturn));
     }
 }
