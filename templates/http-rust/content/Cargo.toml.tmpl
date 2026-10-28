@@ -12,5 +12,10 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = "1"
 spin-sdk = "7.0.0"
+{%- case http-router -%}
+{% when "axum" %}
+axum = { version = "0.8", default-features = false, features = [] }
+tower-service = "0.3"
+{%- endcase %}
 
 [workspace]

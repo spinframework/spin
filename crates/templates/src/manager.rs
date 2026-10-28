@@ -648,6 +648,7 @@ mod tests {
         make_values([
             ("project-description", "dummy desc"),
             ("http-path", "/dummy/dummy/dummy/..."),
+            ("http-router", "none"),
         ])
     }
 
