@@ -97,6 +97,19 @@ impl spin_http::Host for crate::InstanceState {
         // Convert http::Request to reqwest::Request
         let req = reqwest::Request::try_from(req).map_err(|_| HttpError::InvalidUrl)?;
 
+        // Enforce blocked networks for IP hosts
+        if let Some(host) = req.url().host() {
+            let ip_host: Option<std::net::IpAddr> = match host {
+                url::Host::Ipv4(addr) => Some(addr.into()),
+                url::Host::Ipv6(addr) => Some(addr.into()),
+                url::Host::Domain(_) => None, // Handled by SpinDnsResolver
+            };
+            if ip_host.is_some_and(|ip| self.hooks.blocked_networks.is_blocked(&ip)) {
+                tracing::error!(%host, "Connection to disallowed IP host has been blocked");
+                return Err(HttpError::DestinationNotAllowed);
+            }
+        }
+
         // Allow reuse of Client's internal connection pool for multiple requests
         // in a single component execution
         let client = self.hooks.spin_http_client.get_or_insert_with(|| {
