@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     env,
     path::Path,
     process::{self, Command},
@@ -51,7 +50,7 @@ fn main() {
         let current_toolchain = current_toolchain.split_once('-').unwrap().0;
 
         // Default toolchain: e.g. "stable (default)", "nightly", "1.60-x86_64-pc-windows-msvc"
-        let default_toolchain = run(vec!["rustup", "default"], None, None);
+        let default_toolchain = run(vec!["rustup", "default"], None, []);
         let default_toolchain = std::str::from_utf8(&default_toolchain.stdout).unwrap();
         let default_toolchain = default_toolchain.split(['-', ' ']).next().unwrap();
 
@@ -91,7 +90,7 @@ fn has_wasm32_wasi_target() -> bool {
     let output = run(
         vec!["rustc", "--print=target-libdir", "--target=wasm32-wasip2"],
         None,
-        None,
+        [],
     );
     let Ok(output) = std::str::from_utf8(&output.stdout) else {
         return false;
@@ -110,28 +109,22 @@ fn has_wasm32_wasi_target() -> bool {
 
 fn cargo_build(dir: &str) {
     run(
-        vec![
-            "cargo",
-            "build",
-            "--target",
-            "wasm32-wasip2",
-            "--release",
-            // Ensure that even if `CARGO_TARGET_DIR` is set
-            // that we're still building into the right dir.
-            "--target-dir",
-            "./target",
-        ],
+        vec!["cargo", "build", "--target", "wasm32-wasip2", "--release"],
         Some(dir),
-        None,
+        vec![
+            // Make sure build artifacts end up in the right place.
+            ("CARGO_BUILD_TARGET_DIR", "./target"),
+            ("CARGO_BUILD_BUILD_DIR", "./target"),
+        ],
     );
     println!("cargo:rerun-if-changed={dir}/Cargo.toml");
     println!("cargo:rerun-if-changed={dir}/src");
 }
 
-fn run<S: Into<String> + AsRef<std::ffi::OsStr>>(
+fn run<'a, S: Into<String> + AsRef<std::ffi::OsStr>>(
     args: Vec<S>,
     dir: Option<S>,
-    env: Option<HashMap<S, S>>,
+    env: impl IntoIterator<Item = (&'a str, &'a str)>,
 ) -> process::Output {
     let mut cmd = Command::new(get_os_process());
     cmd.stdout(process::Stdio::piped());
@@ -142,11 +135,7 @@ fn run<S: Into<String> + AsRef<std::ffi::OsStr>>(
         cmd.current_dir(dir);
     };
 
-    if let Some(env) = env {
-        for (k, v) in env {
-            cmd.env(k, v);
-        }
-    };
+    cmd.envs(env);
 
     cmd.arg("-c");
     let c = args
