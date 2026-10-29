@@ -6,7 +6,7 @@ edition = { workspace = true }
 license = { workspace = true }
 
 [workspace.package]
-version = "4.2.5"
+version = "4.2.6"
 authors = ["Spin Framework Contributors"]
 edition = "2024"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -207,9 +207,9 @@ wac-types = "0.11.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 # Dependencies from bytecodealliance/wasmtime
-wasmtime = "50.0.0"
-wasmtime-wasi = { version = "50.0.0", features = ["p3"] }
-wasmtime-wasi-http = { version = "50.0.0", features = ["p3", "component-model-async"] }
+wasmtime = "50.0.1"
+wasmtime-wasi = { version = "50.0.1", features = ["p3"] }
+wasmtime-wasi-http = { version = "50.0.1", features = ["p3", "component-model-async"] }
 # Dependencies from bytecodealliance/wasm-tools
 wasm-encoder = "0.262.0"
 wasm-metadata = "0.262.0"
