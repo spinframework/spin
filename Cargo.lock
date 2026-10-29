@@ -1810,7 +1810,7 @@ dependencies = [
 
 [[package]]
 name = "conformance"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "conformance-tests",
@@ -7988,7 +7988,7 @@ dependencies = [
 
 [[package]]
 name = "runtime-tests"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -8919,7 +8919,7 @@ dependencies = [
 
 [[package]]
 name = "spin-app"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "serde",
@@ -8932,7 +8932,7 @@ dependencies = [
 
 [[package]]
 name = "spin-build"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "serde",
@@ -8951,7 +8951,7 @@ dependencies = [
 
 [[package]]
 name = "spin-capabilities"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "wac-graph",
@@ -8962,7 +8962,7 @@ dependencies = [
 
 [[package]]
 name = "spin-cli"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9051,7 +9051,7 @@ dependencies = [
 
 [[package]]
 name = "spin-common"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "clap",
@@ -9064,7 +9064,7 @@ dependencies = [
 
 [[package]]
 name = "spin-componentize"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9090,7 +9090,7 @@ dependencies = [
 
 [[package]]
 name = "spin-compose"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9109,7 +9109,7 @@ dependencies = [
 
 [[package]]
 name = "spin-connection-semaphore"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "spin-telemetry",
@@ -9120,7 +9120,7 @@ dependencies = [
 
 [[package]]
 name = "spin-core"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9138,7 +9138,7 @@ dependencies = [
 
 [[package]]
 name = "spin-dependency-wit"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
@@ -9154,7 +9154,7 @@ dependencies = [
 
 [[package]]
 name = "spin-doctor"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9176,7 +9176,7 @@ dependencies = [
 
 [[package]]
 name = "spin-environments"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9216,7 +9216,7 @@ dependencies = [
 
 [[package]]
 name = "spin-expressions"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9229,7 +9229,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-key-value"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "serde",
@@ -9254,7 +9254,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-llm"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9275,7 +9275,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-otel"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
@@ -9294,7 +9294,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-http"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "bytes",
@@ -9332,7 +9332,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-mqtt"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "rumqttc",
@@ -9351,7 +9351,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-mysql"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "futures",
@@ -9375,7 +9375,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-networking"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9410,7 +9410,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-pg"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "bytes",
@@ -9447,7 +9447,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-outbound-redis"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "opentelemetry-semantic-conventions",
@@ -9467,7 +9467,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-sqlite"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "async-trait",
  "opentelemetry-semantic-conventions",
@@ -9486,7 +9486,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-variables"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "spin-core",
  "spin-expressions",
@@ -9501,7 +9501,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factor-wasi"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "async-trait",
  "bytes",
@@ -9519,7 +9519,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factors"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "serde",
@@ -9532,7 +9532,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factors-derive"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "expander",
  "proc-macro2",
@@ -9542,7 +9542,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factors-executor"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "spin-app",
@@ -9558,7 +9558,7 @@ dependencies = [
 
 [[package]]
 name = "spin-factors-test"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "spin-app",
  "spin-factors",
@@ -9570,7 +9570,7 @@ dependencies = [
 
 [[package]]
 name = "spin-http"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "http 1.5.0",
@@ -9593,7 +9593,7 @@ dependencies = [
 
 [[package]]
 name = "spin-http-routes"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
@@ -9605,7 +9605,7 @@ dependencies = [
 
 [[package]]
 name = "spin-key-value-aws"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -9620,7 +9620,7 @@ dependencies = [
 
 [[package]]
 name = "spin-key-value-azure"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9636,7 +9636,7 @@ dependencies = [
 
 [[package]]
 name = "spin-key-value-redis"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "redis",
@@ -9649,7 +9649,7 @@ dependencies = [
 
 [[package]]
 name = "spin-key-value-spin"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "rusqlite",
@@ -9663,7 +9663,7 @@ dependencies = [
 
 [[package]]
 name = "spin-llm-local"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "candle-core",
@@ -9683,7 +9683,7 @@ dependencies = [
 
 [[package]]
 name = "spin-llm-remote-http"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "futures",
@@ -9697,7 +9697,7 @@ dependencies = [
 
 [[package]]
 name = "spin-loader"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "dirs 6.0.0",
@@ -9726,7 +9726,7 @@ dependencies = [
 
 [[package]]
 name = "spin-locked-app"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9739,7 +9739,7 @@ dependencies = [
 
 [[package]]
 name = "spin-manifest"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "glob",
@@ -9760,7 +9760,7 @@ dependencies = [
 
 [[package]]
 name = "spin-oci"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "astral-tokio-tar",
@@ -9796,7 +9796,7 @@ dependencies = [
 
 [[package]]
 name = "spin-outbound-networking-config"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -9811,7 +9811,7 @@ dependencies = [
 
 [[package]]
 name = "spin-plugins"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -9835,11 +9835,11 @@ dependencies = [
 
 [[package]]
 name = "spin-resource-table"
-version = "4.2.5"
+version = "4.2.6"
 
 [[package]]
 name = "spin-runtime-config"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "serde",
@@ -9877,7 +9877,7 @@ dependencies = [
 
 [[package]]
 name = "spin-runtime-factors"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "clap",
@@ -9905,7 +9905,7 @@ dependencies = [
 
 [[package]]
 name = "spin-serde"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -9918,7 +9918,7 @@ dependencies = [
 
 [[package]]
 name = "spin-sqlite"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "serde",
  "spin-factor-sqlite",
@@ -9930,7 +9930,7 @@ dependencies = [
 
 [[package]]
 name = "spin-sqlite-inproc"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9944,7 +9944,7 @@ dependencies = [
 
 [[package]]
 name = "spin-sqlite-libsql"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9956,7 +9956,7 @@ dependencies = [
 
 [[package]]
 name = "spin-telemetry"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "http 0.2.12",
@@ -9975,7 +9975,7 @@ dependencies = [
 
 [[package]]
 name = "spin-templates"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "bytes",
@@ -10008,14 +10008,14 @@ dependencies = [
 
 [[package]]
 name = "spin-tls"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "rustls 0.23.46",
 ]
 
 [[package]]
 name = "spin-trigger"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "clap",
@@ -10045,7 +10045,7 @@ dependencies = [
 
 [[package]]
 name = "spin-trigger-http"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "clap",
@@ -10086,7 +10086,7 @@ dependencies = [
 
 [[package]]
 name = "spin-trigger-redis"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "futures",
@@ -10103,7 +10103,7 @@ dependencies = [
 
 [[package]]
 name = "spin-variables-azure"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "azure_core 0.20.0",
  "azure_identity 0.20.0",
@@ -10117,7 +10117,7 @@ dependencies = [
 
 [[package]]
 name = "spin-variables-env"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "dotenvy",
  "serde",
@@ -10130,7 +10130,7 @@ dependencies = [
 
 [[package]]
 name = "spin-variables-static"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -10143,7 +10143,7 @@ dependencies = [
 
 [[package]]
 name = "spin-variables-vault"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "serde",
  "spin-expressions",
@@ -10154,7 +10154,7 @@ dependencies = [
 
 [[package]]
 name = "spin-wasi-async"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "spin-core",
@@ -10163,7 +10163,7 @@ dependencies = [
 
 [[package]]
 name = "spin-world"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10479,7 +10479,7 @@ dependencies = [
 
 [[package]]
 name = "terminal"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "termcolor",
 ]
@@ -11266,7 +11266,7 @@ dependencies = [
 
 [[package]]
 name = "ui-testing"
-version = "4.2.5"
+version = "4.2.6"
 dependencies = [
  "anyhow",
  "dirs 6.0.0",
