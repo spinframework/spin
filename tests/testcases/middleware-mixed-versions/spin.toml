@@ -1,0 +1,54 @@
+spin_manifest_version = 2
+
+[application]
+name = "middleware-mixed-versions"
+authors = ["Spin Framework"]
+version = "0.1.0"
+
+# All components built against wasi:http 0.3.2.
+[[trigger.http]]
+route = "/all-new/..."
+component = "echo-all-new"
+dependencies.middleware = [{ component = "header-adder-all-new" }]
+
+# Primary at 0.3.2, middleware at 0.3.0.
+[[trigger.http]]
+route = "/new-primary/..."
+component = "echo-new-primary"
+dependencies.middleware = [{ component = "header-adder-old" }]
+
+# Primary at 0.3.0, middleware at 0.3.2.
+[[trigger.http]]
+route = "/new-middleware/..."
+component = "echo-old"
+dependencies.middleware = [{ component = "header-adder-new" }]
+
+# Middleware imports handler@0.3.0 and exports handler@0.3.2.
+[[trigger.http]]
+route = "/mixed-middleware/..."
+component = "echo-mixed-middleware"
+dependencies.middleware = [{ component = "header-adder-mixed" }]
+
+[component.echo-all-new]
+source = "%{source=middleware-primary-v0.3.2}"
+
+[component.echo-new-primary]
+source = "%{source=middleware-primary-v0.3.2}"
+
+[component.echo-mixed-middleware]
+source = "%{source=middleware-primary-v0.3.2}"
+
+[component.echo-old]
+source = "%{source=middleware-primary}"
+
+[component.header-adder-all-new]
+source = "%{source=middleware-header-adder-v0.3.2}"
+
+[component.header-adder-new]
+source = "%{source=middleware-header-adder-v0.3.2}"
+
+[component.header-adder-old]
+source = "%{source=middleware-header-adder}"
+
+[component.header-adder-mixed]
+source = "%{source=middleware-header-adder-mixed}"

@@ -4,6 +4,7 @@ fn main() {
     println!("cargo:rerun-if-changed=components");
     println!("cargo:rerun-if-changed=helper");
     println!("cargo:rerun-if-changed=adapters");
+    println!("cargo:rerun-if-changed=wit-0.3.2");
 
     let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR env variable not set"));
     let packages = std::fs::read_dir("components")

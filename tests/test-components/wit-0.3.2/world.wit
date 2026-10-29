@@ -1,0 +1,9 @@
+package spin-test:middleware;
+
+/// A middleware that forwards to a `wasi:http/handler@0.3.0` import but exports
+/// `wasi:http/handler@0.3.2`, matching the shape produced by `wasip3` 0.10 SDKs.
+world mixed-version-middleware {
+  import wasi:http/types@0.3.2;
+  import wasi:http/handler@0.3.0;
+  export wasi:http/handler@0.3.2;
+}

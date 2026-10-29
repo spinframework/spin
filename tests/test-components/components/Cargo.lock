@@ -820,6 +820,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "middleware-header-adder-mixed"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "wit-bindgen 0.61.1",
+]
+
+[[package]]
+name = "middleware-header-adder-v0-3-2"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "wit-bindgen 0.61.1",
+]
+
+[[package]]
 name = "middleware-kv-stasher"
 version = "0.1.0"
 dependencies = [
@@ -829,6 +845,14 @@ dependencies = [
 
 [[package]]
 name = "middleware-primary"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "wit-bindgen 0.61.1",
+]
+
+[[package]]
+name = "middleware-primary-v0-3-2"
 version = "0.1.0"
 dependencies = [
  "futures",

@@ -9105,6 +9105,8 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "wac-graph",
+ "wit-component 0.262.0",
+ "wit-parser 0.262.0",
 ]
 
 [[package]]
