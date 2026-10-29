@@ -1796,6 +1796,57 @@ route = "/..."
         Ok(())
     }
 
+    #[test]
+    fn test_middleware_mixed_wasi_http_versions() -> anyhow::Result<()> {
+        run_test(
+            "middleware-mixed-versions",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: Vec::new(),
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                for route in [
+                    "/all-new",
+                    "/new-primary",
+                    "/new-middleware",
+                    "/mixed-middleware",
+                ] {
+                    let headers = vec![("my-header", "hello")];
+                    let request =
+                        Request::full(Method::Post, route, &headers, Some(b"hi".to_vec()));
+                    assert_spin_request(
+                        spin,
+                        request,
+                        Response::full(
+                            200,
+                            [
+                                ("request-my-header".to_owned(), "hello".to_owned()),
+                                (
+                                    "request-header-added-by".to_owned(),
+                                    "middleware-header-adder".to_owned(),
+                                ),
+                                (
+                                    "response-header-added-by".to_owned(),
+                                    "yep me again!".to_owned(),
+                                ),
+                            ]
+                            .into_iter()
+                            .collect(),
+                            b"Request body:\n\nhi".to_vec(),
+                        ),
+                    )?;
+                }
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
     #[cfg(feature = "extern-dependencies-tests")]
     #[test]
     fn test_mysql_v3() -> anyhow::Result<()> {

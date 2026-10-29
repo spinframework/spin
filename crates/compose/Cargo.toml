@@ -23,5 +23,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 wac-graph = { workspace = true }
 
+[dev-dependencies]
+wit-component = { workspace = true, features = ["dummy-module"] }
+wit-parser = { workspace = true }
+
 [lints]
 workspace = true
