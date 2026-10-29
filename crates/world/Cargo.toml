@@ -12,4 +12,5 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+spin-serde = { path = "../serde" }
 wasmtime = { workspace = true }

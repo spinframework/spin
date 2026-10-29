@@ -9,7 +9,7 @@ mod version;
 
 pub use version::{FixedStringVersion, FixedVersion, FixedVersionBackwardCompatible};
 
-pub use dependencies::{DependencyName, DependencyPackageName};
+pub use dependencies::{CapabilitySetKey, DependencyName, DependencyPackageName, NamedImportKey};
 
 /// A "kebab-case" identifier.
 pub type KebabId = id::Id<'-', false>;

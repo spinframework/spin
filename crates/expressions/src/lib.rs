@@ -34,7 +34,7 @@ impl ProviderResolver {
     /// Adds component variable values to the Resolver.
     pub fn add_component_variables(
         &mut self,
-        component_id: impl Into<String>,
+        component_id: impl Into<VariableOwner>,
         variables: impl IntoIterator<Item = (String, String)>,
     ) -> Result<()> {
         self.internal
@@ -47,13 +47,13 @@ impl ProviderResolver {
     }
 
     /// Resolves a variable value for the given path.
-    pub async fn resolve(&self, component_id: &str, key: Key<'_>) -> Result<String> {
+    pub async fn resolve(&self, component_id: &VariableOwner, key: Key<'_>) -> Result<String> {
         let template = self.internal.get_template(component_id, key)?;
         self.resolve_template(template).await
     }
 
     /// Resolves all variables for the given component.
-    pub async fn resolve_all(&self, component_id: &str) -> Result<Vec<(String, String)>> {
+    pub async fn resolve_all(&self, component_id: &VariableOwner) -> Result<Vec<(String, String)>> {
         use futures::FutureExt;
 
         let Some(keys2templates) = self.internal.component_configs.get(component_id) else {
@@ -123,13 +123,25 @@ impl ProviderResolver {
     }
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub enum VariableOwner {
+    Component(String),
+    Dependency(String, spin_serde::CapabilitySetKey),
+}
+
+impl From<&str> for VariableOwner {
+    fn from(value: &str) -> Self {
+        Self::Component(value.into())
+    }
+}
+
 /// A variable resolver.
 #[derive(Debug, Default)]
 pub struct Resolver {
     // variable key -> variable
     variables: HashMap<String, Variable>,
     // component ID -> variable key -> variable value template
-    component_configs: HashMap<String, HashMap<String, Template>>,
+    component_configs: HashMap<VariableOwner, HashMap<String, Template>>,
 }
 
 impl SyncResolver for Resolver {
@@ -163,7 +175,7 @@ impl Resolver {
     /// Adds component variable values to the Resolver.
     pub fn add_component_variables(
         &mut self,
-        component_id: impl Into<String>,
+        component_id: impl Into<VariableOwner>,
         variables: impl IntoIterator<Item = (String, String)>,
     ) -> Result<()> {
         let component_id = component_id.into();
@@ -183,7 +195,7 @@ impl Resolver {
     }
 
     /// Resolves a variable value for the given path.
-    pub fn resolve(&self, component_id: &str, key: Key<'_>) -> Result<String> {
+    pub fn resolve(&self, component_id: &VariableOwner, key: Key<'_>) -> Result<String> {
         let template = self.get_template(component_id, key)?;
         self.resolve_template(template)
     }
@@ -201,7 +213,7 @@ impl Resolver {
     }
 
     /// Gets a template for the given path.
-    fn get_template(&self, component_id: &str, key: Key<'_>) -> Result<&Template> {
+    fn get_template(&self, component_id: &VariableOwner, key: Key<'_>) -> Result<&Template> {
         let configs = self.component_configs.get(component_id).ok_or_else(|| {
             Error::Undefined(format!("no variable for component {component_id:?}"))
         })?;
@@ -399,7 +411,9 @@ mod tests {
             .add_component_variables("test-component", [("test_key".into(), template.into())])
             .unwrap();
         resolver.add_provider(Box::new(TestProvider));
-        resolver.resolve("test-component", Key("test_key")).await
+        resolver
+            .resolve(&"test-component".into(), Key("test_key"))
+            .await
     }
 
     #[tokio::test]

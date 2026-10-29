@@ -146,7 +146,7 @@ async fn add_component_dependency(
         return cancelled();
     };
 
-    let dep_value = dep_source.to_component_dependency(inheritance.to_write.clone());
+    let dep_value = dep_source.to_component_dependency(inheritance.to_write.clone(), None);
     write_dependency_to_manifest(manifest_file, component_id, &dep_name, &dep_value)?;
     regenerate_dependencies_wit(manifest_file, app_root, component_id).await?;
 
@@ -189,7 +189,7 @@ fn add_middleware(
         return cancelled();
     };
 
-    let entry = serialize_trigger_dependency(&dep_source, inheritance.to_write.as_ref());
+    let entry = serialize_trigger_dependency(&dep_source, inheritance.to_write.as_ref(), None);
     write_middleware_to_manifest(manifest_file, &route, index, entry)?;
 
     println!(
@@ -665,28 +665,30 @@ fn write_dependency_to_manifest(
 /// keep the two in sync.
 fn serialize_component_dependency(dep: &ComponentDependency) -> toml_edit::Item {
     let mut table = toml_edit::InlineTable::new();
-    let (export, inherit_configuration) = match dep {
+    let (export, inherit_configuration, capabilities) = match dep {
         ComponentDependency::Version(version) => return toml_edit::value(version.as_str()),
         ComponentDependency::Local {
             path,
             export,
             inherit_configuration,
+            capabilities,
         } => {
             table.insert(
                 "path",
                 toml_edit::Value::from(path.to_string_lossy().as_ref()),
             );
-            (export, inherit_configuration)
+            (export, inherit_configuration, capabilities)
         }
         ComponentDependency::HTTP {
             url,
             digest,
             export,
             inherit_configuration,
+            capabilities,
         } => {
             table.insert("url", toml_edit::Value::from(url.as_str()));
             table.insert("digest", toml_edit::Value::from(digest.as_str()));
-            (export, inherit_configuration)
+            (export, inherit_configuration, capabilities)
         }
         ComponentDependency::Package {
             version,
@@ -694,6 +696,7 @@ fn serialize_component_dependency(dep: &ComponentDependency) -> toml_edit::Item 
             package,
             export,
             inherit_configuration,
+            capabilities,
         } => {
             table.insert("version", toml_edit::Value::from(version.as_str()));
             if let Some(registry) = registry {
@@ -702,21 +705,26 @@ fn serialize_component_dependency(dep: &ComponentDependency) -> toml_edit::Item 
             if let Some(package) = package {
                 table.insert("package", toml_edit::Value::from(package.as_str()));
             }
-            (export, inherit_configuration)
+            (export, inherit_configuration, capabilities)
         }
         ComponentDependency::AppComponent {
             component,
             export,
             inherit_configuration,
+            capabilities,
         } => {
             table.insert("component", toml_edit::Value::from(component.as_ref()));
-            (export, inherit_configuration)
+            (export, inherit_configuration, capabilities)
         }
     };
     if let Some(export) = export {
         table.insert("export", toml_edit::Value::from(export.as_str()));
     }
-    insert_inherit_configuration(&mut table, inherit_configuration.as_ref());
+    insert_inherit_configuration(
+        &mut table,
+        inherit_configuration.as_ref(),
+        capabilities.as_ref(),
+    );
     toml_edit::Item::Value(toml_edit::Value::InlineTable(table))
 }
 
@@ -727,6 +735,7 @@ fn serialize_component_dependency(dep: &ComponentDependency) -> toml_edit::Item 
 fn serialize_trigger_dependency(
     source: &ResolvedSource,
     inherit: Option<&InheritConfiguration>,
+    capabilities: Option<&spin_manifest::schema::v2::DependencyCapabilities>,
 ) -> toml_edit::Value {
     let mut table = toml_edit::InlineTable::new();
     match source {
@@ -755,13 +764,14 @@ fn serialize_trigger_dependency(
             table.insert("component", toml_edit::Value::from(id.as_ref()));
         }
     }
-    insert_inherit_configuration(&mut table, inherit);
+    insert_inherit_configuration(&mut table, inherit, capabilities);
     toml_edit::Value::InlineTable(table)
 }
 
 fn insert_inherit_configuration(
     table: &mut toml_edit::InlineTable,
     config: Option<&InheritConfiguration>,
+    capabilities: Option<&spin_manifest::schema::v2::DependencyCapabilities>,
 ) {
     match config {
         None => {}
@@ -774,6 +784,15 @@ fn insert_inherit_configuration(
                 arr.push(key.as_str());
             }
             table.insert("inherit_configuration", toml_edit::Value::Array(arr));
+        }
+    }
+    match capabilities {
+        None => {}
+        Some(caps) => {
+            let caps_table = toml_edit::ser::to_document(caps)
+                .expect("DependencyCapabilities should be serialisable");
+            let caps_table = caps_table.as_table().clone().into_inline_table();
+            table.insert("capabilities", toml_edit::Value::InlineTable(caps_table));
         }
     }
 }

@@ -5,7 +5,7 @@ use std::{collections::HashSet, path::PathBuf};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use spin_serde::{DependencyName, FixedVersionBackwardCompatible};
+use spin_serde::{CapabilitySetKey, DependencyName, FixedVersionBackwardCompatible};
 use std::collections::BTreeMap;
 
 use crate::{
@@ -250,6 +250,9 @@ pub struct LockedComponent {
     /// Component dependencies
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub trigger_dependencies: BTreeMap<String, Vec<LockedComponentDependency>>,
+    /// TODO
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub precomposed_dependency_capabilities: Vec<DependencyCapabilities>,
     /// Host requirements
     #[serde(
         default,
@@ -257,6 +260,22 @@ pub struct LockedComponent {
         deserialize_with = "deserialize_host_requirements"
     )]
     pub host_requirements: ValuesMap,
+}
+
+impl LockedComponent {
+    /// TODO:
+    pub fn dependency_capabilities(&self) -> impl Iterator<Item = &DependencyCapabilities> {
+        self.dependencies
+            .values()
+            .flat_map(|d| d.custom_capabilities())
+            .chain(
+                self.trigger_dependencies
+                    .values()
+                    .flat_map(|d| d.iter())
+                    .flat_map(|d| d.custom_capabilities()),
+            )
+            .chain(self.precomposed_dependency_capabilities.iter())
+    }
 }
 
 /// A LockedDependency represents a "fully resolved" Spin component dependency.
@@ -269,6 +288,19 @@ pub struct LockedComponentDependency {
     /// Which configurations to inherit from parent
     #[serde(default, skip_serializing_if = "InheritConfiguration::is_none")]
     pub inherit: InheritConfiguration,
+    // /// WASI filesystem contents
+    // #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    // pub files: Vec<ContentPath>,
+}
+
+impl LockedComponentDependency {
+    /// TODO: docs
+    pub fn custom_capabilities(&self) -> Option<&DependencyCapabilities> {
+        match &self.inherit {
+            InheritConfiguration::Exact(dependency_capabilities) => Some(dependency_capabilities),
+            _ => None,
+        }
+    }
 }
 
 // /// A LockedDependency represents a "fully resolved" Spin component dependency.
@@ -289,6 +321,27 @@ pub enum InheritConfiguration {
     /// Dependencies will inherit only the specified configurations from parent
     /// (if empty then deny-all is enforced).
     Some(Vec<String>),
+    /// TODO: doesn't play nicely with name but eh
+    Exact(Box<DependencyCapabilities>),
+}
+
+/// TODO:
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DependencyCapabilities {
+    /// TODO
+    pub capabilities_key: CapabilitySetKey,
+    /// TODO
+    pub files: Vec<ContentPath>,
+    /// TODO
+    pub environment: indexmap::IndexMap<String, String>,
+    /// TODO
+    pub allowed_outbound_hosts: Vec<String>,
+    /// TODO
+    pub variables: indexmap::IndexMap<spin_serde::LowerSnakeId, String>,
+    /// TODO:
+    pub key_value_stores: Vec<String>,
+    /// TODO:
+    pub sqlite_databases: Vec<String>,
 }
 
 impl Default for InheritConfiguration {

@@ -67,6 +67,26 @@ impl<CF: ClientFactory> Factor for OutboundPgFactor<CF> {
         })
     }
 
+    fn register_named_imports<T: spin_factors::InitContext<Self>>(
+        &self,
+        ctx: &mut T,
+        component: &spin_core::wasmtime::component::Component,
+    ) -> anyhow::Result<()> {
+        spin_world::named_imports::spin::postgres4_2_0::postgres::add_to_linker::<
+            _,
+            PgFactorData<CF>,
+        >(
+            ctx.linker(),
+            component,
+            |key| {
+                key.try_into()
+                    .map_err(spin_core::wasmtime::Error::from_anyhow)
+            },
+            T::get_data,
+        )?;
+        Ok(())
+    }
+
     fn prepare<T: RuntimeFactors>(
         &self,
         mut ctx: PrepareContext<T, Self>,

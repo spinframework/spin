@@ -99,7 +99,7 @@ impl ComponentLoader {
 }
 
 #[async_trait]
-impl<T: RuntimeFactors, U> spin_factors_executor::ComponentLoader<T, U> for ComponentLoader {
+impl<T: RuntimeFactors, U: Send> spin_factors_executor::ComponentLoader<T, U> for ComponentLoader {
     async fn load_component(
         &self,
         engine: &wasmtime::Engine,

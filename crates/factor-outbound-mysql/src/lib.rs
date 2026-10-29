@@ -56,6 +56,23 @@ impl<C: Send + Sync + Client + 'static> Factor for OutboundMysqlFactor<C> {
         })
     }
 
+    fn register_named_imports<T: InitContext<Self>>(
+        &self,
+        ctx: &mut T,
+        component: &spin_core::wasmtime::component::Component,
+    ) -> anyhow::Result<()> {
+        spin_world::named_imports::spin::mysql::mysql::add_to_linker::<_, MysqlFactorData<C>>(
+            ctx.linker(),
+            component,
+            |key| {
+                key.try_into()
+                    .map_err(spin_core::wasmtime::Error::from_anyhow)
+            },
+            T::get_data,
+        )?;
+        Ok(())
+    }
+
     fn prepare<T: spin_factors::RuntimeFactors>(
         &self,
         mut ctx: spin_factors::PrepareContext<T, Self>,

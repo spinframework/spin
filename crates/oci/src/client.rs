@@ -336,11 +336,28 @@ impl Client {
 
             for dep in c.dependencies.values_mut() {
                 self.assemble_dependency_layer(dep, &mut layers).await?;
+                if let spin_locked_app::locked::InheritConfiguration::Exact(caps) = &mut dep.inherit
+                {
+                    caps.files = self
+                        .assemble_content_layers(assembly_mode, &mut layers, caps.files.as_slice())
+                        .await?;
+                }
             }
 
             for deps in c.trigger_dependencies.values_mut() {
                 for dep in deps {
                     self.assemble_dependency_layer(dep, &mut layers).await?;
+                    if let spin_locked_app::locked::InheritConfiguration::Exact(caps) =
+                        &mut dep.inherit
+                    {
+                        caps.files = self
+                            .assemble_content_layers(
+                                assembly_mode,
+                                &mut layers,
+                                caps.files.as_slice(),
+                            )
+                            .await?;
+                    }
                 }
             }
 
@@ -402,8 +419,34 @@ impl Client {
                 precompose_using_trigger(&c, &locked_url, working_dir).await?
             };
 
+            for dep in c.dependencies.values_mut() {
+                if let spin_locked_app::locked::InheritConfiguration::Exact(caps) = &mut dep.inherit
+                {
+                    caps.files = self
+                        .assemble_content_layers(assembly_mode, &mut layers, caps.files.as_slice())
+                        .await?;
+                }
+            }
+
+            for deps in c.trigger_dependencies.values_mut() {
+                for dep in deps {
+                    if let spin_locked_app::locked::InheritConfiguration::Exact(caps) =
+                        &mut dep.inherit
+                    {
+                        caps.files = self
+                            .assemble_content_layers(
+                                assembly_mode,
+                                &mut layers,
+                                caps.files.as_slice(),
+                            )
+                            .await?;
+                    }
+                }
+            }
+
             let layer = ImageLayer::new(composed, WASM_LAYER_MEDIA_TYPE.to_string(), None);
             c.source.content = self.content_ref_for_layer(&layer);
+            c.precomposed_dependency_capabilities = c.dependency_capabilities().cloned().collect();
             c.dependencies.clear();
             c.trigger_dependencies.clear();
             layers.push(layer);

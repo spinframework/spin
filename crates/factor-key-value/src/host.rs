@@ -8,11 +8,15 @@ use spin_core::{
 use spin_factor_otel::OtelFactorState;
 use spin_resource_table::Table;
 use spin_telemetry::traces::{self, Blame};
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::key_value::key_value as v3;
 use spin_world::v2::key_value;
 use spin_world::wasi::keyvalue as wasi_keyvalue;
-use std::{any::Any, collections::HashSet, sync::Arc};
+use spin_world::{CapabilitySetKey, MAX_HOST_BUFFERED_BYTES, NamedImportKey};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tracing::instrument;
 
 const DEFAULT_STORE_TABLE_CAPACITY: u32 = 256;
@@ -69,6 +73,7 @@ pub trait Store: Sync + Send {
 
 pub struct KeyValueDispatch {
     allowed_stores: HashSet<String>,
+    dependency_allowed_stores: Arc<HashMap<CapabilitySetKey, HashSet<String>>>,
     manager: Arc<dyn StoreManager>,
     stores: Table<Arc<dyn Store>>,
     compare_and_swaps: Table<Arc<dyn Cas>>,
@@ -79,11 +84,13 @@ pub struct KeyValueDispatch {
 impl KeyValueDispatch {
     pub fn new(
         allowed_stores: HashSet<String>,
+        dependency_allowed_stores: Arc<HashMap<CapabilitySetKey, HashSet<String>>>,
         manager: Arc<dyn StoreManager>,
         app_id: Arc<str>,
     ) -> Self {
         Self::new_with_capacity_and_semaphore(
             allowed_stores,
+            dependency_allowed_stores,
             manager,
             DEFAULT_STORE_TABLE_CAPACITY,
             ConnectionSemaphore::new(None, None, "key-value", app_id, None),
@@ -93,6 +100,7 @@ impl KeyValueDispatch {
 
     pub fn new_with_capacity(
         allowed_stores: HashSet<String>,
+        dependency_allowed_stores: Arc<HashMap<CapabilitySetKey, HashSet<String>>>,
         manager: Arc<dyn StoreManager>,
         capacity: u32,
         app_id: Arc<str>,
@@ -100,6 +108,7 @@ impl KeyValueDispatch {
     ) -> Self {
         Self::new_with_capacity_and_semaphore(
             allowed_stores,
+            dependency_allowed_stores,
             manager,
             capacity,
             ConnectionSemaphore::new(None, None, "key-value", app_id, None),
@@ -109,6 +118,7 @@ impl KeyValueDispatch {
 
     pub fn new_with_capacity_and_semaphore(
         allowed_stores: HashSet<String>,
+        dependency_allowed_stores: Arc<HashMap<CapabilitySetKey, HashSet<String>>>,
         manager: Arc<dyn StoreManager>,
         capacity: u32,
         semaphore: ConnectionSemaphore,
@@ -116,6 +126,7 @@ impl KeyValueDispatch {
     ) -> Self {
         Self {
             allowed_stores,
+            dependency_allowed_stores,
             manager,
             stores: Table::new(capacity),
             compare_and_swaps: Table::new(capacity),
@@ -140,6 +151,42 @@ impl KeyValueDispatch {
         })
     }
 
+    async fn open_async_impl<T>(
+        accessor: &Accessor<T, crate::KeyValueFactorData>,
+        key: Option<&CapabilitySetKey>,
+        label: String,
+    ) -> Result<Resource<v3::Store>, v3::Error> {
+        let (allowed, manager) = accessor.with(|mut access| {
+            let host = access.get();
+            host.otel.reparent_tracing_span();
+            (host.is_allowed_store(key, &label), host.manager.clone())
+        });
+
+        if !allowed {
+            return Err(v3::Error::AccessDenied);
+        }
+
+        let store = manager.get(&label).await.map_err(to_v3_err)?;
+        store.after_open().await.map_err(to_v3_err)?;
+
+        accessor.with(|mut access| {
+            let host = access.get();
+            host.stores
+                .push(store)
+                .map(Resource::new_own)
+                .map_err(|()| v3::Error::StoreTableFull)
+        })
+    }
+
+    fn is_allowed_store(&self, key: Option<&CapabilitySetKey>, label: &str) -> bool {
+        match key {
+            None => self.allowed_stores.contains(label),
+            Some(key) => self
+                .allowed_stores_for(key)
+                .is_some_and(|a| a.contains(label)),
+        }
+    }
+
     pub fn get_store<T: 'static>(&self, store: Resource<T>) -> anyhow::Result<&Arc<dyn Store>> {
         let res = self.stores.get(store.rep()).context("invalid store");
         if let Err(err) = &res {
@@ -156,6 +203,11 @@ impl KeyValueDispatch {
 
     pub fn allowed_stores(&self) -> &HashSet<String> {
         &self.allowed_stores
+    }
+
+    /// Get the set of allowed databases for the dependency identified by the given key.
+    fn allowed_stores_for(&self, key: &CapabilitySetKey) -> Option<&HashSet<String>> {
+        self.dependency_allowed_stores.get(key)
     }
 
     pub fn get_store_wasi<T: 'static>(
@@ -299,26 +351,7 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
         accessor: &Accessor<T, Self>,
         label: String,
     ) -> Result<Resource<v3::Store>, v3::Error> {
-        let (allowed, manager) = accessor.with(|mut access| {
-            let host = access.get();
-            host.otel.reparent_tracing_span();
-            (host.allowed_stores.contains(&label), host.manager.clone())
-        });
-
-        if !allowed {
-            return Err(v3::Error::AccessDenied);
-        }
-
-        let store = manager.get(&label).await.map_err(to_v3_err)?;
-        store.after_open().await.map_err(to_v3_err)?;
-
-        accessor.with(|mut access| {
-            let host = access.get();
-            host.stores
-                .push(store)
-                .map(Resource::new_own)
-                .map_err(|()| v3::Error::StoreTableFull)
-        })
+        KeyValueDispatch::open_async_impl(accessor, None, label).await
     }
 
     async fn get(
@@ -431,6 +464,79 @@ impl<T> v3::HostStoreWithStore<T> for crate::KeyValueFactorData {
         })?;
 
         Ok((ksr, efr))
+    }
+}
+
+impl spin_world::named_imports::spin::key_value::key_value::Host for KeyValueDispatch {
+    fn convert_error(&mut self, err: v3::Error) -> anyhow::Result<v3::Error> {
+        Ok(err)
+    }
+}
+
+impl spin_world::named_imports::spin::key_value::key_value::HostStore for KeyValueDispatch {
+    async fn drop(
+        &mut self,
+        _id: NamedImportKey,
+        store: Resource<spin_world::named_imports::spin::key_value::key_value::Store>,
+    ) -> anyhow::Result<()> {
+        <Self as v3::HostStore>::drop(self, store).await
+    }
+}
+
+impl<T> spin_world::named_imports::spin::key_value::key_value::HostStoreWithStore<T>
+    for crate::KeyValueFactorData
+{
+    async fn open(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        label: String,
+    ) -> Result<Resource<v3::Store>, v3::Error> {
+        KeyValueDispatch::open_async_impl(accessor, Some(id.capability_set()), label).await
+    }
+
+    async fn get(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        store: Resource<v3::Store>,
+        key: String,
+    ) -> Result<Option<Vec<u8>>, v3::Error> {
+        <Self as v3::HostStoreWithStore<T>>::get(accessor, store, key).await
+    }
+
+    async fn set(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        store: Resource<v3::Store>,
+        key: String,
+        value: Vec<u8>,
+    ) -> Result<(), v3::Error> {
+        <Self as v3::HostStoreWithStore<T>>::set(accessor, store, key, value).await
+    }
+
+    async fn delete(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        store: Resource<v3::Store>,
+        key: String,
+    ) -> Result<(), v3::Error> {
+        <Self as v3::HostStoreWithStore<T>>::delete(accessor, store, key).await
+    }
+
+    async fn exists(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        store: Resource<v3::Store>,
+        key: String,
+    ) -> Result<bool, v3::Error> {
+        <Self as v3::HostStoreWithStore<T>>::exists(accessor, store, key).await
+    }
+
+    async fn get_keys(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        store: Resource<v3::Store>,
+    ) -> Result<(StreamReader<String>, FutureReader<Result<(), v3::Error>>)> {
+        <Self as v3::HostStoreWithStore<T>>::get_keys(accessor, store).await
     }
 }
 

@@ -10,6 +10,8 @@ base64 = { workspace = true }
 schemars = { workspace = true }
 semver = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
+sha2 = { workspace = true }
+spin-common = { path = "../common" }
 wasm-pkg-common = { workspace = true }
 
 [dev-dependencies]

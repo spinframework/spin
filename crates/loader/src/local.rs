@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use futures::{StreamExt, future::try_join_all};
@@ -14,7 +17,7 @@ use spin_locked_app::{
 };
 use spin_manifest::schema::v2::{self, AppManifest, KebabId, WasiFilesMount};
 use spin_outbound_networking_config::allowed_hosts::{AllowedHostConfig, AllowedHostsConfig};
-use spin_serde::DependencyName;
+use spin_serde::{CapabilitySetKey, DependencyName};
 use std::collections::BTreeMap;
 use tokio::{io::AsyncWriteExt, sync::Semaphore};
 
@@ -110,36 +113,39 @@ impl LocalLoader {
             .collect::<Result<BTreeMap<_, _>>>()?;
         let resolver = Resolver::new(variables.clone())?;
 
-        let triggers = try_join_all(triggers.into_iter().flat_map(|(trigger_type, configs)| {
-            configs
-                .into_iter()
-                .map(|trigger| {
-                    let trigger_type_2 = trigger_type.clone();
-                    let id = trigger.id.clone();
-                    async move {
-                        self.load_trigger(&id, &trigger_type_2, trigger)
-                            .await
-                            .with_context(|| {
-                                format!("Failed to load `{}` trigger `{}`", trigger_type_2, id)
-                            })
-                    }
-                })
-                .collect::<Vec<_>>()
-        }))
+        let triggers = try_join_all(triggers.into_iter().enumerate().flat_map(
+            |(index, (trigger_type, configs))| {
+                configs
+                    .into_iter()
+                    .map(|trigger| {
+                        let trigger_type_2 = trigger_type.clone();
+                        let id = trigger.id.clone();
+                        async move {
+                            self.load_trigger(&id, index, &trigger_type_2, trigger)
+                                .await
+                                .with_context(|| {
+                                    format!("Failed to load `{}` trigger `{}`", trigger_type_2, id)
+                                })
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            },
+        ))
         .await?;
 
         let sloth_guard = warn_if_component_load_slothful();
 
         // Load all components concurrently
-        let components = try_join_all(components.into_iter().map(|(id, c)| {
-            let resolver = &resolver;
-            async move {
-                self.load_component(&id, c, resolver)
-                    .await
-                    .with_context(|| format!("Failed to load component `{id}`"))
-            }
-        }))
-        .await?;
+        let components =
+            try_join_all(components.into_iter().enumerate().map(|(index, (id, c))| {
+                let resolver = &resolver;
+                async move {
+                    self.load_component(&id, index, c, resolver)
+                        .await
+                        .with_context(|| format!("Failed to load component `{id}`"))
+                }
+            }))
+            .await?;
 
         drop(sloth_guard);
 
@@ -176,6 +182,7 @@ impl LocalLoader {
     async fn load_trigger(
         &self,
         id: &str,
+        trigger_index: usize,
         trigger_type: &str,
         trigger: v2::Trigger,
     ) -> Result<LockedTrigger> {
@@ -193,7 +200,7 @@ impl LocalLoader {
         }
 
         let locked_deps = if !trigger.dependencies.is_empty() {
-            self.load_trigger_dependencies(id, trigger.dependencies.iter())
+            self.load_trigger_dependencies(id, trigger_index, trigger.dependencies.iter())
                 .await?
         } else {
             BTreeMap::new()
@@ -211,6 +218,7 @@ impl LocalLoader {
     async fn load_component(
         &self,
         id: &KebabId,
+        component_index: usize,
         component: v2::Component,
         resolver: &Resolver,
     ) -> Result<LockedComponent> {
@@ -237,7 +245,7 @@ impl LocalLoader {
             .with_context(|| format!("Failed to load Wasm source {}", component.source))?;
 
         let dependencies = self
-            .load_component_dependencies(id, &component.dependencies)
+            .load_component_dependencies(id, component_index, &component.dependencies)
             .await?;
 
         let env = component.environment.into_iter().collect();
@@ -299,6 +307,7 @@ impl LocalLoader {
             config,
             dependencies,
             trigger_dependencies: Default::default(), // We will fix this up later
+            precomposed_dependency_capabilities: Default::default(),
             host_requirements,
         })
     }
@@ -306,12 +315,19 @@ impl LocalLoader {
     async fn load_component_dependencies(
         &self,
         id: &KebabId,
+        component_index: usize,
         dependencies: &v2::ComponentDependencies,
     ) -> Result<BTreeMap<DependencyName, LockedComponentDependency>> {
-        Ok(try_join_all(dependencies.inner.iter().map(
-            |(dependency_name, dependency)| async move {
+        Ok(try_join_all(dependencies.inner.iter().enumerate().map(
+            |(dep_index, (dependency_name, dependency))| async move {
                 let locked_dependency = self
-                    .load_component_dependency(dependency_name.clone(), dependency.clone())
+                    .load_component_dependency(
+                        id,
+                        component_index,
+                        dep_index,
+                        dependency_name.clone(),
+                        dependency.clone(),
+                    )
                     .await
                     .with_context(|| {
                         format!(
@@ -329,23 +345,60 @@ impl LocalLoader {
 
     async fn load_component_dependency(
         &self,
+        component_id: &KebabId,
+        component_index: usize,
+        dependency_index: usize,
         dependency_name: DependencyName,
         dependency: v2::ComponentDependency,
     ) -> Result<LockedComponentDependency> {
-        self.wasm_loader
-            .load_component_dependency(&dependency_name, &dependency)
-            .await
+        let dependency_id = match &dependency_name {
+            DependencyName::Plain(id) => id.as_ref().to_string(),
+            DependencyName::Package(dependency_package_name) => dependency_package_name.to_string(),
+        };
+
+        let files = self
+            .load_dependency_files(
+                component_id.as_ref(),
+                &dependency_name.to_string(),
+                dependency.capabilities(),
+            )
+            .await?;
+
+        let inherit = locked_inherit(
+            component_index,
+            &dependency_id,
+            dependency_index,
+            &dependency,
+            files,
+        )?;
+
+        let (content, export) = self
+            .wasm_loader
+            .load_dependency_content(&dependency_name, &dependency)
+            .await?;
+
+        Ok(locked::LockedComponentDependency {
+            source: locked::LockedComponentSource {
+                content_type: "application/wasm".into(),
+                content: file_content_ref(content)?,
+            },
+            export,
+            inherit,
+        })
     }
 
     async fn load_trigger_dependencies(
         &self,
         id: &str,
+        trigger_index: usize,
         dependencies: impl Iterator<Item = (&String, &v2::TriggerDependencies)>,
     ) -> Result<BTreeMap<String, Vec<LockedComponentDependency>>> {
         let mut loaded = BTreeMap::new();
 
         for (role, deps) in dependencies {
-            let locked_deps = self.load_trigger_dependencies_vec(id, &deps.0).await?;
+            let locked_deps = self
+                .load_trigger_dependencies_vec(id, trigger_index, role, &deps.0)
+                .await?;
             loaded.insert(role.clone(), locked_deps);
         }
 
@@ -355,30 +408,122 @@ impl LocalLoader {
     async fn load_trigger_dependencies_vec(
         &self,
         id: &str,
+        trigger_index: usize,
+        role: &str,
         dependencies: &[v2::TriggerDependency],
     ) -> Result<Vec<LockedComponentDependency>> {
-        Ok(
-            try_join_all(dependencies.iter().map(|dependency| async move {
-                let locked_dependency = self
-                    .load_trigger_dependency(dependency.clone())
-                    .await
-                    .with_context(|| {
-                        format!("Failed to load trigger dependency `{dependency:?}` for `{id}`")
-                    })?;
+        Ok(try_join_all(
+            dependencies
+                .iter()
+                .enumerate()
+                .map(|(index, dependency)| async move {
+                    let dependency_id = format!("{role}{index}");
+                    let locked_dependency = self
+                        .load_trigger_dependency(
+                            id,
+                            trigger_index,
+                            &dependency_id,
+                            index,
+                            dependency.clone(),
+                        )
+                        .await
+                        .with_context(|| {
+                            format!("Failed to load trigger dependency `{dependency:?}` for `{id}`")
+                        })?;
 
-                anyhow::Ok(locked_dependency)
-            }))
-            .await?
-            .into_iter()
-            .collect(),
+                    anyhow::Ok(locked_dependency)
+                }),
         )
+        .await?
+        .into_iter()
+        .collect())
     }
 
     async fn load_trigger_dependency(
         &self,
+        trigger_id: &str,
+        trigger_index: usize,
+        dependency_id: &str,
+        dependency_index: usize,
         dependency: v2::TriggerDependency,
     ) -> Result<LockedComponentDependency> {
-        self.wasm_loader.load_trigger_dependency(&dependency).await
+        let as_component_dep = match dependency.clone() {
+            v2::TriggerDependency::Package {
+                version,
+                registry,
+                package,
+                inherit_configuration,
+                capabilities,
+            } => v2::ComponentDependency::Package {
+                version,
+                registry,
+                package: Some(package),
+                export: None,
+                inherit_configuration,
+                capabilities,
+            },
+            v2::TriggerDependency::Local {
+                path,
+                inherit_configuration,
+                capabilities,
+            } => v2::ComponentDependency::Local {
+                path,
+                export: None,
+                inherit_configuration,
+                capabilities,
+            },
+            v2::TriggerDependency::HTTP {
+                url,
+                digest,
+                inherit_configuration,
+                capabilities,
+            } => v2::ComponentDependency::HTTP {
+                url,
+                digest,
+                export: None,
+                inherit_configuration,
+                capabilities,
+            },
+            v2::TriggerDependency::AppComponent {
+                component,
+                inherit_configuration,
+                capabilities,
+            } => v2::ComponentDependency::AppComponent {
+                component,
+                export: None,
+                inherit_configuration,
+                capabilities,
+            },
+        };
+
+        let files = self
+            .load_dependency_files(trigger_id, dependency_id, as_component_dep.capabilities())
+            .await?;
+
+        let inherit = locked_inherit(
+            trigger_index,
+            dependency_id,
+            dependency_index,
+            &as_component_dep,
+            files,
+        )?;
+
+        let fake_dep_name =
+            DependencyName::Plain(KebabId::try_from("to-do-fix-fix-fix".to_string()).unwrap());
+
+        let (content, export) = self
+            .wasm_loader
+            .load_dependency_content(&fake_dep_name, &as_component_dep)
+            .await?;
+
+        Ok(locked::LockedComponentDependency {
+            source: locked::LockedComponentSource {
+                content_type: "application/wasm".into(),
+                content: file_content_ref(content)?,
+            },
+            export,
+            inherit,
+        })
     }
 
     // Load a Wasm source from the given ContentRef and update the source
@@ -396,6 +541,66 @@ impl LocalLoader {
             content_type: "application/wasm".into(),
             content: file_content_ref(path)?,
         })
+    }
+
+    pub async fn load_dependency_files(
+        &self,
+        component_or_trigger_id: &str,
+        dep_name: &str,
+        caps: Option<&v2::DependencyCapabilities>,
+    ) -> anyhow::Result<Vec<ContentPath>> {
+        // TODO: this needs to be in the dep loader - add it to LockedDep or
+        // does it need to travel some other way? and how will it work with
+        // precomposition?
+        // TODO: How to do trigger deps?  We do not get these on the component until later.
+        // I guess we need to track them with the triggers and make it work at transposition time ugh
+        // (But need to think in e.g. allow-transient-writes do all transpositions of a
+        // trigger dep share the same dir, or do we need to move that on a per-parent basis.)
+        let Some(caps) = caps else {
+            return Ok(vec![]);
+        };
+
+        if caps.files.is_empty() {
+            return Ok(vec![]);
+        };
+
+        // TODO: WHY YES THIS IS HELLA DUPLICATION
+        let files =
+            match &self.files_mount_strategy {
+                FilesMountStrategy::Copy(files_mount_root) => {
+                    let fs_safe_dep =
+                        spin_common::sha256::hex_digest_from_bytes(dep_name.to_string().as_bytes()); // TODO: could be nicer/shorter/more debuggable
+                    let component_mount_root = files_mount_root
+                        .join(component_or_trigger_id)
+                        .join("_deps_assets")
+                        .join(fs_safe_dep);
+                    // Copy mounted files into component mount root, concurrently
+                    try_join_all(caps.files.iter().map(|f| {
+                        self.copy_file_mounts(f, &component_mount_root, &caps.exclude_files)
+                    }))
+                    .await?;
+
+                    // All component files (copies) are in `component_mount_root` now
+                    vec![ContentPath {
+                        content: file_content_ref(component_mount_root)?,
+                        path: "/".into(),
+                    }]
+                }
+                FilesMountStrategy::Direct => {
+                    ensure!(
+                        caps.exclude_files.is_empty(),
+                        "Cannot load a component with `exclude_files` using --direct-mounts"
+                    );
+                    let mut files = vec![];
+                    for mount in &caps.files {
+                        // Validate (and canonicalize) direct mount directory
+                        files.push(self.resolve_direct_mount(mount).await?);
+                    }
+                    files
+                }
+            };
+
+        Ok(files)
     }
 
     // Copy content(s) from the given `mount`
@@ -863,93 +1068,6 @@ impl WasmLoader {
         Ok(path)
     }
 
-    /// Loads a dependency and returns a fully resolved locked component dependency.
-    pub async fn load_component_dependency(
-        &self,
-        dependency_name: &DependencyName,
-        dependency: &v2::ComponentDependency,
-    ) -> Result<locked::LockedComponentDependency> {
-        let inherit = locked_inherit(dependency);
-
-        let (content, export) = self
-            .load_dependency_content(dependency_name, dependency)
-            .await?;
-
-        Ok(locked::LockedComponentDependency {
-            source: locked::LockedComponentSource {
-                content_type: "application/wasm".into(),
-                content: file_content_ref(content)?,
-            },
-            export,
-            inherit,
-        })
-    }
-
-    /// Loads a dependency and returns a fully resolved locked component dependency.
-    pub async fn load_trigger_dependency(
-        &self,
-        dependency: &v2::TriggerDependency,
-    ) -> Result<locked::LockedComponentDependency> {
-        let as_component_dep = match dependency.clone() {
-            v2::TriggerDependency::Package {
-                version,
-                registry,
-                package,
-                inherit_configuration,
-            } => v2::ComponentDependency::Package {
-                version,
-                registry,
-                package: Some(package),
-                export: None,
-                inherit_configuration,
-            },
-            v2::TriggerDependency::Local {
-                path,
-                inherit_configuration,
-            } => v2::ComponentDependency::Local {
-                path,
-                export: None,
-                inherit_configuration,
-            },
-            v2::TriggerDependency::HTTP {
-                url,
-                digest,
-                inherit_configuration,
-            } => v2::ComponentDependency::HTTP {
-                url,
-                digest,
-                export: None,
-                inherit_configuration,
-            },
-            v2::TriggerDependency::AppComponent {
-                component,
-                inherit_configuration,
-            } => v2::ComponentDependency::AppComponent {
-                component,
-                export: None,
-                inherit_configuration,
-            },
-        };
-
-        let inherit = locked_inherit(&as_component_dep);
-
-        let fake_dep_name =
-            DependencyName::Plain(KebabId::try_from("to-do-fix-fix-fix".to_string()).unwrap());
-
-        let (content, export) = self
-            .load_dependency_content(&fake_dep_name, &as_component_dep)
-            .await?;
-
-        Ok(locked::LockedComponentDependency {
-            source: locked::LockedComponentSource {
-                content_type: "application/wasm".into(),
-                content: file_content_ref(content)?,
-            },
-            export,
-            inherit,
-        })
-    }
-
     /// Loads the content path and export for a dependency.
     pub async fn load_dependency_content(
         &self,
@@ -1027,8 +1145,35 @@ impl WasmLoader {
     }
 }
 
-fn locked_inherit(dependency: &v2::ComponentDependency) -> locked::InheritConfiguration {
-    match dependency.inherit_configuration() {
+fn locked_inherit(
+    parent_index: usize,
+    dependency_id: &str,
+    dependency_index: usize,
+    dependency: &v2::ComponentDependency,
+    files: Vec<ContentPath>,
+) -> anyhow::Result<locked::InheritConfiguration> {
+    match (
+        dependency.capabilities(),
+        dependency.inherit_configuration(),
+    ) {
+        (Some(_), Some(_)) => anyhow::bail!(
+            "{dependency_id} has both inherited configuration and specified capabilities - at most one may be set"
+        ),
+        (Some(capabilities), _) => Ok(locked_dependency_capabilities(
+            parent_index,
+            dependency_id,
+            dependency_index,
+            capabilities,
+            files,
+        )),
+        (_, inherit) => Ok(locked_inherit_configuration(inherit)),
+    }
+}
+
+fn locked_inherit_configuration(
+    inherit: Option<&v2::InheritConfiguration>,
+) -> locked::InheritConfiguration {
+    match inherit {
         Some(v2::InheritConfiguration::All(true)) => locked::InheritConfiguration::All,
         Some(v2::InheritConfiguration::Some(keys)) => {
             locked::InheritConfiguration::Some(keys.clone())
@@ -1037,6 +1182,39 @@ fn locked_inherit(dependency: &v2::ComponentDependency) -> locked::InheritConfig
             locked::InheritConfiguration::Some(vec![])
         }
     }
+}
+
+fn locked_dependency_capabilities(
+    parent_index: usize,
+    dependency_id: &str,
+    dependency_index: usize,
+    capabilities: &v2::DependencyCapabilities,
+    files: Vec<ContentPath>,
+) -> locked::InheritConfiguration {
+    let dependency_id = safeify(dependency_id);
+    locked::InheritConfiguration::Exact(Box::new(locked::DependencyCapabilities {
+        capabilities_key: CapabilitySetKey::new(format!(
+            "csk-p{parent_index}-d{dependency_index}-{dependency_id}"
+        )), // TODO: dep ID is for debug only and is a faff to make safe - remove? (Would also save making fake IDs for trigger deps)
+        files,
+        environment: capabilities.environment.clone(),
+        allowed_outbound_hosts: capabilities.allowed_outbound_hosts.clone(),
+        variables: capabilities.variables.clone(),
+        key_value_stores: capabilities.key_value_stores.clone(),
+        sqlite_databases: capabilities.sqlite_databases.clone(),
+    }))
+}
+
+static UNSAFE_CHARACTERS: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new("[^-a-z]").expect("Invalid safeification regex"));
+static TOO_MANY_HYPHENS: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new("-{2,}").expect("Invalid overhyphening regex"));
+
+fn safeify(id: &str) -> String {
+    let safified = UNSAFE_CHARACTERS.replace_all(id, "-");
+    let safified = TOO_MANY_HYPHENS.replace_all(&safified, "-");
+    let safified = safified.trim_matches('-');
+    safified.to_string()
 }
 
 fn looks_like_glob_pattern(s: impl AsRef<str>) -> bool {

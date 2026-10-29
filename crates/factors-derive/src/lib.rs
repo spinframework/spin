@@ -143,6 +143,47 @@ fn expand_factors(input: &DeriveInput) -> syn::Result<TokenStream> {
                 Ok(#ConfiguredApp::new(app, app_state))
             }
 
+            fn register_named_imports<T: #factors_path::AsInstanceState<Self::InstanceState> + Send + 'static>(&self, linker: &mut #wasmtime::component::Linker<T>, component: &#wasmtime::component::Component) -> #Result<()> {
+                let factor_type_ids = [#(
+                    (stringify!(#factor_types), #TypeId::of::<(<#factor_types as #Factor>::InstanceBuilder, <#factor_types as #Factor>::AppState)>()),
+                )*];
+
+                let mut unique = ::std::collections::HashSet::new();
+                for (name, type_id) in factor_type_ids {
+                    if !unique.insert(type_id) {
+                        return Err(#Error::DuplicateFactorTypes(name.to_owned()));
+                    }
+                }
+
+                #(
+                    #[allow(non_camel_case_types)]
+                    struct #factor_names;
+
+                    impl #factors_path::FactorField for #factor_names {
+                        type State = #state_name;
+                        type Factor = #factor_types;
+
+                        fn get(state: &mut #state_name) -> (
+                            &mut #factors_path::FactorInstanceState<#factor_types>,
+                            &mut #wasmtime::component::ResourceTable,
+                        ) {
+                            (&mut state.#factor_names, &mut state.__table)
+                        }
+                    }
+
+                    #Factor::register_named_imports(
+                        &self.#factor_names,
+                        &mut #factors_path::FactorInitContext::<'_, T, #factor_names> {
+                            linker,
+                            _marker: std::marker::PhantomData,
+                        },
+                        component
+                    ).map_err(#Error::factor_init_error::<#factor_types>)?;
+                )*
+
+                Ok(())
+            }
+
             fn prepare(
                 &self, configured_app: &#ConfiguredApp<Self>,
                 component_id: &str,

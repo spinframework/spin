@@ -30,6 +30,7 @@ use spin_factor_outbound_networking::{
     config::{allowed_hosts::OutboundAllowedHosts, blocked_networks::BlockedNetworks},
 };
 use spin_factors::RuntimeFactorsInstanceState;
+use spin_world::CapabilitySetKey;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::TcpStream,
@@ -114,6 +115,7 @@ impl WasiHttpHooks for InstanceHttpHooks {
         _ = fut;
 
         let request_sender = RequestSender {
+            capability_set: self.capability_set.clone(),
             allowed_hosts: self.allowed_hosts.clone(),
             component_tls_configs: self.component_tls_configs.clone(),
             request_interceptor: self.request_interceptor.clone(),
@@ -326,6 +328,7 @@ impl OutboundHttpFactor {
 type OutgoingRequest = http::Request<HyperOutgoingBody>;
 
 struct RequestSender {
+    capability_set: Option<CapabilitySetKey>,
     allowed_hosts: OutboundAllowedHosts,
     blocked_networks: BlockedNetworks,
     component_tls_configs: ComponentTlsClientConfigs,
@@ -427,7 +430,11 @@ impl RequestSender {
                 .unwrap_or(false)
         } else {
             self.allowed_hosts
-                .check_url(&request.uri().to_string(), "https")
+                .check_url(
+                    self.capability_set.as_ref(),
+                    &request.uri().to_string(),
+                    "https",
+                )
                 .await
                 .unwrap_or(false)
         };

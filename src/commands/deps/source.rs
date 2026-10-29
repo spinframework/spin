@@ -230,18 +230,21 @@ impl ResolvedSource {
     pub(super) fn to_component_dependency(
         &self,
         inherit_configuration: Option<InheritConfiguration>,
+        capabilities: Option<spin_manifest::schema::v2::DependencyCapabilities>,
     ) -> ComponentDependency {
         match self {
             ResolvedSource::Local { path } => ComponentDependency::Local {
                 path: path.clone(),
                 export: None,
                 inherit_configuration,
+                capabilities,
             },
             ResolvedSource::Http { url, digest } => ComponentDependency::HTTP {
                 url: url.clone(),
                 digest: digest.clone(),
                 export: None,
                 inherit_configuration,
+                capabilities,
             },
             ResolvedSource::Registry {
                 version,
@@ -253,11 +256,13 @@ impl ResolvedSource {
                 package: Some(package.clone()),
                 export: None,
                 inherit_configuration,
+                capabilities,
             },
             ResolvedSource::Component { id } => ComponentDependency::AppComponent {
                 component: id.clone(),
                 export: None,
                 inherit_configuration,
+                capabilities,
             },
         }
     }
