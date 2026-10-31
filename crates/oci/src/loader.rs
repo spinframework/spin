@@ -66,52 +66,28 @@ impl OciLoader {
         reference: &str,
         cache: &Cache,
     ) -> std::result::Result<ExecutableArtifact, anyhow::Error> {
-        let locked_content = tokio::fs::read(&lockfile_path)
-            .await
-            .with_context(|| format!("failed to read from {}", quoted_path(&lockfile_path)))?;
-        let locked_app_descriptor = locked_app_descriptor(&manifest)?;
-        verify_digest(&locked_content, &locked_app_descriptor.digest).with_context(|| {
-            format!(
-                "{} is not the locked app of {reference:?}",
-                quoted_path(&lockfile_path)
-            )
-        })?;
-        let locked_json: serde_json::Value = serde_json::from_slice(&locked_content)
-            .with_context(|| format!("OCI config {} is not JSON", quoted_path(&lockfile_path)))?;
-
-        if locked_json.get("spin_lock_version").is_some() {
-            let mut locked_app = LockedApp::from_json(&locked_content).with_context(|| {
-                format!(
-                    "failed to decode locked app from {}",
-                    quoted_path(&lockfile_path)
-                )
-            })?;
-
-            // Update origin metadata
-            let resolved_reference = Reference::try_from(reference).context("invalid reference")?;
-            let origin_uri = format!("{ORIGIN_URL_SCHEME}:{resolved_reference}");
-            locked_app
-                .metadata
-                .insert("origin".to_string(), origin_uri.into());
-
-            for component in &mut locked_app.components {
-                self.resolve_component_content_refs(component, cache)
-                    .await
-                    .with_context(|| {
-                        format!("failed to resolve content for component {:?}", component.id)
-                    })?;
+        match read_locked_app(&manifest, &lockfile_path, reference).await? {
+            Some(mut locked_app) => {
+                for component in &mut locked_app.components {
+                    self.resolve_component_content_refs(component, cache)
+                        .await
+                        .with_context(|| {
+                            format!("failed to resolve content for component {:?}", component.id)
+                        })?;
+                }
+                Ok(ExecutableArtifact::Application(locked_app))
             }
-            Ok(ExecutableArtifact::Application(locked_app))
-        } else {
-            if manifest.layers.len() != 1 {
-                anyhow::bail!(
-                    "expected single layer in OCI package, found {} layers",
-                    manifest.layers.len()
-                );
+            None => {
+                if manifest.layers.len() != 1 {
+                    anyhow::bail!(
+                        "expected single layer in OCI package, found {} layers",
+                        manifest.layers.len()
+                    );
+                }
+                let layer = &manifest.layers[0]; // guaranteed safe by previous check
+                let wasm_path = cache.wasm_path(&layer.digest);
+                Ok(ExecutableArtifact::Package(wasm_path))
             }
-            let layer = &manifest.layers[0]; // guaranteed safe by previous check
-            let wasm_path = cache.wasm_path(&layer.digest);
-            Ok(ExecutableArtifact::Package(wasm_path))
         }
     }
 
@@ -136,66 +112,20 @@ impl OciLoader {
             component.id
         );
 
-        // Update wasm content path
-        let wasm_digest = content_digest(&component.source.content)?;
-        let wasm_path = cache.wasm_file(wasm_digest)?;
-        component.source.content = content_ref(wasm_path)?;
-
-        for dep in &mut component.dependencies.values_mut() {
-            let dep_wasm_digest = content_digest(&dep.source.content)?;
-            let dep_wasm_path = cache.wasm_file(dep_wasm_digest)?;
-            dep.source.content = content_ref(dep_wasm_path)?;
-        }
-
-        // Applications pushed without composition carry their trigger dependencies
-        // (e.g. HTTP middleware) as layers of their own, so those need resolving too.
-        for deps in component.trigger_dependencies.values_mut() {
-            for dep in deps {
-                let dep_wasm_digest = content_digest(&dep.source.content)?;
-                let dep_wasm_path = cache.wasm_file(dep_wasm_digest)?;
-                dep.source.content = content_ref(dep_wasm_path)?;
-            }
+        // Update wasm content paths
+        for content in wasm_content_refs_mut(component) {
+            let wasm_path = cache.wasm_file(content_digest(content)?)?;
+            *content = content_ref(wasm_path)?;
         }
 
         if !component.files.is_empty() {
-            let mount_dir = self.working_dir.join("assets").join(&component.id);
-            for file in &mut component.files {
-                ensure!(is_safe_to_join(&file.path), "invalid file mount {file:?}");
-                let mount_path = mount_dir.join(&file.path);
-
-                // Create parent directory
-                let mount_parent = mount_path
-                    .parent()
-                    .with_context(|| format!("invalid mount path {mount_path:?}"))?;
-                tokio::fs::create_dir_all(mount_parent)
-                    .await
-                    .with_context(|| {
-                        format!("failed to create temporary mount path {mount_path:?}")
-                    })?;
-
-                if let Some(content_bytes) = file.content.inline.as_deref() {
-                    // Write inline content to disk
-                    tokio::fs::write(&mount_path, content_bytes)
-                        .await
-                        .with_context(|| {
-                            format!("failed to write inline content to {mount_path:?}")
-                        })?;
-                } else {
-                    // Copy content
-                    let digest = content_digest(&file.content)?;
-                    let content_path = cache.data_file(digest)?;
-                    // TODO: parallelize
-                    tokio::fs::copy(&content_path, &mount_path)
-                        .await
-                        .with_context(|| {
-                            format!(
-                                "failed to copy {}->{mount_path:?}",
-                                quoted_path(&content_path)
-                            )
-                        })?;
-                }
-            }
-
+            let mount_dir = write_component_files(
+                &component.id,
+                &component.files,
+                cache,
+                &self.working_dir.join("assets"),
+            )
+            .await?;
             component.files = vec![ContentPath {
                 content: content_ref(mount_dir)?,
                 path: "/".into(),
@@ -204,6 +134,125 @@ impl OciLoader {
 
         Ok(())
     }
+}
+
+/// Reads the locked app of an OCI artifact from `lockfile_path`, after
+/// checking it against the digest the manifest records, and sets its origin
+/// to `reference`. Returns `None` if the artifact is a Wasm package rather
+/// than a Spin application.
+pub(crate) async fn read_locked_app(
+    manifest: &oci_client::manifest::OciImageManifest,
+    lockfile_path: &Path,
+    reference: &str,
+) -> Result<Option<LockedApp>> {
+    let locked_content = tokio::fs::read(lockfile_path)
+        .await
+        .with_context(|| format!("failed to read from {}", quoted_path(lockfile_path)))?;
+    let locked_app_descriptor = locked_app_descriptor(manifest)?;
+    verify_digest(&locked_content, &locked_app_descriptor.digest).with_context(|| {
+        format!(
+            "{} is not the locked app of {reference:?}",
+            quoted_path(lockfile_path)
+        )
+    })?;
+    let locked_json: serde_json::Value = serde_json::from_slice(&locked_content)
+        .with_context(|| format!("OCI config {} is not JSON", quoted_path(lockfile_path)))?;
+    if locked_json.get("spin_lock_version").is_none() {
+        return Ok(None);
+    }
+
+    let mut locked_app = LockedApp::from_json(&locked_content).with_context(|| {
+        format!(
+            "failed to decode locked app from {}",
+            quoted_path(lockfile_path)
+        )
+    })?;
+
+    // Update origin metadata
+    let resolved_reference = Reference::try_from(reference).context("invalid reference")?;
+    let origin_uri = format!("{ORIGIN_URL_SCHEME}:{resolved_reference}");
+    locked_app
+        .metadata
+        .insert("origin".to_string(), origin_uri.into());
+    Ok(Some(locked_app))
+}
+
+/// Returns each Wasm content reference of the component: its own source,
+/// and those of its dependencies and trigger dependencies.
+///
+/// Applications pushed without composition carry their trigger dependencies
+/// (e.g. HTTP middleware) as layers of their own, so those are included.
+pub(crate) fn wasm_content_refs_mut(
+    component: &mut LockedComponent,
+) -> impl Iterator<Item = &mut ContentRef> {
+    std::iter::once(&mut component.source.content)
+        .chain(
+            component
+                .dependencies
+                .values_mut()
+                .map(|dep| &mut dep.source.content),
+        )
+        .chain(
+            component
+                .trigger_dependencies
+                .values_mut()
+                .flatten()
+                .map(|dep| &mut dep.source.content),
+        )
+}
+
+/// Writes a component's files, from their inline content or the cache, to
+/// `assets_dir/<component id>`, laid out as the guest sees them, and returns
+/// that directory.
+///
+/// Every file must have inline content or a digest whose content is in the
+/// cache. Nothing is created when `files` is empty.
+pub(crate) async fn write_component_files(
+    component_id: &str,
+    files: &[ContentPath],
+    cache: &Cache,
+    assets_dir: &Path,
+) -> Result<PathBuf> {
+    // Callers may check the id too; this function joins it to a path, so it
+    // checks for itself.
+    ensure!(
+        is_safe_to_join(component_id),
+        "invalid component id {component_id}"
+    );
+    let mount_dir = assets_dir.join(component_id);
+    for file in files {
+        ensure!(is_safe_to_join(&file.path), "invalid file mount {file:?}");
+        let mount_path = mount_dir.join(&file.path);
+
+        // Create parent directory
+        let mount_parent = mount_path
+            .parent()
+            .with_context(|| format!("invalid mount path {mount_path:?}"))?;
+        tokio::fs::create_dir_all(mount_parent)
+            .await
+            .with_context(|| format!("failed to create temporary mount path {mount_path:?}"))?;
+
+        if let Some(content_bytes) = file.content.inline.as_deref() {
+            // Write inline content to disk
+            tokio::fs::write(&mount_path, content_bytes)
+                .await
+                .with_context(|| format!("failed to write inline content to {mount_path:?}"))?;
+        } else {
+            // Copy content
+            let digest = content_digest(&file.content)?;
+            let content_path = cache.data_file(digest)?;
+            // TODO: parallelize
+            tokio::fs::copy(&content_path, &mount_path)
+                .await
+                .with_context(|| {
+                    format!(
+                        "failed to copy {}->{mount_path:?}",
+                        quoted_path(&content_path)
+                    )
+                })?;
+        }
+    }
+    Ok(mount_dir)
 }
 
 fn content_digest(content_ref: &ContentRef) -> Result<&str> {
@@ -303,6 +352,109 @@ mod test {
         loader
             .resolve_component_content_refs(&mut component, &cache)
             .await
+    }
+
+    fn wasm_source(digest: &str) -> serde_json::Value {
+        serde_json::json!({ "content_type": "application/wasm", "digest": digest })
+    }
+
+    fn sha256_digest(bytes: &[u8]) -> String {
+        format!(
+            "sha256:{}",
+            spin_common::sha256::hex_digest_from_bytes(bytes)
+        )
+    }
+
+    #[tokio::test]
+    async fn content_refs_resolve_to_cache_and_assets() -> anyhow::Result<()> {
+        let working_dir = tempfile::tempdir()?;
+        let cache_dir = tempfile::tempdir()?;
+        let cache = Cache::new(Some(cache_dir.path().into())).await?;
+        let loader = OciLoader::new(working_dir.path());
+
+        let mut wasm_digests = vec![];
+        for wasm in [b"main".as_slice(), b"dependency", b"middleware"] {
+            let digest = sha256_digest(wasm);
+            cache.write_wasm(wasm, &digest).await?;
+            wasm_digests.push(digest);
+        }
+        let file = b"some content".to_vec();
+        let file_digest = sha256_digest(&file);
+        cache.write_data(&file, &file_digest).await?;
+        let inline = b"inline content".to_vec();
+
+        let mut component: LockedComponent = serde_json::from_value(serde_json::json!({
+            "id": "comp",
+            "source": wasm_source(&wasm_digests[0]),
+            "dependencies": { "test:dep": { "source": wasm_source(&wasm_digests[1]) } },
+            "trigger_dependencies": {
+                "middleware": [{ "source": wasm_source(&wasm_digests[2]) }]
+            },
+            "files": [{ "digest": file_digest, "path": "dir/file.txt" }],
+        }))?;
+        component.files.push(ContentPath {
+            content: ContentRef {
+                inline: Some(inline.clone()),
+                ..Default::default()
+            },
+            path: "inline.txt".into(),
+        });
+
+        loader
+            .resolve_component_content_refs(&mut component, &cache)
+            .await?;
+
+        // Wasm sources point at the cache, with no digest or inline content.
+        let wasm_contents = [
+            &component.source.content,
+            &component
+                .dependencies
+                .values()
+                .next()
+                .unwrap()
+                .source
+                .content,
+            &component.trigger_dependencies["middleware"][0]
+                .source
+                .content,
+        ];
+        for (content, digest) in wasm_contents.into_iter().zip(&wasm_digests) {
+            let expected = content_ref(cache.wasm_file(digest)?)?;
+            assert_eq!(content.source, expected.source);
+            assert!(content.digest.is_none() && content.inline.is_none());
+        }
+
+        // Files are written beneath assets/<component id> and mounted at `/`.
+        let mount_dir = working_dir.path().join("assets/comp");
+        assert_eq!(component.files.len(), 1);
+        assert_eq!(component.files[0].path, Path::new("/"));
+        assert_eq!(
+            component.files[0].content.source,
+            content_ref(&mount_dir)?.source
+        );
+        assert_eq!(std::fs::read(mount_dir.join("dir/file.txt"))?, file);
+        assert_eq!(std::fs::read(mount_dir.join("inline.txt"))?, inline);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn file_path_cannot_be_used_to_escape_asset_directory() -> anyhow::Result<()> {
+        let base_dir = tempfile::tempdir()?;
+        let cache_dir = tempfile::tempdir()?;
+        let cache = Cache::new(Some(cache_dir.path().into())).await?;
+        let assets_dir = base_dir.path().join("good/assets");
+
+        let files: Vec<ContentPath> = serde_json::from_value(serde_json::json!([
+            { "inline": "", "path": "../../escaped.txt" },
+        ]))?;
+        write_component_files("comp", &files, &cache, &assets_dir)
+            .await
+            .expect_err("a file path with .. should be rejected");
+        assert!(!base_dir.path().join("good/escaped.txt").exists());
+        assert!(!base_dir.path().join("escaped.txt").exists());
+
+        Ok(())
     }
 
     #[tokio::test]
