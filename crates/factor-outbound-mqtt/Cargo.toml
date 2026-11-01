@@ -15,6 +15,7 @@ spin-factor-otel = { path = "../factor-otel" }
 spin-factor-outbound-networking = { path = "../factor-outbound-networking" }
 spin-factors = { path = "../factors" }
 spin-resource-table = { path = "../table" }
+spin-tls = { path = "../tls" }
 spin-world = { path = "../world" }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
