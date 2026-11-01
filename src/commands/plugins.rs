@@ -755,11 +755,11 @@ pub struct List {
     #[clap(long, group = "which")]
     pub installed: bool,
 
-    /// List all versions of plugins. This is the default behaviour.
+    /// List all versions of plugins.
     #[clap(long, group = "which")]
     pub all: bool,
 
-    /// List latest and installed versions of plugins.
+    /// List latest and installed versions of plugins. This is the default behaviour.
     #[clap(long, group = "which")]
     pub summary: bool,
 
@@ -798,7 +798,7 @@ impl List {
             }
         }?;
 
-        if self.summary {
+        if self.should_summarise() {
             plugins = summarise(plugins);
         }
 
@@ -850,6 +850,10 @@ impl List {
 
     fn target_environment(&self) -> OptionalValueFlag {
         (&self.target_environment).into()
+    }
+
+    fn should_summarise(&self) -> bool {
+        self.summary || (!self.installed && !self.all)
     }
 }
 
@@ -1191,5 +1195,29 @@ mod test {
         let rest_vers: std::collections::HashSet<_> = rest.into_iter().map(|p| p.version).collect();
         assert!(rest_vers.contains("1.2.3"));
         assert!(rest_vers.contains("1.3.5"));
+    }
+
+    #[test]
+    fn list_installed_disables_summary_mode() {
+        let list = List::parse_from(["list", "--installed"]);
+        assert!(!list.should_summarise());
+    }
+
+    #[test]
+    fn list_default_enables_summary_mode() {
+        let list = List::parse_from(["list"]);
+        assert!(list.should_summarise());
+    }
+
+    #[test]
+    fn list_all_disables_summary_mode() {
+        let list = List::parse_from(["list", "--all"]);
+        assert!(!list.should_summarise());
+    }
+
+    #[test]
+    fn list_summary_enables_summary_mode() {
+        let list = List::parse_from(["list", "--summary"]);
+        assert!(list.should_summarise());
     }
 }
