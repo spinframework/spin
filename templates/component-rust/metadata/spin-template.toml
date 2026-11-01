@@ -1,0 +1,13 @@
+manifest_version = "1"
+id = "component-rust"
+description = "Library (dependency) component using Rust"
+tags = ["rust"]
+
+[new_application]
+supported = false
+
+[add_component.snippets]
+component = "component.txt"
+
+[parameters]
+component-description = { type = "string",  prompt = "Description", default = "" }
