@@ -11,5 +11,5 @@ clap = { workspace = true }
 dirs = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["rt", "time"] }
+tokio = { workspace = true, features = ["rt", "time", "process"] }
 url = { workspace = true }

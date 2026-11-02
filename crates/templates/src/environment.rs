@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use tokio::process::Command;
 
-use crate::git::UnderstandGitResult;
+use spin_common::git::UnderstandGitResult;
 
 #[derive(Debug, Default)]
 pub(crate) struct Authors {

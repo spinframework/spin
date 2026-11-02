@@ -1,6 +1,12 @@
-use anyhow::Result;
+//! Clone and update Git repositories, and classify `git` process failures.
+//!
+//! Plugin catalogues, template installation, and environment catalogues share
+//! this helper.
+
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+
+use anyhow::Context;
 use tokio::process::Command;
 use url::Url;
 
@@ -18,7 +24,9 @@ pub struct GitSource {
 }
 
 impl GitSource {
-    /// Creates a new git source
+    /// Creates a new git source.
+    ///
+    /// `branch` defaults to `main`.
     pub fn new(source_url: &Url, branch: Option<String>, git_root: impl AsRef<Path>) -> GitSource {
         Self {
             source_url: source_url.clone(),
@@ -27,8 +35,8 @@ impl GitSource {
         }
     }
 
-    /// Clones a contents of a git repository to a local directory
-    pub async fn clone_repo(&self) -> Result<()> {
+    /// Clones a contents of a git repository to a local directory.
+    pub async fn clone_repo(&self) -> anyhow::Result<()> {
         let mut git = Command::new("git");
         git.args([
             "clone",
@@ -45,8 +53,8 @@ impl GitSource {
         Ok(())
     }
 
-    /// Fetches the latest changes from the source repository
-    pub async fn pull(&self) -> Result<()> {
+    /// Fetches the latest changes from the source repository.
+    pub async fn pull(&self) -> anyhow::Result<()> {
         let mut git = Command::new("git");
         git.arg("-C").arg(&self.git_root).arg("pull");
         let pull_result = git.output().await.understand_git_result();
@@ -61,11 +69,13 @@ impl GitSource {
     }
 }
 
-// TODO: the following and templates/git.rs are duplicates
-
-pub(crate) enum GitError {
+/// Failure from running `git`.
+pub enum GitError {
+    /// `git` exited non-zero. The payload is its stderr.
     ProgramFailed(Vec<u8>),
+    /// The `git` program could not be found.
     ProgramNotFound,
+    /// Running `git` failed before it produced a status.
     Other(anyhow::Error),
 }
 
@@ -82,7 +92,9 @@ impl std::fmt::Display for GitError {
     }
 }
 
-pub(crate) trait UnderstandGitResult {
+/// Classifies the outcome of a `git` invocation.
+pub trait UnderstandGitResult {
+    /// Returns stdout when `git` succeeded, or a [`GitError`] otherwise.
     fn understand_git_result(self) -> Result<Vec<u8>, GitError>;
 }
 
@@ -106,4 +118,33 @@ impl UnderstandGitResult for Result<std::process::Output, std::io::Error> {
             },
         }
     }
+}
+
+/// Reports whether `dir` is inside a Git work tree.
+///
+/// `git` is invoked with stdout and stderr discarded. An error from launching
+/// `git` is returned; a non-zero status is `Ok(false)`.
+pub async fn is_in_git_repo(dir: &Path) -> anyhow::Result<bool> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(dir)
+        .arg("rev-parse")
+        .arg("--git-dir")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    let status = cmd
+        .status()
+        .await
+        .context("checking if new app is in a git repo")?;
+    Ok(status.success())
+}
+
+/// Runs `git init` in `dir`.
+pub async fn init_git_repo(dir: &Path) -> Result<(), GitError> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(dir).arg("init");
+
+    let result = cmd.output().await;
+    result.understand_git_result().map(|_| ())
 }

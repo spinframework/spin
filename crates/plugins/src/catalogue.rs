@@ -1,6 +1,7 @@
-use crate::{git::GitSource, manifest::PluginManifest};
+use crate::manifest::PluginManifest;
 use anyhow::Context;
 use semver::Version;
+use spin_common::git::GitSource;
 use std::path::{Path, PathBuf};
 use url::Url;
 
