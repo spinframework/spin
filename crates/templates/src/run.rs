@@ -8,9 +8,10 @@ use itertools::Itertools;
 use path_absolutize::Absolutize;
 use walkdir::WalkDir;
 
+use spin_common::git::{self, GitError};
+
 use crate::{
     cancellable::Cancellable,
-    git,
     interaction::{InteractionStrategy, Interactive, Silent},
     renderer::MergeTarget,
     template::{ExtraOutputAction, TemplateVariantInfo},
@@ -367,7 +368,7 @@ impl Run {
         }
 
         if let Err(e) = git::init_git_repo(&target_dir).await
-            && !matches!(e, git::GitError::ProgramNotFound)
+            && !matches!(e, GitError::ProgramNotFound)
         {
             terminal::warn!(
                 "Spin was unable to initialise a Git repository. Run `git init` manually if you want one."

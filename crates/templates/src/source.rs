@@ -6,7 +6,9 @@ use tempfile::{TempDir, tempdir};
 use tokio::process::Command;
 use url::Url;
 
-use crate::{directory::subdirectories, git::UnderstandGitResult};
+use spin_common::git::UnderstandGitResult;
+
+use crate::directory::subdirectories;
 
 const TEMPLATE_SOURCE_DIR: &str = "templates";
 const TEMPLATE_VERSION_TAG_PREFIX: &str = "spin/templates/v";

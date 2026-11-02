@@ -1,7 +1,6 @@
 pub mod badger;
 mod catalogue;
 pub mod error;
-mod git;
 mod lookup;
 pub mod manager;
 pub mod manifest;
