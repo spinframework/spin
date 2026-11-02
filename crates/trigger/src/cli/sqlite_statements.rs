@@ -147,7 +147,11 @@ mod tests {
             creator.clone() as Arc<dyn ConnectionCreator>,
         );
         connection_creators.insert("label".into(), creator);
-        let sqlite = spin_factor_sqlite::AppState::new(Default::default(), connection_creators);
+        let sqlite = spin_factor_sqlite::AppState::new(
+            Default::default(),
+            Default::default(),
+            connection_creators,
+        );
         let result = hook.execute(&sqlite).await;
         assert!(result.is_ok());
 

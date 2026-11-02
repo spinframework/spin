@@ -13,6 +13,7 @@ pin-project-lite = { workspace = true }
 spin-common = { path = "../common" }
 spin-connection-semaphore = { path = "../connection-semaphore" }
 spin-factors = { path = "../factors" }
+spin-serde = { path = "../serde" }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 wasmtime = { workspace = true }

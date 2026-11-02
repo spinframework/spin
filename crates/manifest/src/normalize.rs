@@ -2,7 +2,7 @@
 
 use std::{collections::HashSet, path::PathBuf};
 
-use crate::schema::v2::{AppManifest, ComponentSpec, KebabId};
+use crate::schema::v2::{AppManifest, ComponentSpec, DependencyCapabilities, KebabId};
 use anyhow::Context;
 
 /// Normalizes some optional [`AppManifest`] features into a canonical form:
@@ -195,6 +195,7 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
                 component: depended_on_id,
                 export,
                 inherit_configuration,
+                capabilities,
             } = dependency
             {
                 let depended_on = components
@@ -205,6 +206,7 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
                     &depended_on.source,
                     export.clone(),
                     inherit_configuration.clone(),
+                    capabilities.clone(),
                 );
             }
         }
@@ -217,6 +219,7 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
                     if let TriggerDependency::AppComponent {
                         component: depended_on_id,
                         inherit_configuration,
+                        capabilities,
                     } = dependency
                     {
                         let depended_on = components.get(depended_on_id).with_context(|| {
@@ -226,6 +229,7 @@ fn normalize_dependency_component_refs(manifest: &mut AppManifest) -> anyhow::Re
                         *dependency = component_source_to_trigger_dependency(
                             &depended_on.source,
                             inherit_configuration.clone(),
+                            capabilities.clone(),
                         );
                     }
                 }
@@ -240,18 +244,21 @@ fn component_source_to_dependency(
     source: &ComponentSource,
     export: Option<String>,
     inherit_configuration: Option<InheritConfiguration>,
+    capabilities: Option<DependencyCapabilities>,
 ) -> ComponentDependency {
     match source {
         ComponentSource::Local(path) => ComponentDependency::Local {
             path: PathBuf::from(path),
             export,
             inherit_configuration,
+            capabilities,
         },
         ComponentSource::Remote { url, digest } => ComponentDependency::HTTP {
             url: url.clone(),
             digest: digest.clone(),
             export,
             inherit_configuration,
+            capabilities,
         },
         ComponentSource::Registry {
             registry,
@@ -263,6 +270,7 @@ fn component_source_to_dependency(
             package: Some(package.to_string()),
             export,
             inherit_configuration,
+            capabilities,
         },
     }
 }
@@ -270,16 +278,19 @@ fn component_source_to_dependency(
 fn component_source_to_trigger_dependency(
     source: &ComponentSource,
     inherit_configuration: Option<InheritConfiguration>,
+    capabilities: Option<DependencyCapabilities>,
 ) -> TriggerDependency {
     match source {
         ComponentSource::Local(path) => TriggerDependency::Local {
             path: PathBuf::from(path),
             inherit_configuration,
+            capabilities,
         },
         ComponentSource::Remote { url, digest } => TriggerDependency::HTTP {
             url: url.clone(),
             digest: digest.clone(),
             inherit_configuration,
+            capabilities,
         },
         ComponentSource::Registry {
             registry,
@@ -290,6 +301,7 @@ fn component_source_to_trigger_dependency(
             registry: registry.as_ref().map(|r| r.to_string()),
             package: package.to_string(),
             inherit_configuration,
+            capabilities,
         },
     }
 }
@@ -415,6 +427,7 @@ mod test {
             path,
             export,
             inherit_configuration,
+            capabilities,
         } = dep
         else {
             panic!("should have normalised to local dep");
@@ -423,6 +436,7 @@ mod test {
         assert_eq!(&PathBuf::from("b.wasm"), path);
         assert_eq!(&None, export);
         assert!(inherit_configuration.is_none());
+        assert!(capabilities.is_none());
     }
 
     #[test]
@@ -462,6 +476,7 @@ mod test {
             digest,
             export,
             inherit_configuration,
+            capabilities,
         } = dep
         else {
             panic!("should have normalised to HTTP dep");
@@ -471,6 +486,7 @@ mod test {
         assert_eq!("12345", digest);
         assert_eq!("c:d/e", export.as_ref().unwrap());
         assert!(inherit_configuration.is_none());
+        assert!(capabilities.is_none());
     }
 
     #[test]
@@ -511,6 +527,7 @@ mod test {
             package,
             export,
             inherit_configuration,
+            capabilities,
         } = dep
         else {
             panic!("should have normalised to package dep");
@@ -521,6 +538,7 @@ mod test {
         assert_eq!("bb:bb", package.as_ref().unwrap());
         assert_eq!(&None, export);
         assert!(inherit_configuration.is_none());
+        assert!(capabilities.is_none());
     }
 
     #[test]
@@ -559,6 +577,7 @@ mod test {
             path,
             export,
             inherit_configuration,
+            capabilities,
         } = dep
         else {
             panic!("should have normalised to local dep");
@@ -570,6 +589,7 @@ mod test {
             inherit_configuration,
             Some(InheritConfiguration::All(true))
         ));
+        assert!(capabilities.is_none());
     }
 
     #[test]
@@ -608,6 +628,7 @@ mod test {
             path,
             export,
             inherit_configuration,
+            capabilities,
         } = dep
         else {
             panic!("should have normalised to local dep");
@@ -625,5 +646,6 @@ mod test {
             ],
             keys
         );
+        assert!(capabilities.is_none());
     }
 }

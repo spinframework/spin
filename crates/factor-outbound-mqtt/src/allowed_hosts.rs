@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
+use spin_world::CapabilitySetKey;
 
 #[derive(Clone)]
 pub struct AllowedHostChecker {
@@ -15,7 +16,11 @@ impl AllowedHostChecker {
         }
     }
 
-    pub async fn is_address_allowed(&self, address: &str) -> Result<bool> {
-        self.allowed_hosts.check_url(address, "mqtt").await
+    pub async fn is_address_allowed(
+        &self,
+        key: Option<&CapabilitySetKey>,
+        address: &str,
+    ) -> Result<bool> {
+        self.allowed_hosts.check_url(key, address, "mqtt").await
     }
 }

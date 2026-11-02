@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
-use spin_world::spin::postgres4_2_0::postgres::{self as v4};
+use spin_world::{
+    CapabilitySetKey,
+    spin::postgres4_2_0::postgres::{self as v4},
+};
 
 /// Encapsulates checking of a PostgreSQL address/connection string against
 /// an allow-list.
@@ -21,7 +24,11 @@ impl AllowedHostChecker {
     }
 
     #[allow(clippy::result_large_err)]
-    pub async fn ensure_address_allowed(&self, address: &str) -> Result<(), v4::Error> {
+    pub async fn ensure_address_allowed(
+        &self,
+        key: Option<&CapabilitySetKey>,
+        address: &str,
+    ) -> Result<(), v4::Error> {
         fn conn_failed(message: impl Into<String>) -> v4::Error {
             v4::Error::ConnectionFailed(message.into())
         }
@@ -51,7 +58,7 @@ impl AllowedHostChecker {
                     let url = format!("{address}{port_str}");
                     if !self
                         .allowed_hosts
-                        .check_url(&url, "postgres")
+                        .check_url(key, &url, "postgres")
                         .await
                         .map_err(err_other)?
                     {

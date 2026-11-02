@@ -34,7 +34,7 @@ impl spin_http::Host for crate::InstanceState {
             let is_allowed = self
                 .hooks
                 .allowed_hosts
-                .check_url(&uri, "https")
+                .check_url(None, &uri, "https") // Named imports not supported on legacy HTTP
                 .await
                 .unwrap_or(false);
             if !is_allowed {

@@ -79,6 +79,7 @@ impl<T: RuntimeFactors, U: Send + 'static> FactorsExecutor<T, U> {
         for component in components {
             let instance_pre = component_loader
                 .load_instance_pre(
+                    &self.factors,
                     &self.core_engine,
                     &component,
                     &trigger_dependencies_composer,
@@ -115,7 +116,7 @@ where
 
 /// A ComponentLoader is responsible for loading Wasmtime [`Component`]s.
 #[async_trait]
-pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
+pub trait ComponentLoader<T: RuntimeFactors, U: Send>: Sync {
     /// Loads a [`Component`] for the given [`AppComponent`].
     async fn load_component(
         &self,
@@ -127,6 +128,7 @@ pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
     /// Loads [`InstancePre`] for the given [`AppComponent`].
     async fn load_instance_pre(
         &self,
+        runtime_factors: &T,
         engine: &spin_core::Engine<InstanceState<T::InstanceState, U>>,
         component: &AppComponent,
         trigger_dependencies_composer: &impl TriggerDependenciesComposer,
@@ -134,7 +136,11 @@ pub trait ComponentLoader<T: RuntimeFactors, U>: Sync {
         let component = self
             .load_component(engine.as_ref(), component, trigger_dependencies_composer)
             .await?;
-        engine.instantiate_pre(&component)
+
+        let mut linker = engine.linker().clone();
+        runtime_factors.register_named_imports(&mut linker, &component)?;
+
+        spin_core::Engine::instantiate_pre(&linker, &component)
     }
 }
 

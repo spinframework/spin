@@ -118,22 +118,51 @@ impl OciLoader {
             *content = content_ref(wasm_path)?;
         }
 
+        let assets_dir = self.working_dir.join("assets");
+
         if !component.files.is_empty() {
-            let mount_dir = write_component_files(
-                &component.id,
-                &component.files,
-                cache,
-                &self.working_dir.join("assets"),
-            )
-            .await?;
+            let mount_dir =
+                write_component_files(&component.id, &component.files, cache, &assets_dir).await?;
             component.files = vec![ContentPath {
                 content: content_ref(mount_dir)?,
                 path: "/".into(),
-            }]
+            }];
+        }
+
+        // This will exist for non-precomposed apps
+        for dep in component.dependencies.values_mut() {
+            if let spin_locked_app::locked::InheritConfiguration::Exact(caps) = &mut dep.inherit {
+                let dir_name = dependency_files_dir_name(&component.id, &caps.capabilities_key);
+                let mount_dir =
+                    write_component_files(&dir_name, &caps.files, cache, &assets_dir).await?;
+                caps.files = vec![ContentPath {
+                    content: content_ref(mount_dir)?,
+                    path: "/".into(),
+                }];
+            }
+        }
+
+        // This will exist for precomposed apps
+        for dep_cap in &mut component.precomposed_dependency_capabilities {
+            let dir_name = dependency_files_dir_name(&component.id, &dep_cap.capabilities_key);
+            let mount_dir =
+                write_component_files(&dir_name, &dep_cap.files, cache, &assets_dir).await?;
+            dep_cap.files = vec![ContentPath {
+                content: content_ref(mount_dir)?,
+                path: "/".into(),
+            }];
         }
 
         Ok(())
     }
+}
+
+// TODO: I don't love using the Display trait here - add a better one to CSK?
+fn dependency_files_dir_name(
+    component_or_trigger_id: &str,
+    capabilities_key: impl std::fmt::Display,
+) -> String {
+    format!("{component_or_trigger_id}-dep-{capabilities_key}")
 }
 
 /// Reads the locked app of an OCI artifact from `lockfile_path`, after
@@ -347,6 +376,7 @@ mod test {
             dependencies: Default::default(),
             trigger_dependencies: Default::default(),
             host_requirements: Default::default(),
+            precomposed_dependency_capabilities: Default::default(),
         };
 
         loader

@@ -25,6 +25,7 @@ pub use host::{
 };
 pub use runtime_config::RuntimeConfig;
 use spin_core::async_trait;
+use spin_world::CapabilitySetKey;
 pub use spin_world::spin::key_value::key_value as v3;
 pub use util::DelegatingStoreManager;
 
@@ -90,6 +91,20 @@ impl Factor for KeyValueFactor {
             // TODO: warn (?) on unused store?
         }
 
+        let mut id_dependency_allowed_stores = HashMap::new();
+        for c in ctx.app().components() {
+            let mut this_comp_capset_allowed_stores = HashMap::new();
+            for caps in c.locked.dependency_capabilities() {
+                let csk = caps.capabilities_key.clone();
+                let allowed = caps.key_value_stores.clone().into_iter().collect();
+                this_comp_capset_allowed_stores.insert(csk, allowed);
+            }
+            id_dependency_allowed_stores.insert(
+                c.id().to_string(),
+                Arc::new(this_comp_capset_allowed_stores),
+            );
+        }
+
         let app_id: Arc<str> = ctx
             .app()
             .get_metadata(APP_NAME_KEY)?
@@ -112,8 +127,29 @@ impl Factor for KeyValueFactor {
         Ok(AppState {
             store_manager,
             component_allowed_stores,
+            id_dependency_allowed_stores,
             semaphore,
         })
+    }
+
+    fn register_named_imports<T: InitContext<Self>>(
+        &self,
+        ctx: &mut T,
+        component: &spin_core::wasmtime::component::Component,
+    ) -> anyhow::Result<()> {
+        spin_world::named_imports::spin::key_value::key_value::add_to_linker::<
+            _,
+            KeyValueFactorData,
+        >(
+            ctx.linker(),
+            component,
+            |key| {
+                key.try_into()
+                    .map_err(spin_core::wasmtime::Error::from_anyhow)
+            },
+            T::get_data,
+        )?;
+        Ok(())
     }
 
     fn prepare<T: RuntimeFactors>(
@@ -126,10 +162,17 @@ impl Factor for KeyValueFactor {
             .get(ctx.app_component().id())
             .expect("component should be in component_stores")
             .clone();
+        let dependency_allowed_stores = ctx
+            .app_state()
+            .id_dependency_allowed_stores
+            .get(ctx.app_component().id())
+            .cloned()
+            .unwrap_or_default();
         let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
         Ok(InstanceBuilder {
             store_manager: app_state.store_manager.clone(),
             allowed_stores,
+            dependency_allowed_stores,
             semaphore: app_state.semaphore.clone(),
             otel,
         })
@@ -150,6 +193,7 @@ pub struct AppState {
     /// This is a map from component ID to the set of store labels that the
     /// component is allowed to use.
     component_allowed_stores: HashMap<String, HashSet<String>>,
+    id_dependency_allowed_stores: HashMap<String, Arc<HashMap<CapabilitySetKey, HashSet<String>>>>,
     /// App-scoped semaphore used to limit in-flight key-value operations.
     semaphore: ConnectionSemaphore,
 }
@@ -213,6 +257,7 @@ pub struct InstanceBuilder {
     store_manager: Arc<AppStoreManager>,
     /// The allowed stores for this component instance.
     allowed_stores: HashSet<String>,
+    dependency_allowed_stores: Arc<HashMap<CapabilitySetKey, HashSet<String>>>,
     /// App-scoped semaphore shared by all component instances for this app.
     semaphore: ConnectionSemaphore,
     otel: OtelFactorState,
@@ -225,11 +270,13 @@ impl FactorInstanceBuilder for InstanceBuilder {
         let Self {
             store_manager,
             allowed_stores,
+            dependency_allowed_stores,
             semaphore,
             otel,
         } = self;
         Ok(KeyValueDispatch::new_with_capacity_and_semaphore(
             allowed_stores,
+            dependency_allowed_stores,
             store_manager,
             u32::MAX,
             semaphore,

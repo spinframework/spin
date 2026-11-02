@@ -101,6 +101,7 @@ async fn configures_wasi_socket_addr_check() -> anyhow::Result<()> {
 
     spin_factor_outbound_networking::check_socket_addr_use(
         state.networking.allowed_hosts(),
+        None,
         state.networking.blocked_networks(),
         "123.0.2.1:12345".parse().unwrap(),
         SocketAddrUse::TcpConnect,
@@ -117,6 +118,7 @@ async fn configures_wasi_socket_addr_check() -> anyhow::Result<()> {
         assert_eq!(
             spin_factor_outbound_networking::check_socket_addr_use(
                 state.networking.allowed_hosts(),
+                None,
                 state.networking.blocked_networks(),
                 not_allowed.parse().unwrap(),
                 SocketAddrUse::TcpConnect

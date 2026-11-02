@@ -6,10 +6,10 @@ use spin_core::wasmtime::component::{Accessor, FutureReader, StreamReader};
 use spin_factor_otel::OtelFactorState;
 use spin_factors::wasmtime::component::Resource;
 use spin_factors::{SelfInstanceBuilder, anyhow};
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::sqlite3_1_0::sqlite as v3;
 use spin_world::v1::sqlite as v1;
 use spin_world::v2::sqlite as v2;
+use spin_world::{CapabilitySetKey, MAX_HOST_BUFFERED_BYTES, NamedImportKey};
 use tracing::field::Empty;
 use tracing::{Level, instrument};
 
@@ -17,6 +17,7 @@ use crate::{Connection, ConnectionCreator, QueryAsyncResult};
 
 pub struct InstanceState {
     allowed_databases: Arc<HashSet<String>>,
+    dependency_allowed_databases: Arc<HashMap<CapabilitySetKey, HashSet<String>>>,
     /// A resource table of connections.
     connections: spin_resource_table::Table<Arc<dyn Connection>>,
     /// A map from database label to connection creators.
@@ -30,11 +31,16 @@ impl InstanceState {
     /// Takes the list of allowed databases, and a function for getting a connection creator given a database label.
     pub fn new(
         allowed_databases: Arc<HashSet<String>>,
+        dependency_allowed_databases: Arc<HashMap<CapabilitySetKey, HashSet<String>>>,
         connection_creators: HashMap<String, Arc<dyn ConnectionCreator>>,
         otel: OtelFactorState,
     ) -> Self {
+        // NOTE TO SELF: A possible alternative is to create separate InstanceStates for
+        // each dep, which I dunno maybe would require less custom code in the general case? (And then
+        // the named import host would hand off to the relevant sub-InstSt.) Not sure.
         Self {
             allowed_databases,
+            dependency_allowed_databases,
             connections: spin_resource_table::Table::new(256),
             connection_creators,
             otel,
@@ -52,10 +58,15 @@ impl InstanceState {
             .ok_or(v3::Error::InvalidConnection)
     }
 
-    async fn open_impl<T: 'static>(&mut self, database: String) -> Result<Resource<T>, v3::Error> {
-        if !self.allowed_databases.contains(&database) {
+    async fn open_impl<T: 'static>(
+        &mut self,
+        key: Option<&CapabilitySetKey>,
+        database: String,
+    ) -> Result<Resource<T>, v3::Error> {
+        if !self.is_allowed_database(key, &database) {
             return Err(v3::Error::AccessDenied);
         }
+
         let conn = self
             .connection_creators
             .get(&database)
@@ -70,6 +81,49 @@ impl InstanceState {
             .push(conn)
             .map_err(|()| v3::Error::Io("too many connections opened".to_string()))
             .map(Resource::new_own)
+    }
+
+    async fn open_async_impl<T>(
+        accessor: &Accessor<T, crate::SqliteFactorData>,
+        key: Option<&CapabilitySetKey>,
+        database: String,
+    ) -> Result<Resource<v3::Connection>, v3::Error> {
+        // TODO: this duplicates `open_impl` logic but split up to move
+        // in and out of the Accessor. How to dedupe?
+        let conn_creator = accessor.with(|mut access| {
+            let host = access.get();
+            if !host.is_allowed_database(key, &database) {
+                return Err(v3::Error::AccessDenied);
+            };
+            host.connection_creators
+                .get(&database)
+                .ok_or(v3::Error::NoSuchDatabase)
+                .cloned()
+        })?;
+
+        let conn = conn_creator.create_connection(&database).await?;
+
+        tracing::Span::current().record(
+            "sqlite.backend",
+            conn.summary().as_deref().unwrap_or("unknown"),
+        );
+
+        accessor.with(|mut access| {
+            let host = access.get();
+            host.connections
+                .push(conn)
+                .map_err(|()| v3::Error::Io("too many connections opened".to_string()))
+                .map(Resource::new_own)
+        })
+    }
+
+    fn is_allowed_database(&mut self, key: Option<&CapabilitySetKey>, database: &str) -> bool {
+        match key {
+            None => self.allowed_databases.contains(database),
+            Some(key) => self
+                .allowed_databases_for(key)
+                .is_some_and(|a| a.contains(database)),
+        }
     }
 
     async fn execute_impl<T: 'static>(
@@ -91,6 +145,11 @@ impl InstanceState {
     pub fn allowed_databases(&self) -> &HashSet<String> {
         &self.allowed_databases
     }
+
+    /// Get the set of allowed databases for the dependency identified by the given key.
+    fn allowed_databases_for(&self, key: &CapabilitySetKey) -> Option<&HashSet<String>> {
+        self.dependency_allowed_databases.get(key)
+    }
 }
 
 impl SelfInstanceBuilder for InstanceState {}
@@ -105,7 +164,7 @@ impl v3::HostConnection for InstanceState {
     #[instrument(name = "spin_sqlite.open", skip(self), err(level = Level::INFO),
         fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", sqlite.backend = Empty))]
     async fn open(&mut self, database: String) -> Result<Resource<v3::Connection>, v3::Error> {
-        self.open_impl(database).await
+        self.open_impl(None, database).await
     }
 
     #[instrument(name = "spin_sqlite.execute", skip(self, connection, parameters), err(level = Level::INFO),
@@ -152,38 +211,112 @@ impl v3::HostConnection for InstanceState {
     }
 }
 
+impl<T: Send> spin_world::named_imports::spin::sqlite3_1_0::sqlite::HostConnectionWithStore<T>
+    for crate::SqliteFactorData
+{
+    async fn open_async(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        database: String,
+    ) -> Result<Resource<v3::Connection>, v3::Error> {
+        InstanceState::open_async_impl(accessor, Some(id.capability_set()), database).await
+    }
+
+    async fn execute_async(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        query: String,
+        parameters: Vec<v3::Value>,
+    ) -> Result<
+        (
+            Vec<String>,
+            StreamReader<v3::RowResult>,
+            FutureReader<Result<(), v3::Error>>,
+        ),
+        v3::Error,
+    > {
+        <Self as v3::HostConnectionWithStore<T>>::execute_async(
+            accessor, connection, query, parameters,
+        )
+        .await
+    }
+
+    async fn changes_async(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+    ) -> anyhow::Result<u64> {
+        <Self as v3::HostConnectionWithStore<T>>::changes_async(accessor, connection).await
+    }
+
+    async fn last_insert_rowid_async(
+        accessor: &Accessor<T, Self>,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+    ) -> anyhow::Result<i64> {
+        <Self as v3::HostConnectionWithStore<T>>::last_insert_rowid_async(accessor, connection)
+            .await
+    }
+}
+
+impl spin_world::named_imports::spin::sqlite3_1_0::sqlite::Host for InstanceState {
+    fn convert_error(&mut self, err: v3::Error) -> anyhow::Result<v3::Error> {
+        Ok(err)
+    }
+}
+
+impl spin_world::named_imports::spin::sqlite3_1_0::sqlite::HostConnection for InstanceState {
+    async fn open(
+        &mut self,
+        id: NamedImportKey,
+        database: String,
+    ) -> Result<Resource<v3::Connection>, v3::Error> {
+        self.open_impl(Some(id.capability_set()), database).await
+    }
+
+    async fn execute(
+        &mut self,
+        _id: NamedImportKey,
+        self_: Resource<v3::Connection>,
+        statement: String,
+        parameters: Vec<v3::Value>,
+    ) -> Result<v3::QueryResult, v3::Error> {
+        <Self as v3::HostConnection>::execute(self, self_, statement, parameters).await
+    }
+
+    async fn last_insert_rowid(
+        &mut self,
+        _id: NamedImportKey,
+        self_: Resource<v3::Connection>,
+    ) -> anyhow::Result<i64> {
+        <Self as v3::HostConnection>::last_insert_rowid(self, self_).await
+    }
+
+    async fn changes(
+        &mut self,
+        _id: NamedImportKey,
+        self_: Resource<v3::Connection>,
+    ) -> anyhow::Result<u64> {
+        <Self as v3::HostConnection>::changes(self, self_).await
+    }
+
+    async fn drop(
+        &mut self,
+        _id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+    ) -> anyhow::Result<()> {
+        let _ = self.connections.remove(connection.rep());
+        Ok(())
+    }
+}
+
 impl<T> v3::HostConnectionWithStore<T> for crate::SqliteFactorData {
     async fn open_async(
         accessor: &Accessor<T, Self>,
         database: String,
     ) -> Result<Resource<v3::Connection>, v3::Error> {
-        // TODO: this duplicates `open_impl` logic but split up to move
-        // in and out of the Accessor. How to dedupe?
-        let conn_creator = accessor.with(|mut access| {
-            let host = access.get();
-            if !host.allowed_databases.contains(&database) {
-                return Err(v3::Error::AccessDenied);
-            }
-            host.connection_creators
-                .get(&database)
-                .ok_or(v3::Error::NoSuchDatabase)
-                .cloned()
-        })?;
-
-        let conn = conn_creator.create_connection(&database).await?;
-
-        tracing::Span::current().record(
-            "sqlite.backend",
-            conn.summary().as_deref().unwrap_or("unknown"),
-        );
-
-        accessor.with(|mut access| {
-            let host = access.get();
-            host.connections
-                .push(conn)
-                .map_err(|()| v3::Error::Io("too many connections opened".to_string()))
-                .map(Resource::new_own)
-        })
+        InstanceState::open_async_impl(accessor, None, database).await
     }
 
     async fn execute_async(
@@ -281,7 +414,7 @@ impl v2::HostConnection for InstanceState {
         fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "sqlite", sqlite.backend = Empty))]
     async fn open(&mut self, database: String) -> Result<Resource<v2::Connection>, v2::Error> {
         self.otel.reparent_tracing_span();
-        self.open_impl(database).await.map_err(to_v2_error)
+        self.open_impl(None, database).await.map_err(to_v2_error)
     }
 
     #[instrument(name = "spin_sqlite.execute", skip(self, connection, parameters), err(level = Level::INFO),

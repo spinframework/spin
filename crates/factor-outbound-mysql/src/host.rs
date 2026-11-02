@@ -5,7 +5,9 @@ use opentelemetry_semantic_conventions::attribute as otel_attribute;
 use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
 use spin_factor_outbound_networking::ConnectionPermit;
 use spin_telemetry::traces::{self, Blame};
+use spin_world::CapabilitySetKey;
 use spin_world::MAX_HOST_BUFFERED_BYTES;
+use spin_world::NamedImportKey;
 use spin_world::spin::mysql::mysql as v3;
 use spin_world::v1::mysql as v1;
 use spin_world::v2::mysql as v2;
@@ -20,12 +22,13 @@ use crate::{InstanceState, InstanceStateInner, MysqlFactorData};
 impl<C: Client> InstanceStateInner<C> {
     async fn open_connection(
         &mut self,
+        key: Option<&CapabilitySetKey>,
         address: &str,
         permit: ConnectionPermit,
     ) -> Result<u32, v2::Error> {
         spin_factor_outbound_networking::record_address_fields(address);
 
-        if !self.is_address_allowed(address).await.map_err(|e| {
+        if !self.is_address_allowed(key, address).await.map_err(|e| {
             // The allow-list check infrastructure itself failed; that's a
             // host problem, not anything the guest did wrong.
             let err = v2::Error::Other(e.to_string());
@@ -69,8 +72,12 @@ impl<C: Client> InstanceStateInner<C> {
             })
     }
 
-    async fn is_address_allowed(&self, address: &str) -> Result<bool> {
-        self.allowed_hosts.check_url(address, "mysql").await
+    async fn is_address_allowed(
+        &self,
+        key: Option<&CapabilitySetKey>,
+        address: &str,
+    ) -> Result<bool> {
+        self.allowed_hosts.check_url(key, address, "mysql").await
     }
 }
 
@@ -111,7 +118,7 @@ impl<C: Client, T> v3::HostConnectionWithStore<T> for MysqlFactorData<C> {
         let mut state = state_arc.lock().await;
         state.otel.reparent_tracing_span();
         Ok(Resource::new_own(
-            state.open_connection(&address, permit).await?,
+            state.open_connection(None, &address, permit).await?,
         ))
     }
 
@@ -175,6 +182,112 @@ impl<C: Client, T> v3::HostConnectionWithStore<T> for MysqlFactorData<C> {
     }
 }
 
+impl<C: Client> spin_world::named_imports::spin::mysql::mysql::Host for InstanceState<C> {
+    fn convert_error(&mut self, err: v3::Error) -> anyhow::Result<v3::Error> {
+        Ok(err)
+    }
+}
+
+impl<C: Client> spin_world::named_imports::spin::mysql::mysql::HostConnection for InstanceState<C> {
+    async fn drop(
+        &mut self,
+        _id: NamedImportKey,
+        connection: Resource<spin_world::named_imports::spin::mysql::mysql::Connection>,
+    ) -> Result<()> {
+        let mut state = self.inner.lock().await;
+        state.connections.remove(connection.rep());
+        Ok(())
+    }
+}
+
+impl<C: Client, T> spin_world::named_imports::spin::mysql::mysql::HostConnectionWithStore<T>
+    for MysqlFactorData<C>
+{
+    #[instrument(name = "spin_outbound_mysql.open", skip(accessor, address), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    async fn open(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        address: String,
+    ) -> Result<Resource<v3::Connection>, v3::Error> {
+        let (state_arc, semaphore) = accessor.with(|mut access| {
+            let host = access.get();
+            (host.inner.clone(), host.semaphore.clone())
+        });
+        let permit = semaphore
+            .acquire()
+            .await
+            .map_err(|_| v3::Error::ConnectionFailed("too many connections".into()))?;
+        let mut state = state_arc.lock().await;
+        state.otel.reparent_tracing_span();
+        Ok(Resource::new_own(
+            state
+                .open_connection(Some(id.capability_set()), &address, permit)
+                .await?,
+        ))
+    }
+
+    #[instrument(name = "spin_outbound_mysql.execute", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", otel.name = statement))]
+    async fn execute(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        statement: String,
+        params: Vec<v3::ParameterValue>,
+    ) -> Result<(), v3::Error> {
+        let state = accessor.with(|mut access| access.get().inner.clone());
+        let client = {
+            let mut state = state.lock().await;
+            state.otel.reparent_tracing_span();
+            state.get_client(connection.rep())?
+        };
+        client
+            .lock()
+            .await
+            .execute(statement, params.into_iter().map(Into::into).collect())
+            .await
+            .map_err(track_db_error_on_span)?;
+        Ok(())
+    }
+
+    #[instrument(name = "spin_outbound_mysql.query", skip(accessor, connection, params), err(level = Level::INFO), fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "mysql", otel.name = statement))]
+    async fn query(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        connection: Resource<v3::Connection>,
+        statement: String,
+        params: Vec<v3::ParameterValue>,
+    ) -> Result<QueryTuple, v3::Error> {
+        let state = accessor.with(|mut access| access.get().inner.clone());
+        let client = {
+            let mut state = state.lock().await;
+            state.otel.reparent_tracing_span();
+            state.get_client(connection.rep())?
+        };
+
+        let (columns, stream, future) =
+            C::query_async(client, statement, params, MAX_HOST_BUFFERED_BYTES)
+                .await
+                .map_err(|v| v3::Error::from(track_db_error_on_span(v2::Error::from(v))))?;
+
+        let (stream, future) = accessor
+            .with(|mut access| {
+                anyhow::Ok((
+                    StreamReader::new(&mut access, spin_wasi_async::stream::producer(stream))?,
+                    FutureReader::new(&mut access, future)?,
+                ))
+            })
+            .map_err(|e| {
+                // Setting up the async stream/future channels is a host
+                // implementation detail; if it fails, that's a host bug.
+                let err = v3::Error::Other(e.to_string());
+                traces::mark_as_error(&err, Some(Blame::Host));
+                err
+            })?;
+
+        Ok((columns, stream, future))
+    }
+}
+
 impl<C: Client> v2::Host for InstanceState<C> {}
 
 impl<C: Client> v2::HostConnection for InstanceState<C> {
@@ -189,7 +302,7 @@ impl<C: Client> v2::HostConnection for InstanceState<C> {
         let mut state = self.inner.lock().await;
         state.otel.reparent_tracing_span();
         state
-            .open_connection(&address, permit)
+            .open_connection(None, &address, permit)
             .await
             .map(Resource::new_own)
     }
@@ -255,7 +368,7 @@ macro_rules! delegate {
             .map_err(|_| v2::Error::ConnectionFailed("too many connections".into()))?;
         let connection = {
             let mut state = $self.inner.lock().await;
-            Resource::new_own(state.open_connection(&$address, permit).await?)
+            Resource::new_own(state.open_connection(None, &$address, permit).await?)
         };
         // v1 has no persistent connections, so remove the table entry immediately
         // after the call to release the semaphore permit.

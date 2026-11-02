@@ -4,13 +4,13 @@ use anyhow::Result;
 use opentelemetry_semantic_conventions::attribute as otel_attribute;
 use spin_core::wasmtime::component::{Accessor, FutureReader, Resource, StreamReader};
 use spin_telemetry::traces::{self, Blame};
-use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::spin::postgres3_0_0::postgres::{self as v3};
 use spin_world::spin::postgres4_2_0::postgres::{self as v4};
 use spin_world::v1::postgres as v1;
 use spin_world::v1::rdbms_types as v1_types;
 use spin_world::v2::postgres::{self as v2};
 use spin_world::v2::rdbms_types as v2_types;
+use spin_world::{CapabilitySetKey, MAX_HOST_BUFFERED_BYTES, NamedImportKey};
 use tracing::Level;
 use tracing::field::Empty;
 use tracing::instrument;
@@ -74,9 +74,13 @@ impl<CF: ClientFactory> InstanceState<CF> {
     }
 
     #[allow(clippy::result_large_err)]
-    async fn ensure_address_allowed(&self, address: &str) -> Result<(), v4::Error> {
+    async fn ensure_address_allowed(
+        &self,
+        key: Option<&CapabilitySetKey>,
+        address: &str,
+    ) -> Result<(), v4::Error> {
         self.allowed_host_checker
-            .ensure_address_allowed(address)
+            .ensure_address_allowed(key, address)
             .await
     }
 }
@@ -97,7 +101,7 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
     async fn open(&mut self, address: String) -> Result<Resource<v3::Connection>, v3::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        self.ensure_address_allowed(&address)
+        self.ensure_address_allowed(None, &address)
             .await
             .map_err(v3::Error::from)
             .map_err(track_address_check_error_v3)?;
@@ -192,6 +196,7 @@ impl<CF: ClientFactory> v4::HostConnectionBuilder for InstanceState<CF> {
         self_: Resource<v4::ConnectionBuilder>,
     ) -> Result<Resource<v4::Connection>, v4::Error> {
         let (address, root_ca) = self.get_builder_info(self_.rep())?;
+        self.ensure_address_allowed(None, &address).await?;
         self.open_connection(&address, root_ca).await
     }
 
@@ -207,7 +212,7 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     async fn open(&mut self, address: String) -> Result<Resource<v4::Connection>, v4::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        self.ensure_address_allowed(&address)
+        self.ensure_address_allowed(None, &address)
             .await
             .map_err(track_address_check_error_v4)?;
 
@@ -261,7 +266,7 @@ impl<T, CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnec
     ) -> Result<Resource<v4::Connection>, v4::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        Self::ensure_address_allowed_async(accessor, &address)
+        Self::ensure_address_allowed_async(accessor, None, &address)
             .await
             .map_err(track_address_check_error_v4)?;
         Self::open_connection_async(accessor, &address, None).await
@@ -342,6 +347,253 @@ impl<T, CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnec
     }
 }
 
+impl<T, CF: ClientFactory>
+    spin_world::named_imports::spin::postgres4_2_0::postgres::HostConnectionWithStore<T>
+    for crate::PgFactorData<CF>
+{
+    #[instrument(name = "spin_outbound_pg.open_async", skip(accessor, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    async fn open_async(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        address: String,
+    ) -> Result<Resource<v4::Connection>, v4::Error> {
+        spin_factor_outbound_networking::record_address_fields(&address);
+
+        Self::ensure_address_allowed_async(accessor, Some(id.capability_set()), &address)
+            .await
+            .map_err(track_address_check_error_v4)?;
+        Self::open_connection_async(accessor, &address, None).await
+    }
+
+    #[instrument(name = "spin_outbound_pg.execute", skip(accessor, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
+    async fn execute_async(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        connection: Resource<v4::Connection>,
+        statement: String,
+        params: Vec<v4::ParameterValue>,
+    ) -> Result<u64, v4::Error> {
+        let client = accessor.with(|mut access| {
+            let host = access.get();
+            host.connections
+                .get(connection.rep())
+                .map(|(client, _permit)| client.clone())
+                .unwrap()
+        });
+
+        client
+            .execute(statement, params)
+            .await
+            .map_err(track_db_error_on_span_v4)
+    }
+
+    #[allow(clippy::type_complexity)] // blame bindgen, clippy, blame bindgen
+    #[instrument(name = "spin_outbound_pg.query_async", skip(accessor, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
+    async fn query_async(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        connection: Resource<v4::Connection>,
+        statement: String,
+        params: Vec<v4::ParameterValue>,
+    ) -> Result<
+        (
+            Vec<v4::Column>,
+            StreamReader<v4::Row>,
+            FutureReader<Result<(), v4::Error>>,
+        ),
+        v4::Error,
+    > {
+        let client = accessor.with(|mut access| {
+            let host = access.get();
+            host.connections
+                .get(connection.rep())
+                .map(|(client, _permit)| client.clone())
+                .unwrap()
+        });
+
+        let QueryAsyncResult {
+            columns,
+            rows,
+            error,
+        } = client
+            .query_async(statement, params, MAX_HOST_BUFFERED_BYTES)
+            .await
+            .map_err(track_db_error_on_span_v4)?;
+
+        let row_producer = spin_wasi_async::stream::producer(rows);
+
+        let (sr, efr) = accessor
+            .with(|mut access| {
+                let sr = StreamReader::new(&mut access, row_producer)?;
+                let efr = FutureReader::new(&mut access, error)?;
+                anyhow::Ok((sr, efr))
+            })
+            .map_err(|e| {
+                // Setting up the async stream/future channels is a host
+                // implementation detail; if it fails, that's a host bug.
+                let err = v4::Error::Other(e.to_string());
+                traces::mark_as_error(&err, Some(Blame::Host));
+                err
+            })?;
+
+        Ok((columns, sr, efr))
+    }
+}
+
+impl<T, CF: ClientFactory>
+    spin_world::named_imports::spin::postgres4_2_0::postgres::HostConnectionBuilderWithStore<T>
+    for crate::PgFactorData<CF>
+{
+    async fn build_async(
+        accessor: &Accessor<T, Self>,
+        id: NamedImportKey,
+        builder: Resource<v4::ConnectionBuilder>,
+    ) -> Result<Resource<v4::Connection>, v4::Error> {
+        let (address, root_ca) = Self::get_builder_info(accessor, builder)?;
+
+        spin_factor_outbound_networking::record_address_fields(&address);
+
+        Self::ensure_address_allowed_async(accessor, Some(id.capability_set()), &address)
+            .await
+            .map_err(track_address_check_error_v4)?;
+        Self::open_connection_async(accessor, &address, root_ca).await
+    }
+}
+
+impl<CF: ClientFactory> spin_world::named_imports::spin::postgres4_2_0::postgres::Host
+    for InstanceState<CF>
+{
+    fn convert_error(&mut self, err: v4::Error) -> anyhow::Result<v4::Error> {
+        Ok(err)
+    }
+}
+
+impl<CF: ClientFactory> spin_world::named_imports::spin::postgres4_2_0::postgres::HostConnection
+    for InstanceState<CF>
+{
+    #[instrument(name = "spin_outbound_pg.open", skip(self, address), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
+    async fn open(
+        &mut self,
+        id: NamedImportKey,
+        address: String,
+    ) -> Result<Resource<v4::Connection>, v4::Error> {
+        spin_factor_outbound_networking::record_address_fields(&address);
+
+        self.ensure_address_allowed(None, &address)
+            .await
+            .map_err(track_address_check_error_v4)?;
+
+        self.open_connection(&address, None).await
+    }
+
+    #[instrument(name = "spin_outbound_pg.execute", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
+    async fn execute(
+        &mut self,
+        id: NamedImportKey,
+        connection: Resource<v4::Connection>,
+        statement: String,
+        params: Vec<v4::ParameterValue>,
+    ) -> Result<u64, v4::Error> {
+        self.get_client(connection)
+            .await?
+            .execute(statement, params)
+            .await
+            .map_err(track_db_error_on_span_v4)
+    }
+
+    #[instrument(name = "spin_outbound_pg.query", skip(self, connection, params), err(level = Level::INFO),
+        fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql"))]
+    async fn query(
+        &mut self,
+        id: NamedImportKey,
+        connection: Resource<v4::Connection>,
+        statement: String,
+        params: Vec<v4::ParameterValue>,
+    ) -> Result<v4::RowSet, v4::Error> {
+        self.get_client(connection)
+            .await?
+            .query(statement, params, MAX_HOST_BUFFERED_BYTES)
+            .await
+            .map_err(track_db_error_on_span_v4)
+    }
+
+    async fn drop(
+        &mut self,
+        _id: NamedImportKey,
+        connection: Resource<v4::Connection>,
+    ) -> anyhow::Result<()> {
+        self.connections.remove(connection.rep());
+        Ok(())
+    }
+}
+
+impl<CF: ClientFactory>
+    spin_world::named_imports::spin::postgres4_2_0::postgres::HostConnectionBuilder
+    for InstanceState<CF>
+{
+    async fn new(
+        &mut self,
+        _id: NamedImportKey,
+        address: String,
+    ) -> Result<Resource<v4::ConnectionBuilder>> {
+        let builder = ConnectionBuilder {
+            address,
+            root_ca: None,
+        };
+        let rep = self
+            .builders
+            .push(builder)
+            .map_err(|_| anyhow::anyhow!("out of builder table space"))?;
+        let rsrc = Resource::new_own(rep);
+        Ok(rsrc)
+    }
+
+    async fn set_ca_root(
+        &mut self,
+        _id: NamedImportKey,
+        self_: Resource<v4::ConnectionBuilder>,
+        certificate: String,
+    ) -> Result<(), v4::Error> {
+        let root_ca = HashableCertificate::from_pem(&certificate).map_err(|e| {
+            let err = v4::Error::Other(format!("invalid root certificate: {e}"));
+            traces::mark_as_error(&err, Some(Blame::Guest));
+            err
+        })?;
+        let builder = self.builders.get_mut(self_.rep()).ok_or_else(|| {
+            let err = v4::Error::ConnectionFailed("no builder found".into());
+            traces::mark_as_error(&err, Some(Blame::Host));
+            err
+        })?;
+        builder.root_ca = Some(root_ca);
+        Ok(())
+    }
+
+    async fn build(
+        &mut self,
+        id: NamedImportKey,
+        self_: Resource<v4::ConnectionBuilder>,
+    ) -> Result<Resource<v4::Connection>, v4::Error> {
+        let (address, root_ca) = self.get_builder_info(self_.rep())?;
+        self.ensure_address_allowed(Some(id.capability_set()), &address)
+            .await?;
+        self.open_connection(&address, root_ca).await
+    }
+
+    async fn drop(
+        &mut self,
+        _id: NamedImportKey,
+        builder: Resource<v4::ConnectionBuilder>,
+    ) -> Result<()> {
+        self.builders.remove(builder.rep());
+        Ok(())
+    }
+}
+
 impl<CF: ClientFactory> InstanceState<CF> {
     #[allow(clippy::result_large_err)]
     fn get_builder_info(
@@ -376,6 +628,7 @@ impl<CF: ClientFactory> crate::PgFactorData<CF> {
 
     async fn ensure_address_allowed_async<T>(
         accessor: &Accessor<T, Self>,
+        key: Option<&CapabilitySetKey>,
         address: &str,
     ) -> Result<(), v4::Error> {
         // A merry dance to avoid doing the async allow check under the accessor
@@ -384,7 +637,9 @@ impl<CF: ClientFactory> crate::PgFactorData<CF> {
             host.allowed_host_checker()
         });
 
-        allowed_host_checker.ensure_address_allowed(address).await
+        allowed_host_checker
+            .ensure_address_allowed(key, address)
+            .await
     }
 
     async fn open_connection_async<T>(
@@ -435,7 +690,7 @@ impl<T, CF: ClientFactory>
 
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        Self::ensure_address_allowed_async(accessor, &address)
+        Self::ensure_address_allowed_async(accessor, None, &address)
             .await
             .map_err(track_address_check_error_v4)?;
         Self::open_connection_async(accessor, &address, root_ca).await
@@ -463,7 +718,7 @@ impl<CF: ClientFactory> v4::Host for InstanceState<CF> {
 /// Delegate a function call to the v4::HostConnection implementation
 macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
-        $self.ensure_address_allowed(&$address).await?;
+        $self.ensure_address_allowed(None, &$address).await?;
         let connection = match $self.open_connection(&$address, None).await {
             Ok(c) => c,
             Err(e) => return Err(e.into()),
@@ -488,7 +743,7 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
         self.otel.reparent_tracing_span();
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        self.ensure_address_allowed(&address)
+        self.ensure_address_allowed(None, &address)
             .await
             .map_err(v2::Error::from)
             .map_err(track_address_check_error_v2)?;
