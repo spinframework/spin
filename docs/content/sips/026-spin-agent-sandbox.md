@@ -63,14 +63,18 @@ component built by composing three components with `wac`:
                  +------------------------+
 ```
 
-- **`guard`** is the HTTP entry point. It validates and size-limits the
- request, sets the per-request context (sandbox ID, allowed hosts, KV on/off),
- runs the guest, and returns the result as JSON.
-- **The language guest** runs the user's JavaScript/TypeScript or Python code,
- either as a script (captured stdout/stderr) or as an HTTP handler.
-- **`guard-io`** sits between the guest and the host and applies the
- per-request policy to every host call: KV keys are scoped to the sandbox ID,
- outbound HTTP is denied unless allow-listed, and stdio is captured. The language guest component cannot change this policy.
+The released binary is pre-composed; consumers deploy a single component with no need to 
+manually compose. The composition uses three components internally to avoid cyclic 
+dependencies:
+
+- **`guard`** is the HTTP entry point. It validates and size-limits the request, sets the per-request context (sandbox ID, allowed hosts, KV on/off), calls `guard-io` to establish the context, then executes the guest. It returns the result as JSON.
+- **The language guest** (ts-sandbox or py-sandbox) runs the user's JavaScript/TypeScript or Python code, either as a script (with captured stdout/stderr) or as an HTTP handler.
+- **`guard-io`** sits between the guest and the host and enforces per-request policy on every host call: KV keys are namespaced by the sandbox ID so each sandbox only sees its own data, outbound HTTP is denied unless explicitly allowed in per-request config, and stdio is captured. The language guest component cannot override this policy.
+
+The sandbox ID serves as a namespace for KV storage and other stateful resources, enabling 
+multi-tenant isolation within a single Spin application. Allowed hosts are set per-request 
+and operate as additional constraints on top of the `spin.toml` outbound host allowlist 
+(deny-by-default narrowing, not expansion).
 
 Alongside the sandboxes, the project includes a TypeScript client SDK, Spin templates for adding sandboxes to an app, an experimental npm bundler for TypeScript dependencies, and examples.
 
@@ -85,8 +89,5 @@ Alongside the sandboxes, the project includes a TypeScript client SDK, Spin temp
 
 ## Known limitations
 
-
-- No built-in CPU, time, or memory limits; these must be enforced by the host
- or platform.
-- No current built-in way to keep secrets or variables outside of the agent code’s purview
-025-validate-target-environment copy
+- No built-in CPU, time, or memory limits; these must be enforced by the host or platform.
+- No current built-in way to keep secrets or variables outside of the agent code’s purview.
