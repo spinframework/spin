@@ -32,7 +32,7 @@
 //! version.
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use oci_client::Reference;
@@ -40,7 +40,7 @@ use oci_client::manifest::OciImageManifest;
 use spin_common::sha256::hex_digest_from_file;
 use spin_common::ui::quoted_path;
 use spin_loader::cache::Cache;
-use spin_locked_app::locked::{ContentRef, LockedApp, LockedComponent};
+use spin_locked_app::locked::{ContentPath, ContentRef, LockedApp, LockedComponent};
 use spin_serde::KebabId;
 
 use crate::Client;
@@ -371,6 +371,251 @@ fn file_digest(path: &Path) -> Result<String> {
 /// Whether the file matches its `sha256:<hex>` digest.
 fn matches_digest(path: &Path, digest: &str) -> Result<bool> {
     Ok(file_digest(path)? == digest)
+}
+
+/// Reads the prepared application in `dir`, checks the directory against its
+/// lock, and returns a locked app that Spin can run from `dir` in place.
+///
+/// `dir` must contain no symbolic links. Each Wasm and file source in the
+/// lock must be the path the layout gives it, and each component's
+/// `assets/<component id>` directory, which is what the guest sees, must hold
+/// exactly its listed files. With `verify_digests`, every file is also
+/// checked against its digest. This reads the directory, and blocks while it
+/// does.
+///
+/// These checks hold when this function runs: Spin opens the files again
+/// later, so the caller must ensure that `dir` does not change while the app
+/// runs (for example, a read-only mount). The digests come from the lock in
+/// `dir`, so they detect a corrupted or partly changed directory, not a
+/// different application: trust a prepared directory as you would the code
+/// in it. Hard links are not detected.
+///
+/// In the returned app, Wasm sources are `file:` URLs into `dir`, and each
+/// component's files become one mount of `assets/<component id>` at `/`, as
+/// for apps loaded from a registry. Nothing is written to `dir`.
+pub fn load(dir: &Path, verify_digests: bool) -> Result<LockedApp> {
+    let mut prepared = PreparedDir::scan(dir, verify_digests)?;
+    let mut app = prepared.read_lock()?;
+    validate_lock(&app)?;
+    for component in &mut app.components {
+        let id = component.id.clone();
+        prepared
+            .load_component(component)
+            .with_context(|| format!("component {id:?} does not match the prepared directory"))?;
+    }
+    Ok(app)
+}
+
+/// A prepared directory being loaded.
+struct PreparedDir {
+    root: PathBuf,
+    /// The regular files in the directory, relative to it.
+    files: HashSet<PathBuf>,
+    /// The directories in the directory, relative to it.
+    dirs: HashSet<PathBuf>,
+    verify_digests: bool,
+    /// The Wasm files already checked against their digests.
+    checked_wasm: HashSet<String>,
+}
+
+impl PreparedDir {
+    /// Lists the prepared directory `dir`, which must contain only regular
+    /// files and directories. A symbolic link could point outside `dir`, and
+    /// the guest would see what it points to.
+    fn scan(dir: &Path, verify_digests: bool) -> Result<Self> {
+        let root = std::fs::canonicalize(dir)
+            .with_context(|| format!("cannot use {}", quoted_path(dir)))?;
+        let mut files = HashSet::new();
+        let mut dirs = HashSet::new();
+        for entry in walkdir::WalkDir::new(&root).min_depth(1) {
+            let entry = entry.with_context(|| format!("cannot read {}", quoted_path(&root)))?;
+            let path = entry.path().strip_prefix(&root)?.to_owned();
+            let file_type = entry.file_type();
+            if file_type.is_file() {
+                files.insert(path);
+            } else if file_type.is_dir() {
+                dirs.insert(path);
+            } else if file_type.is_symlink() {
+                bail!(
+                    "{} is a symbolic link, which a prepared directory cannot contain",
+                    quoted_path(entry.path())
+                );
+            } else {
+                bail!(
+                    "{} is not a regular file or a directory",
+                    quoted_path(entry.path())
+                );
+            }
+        }
+        Ok(Self {
+            root,
+            files,
+            dirs,
+            verify_digests,
+            checked_wasm: HashSet::new(),
+        })
+    }
+
+    /// Reads the lock and checks its layout version.
+    fn read_lock(&self) -> Result<LockedApp> {
+        ensure!(
+            self.has_file(PREPARED_LOCK_FILE),
+            "{} is not a prepared application: it has no {PREPARED_LOCK_FILE}",
+            quoted_path(&self.root)
+        );
+        let path = self.root.join(PREPARED_LOCK_FILE);
+        let lock = std::fs::read(&path)
+            .with_context(|| format!("failed to read {}", quoted_path(&path)))?;
+        let app = LockedApp::from_json(&lock)
+            .with_context(|| format!("failed to decode {}", quoted_path(&path)))?;
+        let version = app.metadata.get(LAYOUT_VERSION_KEY);
+        ensure!(
+            version.and_then(|v| v.as_u64()) == Some(LAYOUT_VERSION),
+            "{} has prepared layout version {}, but this Spin reads version {LAYOUT_VERSION}",
+            quoted_path(&path),
+            version.map_or("(none)".to_owned(), |v| v.to_string())
+        );
+        Ok(app)
+    }
+
+    /// Checks a component against the directory, and points its sources
+    /// into it.
+    fn load_component(&mut self, component: &mut LockedComponent) -> Result<()> {
+        self.load_wasm(component)?;
+        self.load_files(component)
+    }
+
+    /// Checks that the component's Wasm files are where the layout puts
+    /// them, and points their sources at them. Wasm used more than once is
+    /// checked against its digest once.
+    fn load_wasm(&mut self, component: &mut LockedComponent) -> Result<()> {
+        for content in wasm_content_refs_mut(component) {
+            let digest = content_digest(content)?.to_owned();
+            let source = wasm_source(&digest)?;
+            check_source(content, &source)?;
+            ensure!(
+                self.has_file(&source),
+                "{} is missing",
+                quoted_path(&source)
+            );
+            let path = self.root.join(&source);
+            if self.verify_digests && self.checked_wasm.insert(source) {
+                check_digest(&path, &digest)?;
+            }
+            *content = ContentRef {
+                source: Some(file_url(&path)?),
+                ..Default::default()
+            };
+        }
+        Ok(())
+    }
+
+    /// Checks that the component's directory holds exactly its listed files,
+    /// and replaces them with one mount of that directory, as the guest sees
+    /// it.
+    fn load_files(&self, component: &mut LockedComponent) -> Result<()> {
+        let mut sources = Vec::with_capacity(component.files.len());
+        for file in &component.files {
+            let source = asset_source(&component.id, &file.path);
+            check_source(&file.content, &source)?;
+            let digest = content_digest(&file.content)?.to_owned();
+            sources.push((source, digest));
+        }
+
+        let component_dir = Path::new(ASSETS_DIR).join(&component.id);
+        let expected = sources
+            .iter()
+            .map(|(source, _)| Path::new(source))
+            .collect();
+        self.check_holds_exactly(&component_dir, &expected)?;
+        if self.verify_digests {
+            for (source, digest) in &sources {
+                check_digest(&self.root.join(source), digest)?;
+            }
+        }
+
+        if !component.files.is_empty() {
+            component.files = vec![ContentPath {
+                content: ContentRef {
+                    source: Some(file_url(&self.root.join(&component_dir))?),
+                    ..Default::default()
+                },
+                path: "/".into(),
+            }];
+        }
+        Ok(())
+    }
+
+    fn has_file(&self, path: impl AsRef<Path>) -> bool {
+        self.files.contains(path.as_ref())
+    }
+
+    /// Checks that `component_dir` holds exactly the `expected` files and
+    /// the directories that lead to them. With no files, `component_dir`
+    /// must not exist.
+    fn check_holds_exactly(&self, component_dir: &Path, expected: &HashSet<&Path>) -> Result<()> {
+        if expected.is_empty() {
+            ensure!(
+                !self.files.contains(component_dir) && !self.dirs.contains(component_dir),
+                "{} was not expected, because the component has no files",
+                quoted_path(component_dir)
+            );
+            return Ok(());
+        }
+        for file in expected {
+            ensure!(self.has_file(file), "{} is missing", quoted_path(file));
+        }
+
+        let expected_dirs: HashSet<&Path> = expected
+            .iter()
+            .flat_map(|file| {
+                file.ancestors()
+                    .skip(1)
+                    .take_while(|ancestor| ancestor.starts_with(component_dir))
+            })
+            .collect();
+        let unexpected_files = self
+            .files
+            .iter()
+            .filter(|file| file.starts_with(component_dir) && !expected.contains(file.as_path()));
+        let unexpected_dirs = self
+            .dirs
+            .iter()
+            .filter(|dir| dir.starts_with(component_dir) && !expected_dirs.contains(dir.as_path()));
+        if let Some(path) = unexpected_files.chain(unexpected_dirs).next() {
+            bail!(
+                "{} is not listed in the lock, and the guest would see it",
+                quoted_path(path)
+            );
+        }
+        Ok(())
+    }
+}
+
+/// Checks that the lock records `expected` as the source of `content`.
+fn check_source(content: &ContentRef, expected: &str) -> Result<()> {
+    ensure!(
+        content.source.as_deref() == Some(expected),
+        "source {:?} should be {expected:?}",
+        content.source.as_deref().unwrap_or_default()
+    );
+    Ok(())
+}
+
+/// Checks that the file matches its digest.
+fn check_digest(path: &Path, digest: &str) -> Result<()> {
+    ensure!(
+        matches_digest(path, digest)?,
+        "{} does not match its digest {digest}",
+        quoted_path(path)
+    );
+    Ok(())
+}
+
+fn file_url(path: &Path) -> Result<String> {
+    reqwest::Url::from_file_path(path)
+        .map(|url| url.to_string())
+        .map_err(|_| anyhow!("cannot make a file URL of {}", quoted_path(path)))
 }
 
 #[cfg(test)]
@@ -732,5 +977,324 @@ mod test {
         ] {
             assert!(wasm_source(&digest).is_err(), "{digest:?}");
         }
+    }
+
+    /// Edits the prepared lock in `dir` as JSON.
+    fn edit_lock(dir: &Path, edit: impl FnOnce(&mut serde_json::Value)) -> Result<()> {
+        let path = dir.join(PREPARED_LOCK_FILE);
+        let mut lock: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+        edit(&mut lock);
+        std::fs::write(&path, serde_json::to_vec(&lock)?)?;
+        Ok(())
+    }
+
+    fn file_url(path: &Path) -> String {
+        reqwest::Url::from_file_path(std::fs::canonicalize(path).unwrap())
+            .unwrap()
+            .to_string()
+    }
+
+    #[tokio::test]
+    async fn loads_a_prepared_directory_in_place() -> Result<()> {
+        let f = Fixture::new().await?;
+        write_prepared(f.app()?, &f.cache, &f.dir()).await?;
+        let moved = f.base.path().join("moved");
+        std::fs::rename(f.dir(), &moved)?;
+
+        // Files outside the component directories are not read.
+        std::fs::write(moved.join("README"), "about this app")?;
+        let app = load(&moved, true)?;
+        let main = moved.join(format!("wasm/{}.wasm", hex_digest_from_bytes(&f.main_wasm)));
+        let dep = moved.join(format!("wasm/{}.wasm", hex_digest_from_bytes(&f.dep_wasm)));
+        let first = &app.components[0];
+        assert_eq!(first.source.content_type, "application/wasm");
+        let sources = [
+            &first.source.content,
+            &first.dependencies.values().next().unwrap().source.content,
+            &first.trigger_dependencies["middleware"][0].source.content,
+            &app.components[1].source.content,
+        ];
+        for (content, path) in sources.into_iter().zip([&main, &dep, &dep, &main]) {
+            assert_eq!(content.source, Some(file_url(path)));
+            assert!(content.digest.is_none() && content.inline.is_none());
+        }
+        assert_eq!(first.files.len(), 1);
+        assert_eq!(first.files[0].path, Path::new("/"));
+        assert_eq!(
+            first.files[0].content.source,
+            Some(file_url(&moved.join("assets/first")))
+        );
+        assert!(app.components[1].files.is_empty());
+        Ok(())
+    }
+
+    /// Makes a directory tree read-only, and writable again when dropped.
+    #[cfg(unix)]
+    struct ReadOnly<'a>(&'a Path);
+
+    #[cfg(unix)]
+    impl<'a> ReadOnly<'a> {
+        fn new(dir: &'a Path) -> Result<Self> {
+            Self::set_modes(dir, 0o444, 0o555)?;
+            Ok(Self(dir))
+        }
+
+        fn set_modes(dir: &Path, file_mode: u32, dir_mode: u32) -> Result<()> {
+            use std::os::unix::fs::PermissionsExt;
+            // Directories last when locking, first when unlocking.
+            let lock = dir_mode & 0o200 == 0;
+            for entry in walkdir::WalkDir::new(dir).contents_first(lock) {
+                let entry = entry?;
+                let mode = if entry.file_type().is_dir() {
+                    dir_mode
+                } else {
+                    file_mode
+                };
+                std::fs::set_permissions(entry.path(), std::fs::Permissions::from_mode(mode))?;
+            }
+            Ok(())
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for ReadOnly<'_> {
+        fn drop(&mut self) {
+            let _ = Self::set_modes(self.0, 0o644, 0o755);
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn loads_a_read_only_directory_without_writing() -> Result<()> {
+        let f = Fixture::new().await?;
+        write_prepared(f.app()?, &f.cache, &f.dir()).await?;
+        let listing = || -> Result<Vec<_>> {
+            walkdir::WalkDir::new(f.dir())
+                .into_iter()
+                .map(|e| Ok(e?.path().to_owned()))
+                .collect()
+        };
+        let dir = f.dir();
+        let _read_only = ReadOnly::new(&dir)?;
+        let before = listing()?;
+        load(&f.dir(), true)?;
+        assert_eq!(before, listing()?);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn digests_are_checked_unless_skipped() -> Result<()> {
+        let f = Fixture::new().await?;
+        write_prepared(f.app()?, &f.cache, &f.dir()).await?;
+        for rel in [
+            format!("wasm/{}.wasm", hex_digest_from_bytes(&f.dep_wasm)),
+            "assets/first/static/file.txt".to_owned(),
+        ] {
+            let path = f.dir().join(&rel);
+            let original = std::fs::read(&path)?;
+            std::fs::write(&path, b"tampered")?;
+            let err = load(&f.dir(), true).expect_err("tampered content should be refused");
+            assert!(
+                format!("{err:#}").contains("does not match its digest"),
+                "{rel}: {err:#}"
+            );
+            load(&f.dir(), false)?;
+            std::fs::write(&path, original)?;
+        }
+        load(&f.dir(), true)?;
+        Ok(())
+    }
+
+    /// Makes a valid prepared directory invalid.
+    type DirBreakage = fn(&Path, &str, &str);
+
+    /// Checks that each breakage of a fresh prepared directory makes `load`
+    /// fail with the expected message.
+    async fn assert_refused(f: &Fixture, cases: Vec<(&str, DirBreakage)>) -> Result<()> {
+        let main = format!("wasm/{}.wasm", hex_digest_from_bytes(&f.main_wasm));
+        let file = "assets/first/static/file.txt";
+        for (i, (expected, break_dir)) in cases.into_iter().enumerate() {
+            let dir = f.base.path().join(format!("case-{i}"));
+            write_prepared(f.app()?, &f.cache, &dir).await?;
+            break_dir(&dir, &main, file);
+            let err = load(&dir, false).expect_err(expected);
+            assert!(
+                format!("{err:#}").contains(expected),
+                "case {i}, {expected}: {err:#}"
+            );
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn directories_that_do_not_match_their_lock_are_refused() -> Result<()> {
+        let f = Fixture::new().await?;
+        let dep = format!("wasm/{}.wasm", hex_digest_from_bytes(&f.dep_wasm));
+        let cases: Vec<(&str, DirBreakage)> = vec![
+            ("is not a prepared application", |dir, _, _| {
+                std::fs::remove_file(dir.join(PREPARED_LOCK_FILE)).unwrap();
+            }),
+            ("prepared layout version", |dir, _, _| {
+                edit_lock(dir, |lock| lock["metadata"][LAYOUT_VERSION_KEY] = 2.into()).unwrap();
+            }),
+            ("should be", |dir, _, _| {
+                edit_lock(dir, |lock| {
+                    lock["components"][1]["source"]["source"] = "elsewhere.wasm".into()
+                })
+                .unwrap();
+            }),
+            ("should be", |dir, _, _| {
+                // A file of the component, listed under another path.
+                edit_lock(dir, |lock| {
+                    lock["components"][0]["files"][0]["source"] = "assets/first/inline.txt".into()
+                })
+                .unwrap();
+            }),
+            ("should be", |dir, _, _| {
+                // Another component's directory.
+                edit_lock(dir, |lock| {
+                    lock["components"][0]["files"][0]["source"] =
+                        "assets/second/static/file.txt".into()
+                })
+                .unwrap();
+            }),
+            ("invalid file path", |dir, _, _| {
+                edit_lock(dir, |lock| {
+                    lock["components"][0]["files"][0]["path"] = "../x".into()
+                })
+                .unwrap();
+            }),
+            ("invalid file path", |dir, _, _| {
+                edit_lock(dir, |lock| {
+                    lock["components"][0]["files"][0]["path"] = "".into()
+                })
+                .unwrap();
+            }),
+            ("is listed more than once", |dir, _, _| {
+                edit_lock(dir, |lock| {
+                    let file = lock["components"][0]["files"][0].clone();
+                    lock["components"][0]["files"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(file);
+                })
+                .unwrap();
+            }),
+            ("missing expected digest", |dir, _, _| {
+                edit_lock(dir, |lock| {
+                    lock["components"][0]["files"][0]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("digest");
+                })
+                .unwrap();
+            }),
+            ("invalid component id", |dir, _, _| {
+                edit_lock(dir, |lock| {
+                    lock["components"][1]["id"] = "first/nested".into()
+                })
+                .unwrap();
+            }),
+            ("is used more than once", |dir, _, _| {
+                edit_lock(dir, |lock| lock["components"][1]["id"] = "first".into()).unwrap();
+            }),
+            (
+                "trigger dependencies outside its components",
+                |dir, _, _| {
+                    edit_lock(dir, |lock| {
+                        let dependency = lock["components"][0]["trigger_dependencies"].clone();
+                        lock["triggers"] = serde_json::json!([{
+                            "id": "t", "trigger_type": "http", "trigger_config": {},
+                            "trigger_dependencies": dependency,
+                        }]);
+                    })
+                    .unwrap();
+                },
+            ),
+            ("is missing", |dir, main, _| {
+                std::fs::remove_file(dir.join(main)).unwrap();
+            }),
+            ("is missing", |dir, _, file| {
+                std::fs::remove_file(dir.join(file)).unwrap();
+            }),
+            ("is not listed", |dir, _, _| {
+                std::fs::write(dir.join("assets/first/extra.txt"), "").unwrap();
+            }),
+            ("is not listed", |dir, _, _| {
+                std::fs::create_dir(dir.join("assets/first/extra")).unwrap();
+            }),
+            ("is not listed", |dir, _, _| {
+                std::fs::write(dir.join("assets/first/static/extra.txt"), "").unwrap();
+            }),
+            ("is missing", |dir, _, file| {
+                std::fs::remove_file(dir.join(file)).unwrap();
+                std::fs::create_dir(dir.join(file)).unwrap();
+            }),
+            ("was not expected", |dir, _, _| {
+                std::fs::create_dir_all(dir.join("assets/second")).unwrap();
+            }),
+        ];
+        assert_refused(&f, cases).await?;
+
+        // A Wasm source naming another Wasm file of the directory.
+        let dir = f.base.path().join("other-wasm");
+        write_prepared(f.app()?, &f.cache, &dir).await?;
+        edit_lock(&dir, |lock| {
+            lock["components"][1]["source"]["source"] = dep.into()
+        })?;
+        let err = load(&dir, false).expect_err("another Wasm file");
+        assert!(format!("{err:#}").contains("should be"), "{err:#}");
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn symbolic_links_are_refused_below_the_directory() -> Result<()> {
+        use std::os::unix::fs::symlink;
+        let f = Fixture::new().await?;
+
+        /// Moves `rel` out of `dir` and puts a symbolic link to it in its place.
+        fn replace_with_link(dir: &Path, rel: &str) {
+            let outside = dir.with_extension(rel.replace('/', "-"));
+            std::fs::rename(dir.join(rel), &outside).unwrap();
+            symlink(&outside, dir.join(rel)).unwrap();
+        }
+
+        let cases: Vec<(&str, DirBreakage)> = vec![
+            ("symbolic link", |dir, _, _| {
+                replace_with_link(dir, PREPARED_LOCK_FILE);
+            }),
+            ("symbolic link", |dir, main, _| {
+                replace_with_link(dir, main);
+            }),
+            ("symbolic link", |dir, _, file| {
+                replace_with_link(dir, file);
+            }),
+            ("symbolic link", |dir, _, _| replace_with_link(dir, "wasm")),
+            ("symbolic link", |dir, _, _| {
+                replace_with_link(dir, "assets")
+            }),
+            ("symbolic link", |dir, _, _| {
+                replace_with_link(dir, "assets/first");
+            }),
+            ("symbolic link", |dir, _, _| {
+                replace_with_link(dir, "assets/first/static");
+            }),
+            ("symbolic link", |dir, _, _| {
+                symlink("/", dir.join("assets/first/root")).unwrap();
+            }),
+            ("symbolic link", |dir, _, _| {
+                // Outside the component directories too.
+                symlink("/", dir.join("README")).unwrap();
+            }),
+        ];
+        assert_refused(&f, cases).await?;
+
+        // `dir` itself may be a link: it names the directory to use.
+        write_prepared(f.app()?, &f.cache, &f.dir()).await?;
+        let link = f.base.path().join("link");
+        symlink(f.dir(), &link)?;
+        load(&link, true)?;
+        Ok(())
     }
 }
