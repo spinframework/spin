@@ -58,6 +58,7 @@ impl Factor for OutboundHttpFactor {
         Ok(AppState {
             wasi_http_clients: wasi::HttpClients::new(config.connection_pooling_enabled),
             connection_pooling_enabled: config.connection_pooling_enabled,
+            tcp_nodelay: config.tcp_nodelay,
             semaphore: build_connection_semaphore(
                 networking,
                 "http",
@@ -76,18 +77,20 @@ impl Factor for OutboundHttpFactor {
         let blocked_networks = outbound_networking.blocked_networks();
         let component_tls_configs = outbound_networking.component_tls_configs();
         let otel = OtelFactorState::from_prepare_context(&mut ctx)?;
+        let app_state = ctx.app_state();
         Ok(InstanceState {
             wasi_http_ctx: WasiHttpCtx::new(),
             hooks: InstanceHttpHooks {
                 allowed_hosts,
                 blocked_networks,
                 component_tls_configs,
+                tcp_nodelay: app_state.tcp_nodelay,
                 self_request_origin: None,
                 request_interceptor: None,
                 spin_http_client: None,
-                wasi_http_clients: ctx.app_state().wasi_http_clients.clone(),
-                connection_pooling_enabled: ctx.app_state().connection_pooling_enabled,
-                semaphore: ctx.app_state().semaphore.clone(),
+                wasi_http_clients: app_state.wasi_http_clients.clone(),
+                connection_pooling_enabled: app_state.connection_pooling_enabled,
+                semaphore: app_state.semaphore.clone(),
                 otel,
             },
         })
@@ -122,6 +125,8 @@ struct InstanceHttpHooks {
     semaphore: ConnectionSemaphore,
     /// Manages access to the OtelFactor state.
     otel: OtelFactorState,
+    /// Enables TCP_NODELAY.
+    tcp_nodelay: bool,
 }
 
 impl InstanceState {
@@ -205,6 +210,8 @@ pub struct AppState {
     wasi_http_clients: wasi::HttpClients,
     /// Whether connection pooling is enabled for this app.
     connection_pooling_enabled: bool,
+    /// Enables TCP_NODELAY on connection sockets.
+    tcp_nodelay: bool,
     /// Semaphore to limit concurrent outbound connections.
     semaphore: ConnectionSemaphore,
 }
