@@ -120,6 +120,37 @@ pub(crate) struct UpCommandInner {
     )]
     pub registry_source: Option<String>,
 
+    /// The application to run: a prepared application, written by `spin
+    /// registry pull --prepare`. Spin checks the directory against its lock
+    /// and runs it in place, without copying its files or accessing a
+    /// registry. The directory must not change while the application runs,
+    /// so make it read-only. With --allow-transient-write, the application
+    /// writes to its files in the directory itself, which then no longer
+    /// matches its lock.
+    #[clap(
+        name = FROM_PREPARED_OPT,
+        long = "from-prepared",
+        value_name = "DIR",
+        group = "source",
+        conflicts_with = "direct_mounts",
+        value_hint = clap::ValueHint::DirPath,
+    )]
+    pub prepared_source: Option<PathBuf>,
+
+    /// With --from-prepared, do not check the files of the application
+    /// against their digests, for directories whose integrity the platform
+    /// already ensures (for example a verified read-only image).
+    //
+    // `requires` alone is not enough: clap excuses a missing required
+    // argument when one that conflicts with it, such as another source, is
+    // present.
+    #[clap(
+        long,
+        requires = FROM_PREPARED_OPT,
+        conflicts_with_all = [APPLICATION_OPT, APP_MANIFEST_FILE_OPT, FROM_REGISTRY_OPT],
+    )]
+    pub skip_digest_check: bool,
+
     /// The build profile to run. The default is the anonymous profile (usually
     /// the release build).
     #[clap(long)]
@@ -138,7 +169,8 @@ pub(crate) struct UpCommandInner {
     #[clap(short = 'e', long = "env", value_parser = parse_env_var)]
     pub env: Vec<(String, String)>,
 
-    /// Temporary directory for the static assets of the components.
+    /// Working directory for the application's lock file and, for local and
+    /// registry applications, copies of the static assets of the components.
     #[clap(long = "temp", alias = "tmp", value_hint = clap::ValueHint::DirPath)]
     pub tmp: Option<PathBuf>,
 
@@ -156,7 +188,8 @@ pub(crate) struct UpCommandInner {
 
     /// For local apps, specifies to perform `spin build` (with the default options) before running the application.
     ///
-    /// This is ignored on remote applications, as they are already built.
+    /// This is ignored on registry and prepared applications, as they are
+    /// already built.
     #[clap(long, env = ALWAYS_BUILD_ENV, value_parser = clap::builder::BoolishValueParser::new())]
     pub build: bool,
 
@@ -426,11 +459,17 @@ impl UpCommandInner {
     }
 
     fn app_source(&self) -> AppSource {
-        match (&self.app_source, &self.file_source, &self.registry_source) {
-            (None, None, None) => self.default_manifest_or_none(),
-            (Some(source), None, None) => AppSource::infer_source(source),
-            (None, Some(file), None) => AppSource::infer_file_source(file.to_owned()),
-            (None, None, Some(reference)) => AppSource::OciRegistry(reference.to_owned()),
+        match (
+            &self.app_source,
+            &self.file_source,
+            &self.registry_source,
+            &self.prepared_source,
+        ) {
+            (None, None, None, None) => self.default_manifest_or_none(),
+            (Some(source), None, None, None) => AppSource::infer_source(source),
+            (None, Some(file), None, None) => AppSource::infer_file_source(file.to_owned()),
+            (None, None, Some(reference), None) => AppSource::OciRegistry(reference.to_owned()),
+            (None, None, None, Some(dir)) => AppSource::Prepared(dir.to_owned()),
             _ => AppSource::unresolvable("More than one application source was specified"),
         }
     }
@@ -516,6 +555,15 @@ impl UpCommandInner {
             AppSource::BareWasm(path) => ResolvedAppSource::BareWasm {
                 wasm_path: path.clone(),
             },
+            AppSource::Prepared(dir) => {
+                // Help needs only the trigger types: skip hashing the files.
+                let verify_digests = !self.skip_digest_check && !self.help;
+                // This blocks while it reads the directory, before the app
+                // starts.
+                let locked_app = spin_oci::prepared::load(dir, verify_digests)
+                    .with_context(|| format!("cannot run prepared app {}", quoted_path(dir)))?;
+                ResolvedAppSource::Prepared { locked_app }
+            }
             AppSource::Unresolvable(err) => bail!("{err}"),
             AppSource::None => bail!("Internal error - should have shown help"),
         })
@@ -548,7 +596,8 @@ impl UpCommandInner {
                     )
                 })
             }
-            ResolvedAppSource::OciRegistry { locked_app } => Ok(locked_app),
+            ResolvedAppSource::OciRegistry { locked_app }
+            | ResolvedAppSource::Prepared { locked_app } => Ok(locked_app),
             ResolvedAppSource::BareWasm { wasm_path } => spin_loader::from_wasm_file(&wasm_path)
                 .await
                 .with_context(|| {
@@ -811,6 +860,27 @@ mod test {
     }
 
     #[test]
+    fn points_prepared_directories_to_from_prepared() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(spin_oci::prepared::PREPARED_LOCK_FILE),
+            "{}",
+        )
+        .unwrap();
+
+        let source = UpCommandInner {
+            app_source: Some(dir.path().display().to_string()),
+            ..Default::default()
+        }
+        .app_source();
+
+        let AppSource::Unresolvable(message) = source else {
+            panic!("a prepared directory was accepted by --from: {source:?}");
+        };
+        assert!(message.contains("--from-prepared"), "{message}");
+    }
+
+    #[test]
     fn can_infer_oci_registry_reference() {
         let reference = "ghcr.io/fermyon/noodles:v1".to_owned();
 
@@ -886,6 +956,45 @@ mod test {
             "127.0.0.1:39453",
         ])
         .expect("Failed to parse --from-registry with trigger option");
+    }
+
+    #[test]
+    fn parses_prepared_source() {
+        let cmd = UpCommand::try_parse_from(["up", "--from-prepared", "prepared"])
+            .expect("Failed to parse --from-prepared");
+        assert_eq!(cmd.0.app_source(), AppSource::Prepared("prepared".into()));
+        assert!(!cmd.0.skip_digest_check);
+
+        let cmd =
+            UpCommand::try_parse_from(["up", "--from-prepared", "prepared", "--skip-digest-check"])
+                .expect("Failed to parse --from-prepared with --skip-digest-check");
+        assert!(cmd.0.skip_digest_check);
+
+        for args in [
+            &["up", "--from-prepared", "prepared", "-f", "spin.toml"][..],
+            &[
+                "up",
+                "--from-prepared",
+                "prepared",
+                "--from-registry",
+                "example.com/app:v1",
+            ],
+            &["up", "--from-prepared", "prepared", "--direct-mounts"],
+            &["up", "--skip-digest-check"],
+            &["up", "-f", "spin.toml", "--skip-digest-check"],
+            &["up", "--from", "spin.toml", "--skip-digest-check"],
+            &[
+                "up",
+                "--from-registry",
+                "example.com/app:v1",
+                "--skip-digest-check",
+            ],
+        ] {
+            assert!(
+                UpCommand::try_parse_from(args).is_err(),
+                "{args:?} should be refused"
+            );
+        }
     }
 
     #[test]

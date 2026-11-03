@@ -166,11 +166,10 @@ pub struct Pull {
     pub cache_dir: Option<PathBuf>,
 
     /// Write the application to DIR as a prepared application: its Wasm, its
-    /// files and a lock file, laid out to run without registry access. DIR
-    /// must not exist or must be an empty directory, which is replaced (so it
-    /// cannot be a mount point).
-    // Hidden until `spin up` can run such a directory (#3753).
-    #[clap(long, value_name = "DIR", hide = true)]
+    /// files and a lock file, laid out so that `spin up --from-prepared DIR`
+    /// runs it without registry access. DIR must not exist or must be an
+    /// empty directory, which is replaced (so it cannot be a mount point).
+    #[clap(long, value_name = "DIR")]
     pub prepare: Option<PathBuf>,
 }
 

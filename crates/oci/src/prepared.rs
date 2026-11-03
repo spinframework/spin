@@ -1,10 +1,8 @@
 //! Prepared application directories.
 //!
 //! A prepared directory holds everything a Spin application from a registry
-//! needs to run, laid out ahead of time so that it can be run in place,
-//! without copying its files or accessing a registry (`spin up
-//! --from-prepared`, which is still to come; until then this format may
-//! change):
+//! needs to run, laid out ahead of time so that `spin up --from-prepared` can
+//! run it in place, without copying its files or accessing a registry:
 //!
 //! ```text
 //! <dir>/

@@ -13,6 +13,7 @@ pub enum AppSource {
     File(PathBuf),
     OciRegistry(String),
     BareWasm(PathBuf),
+    Prepared(PathBuf),
     Unresolvable(String),
     None,
 }
@@ -32,7 +33,14 @@ impl AppSource {
     }
 
     pub fn infer_file_source(path: impl Into<PathBuf>) -> Self {
-        match spin_common::paths::resolve_manifest_file_path(path.into()) {
+        let path = path.into();
+        if path.join(spin_oci::prepared::PREPARED_LOCK_FILE).exists() {
+            return Self::Unresolvable(format!(
+                "{} is a prepared application. Run it with `spin up --from-prepared`.",
+                quoted_path(&path)
+            ));
+        }
+        match spin_common::paths::resolve_manifest_file_path(path) {
             Ok(file) => {
                 if is_wasm_file(&file) {
                     Self::BareWasm(file)
@@ -87,6 +95,7 @@ impl std::fmt::Display for AppSource {
             Self::File(path) => write!(f, "local app {}", quoted_path(path)),
             Self::OciRegistry(reference) => write!(f, "remote app {reference:?}"),
             Self::BareWasm(path) => write!(f, "Wasm file {}", quoted_path(path)),
+            Self::Prepared(path) => write!(f, "prepared app {}", quoted_path(path)),
             Self::Unresolvable(s) => write!(f, "unknown app source: {s:?}"),
             Self::None => write!(f, "<no source>"),
         }
@@ -108,6 +117,9 @@ pub enum ResolvedAppSource {
     OciRegistry {
         locked_app: LockedApp,
     },
+    Prepared {
+        locked_app: LockedApp,
+    },
 }
 
 impl ResolvedAppSource {
@@ -118,7 +130,8 @@ impl ResolvedAppSource {
                 .keys()
                 .map(|s| s.as_str())
                 .collect::<HashSet<_>>(),
-            ResolvedAppSource::OciRegistry { locked_app } => locked_app
+            ResolvedAppSource::OciRegistry { locked_app }
+            | ResolvedAppSource::Prepared { locked_app } => locked_app
                 .triggers
                 .iter()
                 .map(|t| t.trigger_type.as_str())
