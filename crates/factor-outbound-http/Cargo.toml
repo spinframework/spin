@@ -30,6 +30,7 @@ tokio-rustls = { workspace = true }
 tower-service = { workspace = true }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
+url = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }

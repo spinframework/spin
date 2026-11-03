@@ -159,6 +159,26 @@ async fn override_connect_addr_disallowed_private_ip_fails() -> anyhow::Result<(
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn disallowed_private_ips_fails_spin_http() -> anyhow::Result<()> {
+    use spin_world::v1::{http as spin_http, http_types::Method};
+
+    let mut state = test_instance_state("http://*", false).await?;
+    let res = spin_http::Host::send_request(
+        &mut state.http,
+        spin_http::Request {
+            method: Method::Get,
+            uri: "http://10.10.10.10".into(),
+            headers: vec![],
+            params: vec![],
+            body: None,
+        },
+    )
+    .await;
+    assert_matches!(res, Err(spin_http::HttpError::DestinationNotAllowed));
+    Ok(())
+}
+
 async fn test_instance_state(
     allowed_outbound_hosts: &str,
     allow_private_ips: bool,
