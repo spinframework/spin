@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use spin_factors::runtime_config::toml::GetTomlValue;
+use spin_factors::runtime_config::toml::{GetTomlValue, default_true};
 
 /// Get the runtime configuration for outbound HTTP from a TOML table.
 ///
@@ -36,6 +36,7 @@ pub fn config_from_table(
 
         Ok(Some(super::RuntimeConfig {
             connection_pooling_enabled: toml.connection_pooling,
+            tcp_nodelay: toml.tcp_nodelay,
             max_concurrent_connections: max_connections,
             wait_timeout: None,
         }))
@@ -49,6 +50,8 @@ pub fn config_from_table(
 struct OutboundHttpToml {
     #[serde(default)]
     connection_pooling: bool,
+    #[serde(default = "default_true")]
+    tcp_nodelay: bool,
     #[serde(default)]
     max_connections: Option<usize>,
     /// Deprecated. Use `max_connections` instead.

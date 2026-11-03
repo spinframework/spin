@@ -121,6 +121,7 @@ impl WasiHttpHooks for InstanceHttpHooks {
             blocked_networks: self.blocked_networks.clone(),
             http_clients: self.wasi_http_clients.clone(),
             semaphore: self.semaphore.clone(),
+            tcp_nodelay: self.tcp_nodelay,
         };
         let between_bytes_timeout = options
             .and_then(|v| v.between_bytes_timeout)
@@ -333,6 +334,7 @@ struct RequestSender {
     request_interceptor: Option<Arc<dyn OutboundHttpInterceptor>>,
     http_clients: HttpClients,
     semaphore: ConnectionSemaphore,
+    tcp_nodelay: bool,
 }
 
 impl RequestSender {
@@ -488,6 +490,7 @@ impl RequestSender {
                 tls_client_config,
                 override_connect_addr,
                 semaphore: self.semaphore,
+                tcp_nodelay: self.tcp_nodelay,
             },
             async move {
                 if use_tls {
@@ -583,6 +586,8 @@ struct ConnectOptions {
     override_connect_addr: Option<SocketAddr>,
     /// Semaphore to limit concurrent outbound connections.
     semaphore: ConnectionSemaphore,
+    /// Set TCP_NODELAY.
+    tcp_nodelay: bool,
 }
 
 impl ConnectOptions {
@@ -634,6 +639,9 @@ impl ConnectOptions {
             std::io::ErrorKind::AddrNotAvailable => dns_error("address not available".into(), 0),
             _ => ErrorCode::ConnectionRefused,
         })?;
+        if self.tcp_nodelay {
+            _ = stream.set_nodelay(true);
+        }
         Ok(PermittedTcpStream {
             inner: stream,
             _permit: permit,
@@ -897,6 +905,7 @@ mod tests {
             // Skip DNS by supplying the address directly.
             override_connect_addr: Some("127.0.0.1:1".parse().unwrap()),
             semaphore: conn_semaphore,
+            tcp_nodelay: true,
         };
 
         // `connect_tcp` must time out while waiting for a permit rather than

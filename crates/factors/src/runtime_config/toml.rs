@@ -55,3 +55,17 @@ impl AsRef<toml::Table> for TomlKeyTracker<'_> {
         self.table
     }
 }
+
+/// Returns true. For use with `#[derive(Deserialize)]`:
+///
+/// ```
+/// use spin_factors::runtime_config::toml::default_true;
+/// #[derive(serde::Deserialize)]
+/// struct Options {
+///     #[serde(default = "default_true")]
+///     turbo_mode: bool,
+/// }
+/// ```
+pub fn default_true() -> bool {
+    true
+}
