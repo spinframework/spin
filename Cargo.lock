@@ -9785,6 +9785,7 @@ dependencies = [
  "spin-compose",
  "spin-loader",
  "spin-locked-app",
+ "spin-serde",
  "tempfile",
  "tokio",
  "tokio-util",

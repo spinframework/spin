@@ -10,6 +10,10 @@ use spin_locked_app::locked::{ContentPath, ContentRef, LockedApp, LockedComponen
 use crate::client::{locked_app_descriptor, verify_digest};
 use crate::{Client, ORIGIN_URL_SCHEME};
 
+/// The directory, in the working directory of a loaded app or in a prepared
+/// app, that holds each component's files in `<component id>/`.
+pub(crate) const ASSETS_DIR: &str = "assets";
+
 /// OciLoader loads an OCI app in preparation for running with Spin.
 pub struct OciLoader {
     working_dir: PathBuf,
@@ -41,19 +45,7 @@ impl OciLoader {
         let (manifest, digest) = client.pull_with_digest(reference).await.with_context(|| {
             format!("cannot pull Spin application from registry reference {reference:?}")
         })?;
-
-        // Read the locked app cached for the pulled digest. The location for the
-        // reference as given may hold another artifact if the reference is a tag.
-        let parsed = Reference::try_from(reference).context("invalid reference")?;
-        let pinned = Reference::with_digest(
-            parsed.registry().to_owned(),
-            parsed.repository().to_owned(),
-            digest,
-        );
-        let lockfile_path = client
-            .lockfile_path(pinned.whole())
-            .await
-            .context("cannot get path to spin.lock")?;
+        let lockfile_path = cached_lockfile_path(client, reference, &digest).await?;
         self.load_from_cache(manifest, lockfile_path, reference, &client.cache)
             .await
     }
@@ -123,7 +115,7 @@ impl OciLoader {
                 &component.id,
                 &component.files,
                 cache,
-                &self.working_dir.join("assets"),
+                &self.working_dir.join(ASSETS_DIR),
             )
             .await?;
             component.files = vec![ContentPath {
@@ -134,6 +126,27 @@ impl OciLoader {
 
         Ok(())
     }
+}
+
+/// Returns the path of the locked app that a pull of `reference` cached for
+/// `digest`, the manifest digest the reference resolved to.
+pub(crate) async fn cached_lockfile_path(
+    client: &Client,
+    reference: &str,
+    digest: &str,
+) -> Result<PathBuf> {
+    // The location for the reference as given may hold another artifact if
+    // the reference is a tag.
+    let parsed = Reference::try_from(reference).context("invalid reference")?;
+    let pinned = Reference::with_digest(
+        parsed.registry().to_owned(),
+        parsed.repository().to_owned(),
+        digest.to_owned(),
+    );
+    client
+        .lockfile_path(pinned.whole())
+        .await
+        .context("cannot get path to spin.lock")
 }
 
 /// Reads the locked app of an OCI artifact from `lockfile_path`, after
@@ -255,7 +268,7 @@ pub(crate) async fn write_component_files(
     Ok(mount_dir)
 }
 
-fn content_digest(content_ref: &ContentRef) -> Result<&str> {
+pub(crate) fn content_digest(content_ref: &ContentRef) -> Result<&str> {
     content_ref
         .digest
         .as_deref()
@@ -271,7 +284,7 @@ fn content_ref(path: impl AsRef<Path>) -> Result<ContentRef> {
     })
 }
 
-fn is_safe_to_join(path: impl AsRef<Path>) -> bool {
+pub(crate) fn is_safe_to_join(path: impl AsRef<Path>) -> bool {
     // This could be loosened, but currently should always be true
     path.as_ref()
         .components()

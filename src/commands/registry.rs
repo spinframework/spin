@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use clap::{ArgAction, Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use spin_common::arg_parser::parse_kv;
+use spin_common::ui::quoted_path;
 use spin_oci::{Client, ComposeMode, client::InferPredefinedAnnotations};
 use std::{io::Read, path::PathBuf, time::Duration};
 
@@ -163,6 +164,14 @@ pub struct Pull {
     /// Cache directory for downloaded registry data.
     #[clap(long)]
     pub cache_dir: Option<PathBuf>,
+
+    /// Write the application to DIR as a prepared application: its Wasm, its
+    /// files and a lock file, laid out to run without registry access. DIR
+    /// must not exist or must be an empty directory, which is replaced (so it
+    /// cannot be a mount point).
+    // Hidden until `spin up` can run such a directory (#3753).
+    #[clap(long, value_name = "DIR", hide = true)]
+    pub prepare: Option<PathBuf>,
 }
 
 impl Pull {
@@ -172,8 +181,18 @@ impl Pull {
 
         let _spinner = create_dotted_spinner(2000, "Pulling app from the Registry".to_owned());
 
-        client.pull(&self.reference).await?;
+        if let Some(dir) = &self.prepare {
+            // Fail before pulling if the app cannot be prepared there.
+            spin_oci::prepared::check_target(dir)?;
+        }
+
+        let (manifest, digest) = client.pull_with_digest(&self.reference).await?;
         println!("Successfully pulled the app from the registry");
+
+        if let Some(dir) = &self.prepare {
+            spin_oci::prepared::prepare(&client, &self.reference, &manifest, &digest, dir).await?;
+            println!("Prepared the app in {}", quoted_path(dir));
+        }
         Ok(())
     }
 }
