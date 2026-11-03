@@ -1621,6 +1621,76 @@ route = "/..."
         Ok(())
     }
 
+    #[test]
+    /// `/slow` keeps streaming for ~3s after responding, which a 1s request timeout
+    /// must not cut short when the post-return timeout is longer.
+    fn test_wasi_http_p3_stream_outlives_request_timeout() -> anyhow::Result<()> {
+        run_test(
+            "wasi-http-p3-streaming",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: vec![
+                    "--request-timeout".into(),
+                    "1".into(),
+                    "--post-return-timeout".into(),
+                    "30".into(),
+                ],
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                let request = Request::full(Method::Get, "/slow", &[], None::<Vec<u8>>);
+                assert_spin_request(
+                    spin,
+                    request,
+                    Response::full(
+                        200,
+                        [("content-type".to_owned(), "text/plain".to_owned())]
+                            .into_iter()
+                            .collect(),
+                        vec![b"1\n".to_vec(), b"2\n".to_vec(), b"3\n".to_vec()],
+                    ),
+                )?;
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    /// With only `--request-timeout` set, the post-return timeout inherits it, so
+    /// `/slow`'s ~3s stream is cut off after ~1s.
+    fn test_wasi_http_p3_post_return_timeout_defaults_to_request_timeout() -> anyhow::Result<()> {
+        run_test(
+            "wasi-http-p3-streaming",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: vec!["--request-timeout".into(), "1".into()],
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                let request = Request::full(Method::Get, "/slow", &[], None::<Vec<u8>>);
+                let response = spin.make_http_request(request)?;
+                assert_eq!(response.status(), 200);
+                let body = response.body();
+                assert!(
+                    body.starts_with(b"1\n") && body != b"1\n2\n3\n",
+                    "expected the post-return timeout to truncate the stream; got {:?}",
+                    String::from_utf8_lossy(&body)
+                );
+
+                Ok(())
+            },
+        )?;
+
+        Ok(())
+    }
+
     fn binary_chunks(num_kilobytes: usize) -> Vec<Vec<u8>> {
         let body_bytes = {
             let mut n = 0_u8;
