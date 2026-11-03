@@ -1062,6 +1062,107 @@ mod integration_tests {
 
     #[test]
     #[cfg(feature = "extern-dependencies-tests")]
+    fn registry_prepared_app_works() -> anyhow::Result<()> {
+        /// Sets the mode of every directory and file in a tree.
+        #[cfg(unix)]
+        fn set_tree_mode(
+            path: &std::path::Path,
+            dir_mode: u32,
+            file_mode: u32,
+        ) -> anyhow::Result<()> {
+            use std::os::unix::fs::PermissionsExt;
+            if path.is_dir() {
+                // Writable while descending, then the final mode.
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))?;
+                for entry in std::fs::read_dir(path)? {
+                    set_tree_mode(&entry?.path(), dir_mode, file_mode)?;
+                }
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(dir_mode))?;
+            } else {
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(file_mode))?;
+            }
+            Ok(())
+        }
+
+        /// Makes a tree writable again when dropped, so that it can be removed
+        /// even if the test fails.
+        struct Writable(std::path::PathBuf);
+        impl Drop for Writable {
+            fn drop(&mut self) {
+                #[cfg(unix)]
+                let _ = set_tree_mode(&self.0, 0o755, 0o644);
+            }
+        }
+
+        // Outside the test environment, and dropped after `writable`.
+        let outside = tempfile::tempdir()?;
+        let prepared = outside.path().join("prepared");
+        let _writable = Writable(prepared.clone());
+
+        let services = ServicesConfig::new(vec!["registry"])?;
+        let add_files = |env: &mut test_environment::TestEnvironment<()>| {
+            // Give the component files, so that the read-only mount of the
+            // prepared assets is exercised too.
+            std::fs::create_dir_all(env.path().join("static"))?;
+            env.write_file("static/hello.txt", "hello")?;
+            let manifest = std::fs::read_to_string(env.path().join("spin.toml"))?;
+            let manifest = manifest.replacen(
+                "\nsource = ",
+                "\nfiles = [{ source = \"static\", destination = \"/\" }]\nsource = ",
+                1,
+            );
+            anyhow::ensure!(
+                manifest.contains("files = "),
+                "no component to add files to"
+            );
+            env.write_file("spin.toml", manifest)?;
+            Ok(())
+        };
+        let spin_up_args = |env: &mut test_environment::TestEnvironment<()>| {
+            let registry_url = format!(
+                "localhost:{}/spin-e2e-tests/registry-prepared/v1",
+                env.get_port(5000)?
+                    .context("no registry port was exposed by test services")?
+            );
+            let mut registry_push = std::process::Command::new(spin_binary());
+            registry_push.args(["registry", "push", &registry_url, "--insecure"]);
+            env.run_in(&mut registry_push)?;
+
+            let mut registry_pull = std::process::Command::new(spin_binary());
+            registry_pull.args(["registry", "pull", &registry_url, "--insecure", "--prepare"]);
+            registry_pull.arg(&prepared);
+            env.run_in(&mut registry_pull)?;
+
+            // Run it read-only. `spin up` gets no `--insecure`, so any request
+            // to the test registry, which serves plain HTTP, would fail.
+            #[cfg(unix)]
+            set_tree_mode(&prepared, 0o555, 0o444)?;
+            Ok(vec![
+                "--from-prepared".into(),
+                prepared.display().to_string(),
+            ])
+        };
+        let mut env = super::testcases::bootstrap_smoke_test(
+            services,
+            None,
+            &[],
+            "http-rust",
+            |_| Ok(Vec::new()),
+            add_files,
+            HashMap::default(),
+            spin_up_args,
+            SpinAppType::Http,
+        )?;
+        assert_spin_request(
+            env.runtime_mut(),
+            Request::new(Method::Get, "/"),
+            Response::new_with_body(200, "Hello World!"),
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "extern-dependencies-tests")]
     fn registry_bare_wasm_works() -> anyhow::Result<()> {
         let services = ServicesConfig::new(vec!["registry"])?;
         let spin_up_args = |env: &mut test_environment::TestEnvironment<()>| {

@@ -31,6 +31,7 @@ spin-common = { path = "../common" }
 spin-compose = { path = "../compose" }
 spin-loader = { path = "../loader" }
 spin-locked-app = { path = "../locked-app" }
+spin-serde = { path = "../serde" }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "rt"] }
 tokio-util = { version = "0.7", features = ["compat"] }

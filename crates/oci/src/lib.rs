@@ -4,6 +4,7 @@
 mod auth;
 pub mod client;
 mod loader;
+pub mod prepared;
 pub mod utils;
 mod validate;
 

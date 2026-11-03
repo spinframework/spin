@@ -10,6 +10,7 @@ pub const PLUGIN_TARGET_ENV_OPT: &str = "TARGET_ENV";
 pub const PLUGIN_OVERRIDE_COMPATIBILITY_CHECK_FLAG: &str = "override-compatibility-check";
 pub const HELP_ARGS_ONLY_TRIGGER_TYPE: &str = "provide-help-args-no-app";
 pub const FROM_REGISTRY_OPT: &str = "REGISTRY_REFERENCE";
+pub const FROM_PREPARED_OPT: &str = "PREPARED_DIR";
 pub const WATCH_CLEAR_OPT: &str = "CLEAR";
 pub const WATCH_DEBOUNCE_OPT: &str = "DEBOUNCE";
 pub const WATCH_SKIP_BUILD_OPT: &str = "SKIP_BUILD";
