@@ -23,7 +23,7 @@ impl<D, T: Send + Sync + 'static> wasmtime::component::StreamProducer<D> for Str
         use std::task::Poll;
         use wasmtime::component::StreamResult;
 
-        let remaining = destination.remaining(store);
+        let remaining = destination.remaining(store)?;
         if remaining.is_some_and(|r| r == 0) {
             return Poll::Ready(Ok(StreamResult::Completed));
         }
