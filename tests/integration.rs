@@ -1245,6 +1245,63 @@ mod integration_tests {
     }
 
     #[test]
+    /// Test that `--trigger-type` runs only the selected trigger types, so that
+    /// an app can be run without the services needed by its other triggers
+    fn spin_up_runs_only_selected_trigger_types() -> anyhow::Result<()> {
+        run_test(
+            "trigger-type-filter",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: vec!["--trigger-type".into(), "http".into()],
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+                assert_spin_request(
+                    spin,
+                    Request::new(Method::Get, "/hello"),
+                    Response::new_with_body(200, "Hello World!\n"),
+                )
+            },
+        )?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn spin_up_gives_trigger_help_for_selected_trigger_type() -> anyhow::Result<()> {
+        let env = test_environment::TestEnvironment::<()>::boot(ServicesConfig::none())?;
+
+        // Multi-trigger apps only get common help unless a single trigger type is selected.
+        let toml_text = r#"spin_manifest_version = 2
+[application]
+name = "unbuilt"
+[[trigger.http]]
+route = "/..."
+component = "unbuilt"
+[[trigger.redis]]
+address = "redis://localhost:6379"
+channel = "my-channel"
+component = "unbuilt"
+[component.unbuilt]
+source = "fake.wasm"
+"#;
+        env.write_file("spin.toml", toml_text)?;
+        env.write_file("fake.wasm", [])?;
+
+        let mut up = std::process::Command::new(spin_binary());
+        up.args(["up", "--trigger-type", "http", "--help"]);
+        let output = env.run_in(&mut up)?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("--quiet"));
+        assert!(stdout.contains("--listen"));
+
+        Ok(())
+    }
+
+    #[test]
     fn spin_up_gives_help_on_new_app() -> anyhow::Result<()> {
         let mut env = test_environment::TestEnvironment::<()>::boot(ServicesConfig::none())?;
 
