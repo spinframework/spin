@@ -73,8 +73,14 @@ dependencies:
 
 The sandbox ID is a namespace for KV storage and enables multi-tenant isolation within a single Spin application. The application, not the model or the end user, sets the ID, and it is the application's responsibility to supply the correct one; the sandbox does not authenticate it (see [Trust model](#trust-model)). Allowed hosts are likewise set per-request by the application
 and operate as additional constraints on top of the `spin.toml` outbound host allowlist
-(deny-by-default narrowing, not expansion). Entries use the same syntax as `allowed_outbound_hosts` in
-`spin.toml` (optional `scheme://`, `host[:port]`, `*.` subdomain wildcards, `:*` for any port; no port means the scheme's default port), with three differences: a bare `*` grants nothing, paths are ignored, and loopback, link-local, private-IP, and `.internal` targets are always refused.
+(deny-by-default narrowing, not expansion). Entries use a subset of the `allowed_outbound_hosts` grammar from `spin.toml` (`scheme://host[:port]`, `*.` subdomain wildcards, `:*` for any port), with these differences:
+
+- The scheme is optional, and an entry without one matches any scheme. Spin requires one.
+- `*.example.com` also matches `example.com` itself. In Spin it matches subdomains only.
+- CIDR hosts and port ranges are not supported.
+- Paths are ignored. Spin rejects entries that contain one.
+- A bare `*` grants nothing, and loopback, link-local, private-IP, and `.internal` targets are always refused.
+- A malformed entry causes the request to be rejected up front with a 400, instead of being silently denied later.
 
 Alongside the sandboxes, the project includes a TypeScript client SDK, Spin templates for adding sandboxes to an app, an experimental npm bundler for TypeScript dependencies, and examples.
 
@@ -82,7 +88,7 @@ Alongside the sandboxes, the project includes a TypeScript client SDK, Spin temp
 
 The sandbox ID provides multi-tenant isolation on the premise that the application sets it. The model cannot set the sandbox ID or the allow-list, so a prompt-injected agent cannot select another tenant's namespace or widen its egress. The endpoint itself does not authenticate callers: anyone who can reach it can supply any `sandboxId`, `allowedHosts`, and `kvEnabled`, and so can read and write the KV namespace of any sandbox ID. The trust boundary is therefore the route and the calling application, not the request body:
 
-- The templates default to a private route (`route = { private = true }`), reachable only through service chaining over `*.spin.internal`. Exposing a sandbox publicly requires the user to add authentication in front of it on purpose.
+- The templates default to a private route (`route = { private = true }`), reachable only through service chaining over `*.spin.internal`. A private route is still reachable by every component in the same Spin application whose `allowed_outbound_hosts` permits the sandbox's `*.spin.internal` address, so the trust boundary is the whole application, not only the intended caller. Grant that permission only to components trusted to choose sandbox IDs. Exposing a sandbox publicly requires the user to add authentication in front of it on purpose.
 - The calling application owns the sandbox ID and the allow-list. It is responsible for mapping each request to a sandbox ID and for verifying that the correct ID is used. Sandbox IDs are not secrets and must not be accepted from untrusted input, including model output.
 - The client SDK's model-facing tool does not let the model set the sandbox ID (`identity` in the SDK), `allowedHosts`, or `kvEnabled`; the developer sets these in execution options, and the model never sees them. The application decides which sandbox ID each request uses. This is an SDK-level control, not enforcement by the endpoint, so callers that bypass the SDK must apply the same discipline.
 
