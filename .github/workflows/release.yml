@@ -53,7 +53,7 @@ jobs:
               targetDir: "target/release",
             }
           - {
-              os: "macos-14",
+              os: "macos-15",
               arch: "aarch64",
               extension: "",
               extraArgs: "",
