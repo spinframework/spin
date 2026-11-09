@@ -24,8 +24,7 @@ instead of writing their own.
 ## Proposal
 
 We propose creating Spin Agent Sandbox as a new supporting project in the Spin
-Framework organization, hosted at `github.com/spinframework/spin-sandbox` (name
-open for discussion). The project would be seeded from a working prototype we at Akamai have built and can be found at https://github.com/fermyon/spin-agent-sandbox.
+Framework organization, hosted at `github.com/spinframework/spin-code-sandbox`. The project would be seeded from a working prototype we at Akamai have built and can be found at https://github.com/fermyon/spin-agent-sandbox.
 
 Spin Agent Sandbox is a way to run generated Python and TypeScript/JavaScript code on Spin with additional limitations and security guarantees. A
 caller sends source code over HTTP and gets back the result: captured
@@ -67,20 +66,13 @@ The released binary is pre-composed; consumers deploy a single component with no
 manually compose. The composition uses three components internally to avoid cyclic 
 dependencies:
 
-- **`guard`** is the HTTP entry point. It validates and size-limits the request, sets the per-request context (sandbox ID, allowed hosts, KV on/off), calls `guard-io` to establish the context, then executes the guest. It returns the result as JSON. The context is set once and never reset, so the component relies on Spin running each request in a fresh instance (see [Security model](#security-model)). The components currently target wasip2 for which Spin enforces a new instacnce per call.
+- **`guard`** is the HTTP entry point. It validates and size-limits the request, sets the per-request context (sandbox ID, allowed hosts, KV on/off), calls `guard-io` to establish the context, then executes the guest. It returns the result as JSON. The context is set once and never reset, so the component relies on Spin running each request in a fresh instance (see [Security model](#security-model)). The components currently target wasip2 for which Spin enforces a new instance per call.
 - **The language guest** (ts-sandbox or py-sandbox) runs the user's JavaScript/TypeScript or Python code, either as a script (with captured stdout/stderr) or as an HTTP handler.
 - **`guard-io`** sits between the guest and the host and enforces per-request policy on every host call: KV keys are namespaced by the sandbox ID, outbound HTTP is denied unless explicitly allowed in per-request config, stdio is captured and capped, and every other capability the guests can reach is denied or stubbed (see [Security model](#security-model)). The language guest component cannot override this policy.
 
 The sandbox ID is a namespace for KV storage and enables multi-tenant isolation within a single Spin application. The application, not the model or the end user, sets the ID, and it is the application's responsibility to supply the correct one; the sandbox does not authenticate it (see [Trust model](#trust-model)). Allowed hosts are likewise set per-request by the application
 and operate as additional constraints on top of the `spin.toml` outbound host allowlist
-(deny-by-default narrowing, not expansion). Entries use a subset of the `allowed_outbound_hosts` grammar from `spin.toml` (`scheme://host[:port]`, `*.` subdomain wildcards, `:*` for any port), with these differences:
-
-- The scheme is optional, and an entry without one matches any scheme. Spin requires one.
-- `*.example.com` also matches `example.com` itself. In Spin it matches subdomains only.
-- CIDR hosts and port ranges are not supported.
-- Paths are ignored. Spin rejects entries that contain one.
-- A bare `*` grants nothing, and loopback, link-local, private-IP, and `.internal` targets are always refused.
-- A malformed entry causes the request to be rejected up front with a 400, instead of being silently denied later.
+(deny-by-default narrowing, not expansion). Entries use the same grammar as `allowed_outbound_hosts` in `spin.toml` (`scheme://host[:port]`, `*.` wildcards that match subdomains only, `:*` for any port), and the sandbox is stricter in three ways: CIDR hosts and port ranges are not supported, a bare `*` host grants nothing, and loopback, link-local, private-IP, and `.internal` targets are always refused. An entry that Spin would reject, such as one with no scheme or with a path, causes the request to be rejected with a 400.
 
 Alongside the sandboxes, the project includes a TypeScript client SDK, Spin templates for adding sandboxes to an app, an experimental npm bundler for TypeScript dependencies, and examples.
 
@@ -107,7 +99,7 @@ The guest can reach only the host capabilities below. `tests/check-imports.mjs` 
 | `wasi:filesystem` | Stubbed; no preopens. |
 | `spin:variables`, `wasi:config` | Denied for guest code; only `guard` reads its own log-level variable. |
 | Outbound Redis, PostgreSQL, MySQL, MQTT, SQLite, LLM | Denied: `open`/`infer` return an error, so user code sees an ordinary exception. |
-| `wasi:cli/environment` | Not wrapped, so user code can read every environment variable configured on the component. The sandbox template manifests set none. Users may add some |
+| `wasi:cli/environment` | Not wrapped, so user code can read every environment variable configured on the component. The sandbox template manifests set none. Users may add some, but only non-sensitive values; secrets must never be placed there. |
 | Clocks, random | Passed through to the host. |
 
 ### Fresh instance per request
@@ -120,6 +112,7 @@ The per-request context lives in component state and is not cleared after the re
 - Captured stdout and stderr are each capped at 256 KB, with a truncation marker.
 - CPU time, wall-clock time, and memory are not limited inside the component. A host or platform deployment must enforce them.
 - Per-sandbox KV quotas (key count, value size, total size) are not enforced. One sandbox ID can fill the shared store, so deployments that need to bound this should apply quotas in the store or host, or use a dedicated store.
+- KV data is not deleted automatically. The application generates sandbox IDs, so it knows when an ID is no longer needed and is responsible for removing that sandbox's data. The project will add a client SDK helper that deletes all KV state for a sandbox ID.
 
 ## Why the Spin Framework organization
 
@@ -134,6 +127,7 @@ The per-request context lives in component state and is not cleared after the re
 
 - No built-in CPU, time, or memory limits; these must be enforced by the host or platform.
 - No per-sandbox KV quotas; one sandbox ID can exhaust a shared store.
+- No automatic KV cleanup; the application removes a sandbox's data when it retires the ID, using the SDK helper.
 - Response bodies from HTTP handlers are streamed back without a size cap; only request size and captured stdout/stderr are bounded.
 - No endpoint-level authentication of callers or sandbox IDs; callers must be private or authenticated (see [Trust model](#trust-model)).
-- No current built-in way to keep secrets or variables outside of the agent code’s purview.
+- Secrets given to the sandbox (in code, input, or environment variables) are visible to the code that runs. There is no host-side injection of credentials for outbound requests.
