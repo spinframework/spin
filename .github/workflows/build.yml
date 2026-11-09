@@ -117,7 +117,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-15-intel, macos-14]
+        os: [windows-latest, macos-15-intel, macos-15]
     steps:
       - uses: actions/checkout@v7
 
@@ -146,7 +146,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        runner: [ubuntu-22.04-4core-spin, macos-14]
+        runner: [ubuntu-22.04-4core-spin, macos-15]
     steps:
       - uses: actions/checkout@v7
 
@@ -168,7 +168,7 @@ jobs:
           sudo rm -rf /Library/Developer/CoreSimulator
           find /Applications -name "Xcode_*" -maxdepth 1 -mindepth 1 | xargs rm -rf
         continue-on-error: true
-        if: ${{ matrix.runner == 'macos-14' }}
+        if: ${{ matrix.runner == 'macos-15' }}
 
       - name: Check disk space (After)
         run: df -h /
@@ -183,7 +183,7 @@ jobs:
         env:
           SPIN_CONFORMANCE_TESTS_DOCKER_OPT_OUT: true
         # Only run integration tests on macOS as they will be run on ubuntu separately
-        if: ${{ matrix.runner == 'macos-14' }}
+        if: ${{ matrix.runner == 'macos-15' }}
 
   all-integration-tests:
     # run on a larger runner for more SSD/resource access
@@ -259,7 +259,7 @@ jobs:
               targetDir: "target/release",
             }
           - {
-              os: "macos-14",
+              os: "macos-15",
               arch: "aarch64",
               extension: "",
               extraArgs: "",
