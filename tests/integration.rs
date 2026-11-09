@@ -2204,10 +2204,10 @@ route = "/..."
         assert!(
             std::process::Command::new("cargo")
                 .arg("build")
-                .arg("--target-dir")
-                .arg(trigger_dir.join("target"))
                 .arg("--manifest-path")
                 .arg(trigger_dir.join("Cargo.toml"))
+                .env("CARGO_BUILD_TARGET_DIR", trigger_dir.join("target"))
+                .env("CARGO_BUILD_BUILD_DIR", trigger_dir.join("target"))
                 .status()?
                 .success()
         );

@@ -469,7 +469,8 @@ mod tests {
             .current_dir(format!("tests/{name}"))
             .arg("--release")
             .arg("--target=wasm32-wasip1")
-            .env("CARGO_TARGET_DIR", out_dir);
+            .env("CARGO_BUILD_TARGET_DIR", &out_dir)
+            .env("CARGO_BUILD_BUILD_DIR", &out_dir);
 
         let status = cmd.status().unwrap();
         assert!(status.success());
