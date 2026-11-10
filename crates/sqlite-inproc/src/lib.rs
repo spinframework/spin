@@ -74,22 +74,31 @@ impl InProcConnection {
     }
 
     fn create_connection(&self) -> Result<Arc<Mutex<rusqlite::Connection>>, sqlite::Error> {
-        let connection = match &self.location {
+        let mut connection = match &self.location {
             InProcDatabaseLocation::InMemory => rusqlite::Connection::open_in_memory(),
             InProcDatabaseLocation::Path(path) => rusqlite::Connection::open(path),
         }
         .map_err(|e| sqlite::Error::Io(e.to_string()))?;
         if !self.allow_attach_file {
-            connection.authorizer(Some(|ctx: rusqlite::hooks::AuthContext<'_>| {
-                use rusqlite::hooks::{AuthAction, Authorization};
-                match ctx.action {
-                    // Deny attaching files except tempfile ("") and in-memory (":memory:") databases
-                    AuthAction::Attach { filename } if !matches!(filename, "" | ":memory:") => {
-                        Authorization::Deny
+            connection
+                .authorizer(Some(|ctx: rusqlite::hooks::AuthContext<'_>| {
+                    use rusqlite::hooks::{AuthAction, Authorization};
+                    match ctx.action {
+                        // Deny attaching files except tempfile ("") and in-memory (":memory:") databases
+                        AuthAction::Attach { filename } if !matches!(filename, "" | ":memory:") => {
+                            Authorization::Deny
+                        }
+                        AuthAction::Unknown { code, .. }
+                            if code == rusqlite::ffi::SQLITE_ATTACH =>
+                        {
+                            // This is the attach case if the file is passed as a parameter -
+                            // rusqlite doesn't translate it to the typed Attach in this case
+                            Authorization::Deny
+                        }
+                        _ => Authorization::Allow,
                     }
-                    _ => Authorization::Allow,
-                }
-            }));
+                }))
+                .map_err(|e| sqlite::Error::Io(e.to_string()))?;
         }
         Ok(Arc::new(Mutex::new(connection)))
     }
@@ -136,11 +145,7 @@ impl Connection for InProcConnection {
                     return Err(io_error_v3(e));
                 }
             };
-            let columns: Vec<_> = statement
-                .column_names()
-                .into_iter()
-                .map(ToOwned::to_owned)
-                .collect();
+            let columns: Vec<_> = statement.column_names().map(ToOwned::to_owned).collect();
             cols_tx
                 .send(columns)
                 .map_err(|_| v3::Error::Io("column send error".into()))?;
@@ -247,11 +252,7 @@ fn execute_query(
     let mut statement = conn
         .prepare_cached(query)
         .map_err(|e| sqlite::Error::Io(e.to_string()))?;
-    let columns = statement
-        .column_names()
-        .into_iter()
-        .map(ToOwned::to_owned)
-        .collect();
+    let columns = statement.column_names().map(ToOwned::to_owned).collect();
     let mut byte_count = std::mem::size_of::<sqlite::QueryResult>();
     let rows = statement
         .query_map(
