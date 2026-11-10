@@ -9420,6 +9420,7 @@ dependencies = [
  "chrono",
  "deadpool-postgres",
  "futures",
+ "futures-util",
  "moka",
  "native-tls",
  "opentelemetry-semantic-conventions",
