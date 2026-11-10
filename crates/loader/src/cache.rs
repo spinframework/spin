@@ -14,6 +14,7 @@ const REGISTRY_CACHE_DIR: &str = "registry";
 const MANIFESTS_DIR: &str = "manifests";
 const WASM_DIR: &str = "wasm";
 const DATA_DIR: &str = "data";
+const WASM_MAGIC_NUMBER: [u8; 4] = [0, b'a', b's', b'm'];
 
 /// Cache for registry entities.
 #[derive(Debug)]
@@ -66,6 +67,9 @@ impl Cache {
         let mut path = self.wasm_path(&digest);
         if !path.exists() {
             path = self.data_path(&digest);
+            if !is_wasm(&path)? {
+                anyhow::bail!("cached data for digest {} is not Wasm", digest.as_ref());
+            }
         }
         ensure!(
             path.exists(),
@@ -154,6 +158,18 @@ impl Cache {
         self.dirs_ensured_once.store(true, Ordering::Relaxed);
 
         Ok(())
+    }
+}
+
+fn is_wasm(path: &std::path::Path) -> std::io::Result<bool> {
+    use std::io::Read;
+
+    let mut buf = [0; 4];
+    let mut file = std::fs::File::open(path)?;
+    match file.read_exact(&mut buf) {
+        Ok(()) => Ok(buf == WASM_MAGIC_NUMBER),
+        Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Ok(false),
+        Err(e) => Err(e),
     }
 }
 
