@@ -37,6 +37,7 @@ url = { workspace = true }
 uuid = "1"
 
 [dev-dependencies]
+futures-util = { workspace = true }
 spin-factor-variables = { path = "../factor-variables" }
 spin-factors-test = { path = "../factors-test" }
 tokio = { workspace = true, features = ["macros", "rt"] }
