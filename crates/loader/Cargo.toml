@@ -6,6 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+bytes = { workspace = true }
 dirs = { workspace = true }
 futures = { workspace = true }
 glob = { workspace = true }

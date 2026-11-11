@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use futures::{StreamExt, future::try_join_all};
+use futures::future::try_join_all;
 use reqwest::Url;
 use spin_common::{paths::parent_dir, sloth, ui::quoted_path};
 use spin_expressions::Resolver;
@@ -18,7 +18,11 @@ use spin_serde::DependencyName;
 use std::collections::BTreeMap;
 use tokio::sync::Semaphore;
 
-use crate::{FilesMountStrategy, cache::Cache};
+use crate::{
+    FilesMountStrategy,
+    cache::Cache,
+    http::{DestinationConvention, verified_download_stream},
+};
 
 mod trigger_components;
 
@@ -844,37 +848,19 @@ impl WasmLoader {
         let path = if let Ok(cached_path) = self.cache.wasm_file(&digest) {
             cached_path
         } else {
-            use sha2::Digest;
-            use std::io::Write;
-
-            let mut stm = pkg_loader.stream_content(package, &release).await?;
+            let stm = pkg_loader.stream_content(package, &release).await?;
 
             self.cache.ensure_dirs().await?;
             let final_dest = self.cache.wasm_path(&digest);
-            let final_dest_dir = final_dest
-                .parent()
-                .expect("Wasm file cannot be the root dir");
 
-            let mut staging_file = tempfile::NamedTempFile::new_in(final_dest_dir)?;
-            let mut hasher = sha2::Sha256::new();
-
-            while let Some(block) = stm.next().await {
-                let bytes = block.context("Failed to get content from registry")?;
-                hasher.update(&bytes);
-                staging_file
-                    .write_all(&bytes)
-                    .context("Failed to save registry content to cache")?;
-            }
-
-            let actual_digest = hasher.finalize();
-            let actual_digest = format!("sha256:{actual_digest:x}");
-            if actual_digest != digest {
-                anyhow::bail!(
-                    "Content did not match expected (expected digest {digest}, actual digest {actual_digest})"
-                );
-            }
-
-            staging_file.persist(&final_dest)?;
+            verified_download_stream(
+                stm,
+                &format!("{}:{}", package.name(), package.namespace()),
+                &digest,
+                &final_dest,
+                DestinationConvention::ContentIndexed,
+            )
+            .await?;
 
             final_dest
         };

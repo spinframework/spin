@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result, ensure};
+use futures::StreamExt;
 use sha2::Digest;
 use tokio::io::AsyncWriteExt;
 
@@ -34,6 +35,19 @@ pub async fn verified_download(
 ) -> Result<()> {
     tracing::debug!("Downloading content from {url:?}");
 
+    let resp = reqwest::get(url).await?.error_for_status()?;
+    let stm = Box::pin(resp.bytes_stream().map(|v| v.map_err(anyhow::Error::from)));
+
+    verified_download_stream(stm, url, digest, dest, convention).await
+}
+
+pub(crate) async fn verified_download_stream<E: Into<anyhow::Error>>(
+    mut stm: std::pin::Pin<Box<dyn futures::Stream<Item = Result<bytes::Bytes, E>> + Send>>,
+    source: &str,
+    digest: &str,
+    dest: &Path,
+    convention: DestinationConvention,
+) -> anyhow::Result<()> {
     // Prepare tempfile destination
     let prefix = format!("download-{}", digest.replace(':', "-"));
     let dest_dir = dest.parent().context("invalid dest")?;
@@ -41,14 +55,14 @@ pub async fn verified_download(
         .context("error creating download tempfile")?
         .into_parts();
 
-    // Begin download
-    let mut resp = reqwest::get(url).await?.error_for_status()?;
-
     // Hash as we write to the tempfile
     let mut hasher = sha2::Sha256::new();
     {
         let mut temp_file = tokio::fs::File::from_std(temp_file);
-        while let Some(chunk) = resp.chunk().await? {
+        while let Some(block) = stm.next().await {
+            let chunk = block
+                .map_err(Into::into)
+                .context("Failed to get content from registry")?;
             hasher.update(&chunk);
             temp_file.write_all(&chunk).await?;
         }
@@ -71,7 +85,10 @@ pub async fn verified_download(
             Ok(())
         } else {
             Err(e).with_context(|| {
-                format!("Failed to save download from {url} to {}", dest.display())
+                format!(
+                    "Failed to save download from {source} to {}",
+                    dest.display()
+                )
             })
         }
     })
