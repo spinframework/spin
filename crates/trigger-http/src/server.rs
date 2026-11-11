@@ -64,6 +64,7 @@ use crate::{
 };
 
 pub const MAX_RETRIES: u16 = 10;
+const TLS_HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 pub(crate) fn set_request_deadline<T>(
     store: &mut spin_core::Store<T>,
@@ -302,12 +303,17 @@ impl<F: RuntimeFactors> HttpServer<F> {
         let acceptor = tls_config.server_config()?;
         loop {
             let (stream, client_addr) = listener.accept().await?;
-            match acceptor.accept(stream).await {
-                Ok(stream) => self
-                    .clone()
-                    .serve_connection(stream, Scheme::HTTPS, client_addr),
-                Err(err) => tracing::error!(?err, "Failed to start TLS session"),
-            }
+
+            let server = self.clone();
+            let acceptor = acceptor.clone();
+
+            tokio::task::spawn(async move {
+                match tokio::time::timeout(TLS_HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await {
+                    Ok(Ok(stream)) => server.serve_connection(stream, Scheme::HTTPS, client_addr),
+                    Ok(Err(err)) => tracing::error!(?err, "Failed to start TLS session"),
+                    Err(terr) => tracing::error!(?terr, "Handshake timeout starting TLS session"),
+                }
+            });
         }
     }
 
