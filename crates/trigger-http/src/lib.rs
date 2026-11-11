@@ -122,6 +122,16 @@ pub struct CliArgs {
     /// This may be specified either as a single time value or as a range,
     /// e.g. 1..8s.  If it's a range, a value will be selected from that range
     /// at random for each new instance.
+    ///
+    /// Note that the Component Model allows async tasks to continue running
+    /// after returning a value and before exiting, and neither that abstraction
+    /// nor Spin's implementation of it provide feedback to the caller about
+    /// when an individual task actually exits after it has returned a value.
+    /// Consequently, it is possible for a request handler task to continue
+    /// running in excess of this timeout after it has returned a response,
+    /// potentially as long as `request_timeout * max_instance_reuse_count` if a
+    /// sequence of requests arrive just often enough to keep the instance (and
+    /// any background tasks) alive.
     #[clap(long, value_parser = parse_duration_range)]
     pub request_timeout: Option<Range<Duration>>,
 

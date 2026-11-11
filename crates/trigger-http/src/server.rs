@@ -719,10 +719,60 @@ fn set_req_uri(req: &mut Request<Body>, scheme: Scheme) -> anyhow::Result<()> {
     Ok(())
 }
 
+// Note the use of regular comments rather than doc comments in the following,
+// due to https://github.com/taiki-e/pin-project-lite/issues/41
 pin_project! {
     pub(crate) struct HttpWorkerExpiration {
+        // Minimum interval to keep the worker alive after it has gone idle
+        // (i.e. has no remaining guest tasks running) before disposing it.
         idle_timeout: Duration,
+
+        // Minimum interval to allow a guest task to run before we time out and
+        // (gracefully or otherwise) dispose of the worker and its instance.
+        //
+        // This is used in three related, but different, ways:
+        //
+        // - How long we wait for the guest request handler task to return a
+        //   response, starting from when we invoke it.
+        //
+        // - How long we wait for the youngest guest task (i.e. the one most
+        //   recently invoked) to produce a response before we time out the
+        //   instance, again starting from when we invoked that task.  This
+        //   serves as a backstop for the first case above given that certain
+        //   host calls and epoch events can monopolize the Wasmtime store due
+        //   to bytecodealliance/wasmtime#11869 and
+        //   bytecodealliance/wasmtime#11870, preventing the per-request timers
+        //   from being polled.  See the `wasmtime_wasi_http::handler` docs for
+        //   further details.  Note that this timer resets every time new
+        //   request is delivered to the instance.
+        //
+        // - How long we wait for any tasks to exit once all tasks have
+        //   returned responses, starting from when the last response was
+        //   returned.  Note that an async Component Model task is able to
+        //   continue running after it has returned a value, during which time
+        //   it may be streaming a response body and/or doing unrelated work.
+        //   Since Wasmtime (deliberately) doesn't provide an API which would
+        //   allow us to be notified when individual tasks exit, we can only
+        //   wait for _all_ tasks to exit.  As above, this timer resets every
+        //   time a new request is delivered to the instance.
+        //
+        // In practice, this means that a given task could potentially run for
+        // much longer than this interval, e.g. when it has returned a response
+        // and continues running in the background while other requests are
+        // delivered and keep the instance alive.  One way to think of this
+        // interval is as the longest time an instance can get away with making
+        // "no observable progress", where "progress" means accepting a new
+        // request or returning a response.  Note that request or response body
+        // I/O operations do _not_ count as progress for this purpose.
+        //
+        // Finally note, that the true maximum time a guest task could possibly
+        // run after it has returned a result is (roughly) this interval
+        // multiplied by `HttpWorkerState::max_instance_reuse_count`, which
+        // determines how many new requests might be delivered to the instance,
+        // each of which can keep it alive for another `request_timeout`
+        // interval.
         request_timeout: Duration,
+
         #[pin]
         sleep: tokio::time::Sleep,
     }
@@ -739,9 +789,8 @@ impl WorkerExpiration for HttpWorkerExpiration {
 
         let timeout = match status {
             WorkerStatus::Idle => *me.idle_timeout,
-            // TODO: add a dedicated `post_return_timeout` config setting
-            // instead of reusing `request_timeout` for
-            // `WorkerStatus::PostReturn` here
+            // See comment on `HttpWorkerExpiration::request_timeout` for why we
+            // use it here.
             WorkerStatus::Requests | WorkerStatus::PostReturn => *me.request_timeout,
         };
 
