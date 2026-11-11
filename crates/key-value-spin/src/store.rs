@@ -339,7 +339,12 @@ impl Store for SqliteStore {
                 .map_err(log_error)?;
 
             let numeric: i64 = match value {
-                Some(v) => i64::from_le_bytes(v.try_into().expect("incorrect length")),
+                Some(v) => {
+                    let arr = v
+                        .try_into()
+                        .map_err(|_| Error::Other("incorrect length in store".into()))?;
+                    i64::from_le_bytes(arr)
+                }
                 None => 0,
             };
 
