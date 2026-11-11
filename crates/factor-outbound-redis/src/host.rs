@@ -18,6 +18,8 @@ use tracing::{Level, instrument};
 
 use crate::allowed_hosts::AllowedHostChecker;
 
+const REDIS_CONNECTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub struct InstanceState {
     pub(crate) allowed_host_checker: AllowedHostChecker,
     pub blocked_networks: BlockedNetworks,
@@ -44,7 +46,8 @@ impl InstanceState {
             .await
             .map_err(|_| v2::Error::TooManyConnections)?;
         let config = AsyncConnectionConfig::new()
-            .set_dns_resolver(SpinDnsResolver(self.blocked_networks.clone()));
+            .set_dns_resolver(SpinDnsResolver(self.blocked_networks.clone()))
+            .set_connection_timeout(REDIS_CONNECTION_TIMEOUT);
         let conn = redis::Client::open(address.as_str())
             .map_err(|_| v2::Error::InvalidAddress)?
             .get_multiplexed_async_connection_with_config(&config)
