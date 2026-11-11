@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use futures::{StreamExt, future::try_join_all};
+use futures::future::try_join_all;
 use reqwest::Url;
 use spin_common::{paths::parent_dir, sloth, ui::quoted_path};
 use spin_expressions::Resolver;
@@ -16,9 +16,13 @@ use spin_manifest::schema::v2::{self, AppManifest, KebabId, WasiFilesMount};
 use spin_outbound_networking_config::allowed_hosts::{AllowedHostConfig, AllowedHostsConfig};
 use spin_serde::DependencyName;
 use std::collections::BTreeMap;
-use tokio::{io::AsyncWriteExt, sync::Semaphore};
+use tokio::sync::Semaphore;
 
-use crate::{FilesMountStrategy, cache::Cache};
+use crate::{
+    FilesMountStrategy,
+    cache::Cache,
+    http::{DestinationConvention, verified_download_stream},
+};
 
 mod trigger_components;
 
@@ -844,20 +848,21 @@ impl WasmLoader {
         let path = if let Ok(cached_path) = self.cache.wasm_file(&digest) {
             cached_path
         } else {
-            let mut stm = pkg_loader.stream_content(package, &release).await?;
+            let stm = pkg_loader.stream_content(package, &release).await?;
 
             self.cache.ensure_dirs().await?;
-            let dest = self.cache.wasm_path(&digest);
+            let final_dest = self.cache.wasm_path(&digest);
 
-            let mut file = tokio::fs::File::create(&dest).await?;
-            while let Some(block) = stm.next().await {
-                let bytes = block.context("Failed to get content from registry")?;
-                file.write_all(&bytes)
-                    .await
-                    .context("Failed to save registry content to cache")?;
-            }
+            verified_download_stream(
+                stm,
+                &format!("{}:{}", package.name(), package.namespace()),
+                &digest,
+                &final_dest,
+                DestinationConvention::ContentIndexed,
+            )
+            .await?;
 
-            dest
+            final_dest
         };
 
         Ok(path)
