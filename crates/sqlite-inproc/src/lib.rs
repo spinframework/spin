@@ -88,6 +88,12 @@ impl InProcConnection {
                         AuthAction::Attach { filename } if !matches!(filename, "" | ":memory:") => {
                             Authorization::Deny
                         }
+                        AuthAction::Pragma {
+                            pragma_name,
+                            pragma_value,
+                        } if pragma_name == "hard_heap_limit" && pragma_value.is_some() => {
+                            Authorization::Deny
+                        }
                         AuthAction::Unknown { code, .. }
                             if code == rusqlite::ffi::SQLITE_ATTACH =>
                         {
