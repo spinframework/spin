@@ -160,7 +160,7 @@ impl PluginManager {
         if exists {
             // Remove the manifest and the plugin installation directory
             fs::remove_file(manifest_file)?;
-            fs::remove_dir_all(plugin_store.plugin_subdirectory_path(plugin_name))?;
+            fs::remove_dir_all(plugin_store.plugin_subdirectory_path(plugin_name)?)?;
         }
         Ok(exists)
     }
