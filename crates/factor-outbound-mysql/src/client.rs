@@ -374,6 +374,7 @@ fn build_opts(address: &str) -> Result<Opts, mysql_async::Error> {
         } else {
             None
         })
+        .prefer_socket(false)
         .into())
 }
 
