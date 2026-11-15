@@ -34,3 +34,8 @@ pub fn manifest_file_name_version(plugin_name: &str, version: &Option<semver::Ve
 pub fn manifest_file_name(plugin_name: &str) -> String {
     format!("{plugin_name}.json")
 }
+
+pub(crate) fn is_legal_plugin_name(name: &str) -> bool {
+    let is_illegal = name.is_empty() || name.contains('/') || name.contains('\\') || name == "..";
+    !is_illegal
+}

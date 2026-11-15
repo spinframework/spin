@@ -7,7 +7,7 @@ use std::{
 };
 use tar::Archive;
 
-use crate::{Catalogue, manifest::PluginManifest};
+use crate::{Catalogue, manifest::PluginManifest, util::is_legal_plugin_name};
 
 /// Directory where the manifests of installed plugins are stored.
 pub const PLUGIN_MANIFESTS_DIRECTORY_NAME: &str = "manifests";
@@ -37,8 +37,12 @@ impl PluginStore {
     }
 
     /// Get the path to the subdirectory of an installed plugin.
-    pub fn plugin_subdirectory_path(&self, plugin_name: &str) -> PathBuf {
-        self.root.join(plugin_name)
+    pub fn plugin_subdirectory_path(&self, plugin_name: &str) -> anyhow::Result<PathBuf> {
+        if is_legal_plugin_name(plugin_name) {
+            Ok(self.root.join(plugin_name))
+        } else {
+            Err(anyhow::anyhow!("invalid plugin name {plugin_name}"))
+        }
     }
 
     pub fn installed_binary_path(&self, plugin_name: &str) -> PathBuf {
@@ -91,7 +95,7 @@ impl PluginStore {
         let mut archive = Archive::new(tar);
         archive.set_preserve_permissions(true);
         // Create subdirectory in plugins directory for this plugin
-        let plugin_sub_dir = self.plugin_subdirectory_path(plugin_name);
+        let plugin_sub_dir = self.plugin_subdirectory_path(plugin_name)?;
         fs::remove_dir_all(&plugin_sub_dir).ok();
         fs::create_dir_all(&plugin_sub_dir)?;
         archive.unpack(&plugin_sub_dir)?;
