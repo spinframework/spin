@@ -9064,11 +9064,14 @@ name = "spin-common"
 version = "4.4.0-pre0"
 dependencies = [
  "anyhow",
+ "bytes",
  "clap",
  "dirs 6.0.0",
+ "futures",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "tokio-util",
  "url",
 ]
 
@@ -9781,6 +9784,7 @@ dependencies = [
  "astral-tokio-tar",
  "async-compression",
  "base64 0.22.1",
+ "bytes",
  "chrono",
  "dirs 6.0.0",
  "docker-registry",

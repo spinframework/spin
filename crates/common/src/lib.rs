@@ -12,6 +12,7 @@ pub mod arg_parser;
 pub mod assert;
 pub mod cli;
 pub mod data_dir;
+pub mod fs;
 pub mod git;
 pub mod paths;
 pub mod sha256;
