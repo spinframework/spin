@@ -368,7 +368,8 @@ fn build_opts(address: &str) -> Result<Opts, mysql_async::Error> {
         .query_pairs_mut()
         .extend_pairs(query_without_ssl);
 
-    Ok(OptsBuilder::from_opts(cleaned_url.as_str())
+    let opts: Opts = cleaned_url.as_str().try_into()?;
+    Ok(OptsBuilder::from_opts(opts)
         .ssl_opts(if use_ssl {
             Some(SslOpts::default())
         } else {
@@ -423,5 +424,13 @@ mod test {
             build_opts(address).unwrap().pool_opts().constraints().max(),
             10
         )
+    }
+
+    #[test]
+    fn test_mysql_address_with_bad_opt_is_error() {
+        // the obvious way to parse a MySQL URL can panic, so regression test to
+        // remind us to do it the non-obvious way
+        let address = "mysql://myuser:password@127.0.0.1/db?SsLmOdE=VERIFY_CA&pool_max=10&honk=paarp&nonsense=twaddle";
+        build_opts(address).expect_err("error should have errored");
     }
 }
