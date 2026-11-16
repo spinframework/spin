@@ -9714,6 +9714,7 @@ name = "spin-loader"
 version = "4.4.0-pre0"
 dependencies = [
  "anyhow",
+ "bytes",
  "dirs 6.0.0",
  "futures",
  "glob",
