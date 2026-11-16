@@ -715,7 +715,7 @@ fn set_req_uri(req: &mut Request<Body>, scheme: Scheme) -> anyhow::Result<()> {
     };
     parts.scheme = Some(scheme);
     parts.authority = Some(authority);
-    *req.uri_mut() = Uri::from_parts(parts).unwrap();
+    *req.uri_mut() = Uri::from_parts(parts)?;
     Ok(())
 }
 
