@@ -184,14 +184,16 @@ impl Store for RedisStore {
         keys: Vec<String>,
         max_result_bytes: usize,
     ) -> Result<Vec<(String, Option<Vec<u8>>)>, Error> {
-        let values = self
+        let values: Vec<Option<Vec<u8>>> = self
             .connection
             .clone()
-            .keys::<_, Vec<(String, Option<Vec<u8>>)>>(keys)
+            .mget(&keys)
             .await
             .map_err(log_error)?;
 
-        // Currently there's no way to stream a `GET` result using the `redis`
+        let values = keys.into_iter().zip(values).collect::<Vec<_>>();
+
+        // Currently there's no way to stream a `MGET` result using the `redis`
         // crate without buffering, so the damage (in terms of host memory
         // usage) is already done, but we can still enforce the limit:
         if std::mem::size_of::<Vec<(String, Option<Vec<u8>>)>>()
