@@ -6,13 +6,14 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use docker_credential::DockerCredential;
 use futures_util::future;
-use futures_util::stream::{self, StreamExt, TryStreamExt};
+use futures_util::stream::{self, Stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use oci_client::{
     Reference, RegistryOperation, client::ImageLayer, config::ConfigFile,
     manifest::OciImageManifest, secrets::RegistryAuth, token_cache::RegistryTokenType,
 };
 use reqwest::Url;
+use spin_common::fs::{temp_file_beside, write_file_atomically_stream};
 use spin_common::sha256;
 use spin_common::ui::quoted_path;
 use spin_common::url::parse_file_url;
@@ -597,13 +598,26 @@ impl Client {
         self.oci
             .pull_blob(&reference, locked_app_descriptor, &mut locked_app_bytes)
             .await?;
+        let mut locked_app_prev_download_path = None;
 
         for cache_ref in &cache_refs {
             let m = self.manifest_path(cache_ref).await?;
             write_atomically(&m, manifest_json.as_bytes()).await?;
-            self.write_locked_app_config(cache_ref, &locked_app_bytes)
-                .await
-                .context("unable to write locked app config to cache")?;
+            match locked_app_prev_download_path.as_ref() {
+                None => {
+                    let locked_app_stm = self
+                        .oci
+                        .pull_blob_stream(&reference, locked_app_descriptor)
+                        .await?;
+                    locked_app_prev_download_path = Some(
+                        self.write_locked_app_config(cache_ref, locked_app_stm)
+                            .await?,
+                    );
+                }
+                Some(path) => {
+                    self.copy_existing_locked_app(path, cache_ref).await?;
+                }
+            }
         }
 
         // If a layer is a Wasm module, write it in the Wasm directory.
@@ -623,17 +637,16 @@ impl Client {
                     }
 
                     tracing::debug!("Pulling layer {}", &layer.digest);
-                    let mut bytes = Vec::with_capacity(layer.size.try_into()?);
-                    this.oci.pull_blob(&reference, layer, &mut bytes).await?;
+                    let stm = this.oci.pull_blob_stream(&reference, layer).await?;
                     match layer.media_type.as_str() {
                         WASM_LAYER_MEDIA_TYPE | WASM_LAYER_MEDIA_TYPE_WKG => {
-                            this.cache.write_wasm(&bytes, &layer.digest).await?;
+                            this.cache.write_wasm_stream(stm, &layer.digest).await?;
                         }
                         ARCHIVE_MEDIATYPE => {
-                            unpack_archive_layer(&this.cache, &bytes, &layer.digest).await?;
+                            unpack_archive_layer(&this.cache, stm, &layer.digest).await?;
                         }
                         _ => {
-                            this.cache.write_data(&bytes, &layer.digest).await?;
+                            this.cache.write_data_stream(stm, &layer.digest).await?;
                         }
                     }
                     Ok(())
@@ -705,13 +718,23 @@ impl Client {
     async fn write_locked_app_config(
         &self,
         reference: impl AsRef<str>,
-        bytes: impl AsRef<[u8]>,
-    ) -> Result<()> {
-        let cfg = std::str::from_utf8(bytes.as_ref())?;
-        tracing::debug!("Pulled config: {}", cfg);
+        bytes: oci_client::client::SizedStream,
+    ) -> Result<PathBuf> {
+        tracing::debug!("Pulled config (streaming)");
 
         let c = self.lockfile_path(reference).await?;
-        write_atomically(&c, cfg.as_bytes()).await
+        write_file_atomically_stream(&c, bytes).await?;
+        Ok(c)
+    }
+
+    async fn copy_existing_locked_app(
+        &self,
+        existing_path: &Path,
+        reference: impl AsRef<str>,
+    ) -> Result<()> {
+        let c = self.lockfile_path(reference).await?;
+        tokio::fs::copy(existing_path, &c).await?;
+        Ok(())
     }
 
     /// Create a new wasm layer based on a file.
@@ -862,11 +885,11 @@ impl Client {
 /// the unpacked contents prior to writing to the cache.
 pub async fn unpack_archive_layer(
     cache: &Cache,
-    bytes: impl AsRef<[u8]>,
+    bytes: impl Stream<Item = Result<bytes::Bytes, std::io::Error>> + Unpin,
     digest: impl AsRef<str>,
 ) -> Result<()> {
     // Write archive layer to cache as usual
-    cache.write_data(&bytes, &digest).await?;
+    cache.write_data_stream(bytes, &digest).await?;
 
     // Unpack archive into a staging dir
     let path = cache
@@ -1126,20 +1149,7 @@ fn digest_cache_segment(digest: &str) -> Result<String> {
 /// that is then renamed over `path`, so a concurrent reader sees either the
 /// previous content or the new content, never a partial file.
 async fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
-    let dir = path
-        .parent()
-        .with_context(|| format!("{} has no parent directory", quoted_path(path)))?;
-    // Create the file with mode 0666 less the umask, as `fs::write` would,
-    // rather than tempfile's default of 0600.
-    let mut builder = tempfile::Builder::new();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        builder.permissions(std::fs::Permissions::from_mode(0o666));
-    }
-    let tmp = builder
-        .tempfile_in(dir)
-        .with_context(|| format!("cannot create temporary file in {}", quoted_path(dir)))?;
+    let tmp = temp_file_beside(path)?;
     fs::write(tmp.path(), bytes).await?;
     tmp.persist(path)
         .with_context(|| format!("cannot write {}", quoted_path(path)))?;

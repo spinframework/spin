@@ -1,6 +1,7 @@
 //! Cache for OCI registry entities.
 
 use anyhow::{Context, Result, ensure};
+use spin_common::fs::write_file_atomically_stream;
 
 use std::{
     path::PathBuf,
@@ -97,10 +98,32 @@ impl Cache {
         Ok(())
     }
 
+    /// Write the contents in the cache's wasm directory.
+    pub async fn write_wasm_stream(
+        &self,
+        bytes: impl futures::Stream<Item = Result<bytes::Bytes, std::io::Error>> + Unpin,
+        digest: impl AsRef<str>,
+    ) -> Result<()> {
+        self.ensure_dirs().await?;
+        write_file_atomically_stream(&self.wasm_path(digest), bytes).await?;
+        Ok(())
+    }
+
     /// Write the contents in the cache's data directory.
     pub async fn write_data(&self, bytes: impl AsRef<[u8]>, digest: impl AsRef<str>) -> Result<()> {
         self.ensure_dirs().await?;
         write_file_atomically(&self.data_path(digest), bytes.as_ref()).await?;
+        Ok(())
+    }
+
+    /// Write the contents in the cache's data directory.
+    pub async fn write_data_stream(
+        &self,
+        bytes: impl futures::Stream<Item = Result<bytes::Bytes, std::io::Error>> + Unpin,
+        digest: impl AsRef<str>,
+    ) -> Result<()> {
+        self.ensure_dirs().await?;
+        write_file_atomically_stream(&self.data_path(digest), bytes).await?;
         Ok(())
     }
 
