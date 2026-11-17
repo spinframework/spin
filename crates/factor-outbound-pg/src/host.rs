@@ -25,11 +25,16 @@ impl<CF: ClientFactory> InstanceState<CF> {
         address: &str,
         root_ca: Option<HashableCertificate>,
     ) -> Result<Resource<Conn>, v4::Error> {
+        self.ensure_address_allowed(address)
+            .await
+            .map_err(track_address_check_error_v4)?;
+
         let permit = self.semaphore.acquire().await.map_err(|_| {
             let err = v4::Error::ConnectionFailed("too many connections".into());
             traces::mark_as_error(&err, Some(Blame::Guest));
             err
         })?;
+
         let client = self
             .client_factory
             .get_client(address, root_ca)
@@ -96,11 +101,6 @@ impl<CF: ClientFactory> v3::HostConnection for InstanceState<CF> {
         fields(otel.kind = "client", {otel_attribute::DB_SYSTEM_NAME} = "postgresql", {otel_attribute::SERVER_ADDRESS} = Empty, {otel_attribute::SERVER_PORT} = Empty, {otel_attribute::DB_NAMESPACE} = Empty))]
     async fn open(&mut self, address: String) -> Result<Resource<v3::Connection>, v3::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
-
-        self.ensure_address_allowed(&address)
-            .await
-            .map_err(v3::Error::from)
-            .map_err(track_address_check_error_v3)?;
 
         self.open_connection(&address, None)
             .await
@@ -207,10 +207,6 @@ impl<CF: ClientFactory> v4::HostConnection for InstanceState<CF> {
     async fn open(&mut self, address: String) -> Result<Resource<v4::Connection>, v4::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        self.ensure_address_allowed(&address)
-            .await
-            .map_err(track_address_check_error_v4)?;
-
         self.open_connection(&address, None).await
     }
 
@@ -261,9 +257,6 @@ impl<T, CF: ClientFactory> spin_world::spin::postgres4_2_0::postgres::HostConnec
     ) -> Result<Resource<v4::Connection>, v4::Error> {
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        Self::ensure_address_allowed_async(accessor, &address)
-            .await
-            .map_err(track_address_check_error_v4)?;
         Self::open_connection_async(accessor, &address, None).await
     }
 
@@ -392,6 +385,10 @@ impl<CF: ClientFactory> crate::PgFactorData<CF> {
         address: &str,
         root_ca: Option<HashableCertificate>,
     ) -> Result<Resource<v4::Connection>, v4::Error> {
+        Self::ensure_address_allowed_async(accessor, address)
+            .await
+            .map_err(track_address_check_error_v4)?;
+
         let (cf, semaphore) = accessor.with(|mut access| {
             let host = access.get();
             (host.client_factory.clone(), host.semaphore.clone())
@@ -435,9 +432,6 @@ impl<T, CF: ClientFactory>
 
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        Self::ensure_address_allowed_async(accessor, &address)
-            .await
-            .map_err(track_address_check_error_v4)?;
         Self::open_connection_async(accessor, &address, root_ca).await
     }
 }
@@ -463,7 +457,6 @@ impl<CF: ClientFactory> v4::Host for InstanceState<CF> {
 /// Delegate a function call to the v4::HostConnection implementation
 macro_rules! delegate {
     ($self:ident.$name:ident($address:expr, $($arg:expr),*)) => {{
-        $self.ensure_address_allowed(&$address).await?;
         let connection = match $self.open_connection(&$address, None).await {
             Ok(c) => c,
             Err(e) => return Err(e.into()),
@@ -488,10 +481,6 @@ impl<CF: ClientFactory> v2::HostConnection for InstanceState<CF> {
         self.otel.reparent_tracing_span();
         spin_factor_outbound_networking::record_address_fields(&address);
 
-        self.ensure_address_allowed(&address)
-            .await
-            .map_err(v2::Error::from)
-            .map_err(track_address_check_error_v2)?;
         self.open_connection(&address, None)
             .await
             .map_err(v2::Error::from)
@@ -598,24 +587,6 @@ impl<CF: ClientFactory> v1::Host for InstanceState<CF> {
 fn track_address_check_error_v4(err: v4::Error) -> v4::Error {
     let blame = match &err {
         v4::Error::Other(_) => Blame::Host,
-        _ => Blame::Guest,
-    };
-    traces::mark_as_error(&err, Some(blame));
-    err
-}
-
-fn track_address_check_error_v3(err: v3::Error) -> v3::Error {
-    let blame = match &err {
-        v3::Error::Other(_) => Blame::Host,
-        _ => Blame::Guest,
-    };
-    traces::mark_as_error(&err, Some(blame));
-    err
-}
-
-fn track_address_check_error_v2(err: v2::Error) -> v2::Error {
-    let blame = match &err {
-        v2::Error::Other(_) => Blame::Host,
         _ => Blame::Guest,
     };
     traces::mark_as_error(&err, Some(blame));
