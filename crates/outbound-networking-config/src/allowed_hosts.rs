@@ -676,7 +676,8 @@ pub fn parse_service_chaining_target(url: &http::Uri) -> Option<String> {
 }
 
 fn parse_service_chaining_host(host: &str) -> Option<String> {
-    let (host, _) = host.rsplit_once(':').unwrap_or((host, ""));
+    let authority: http::uri::Authority = host.parse().ok()?;
+    let host = authority.host();
 
     let (first, rest) = host.split_once('.')?;
 
@@ -1462,5 +1463,49 @@ mod test {
                 "expected {bad:?} to be rejected"
             );
         }
+    }
+
+    #[test]
+    fn recognises_service_chaining_hosts() -> anyhow::Result<()> {
+        fn parse_service_chaining_url_str(s: &str) -> anyhow::Result<Option<String>> {
+            let u: http::Uri = s.parse()?;
+            Ok(parse_service_chaining_target(&u))
+        }
+
+        fn expect_okay(host: &str, expected: &str) -> anyhow::Result<()> {
+            let url = format!("https://{host}");
+            assert!(
+                parse_service_chaining_url_str(&url)?.is_some_and(|t| t == expected),
+                "{host} should be okay but failed PSCT"
+            );
+            assert!(
+                is_service_chaining_host(host),
+                "{host} should be okay but failed ISCH"
+            );
+            Ok(())
+        }
+
+        fn expect_not_okay(host: &str) -> anyhow::Result<()> {
+            let url = format!("https://{host}");
+            assert!(
+                parse_service_chaining_url_str(&url)?.is_none(),
+                "{host} should fail PSCT but passed"
+            );
+            assert!(
+                !is_service_chaining_host(host),
+                "{host} should fail ISCH but passed"
+            );
+            Ok(())
+        }
+
+        expect_okay("yes.spin.internal", "yes")?;
+        expect_okay("yes.spin.internal:3000", "yes")?;
+        expect_okay("user:pass@yes.spin.internal", "yes")?;
+        expect_okay("user:pass@yes.spin.internal:3000", "yes")?;
+
+        expect_not_okay("Crimes.Spin.Internal")?;
+        expect_not_okay("crimes.spin.internal:pass@example.com")?;
+
+        Ok(())
     }
 }
