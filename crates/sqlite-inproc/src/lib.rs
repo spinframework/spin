@@ -79,27 +79,36 @@ impl InProcConnection {
             InProcDatabaseLocation::Path(path) => rusqlite::Connection::open(path),
         }
         .map_err(|e| sqlite::Error::Io(e.to_string()))?;
-        if !self.allow_attach_file {
-            connection
-                .authorizer(Some(|ctx: rusqlite::hooks::AuthContext<'_>| {
-                    use rusqlite::hooks::{AuthAction, Authorization};
-                    match ctx.action {
-                        // Deny attaching files except tempfile ("") and in-memory (":memory:") databases
-                        AuthAction::Attach { filename } if !matches!(filename, "" | ":memory:") => {
-                            Authorization::Deny
-                        }
-                        AuthAction::Unknown { code, .. }
-                            if code == rusqlite::ffi::SQLITE_ATTACH =>
-                        {
-                            // This is the attach case if the file is passed as a parameter -
-                            // rusqlite doesn't translate it to the typed Attach in this case
-                            Authorization::Deny
-                        }
-                        _ => Authorization::Allow,
+
+        let allow_attach_file = self.allow_attach_file;
+        connection
+            .authorizer(Some(move |ctx: rusqlite::hooks::AuthContext<'_>| {
+                use rusqlite::hooks::{AuthAction, Authorization};
+                match ctx.action {
+                    // If not allowed to attach files: deny attaching files except
+                    // tempfile ("") and in-memory (":memory:") databases [two cases]
+                    AuthAction::Attach { filename }
+                        if !allow_attach_file && !matches!(filename, "" | ":memory:") =>
+                    {
+                        Authorization::Deny
                     }
-                }))
-                .map_err(|e| sqlite::Error::Io(e.to_string()))?;
-        }
+                    // This is the attach case if the file is passed as a parameter -
+                    // rusqlite doesn't translate it to the typed Attach in this case
+                    AuthAction::Unknown { code, .. }
+                        if !allow_attach_file && code == rusqlite::ffi::SQLITE_ATTACH =>
+                    {
+                        Authorization::Deny
+                    }
+                    // Always deny unsafe pragmas
+                    AuthAction::Pragma {
+                        pragma_name,
+                        pragma_value: Some(_),
+                    } if pragma_name.eq_ignore_ascii_case("hard_heap_limit") => Authorization::Deny,
+                    _ => Authorization::Allow,
+                }
+            }))
+            .map_err(|e| sqlite::Error::Io(e.to_string()))?;
+
         Ok(Arc::new(Mutex::new(connection)))
     }
 }
