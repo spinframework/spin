@@ -935,7 +935,13 @@ fn registry_from_input(server: impl AsRef<str>) -> String {
     // We want to allow a user to login to both https://ghcr.io and ghcr.io.
     let server = server.as_ref();
     let server = match server.parse::<Url>() {
-        Ok(url) => url.host_str().unwrap_or(server).to_string(),
+        Ok(url) => match url.host_str() {
+            Some(host) => match url.port() {
+                Some(port) => format!("{host}:{port}"),
+                None => host.to_string(),
+            },
+            None => server.to_string(),
+        },
         Err(_) => server.to_string(),
     };
     // DockerHub is commonly referenced as 'docker.io' but needs to be 'index.docker.io'
@@ -1205,6 +1211,14 @@ mod test {
             TestCase {
                 input: "https://ghcr.io",
                 want: "ghcr.io",
+            },
+            TestCase {
+                input: "example.com:5000",
+                want: "example.com:5000",
+            },
+            TestCase {
+                input: "https://example.com:5000",
+                want: "example.com:5000",
             },
         ]
         .to_vec();
