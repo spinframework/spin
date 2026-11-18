@@ -209,6 +209,22 @@ impl SpinCli {
         }
     }
 
+    /// Get the HTTPS URL of the Spin server if running in http mode
+    pub fn https_url(&self) -> Option<String> {
+        match self.io_mode {
+            IoMode::Http(port) => Some(format!("https://localhost:{}", port)),
+            _ => None,
+        }
+    }
+
+    /// Get the port of the Spin server if running in http mode
+    pub fn http_port(&self) -> Option<u16> {
+        match self.io_mode {
+            IoMode::Http(port) => Some(port),
+            _ => None,
+        }
+    }
+
     pub fn stdout(&mut self) -> &str {
         self.stdout.output_as_str().unwrap_or("<non-utf8>")
     }
