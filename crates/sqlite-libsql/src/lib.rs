@@ -148,14 +148,13 @@ impl LibSqlConnection {
                 .send(columns)
                 .map_err(|_| v3::Error::Io("column send error".into()))?;
 
-            let column_count = rows.column_count();
-
             loop {
                 let row = match rows.next().await.map_err(io_error_v3)? {
                     Some(r) => r,
                     None => break,
                 };
-                let row = convert_row(row, column_count);
+                let row = convert_row(row)
+                    .map_err(|e| v3::Error::Io(format!("row conversion error {e}")))?;
                 if row.values.iter().map(|v| v.memory_size()).sum::<usize>() > max_result_bytes {
                     return Err(v3::Error::Io(format!(
                         "query result exceeds limit of {max_result_bytes} bytes"
@@ -210,10 +209,9 @@ async fn convert_rows(
 ) -> anyhow::Result<Vec<RowResult>> {
     let mut result_rows = vec![];
 
-    let column_count = rows.column_count();
     let mut byte_count = 0;
     while let Some(row) = rows.next().await? {
-        let row = convert_row(row, column_count);
+        let row = convert_row(row)?;
         byte_count += row.values.iter().map(|v| v.memory_size()).sum::<usize>();
         if byte_count > max_result_bytes {
             anyhow::bail!("query result exceeds limit of {max_result_bytes} bytes")
@@ -224,11 +222,11 @@ async fn convert_rows(
     Ok(result_rows)
 }
 
-fn convert_row(row: libsql::Row, column_count: i32) -> RowResult {
-    let values = (0..column_count)
-        .map(|index| convert_value(row.get_value(index).unwrap()))
-        .collect();
-    RowResult { values }
+fn convert_row(row: libsql::Row) -> anyhow::Result<RowResult> {
+    let values = (0..row.column_count())
+        .map(|index| row.get_value(index).map(convert_value))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(RowResult { values })
 }
 
 fn convert_value(v: libsql::Value) -> sqlite::Value {
