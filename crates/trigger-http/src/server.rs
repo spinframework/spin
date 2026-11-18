@@ -302,7 +302,11 @@ impl<F: RuntimeFactors> HttpServer<F> {
         self.print_startup_msgs("https", &listener)?;
         let acceptor = tls_config.server_config()?;
         loop {
-            let (stream, client_addr) = listener.accept().await?;
+            let (stream, client_addr) = match listener.accept().await {
+                Ok(stm_addr) => stm_addr,
+                Err(e) if can_continue_after(&e) => continue,
+                Err(e) => return Err(e.into()),
+            };
 
             let server = self.clone();
             let acceptor = acceptor.clone();
@@ -879,4 +883,10 @@ impl<F: RuntimeFactors> HandlerState for HttpHandlerState<F> {
             },
         })
     }
+}
+
+/// Whether the server can continue serving after the given `accept` error
+/// (e.g. if the connection is reset that is *not* fatal to the server)
+fn can_continue_after(error: &std::io::Error) -> bool {
+    error.kind() == ErrorKind::ConnectionReset || error.kind() == ErrorKind::ConnectionAborted
 }
