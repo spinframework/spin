@@ -116,7 +116,7 @@ impl<T: std::fmt::Display> std::fmt::Display for TruncatedSlice<'_, T> {
 /// Get the test environment ready to run a test
 pub fn preboot<R>(test: &str, env: &mut TestEnvironment<R>) -> anyhow::Result<()> {
     let test_path = format!("tests/testcases/{test}");
-    for file in std::fs::read_dir(test_path)? {
+    for file in std::fs::read_dir(&test_path).context(test_path.clone())? {
         let file = file?;
         let path = file.path();
         if path.is_dir() {

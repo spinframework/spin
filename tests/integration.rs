@@ -75,6 +75,80 @@ mod integration_tests {
         Ok(())
     }
 
+    #[test]
+    fn pending_tls_connection_does_not_block_http_server() -> anyhow::Result<()> {
+        let tests_dir = env!("CARGO_MANIFEST_DIR");
+        let tls_cert_path = format!("{tests_dir}/tests/tls-certs/localhost.crt");
+        let tls_key_path = format!("{tests_dir}/tests/tls-certs/localhost.key");
+
+        run_test(
+            "hello-world",
+            SpinConfig {
+                binary_path: spin_binary(),
+                spin_up_args: vec![
+                    "--tls-cert".into(),
+                    tls_cert_path,
+                    "--tls-key".into(),
+                    tls_key_path,
+                ],
+                app_type: SpinAppType::Http,
+            },
+            ServicesConfig::none(),
+            move |env| {
+                let spin = env.runtime_mut();
+
+                let url = spin.https_url().expect("shoulda been HTTP");
+                let port = spin.http_port().expect("shoulda been HTTP");
+
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("should have built tokio rt");
+
+                // Open a TCP connection and sit there cackling quietly forever (for small values of forever)
+                let crime_socket =
+                    tokio::net::TcpSocket::new_v4().expect("should have created socket");
+                let addr: std::net::SocketAddr =
+                    format!("127.0.0.1:{port}").parse().expect("bad addr");
+                let sock_conn = rt.spawn(async move {
+                    let stm = crime_socket
+                        .connect(addr)
+                        .await
+                        .expect("sock should have connected");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                    drop(stm);
+                });
+
+                // We're not trying to test TLS validation. We just want to exercise
+                // the TLS acceptance path.
+                let client = reqwest::ClientBuilder::new()
+                    .danger_accept_invalid_certs(true)
+                    .build()
+                    .expect("should have built client");
+
+                // Make a request to the TLS server. Timing it out because we don't want it
+                // to falsely succeed by completing after the crime_socket drops.
+                let resp = rt
+                    .block_on(async move {
+                        tokio::time::timeout(
+                            tokio::time::Duration::from_secs(10),
+                            client.get(&url).send(),
+                        )
+                        .await
+                    })
+                    .expect("TLS request timed out")
+                    .expect("should have got response");
+
+                sock_conn.abort();
+
+                assert_eq!(http::StatusCode::OK, resp.status());
+
+                Ok(())
+            },
+        )?;
+        Ok(())
+    }
+
     #[cfg(feature = "extern-dependencies-tests")]
     /// Helper macro to assert that a condition is true eventually
     macro_rules! assert_eventually {
