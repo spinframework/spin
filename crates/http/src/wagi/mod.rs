@@ -165,7 +165,7 @@ pub fn build_headers(
 /// - The content of the host header is considered most authoritative.
 /// - Next most authoritative is self.host, which is set at the CLI or in the config
 /// - As a last resort, we use the host/port that Hyper gives us.
-/// - If none of these provide sufficient data, which is definitely a possiblity,
+/// - If none of these provide sufficient data, which is definitely a possibility,
 ///   we go with `localhost` as host and `80` as port. This, of course, is problematic,
 ///   but should only manifest if both the server and the client are behaving badly.
 fn parse_host_header_uri(

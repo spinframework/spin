@@ -459,7 +459,7 @@ impl RequestSender {
         //
         // Note that we do this _before_ invoking the request interceptor.  It may
         // decide to add the `host` header back in, regardless of the nginx bug, in
-        // which case we'll let it do so without interferring.
+        // which case we'll let it do so without interfering.
         request.headers_mut().remove(HOST);
         Ok(())
     }

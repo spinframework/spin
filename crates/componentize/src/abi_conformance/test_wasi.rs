@@ -89,7 +89,7 @@ pub struct WasiReport {
     /// retrieve metadata from the file "foo.txt" in the preopened directory descriptor 3.  The module should then
     /// write a UTF-8-encoded string of the form "length:<length>,modified:<modified>" to `stdout`, where
     /// "<length>" is the length of the file and "<modified>" is the last-modified time in milliseconds since 1970
-    /// UTC.  The host will assert that the output matches the metdata of the file.
+    /// UTC.  The host will assert that the output matches the metadata of the file.
     pub stat: Result<(), String>,
 }
 
