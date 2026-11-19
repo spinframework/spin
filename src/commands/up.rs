@@ -198,6 +198,11 @@ pub(crate) struct UpCommandInner {
     #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::components))]
     pub components: Vec<String>,
 
+    /// Trigger type to run, e.g. `http`. This can be specified multiple times. The default is all trigger types.
+    #[clap(long = "trigger-type")]
+    #[arg(add = clap_complete::ArgValueCandidates::new(crate::completions::trigger_types))]
+    pub trigger_types: Vec<String>,
+
     /// All other args, to be passed through to the trigger
     #[clap(skip)]
     pub trigger_args: Vec<OsString>,
@@ -233,9 +238,10 @@ impl UpCommandInner {
         resolved_app_source.ensure_profile(self.profile())?;
 
         if self.help {
-            let trigger_cmds =
-                trigger_commands_for_trigger_types(resolved_app_source.trigger_types())
-                    .with_context(|| format!("Couldn't find trigger executor for {app_source}"))?;
+            let trigger_types =
+                self.retain_selected_trigger_types(resolved_app_source.trigger_types());
+            let trigger_cmds = trigger_commands_for_trigger_types(trigger_types)
+                .with_context(|| format!("Couldn't find trigger executor for {app_source}"))?;
 
             let is_multi = trigger_cmds.len() > 1;
             if is_multi {
@@ -277,6 +283,25 @@ impl UpCommandInner {
             .context(
                 "failed to resolve application with only components selected with --component",
             )?;
+        }
+
+        if !self.trigger_types.is_empty() {
+            let trigger_types = self
+                .trigger_types
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<&str>>();
+            // Service chaining targets are always HTTP components, so all possible
+            // targets are retained if HTTP triggers are.
+            let validators: &[&spin_app::ValidatorFn] = if trigger_types.contains(&"http") {
+                &[]
+            } else {
+                &[&validate_service_chaining_for_components]
+            };
+            locked_app = spin_app::retain_trigger_types(locked_app, &trigger_types, validators)
+                .context(
+                    "failed to resolve application with only trigger types selected with --trigger-type",
+                )?;
         }
 
         let trigger_types: HashSet<&str> = locked_app
@@ -330,6 +355,15 @@ impl UpCommandInner {
         }
 
         Ok(())
+    }
+
+    /// Filters the given trigger types to those selected with `--trigger-type`,
+    /// or returns them unchanged if no trigger types were selected.
+    fn retain_selected_trigger_types<'a>(&self, mut trigger_types: Vec<&'a str>) -> Vec<&'a str> {
+        if !self.trigger_types.is_empty() {
+            trigger_types.retain(|t| self.trigger_types.iter().any(|selected| selected == t));
+        }
+        trigger_types
     }
 
     fn get_canonical_working_dir(&self) -> Result<WorkingDirectory, anyhow::Error> {

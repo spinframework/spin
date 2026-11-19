@@ -38,6 +38,18 @@ pub fn components() -> Vec<CompletionCandidate> {
     components.keys().map(CompletionCandidate::new).collect()
 }
 
+pub fn trigger_types() -> Vec<CompletionCandidate> {
+    let Some(toml) = load_manifest_toml() else {
+        return vec![];
+    };
+
+    let Some(triggers) = toml.get("trigger").and_then(|t| t.as_table()) else {
+        return vec![];
+    };
+
+    triggers.keys().map(CompletionCandidate::new).collect()
+}
+
 pub fn environments() -> Vec<CompletionCandidate> {
     let fut = async move {
         let Ok(catalogue) = spin_environments::Catalogue::try_default() else {

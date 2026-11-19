@@ -1,0 +1,26 @@
+spin_manifest_version = 2
+
+[application]
+authors = ["Spin Framework Contributors"]
+description = "An application with HTTP and Redis triggers, used to test running only selected trigger types"
+name = "trigger-type-filter"
+version = "1.0.0"
+
+# No Redis server is provided for this application, so the Redis trigger
+# cannot start: the application can only be run with `--trigger-type http`.
+[application.trigger.redis]
+address = "redis://localhost:6379"
+
+[[trigger.http]]
+route = "/hello"
+component = "hello"
+
+[[trigger.redis]]
+channel = "my-channel"
+component = "redis-hello"
+
+[component.hello]
+source = "%{source=hello-world}"
+
+[component.redis-hello]
+source = "%{source=redis-smoke-test}"
