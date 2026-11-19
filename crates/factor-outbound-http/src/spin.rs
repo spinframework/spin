@@ -3,6 +3,7 @@ use std::sync::Arc;
 use futures::stream::TryStreamExt as _;
 use http_body_util::BodyExt;
 use opentelemetry_semantic_conventions::attribute as otel_attribute;
+use spin_factor_outbound_networking::config::allowed_hosts::OutboundAllowedHosts;
 use spin_factor_outbound_networking::config::blocked_networks::BlockedNetworks;
 use spin_world::MAX_HOST_BUFFERED_BYTES;
 use spin_world::v1::{
@@ -23,45 +24,14 @@ impl spin_http::Host for crate::InstanceState {
         let span = Span::current();
         record_request_fields(&span, &req);
 
-        let uri = req.uri;
+        let uri = &req.uri;
         tracing::trace!("Sending outbound HTTP to {uri:?}");
 
         if !req.params.is_empty() {
             tracing::warn!("HTTP params field is deprecated");
         }
-        let req_url = if !uri.starts_with('/') {
-            // Absolute URI
-            let is_allowed = self
-                .hooks
-                .allowed_hosts
-                .check_url(&uri, "https")
-                .await
-                .unwrap_or(false);
-            if !is_allowed {
-                return Err(HttpError::DestinationNotAllowed);
-            }
-            uri.parse().map_err(|_| HttpError::InvalidUrl)?
-        } else {
-            // Relative URI ("self" request)
-            let is_allowed = self
-                .hooks
-                .allowed_hosts
-                .check_relative_url(&["http", "https"])
-                .await
-                .unwrap_or(false);
-            if !is_allowed {
-                return Err(HttpError::DestinationNotAllowed);
-            }
 
-            let Some(origin) = &self.hooks.self_request_origin else {
-                tracing::error!(
-                    "Couldn't handle outbound HTTP request to relative URI; no origin set"
-                );
-                return Err(HttpError::InvalidUrl);
-            };
-            let path_and_query = uri.parse().map_err(|_| HttpError::InvalidUrl)?;
-            origin.clone().into_uri(Some(path_and_query))
-        };
+        let req_url = self.actual_request_url(&req).await?;
 
         // Build an http::Request for OutboundHttpInterceptor
         let mut req = {
@@ -140,6 +110,76 @@ impl spin_http::Host for crate::InstanceState {
             resp.status().as_u16(),
         );
         response_from_reqwest(resp).await
+    }
+}
+
+impl crate::InstanceState {
+    async fn actual_request_url(&self, req: &Request) -> Result<http::Uri, HttpError> {
+        let uri = &req.uri;
+        let allowed_hosts = &self.hooks.allowed_hosts;
+
+        if !uri.starts_with('/') {
+            // Absolute URI
+            if !Self::is_allowed_absolute(allowed_hosts, req).await {
+                return Err(HttpError::DestinationNotAllowed);
+            }
+            uri.parse().map_err(|_| HttpError::InvalidUrl)
+        } else {
+            // Relative URI ("self" request)
+            if !Self::is_allowed_relative(allowed_hosts, req).await {
+                return Err(HttpError::DestinationNotAllowed);
+            }
+
+            let Some(origin) = &self.hooks.self_request_origin else {
+                tracing::error!(
+                    "Couldn't handle outbound HTTP request to relative URI; no origin set"
+                );
+                return Err(HttpError::InvalidUrl);
+            };
+            let path_and_query = uri.parse().map_err(|_| HttpError::InvalidUrl)?;
+            Ok(origin.clone().into_uri(Some(path_and_query)))
+        }
+    }
+
+    // These functions take `OutboundAllowedHosts` instead of `self` to make testing easier
+
+    async fn is_allowed_absolute(allowed_hosts: &OutboundAllowedHosts, req: &Request) -> bool {
+        Self::is_uri_allowed_absolute(allowed_hosts, &req.uri).await
+            && Self::is_host_header_allowed(allowed_hosts, req).await
+    }
+
+    async fn is_allowed_relative(allowed_hosts: &OutboundAllowedHosts, req: &Request) -> bool {
+        Self::is_url_allowed_relative(allowed_hosts).await
+            && Self::is_host_header_allowed(allowed_hosts, req).await
+    }
+
+    async fn is_url_allowed_relative(allowed_hosts: &OutboundAllowedHosts) -> bool {
+        allowed_hosts
+            .check_relative_url(&["http", "https"])
+            .await
+            .unwrap_or(false)
+    }
+
+    async fn is_uri_allowed_absolute(allowed_hosts: &OutboundAllowedHosts, uri: &str) -> bool {
+        allowed_hosts.check_url(uri, "https").await.unwrap_or(false)
+    }
+
+    async fn is_host_header_allowed(allowed_hosts: &OutboundAllowedHosts, req: &Request) -> bool {
+        let host_header = req
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Host"))
+            .map(|(_, v)| v);
+        match host_header {
+            Some(host) => {
+                if host.starts_with("/") {
+                    Self::is_url_allowed_relative(allowed_hosts).await
+                } else {
+                    Self::is_uri_allowed_absolute(allowed_hosts, host).await
+                }
+            }
+            None => true,
+        }
     }
 }
 
@@ -315,4 +355,134 @@ fn headers_from_map(map: &http::HeaderMap) -> Vec<(String, String)> {
             ))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use futures::FutureExt;
+    use spin_factor_outbound_networking::config::allowed_hosts::{
+        AllowedHostConfig, AllowedHostsConfig,
+    };
+
+    fn allowed_hostify(allowed_hosts_list: &[&str]) -> OutboundAllowedHosts {
+        let allowed_host_configs = allowed_hosts_list
+            .iter()
+            .map(|s| AllowedHostConfig::parse(*s).unwrap())
+            .collect();
+        let allowed_hosts_config = AllowedHostsConfig::SpecificHosts(allowed_host_configs);
+        let allowed_hosts_config_fut = async move { Ok(Arc::new(allowed_hosts_config)) };
+        OutboundAllowedHosts::new(allowed_hosts_config_fut.boxed().shared(), None, false)
+    }
+
+    fn headers(host_header: Option<&str>) -> Vec<(String, String)> {
+        match host_header {
+            None => vec![],
+            Some(h) => vec![("Host".into(), h.into())],
+        }
+    }
+
+    fn requestify(uri: &str, host_header: Option<&str>) -> Request {
+        let headers = headers(host_header);
+        Request {
+            method: Method::Get,
+            uri: uri.into(),
+            headers,
+            params: vec![],
+            body: None,
+        }
+    }
+
+    async fn assert_allowed_absolute(
+        uri: &str,
+        host_header: Option<&str>,
+        allowed_hosts_list: &[&str],
+    ) {
+        let allowed_hosts = allowed_hostify(allowed_hosts_list);
+        let req = requestify(uri, host_header);
+
+        assert!(
+            crate::InstanceState::is_allowed_absolute(&allowed_hosts, &req).await,
+            "expected {uri} to validate against {allowed_hosts_list:?}"
+        );
+    }
+
+    async fn assert_not_allowed_absolute(
+        uri: &str,
+        host_header: Option<&str>,
+        allowed_hosts_list: &[&str],
+    ) {
+        let allowed_hosts = allowed_hostify(allowed_hosts_list);
+        let req = requestify(uri, host_header);
+
+        assert!(
+            !crate::InstanceState::is_allowed_absolute(&allowed_hosts, &req).await,
+            "expected {uri} to validate against {allowed_hosts_list:?}"
+        );
+    }
+
+    async fn assert_allowed_relative(
+        uri: &str,
+        host_header: Option<&str>,
+        allowed_hosts_list: &[&str],
+    ) {
+        let allowed_hosts = allowed_hostify(allowed_hosts_list);
+        let req = requestify(uri, host_header);
+
+        assert!(
+            crate::InstanceState::is_allowed_relative(&allowed_hosts, &req).await,
+            "expected {uri} to validate against {allowed_hosts_list:?}"
+        );
+    }
+
+    async fn assert_not_allowed_relative(
+        uri: &str,
+        host_header: Option<&str>,
+        allowed_hosts_list: &[&str],
+    ) {
+        let allowed_hosts = allowed_hostify(allowed_hosts_list);
+        let req = requestify(uri, host_header);
+
+        assert!(
+            !crate::InstanceState::is_allowed_relative(&allowed_hosts, &req).await,
+            "expected {uri} to validate against {allowed_hosts_list:?}"
+        );
+    }
+
+    async fn assert_allowed(uri: &str, host_header: Option<&str>, allowed_hosts_list: &[&str]) {
+        if uri.starts_with('/') {
+            assert_allowed_relative(uri, host_header, allowed_hosts_list).await
+        } else {
+            assert_allowed_absolute(uri, host_header, allowed_hosts_list).await
+        }
+    }
+
+    async fn assert_not_allowed(uri: &str, host_header: Option<&str>, allowed_hosts_list: &[&str]) {
+        if uri.starts_with('/') {
+            assert_not_allowed_relative(uri, host_header, allowed_hosts_list).await
+        } else {
+            assert_not_allowed_absolute(uri, host_header, allowed_hosts_list).await
+        }
+    }
+
+    #[tokio::test]
+    async fn validates_hosts() {
+        let allowed = &["https://okay.com", "https://legit.com"];
+
+        assert_allowed("https://okay.com/", None, allowed).await;
+        assert_allowed("https://okay.com/", Some("okay.com"), allowed).await;
+        assert_allowed("https://okay.com/", Some("legit.com"), allowed).await;
+
+        assert_not_allowed("https://crimes.com/", None, allowed).await;
+        assert_not_allowed("https://crimes.com/", Some("legit.com"), allowed).await;
+        assert_not_allowed("https://crimes.com/", Some("evil.com"), allowed).await;
+
+        assert_not_allowed("https://okay.com/", Some("evil.com"), allowed).await;
+
+        let allowed = &["https://okay.com", "http://self"];
+
+        assert_allowed("/foo", None, allowed).await;
+        assert_allowed("/foo", Some("okay.com"), allowed).await;
+        assert_not_allowed("/foo", Some("evil.com"), allowed).await;
+    }
 }
