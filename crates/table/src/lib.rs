@@ -15,6 +15,7 @@ pub struct Table<V> {
 
 impl<V> Default for Table<V> {
     fn default() -> Self {
+        // For the value, cf `spin_factors::DEFAULT_RESOURCE_TABLE_SIZE`
         Self::new(1024)
     }
 }

@@ -72,7 +72,7 @@ impl Factor for OutboundRedisFactor {
         Ok(InstanceState {
             allowed_host_checker: AllowedHostChecker::new(outbound_networking.allowed_hosts()),
             blocked_networks: outbound_networking.blocked_networks(),
-            connections: spin_resource_table::Table::new(1024),
+            connections: spin_resource_table::Table::new(spin_factors::DEFAULT_RESOURCE_TABLE_SIZE),
             semaphore: ctx.app_state().semaphore.clone(),
             otel,
         })

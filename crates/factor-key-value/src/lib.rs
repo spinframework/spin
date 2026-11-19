@@ -231,7 +231,7 @@ impl FactorInstanceBuilder for InstanceBuilder {
         Ok(KeyValueDispatch::new_with_capacity_and_semaphore(
             allowed_stores,
             store_manager,
-            u32::MAX,
+            spin_factors::DEFAULT_RESOURCE_TABLE_SIZE,
             semaphore,
             otel,
         ))
