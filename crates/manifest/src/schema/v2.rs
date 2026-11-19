@@ -78,7 +78,7 @@ impl AppManifest {
 
     /// Whether any component in the application defines the given profile.
     /// Not every component defines every profile, and components intentionally
-    /// fall back to the anonymouse profile if they are asked for a profile
+    /// fall back to the anonymous profile if they are asked for a profile
     /// they don't define. So this can be used to detect that a user might have
     /// mistyped a profile (e.g. `spin up --profile deugb`).
     pub fn ensure_profile(&self, profile: Option<&str>) -> anyhow::Result<()> {
