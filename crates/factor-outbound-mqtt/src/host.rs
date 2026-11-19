@@ -34,7 +34,7 @@ impl InstanceState {
         Self {
             allowed_hosts: AllowedHostChecker::new(allowed_hosts),
             create_client,
-            connections: spin_resource_table::Table::new(1024),
+            connections: spin_resource_table::Table::new(spin_factors::DEFAULT_RESOURCE_TABLE_SIZE),
             semaphore,
             otel,
             max_payload_size_bytes,
