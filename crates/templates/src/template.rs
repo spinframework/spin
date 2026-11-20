@@ -285,6 +285,26 @@ impl Template {
         }
     }
 
+    pub(crate) fn validate_safe_to_run(&self) -> anyhow::Result<()> {
+        for variant in self.variants.values() {
+            for snippet_path in variant.snippets.values() {
+                let snippet_path = PathBuf::from(snippet_path);
+                if snippet_path.is_absolute() {
+                    anyhow::bail!("invalid template: snippet paths must be relative");
+                }
+                for component in snippet_path.components() {
+                    if !matches!(component, std::path::Component::Normal(_)) {
+                        anyhow::bail!(
+                            "invalid template: snippet path attempts directory traversal"
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     // TODO: we should resolve this once at the start of Run and then use that forever
     fn variant(&self, variant_info: &TemplateVariantInfo) -> Option<TemplateVariant> {
         let kind = variant_info.kind();
@@ -769,5 +789,29 @@ mod test {
         assert_eq!(1, add_variant.snippets.len());
         assert!(!add_variant.snippets.contains_key("s1"));
         assert!(add_variant.snippets.contains_key("s2"));
+    }
+
+    fn test_data_root() -> PathBuf {
+        let crate_dir = env!("CARGO_MANIFEST_DIR");
+        PathBuf::from(crate_dir).join("tests")
+    }
+
+    #[test]
+    fn template_is_unsafe_if_it_attempts_directory_traversal() {
+        let test_dir = test_data_root().join("templates");
+        for malign_dir in &["evil-absolute", "evil-traverses"] {
+            let template_dir = test_dir.join(malign_dir);
+            let template = Template::load_from(&TemplateLayout::new(template_dir)).unwrap();
+            template.validate_safe_to_run().expect_err(&format!(
+                "'{malign_dir}' should have been judged unsafe but was not"
+            ));
+        }
+        for non_malign_dir in &["add-only-redirect", "partials"] {
+            let template_dir = test_dir.join(non_malign_dir);
+            let template = Template::load_from(&TemplateLayout::new(template_dir)).unwrap();
+            template.validate_safe_to_run().unwrap_or_else(|_| {
+                panic!("'{non_malign_dir}' should have been judged safe but was not")
+            }); // I know but clippy gets mad if I use expect
+        }
     }
 }
