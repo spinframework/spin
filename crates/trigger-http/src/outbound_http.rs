@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use http::uri::Scheme;
+use http::{uri::Scheme, version::Version};
 use spin_core::async_trait;
 use spin_factor_outbound_http::intercept::{self, InterceptOutcome, InterceptRequest};
 use spin_factor_outbound_networking::config::allowed_hosts::parse_service_chaining_target;
@@ -32,7 +32,14 @@ impl<F: RuntimeFactors> intercept::OutboundHttpInterceptor for OutboundHttpInter
     async fn intercept(&self, request: InterceptRequest) -> HttpResult<InterceptOutcome> {
         // Handle service chaining requests
         if let Some(component_id) = parse_service_chaining_target(request.uri()) {
-            let req = request.into_hyper_request();
+            let mut req = request.into_hyper_request();
+            // `wasmtime-wasi-http` 51.0.0 and later requires HTTP/1.x requests
+            // to have `host` headers, but we strip them out in
+            // `spin_factor_outbound_http::wasi::RequestSender::prepare_request`
+            // to work around an `nginx` bug (see the code comment in that
+            // function).  Setting the version to HTTP/2 here avoids that
+            // requirement.
+            *req.version_mut() = Version::HTTP_2;
             let path = req.uri().path().to_owned();
             let route_match = RouteMatch::synthetic(component_id, path);
             let resp = self

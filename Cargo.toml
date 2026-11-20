@@ -207,15 +207,15 @@ wac-types = "0.11.0"
 wasm-pkg-client = "0.11"
 wasm-pkg-common = "0.11"
 # Dependencies from bytecodealliance/wasmtime
-wasmtime = "50.0.2"
-wasmtime-wasi = { version = "50.0.2", features = ["p3"] }
-wasmtime-wasi-http = { version = "50.0.2", features = ["p3", "component-model-async"] }
+wasmtime = "51.0.0"
+wasmtime-wasi = { version = "51.0.0", features = ["p3"] }
+wasmtime-wasi-http = { version = "51.0.0", features = ["p3", "component-model-async"] }
 # Dependencies from bytecodealliance/wasm-tools
-wasm-encoder = "0.262.0"
-wasm-metadata = "0.262.0"
-wasmparser = "0.262.0"
-wit-component = "0.262.0"
-wit-parser = "0.262.0"
+wasm-encoder = "0.263.0"
+wasm-metadata = "0.263.0"
+wasmparser = "0.263.0"
+wit-component = "0.263.0"
+wit-parser = "0.263.0"
 
 spin-componentize = { path = "crates/componentize" }
 
