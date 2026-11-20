@@ -1,0 +1,9 @@
+manifest_version = "1"
+id = "evil-absolute"
+description = "Tests absolute path in snippets is caught"
+trigger_type = "http"
+
+[add_component]
+[add_component.snippets]
+component = "/home/victim/secrets/secret.txt"
+variables = "variables.txt"

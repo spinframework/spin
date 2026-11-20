@@ -1,0 +1,8 @@
+manifest_version = "1"
+id = "evil-traverses"
+description = "Tests path traversal in snippets is caught"
+trigger_type = "http"
+
+[add_component]
+[add_component.snippets]
+component = "wibble/../../../secrets/secret.txt"
