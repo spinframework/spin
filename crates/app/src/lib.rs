@@ -203,6 +203,50 @@ impl App {
         Ok(locked)
     }
 
+    /// Scrubs the locked app to only contain triggers of the given types, and
+    /// the components used by those triggers
+    fn retain_trigger_types(
+        self,
+        retained_trigger_types: &[&str],
+        validators: &[&ValidatorFn],
+    ) -> Result<LockedApp> {
+        self.validate_retained_trigger_types_exist(retained_trigger_types)?;
+        let component_ids: HashSet<String> = self
+            .triggers()
+            .filter(|t| retained_trigger_types.contains(&t.trigger_type()))
+            .filter_map(|t| t.component().ok().map(|comp| comp.id().to_owned()))
+            .collect();
+        let retained_components = component_ids
+            .iter()
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>();
+        for validator in validators {
+            validator(&self, &retained_components).map_err(Error::ValidationError)?;
+        }
+        let mut locked = Arc::unwrap_or_clone(self.locked);
+        locked
+            .triggers
+            .retain(|t| retained_trigger_types.contains(&t.trigger_type.as_str()));
+        locked.components.retain(|c| component_ids.contains(&c.id));
+        Ok(locked)
+    }
+
+    /// Validates that all trigger types specified to be retained are actually used in the app
+    fn validate_retained_trigger_types_exist(&self, retained_trigger_types: &[&str]) -> Result<()> {
+        let app_trigger_types = self
+            .triggers()
+            .map(|t| t.trigger_type())
+            .collect::<HashSet<_>>();
+        for t in retained_trigger_types {
+            if !app_trigger_types.contains(t) {
+                return Err(Error::ValidationError(anyhow::anyhow!(
+                    "Specified trigger type \"{t}\" not found in application"
+                )));
+            }
+        }
+        Ok(())
+    }
+
     /// Validates that all components specified to be retained actually exist in the app
     fn validate_retained_components_exist(&self, retained_components: &[&str]) -> Result<()> {
         let app_components = self
@@ -335,6 +379,16 @@ pub fn retain_components(
     App::new("unused", locked).retain_components(components, validators)
 }
 
+/// Scrubs the locked app to only contain triggers of the given types
+/// Introspects the LockedApp to find and selectively retain the components used by those triggers
+pub fn retain_trigger_types(
+    locked: LockedApp,
+    trigger_types: &[&str],
+    validators: &[&ValidatorFn],
+) -> Result<LockedApp> {
+    App::new("unused", locked).retain_trigger_types(trigger_types, validators)
+}
+
 #[cfg(test)]
 mod test {
     use spin_factors_test::build_locked_app;
@@ -368,5 +422,179 @@ mod test {
             .collect::<HashSet<_>>();
         assert!(components.contains("empty"));
         assert!(components.len() == 1);
+    }
+
+    #[tokio::test]
+    async fn test_retain_trigger_types_filters_triggers_and_components() {
+        let manifest = toml::toml! {
+            spin_manifest_version = 2
+
+            [application]
+            name = "test-app"
+
+            [[trigger.test-trigger]]
+            component = "only-test"
+
+            [[trigger.test-trigger]]
+            component = "shared"
+
+            [[trigger.other-trigger]]
+            component = "only-other"
+
+            [[trigger.other-trigger]]
+            component = "shared"
+
+            [component.only-test]
+            source = "does-not-exist.wasm"
+
+            [component.only-other]
+            source = "does-not-exist.wasm"
+
+            [component.shared]
+            source = "does-not-exist.wasm"
+        };
+        let mut locked_app = build_locked_app(&manifest).await.unwrap();
+        locked_app = retain_trigger_types(locked_app, &["test-trigger"], &[]).unwrap();
+
+        let trigger_types = locked_app
+            .triggers
+            .iter()
+            .map(|t| t.trigger_type.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(vec!["test-trigger", "test-trigger"], trigger_types);
+
+        let components = locked_app
+            .components
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect::<HashSet<_>>();
+        assert_eq!(HashSet::from(["only-test", "shared"]), components);
+    }
+
+    #[tokio::test]
+    async fn test_retain_trigger_types_keeps_triggers_without_components() {
+        let manifest = toml::toml! {
+            spin_manifest_version = 2
+
+            [application]
+            name = "test-app"
+
+            [[trigger.test-trigger]]
+            id = "componentless"
+
+            [[trigger.other-trigger]]
+            component = "other"
+
+            [component.other]
+            source = "does-not-exist.wasm"
+        };
+        let mut locked_app = build_locked_app(&manifest).await.unwrap();
+        locked_app = retain_trigger_types(locked_app, &["test-trigger"], &[]).unwrap();
+
+        assert_eq!(1, locked_app.triggers.len());
+        assert_eq!("componentless", locked_app.triggers[0].id);
+        assert!(locked_app.components.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_retain_trigger_types_with_multiple_types_keeps_all_of_them() {
+        let manifest = toml::toml! {
+            spin_manifest_version = 2
+
+            [application]
+            name = "test-app"
+
+            [[trigger.test-trigger]]
+            component = "test"
+
+            [[trigger.other-trigger]]
+            component = "other"
+
+            [[trigger.third-trigger]]
+            component = "third"
+
+            [component.test]
+            source = "does-not-exist.wasm"
+
+            [component.other]
+            source = "does-not-exist.wasm"
+
+            [component.third]
+            source = "does-not-exist.wasm"
+        };
+        let mut locked_app = build_locked_app(&manifest).await.unwrap();
+        locked_app =
+            retain_trigger_types(locked_app, &["test-trigger", "third-trigger"], &[]).unwrap();
+
+        let trigger_types = locked_app
+            .triggers
+            .iter()
+            .map(|t| t.trigger_type.as_str())
+            .collect::<HashSet<_>>();
+        assert_eq!(
+            HashSet::from(["test-trigger", "third-trigger"]),
+            trigger_types
+        );
+
+        let components = locked_app
+            .components
+            .iter()
+            .map(|c| c.id.as_str())
+            .collect::<HashSet<_>>();
+        assert_eq!(HashSet::from(["test", "third"]), components);
+    }
+
+    #[tokio::test]
+    async fn test_retain_trigger_types_rejects_unknown_trigger_type() {
+        let manifest = toml::toml! {
+            spin_manifest_version = 2
+
+            [application]
+            name = "test-app"
+
+            [[trigger.test-trigger]]
+            component = "empty"
+
+            [component.empty]
+            source = "does-not-exist.wasm"
+        };
+        let locked_app = build_locked_app(&manifest).await.unwrap();
+        let err = retain_trigger_types(locked_app, &["test-trigger", "missing-trigger"], &[])
+            .expect_err("filtering on a trigger type the app doesn't use should fail");
+        assert!(
+            err.to_string()
+                .contains("Specified trigger type \"missing-trigger\" not found in application"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_retain_trigger_types_validates_retained_components() {
+        let manifest = toml::toml! {
+            spin_manifest_version = 2
+
+            [application]
+            name = "test-app"
+
+            [[trigger.test-trigger]]
+            component = "test"
+
+            [[trigger.other-trigger]]
+            component = "other"
+
+            [component.test]
+            source = "does-not-exist.wasm"
+
+            [component.other]
+            source = "does-not-exist.wasm"
+        };
+        let locked_app = build_locked_app(&manifest).await.unwrap();
+        let expects_only_test = |_: &App, retained: &[&str]| {
+            anyhow::ensure!(retained == ["test"], "unexpected components {retained:?}");
+            Ok(())
+        };
+        retain_trigger_types(locked_app.clone(), &["test-trigger"], &[&expects_only_test]).unwrap();
+        retain_trigger_types(locked_app, &["other-trigger"], &[&expects_only_test])
+            .expect_err("validation failure should fail the filtering");
     }
 }
