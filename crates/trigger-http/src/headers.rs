@@ -98,16 +98,6 @@ pub fn prepare_request_headers(
     route_match: &RouteMatch,
     client_addr: SocketAddr,
 ) -> Result<Vec<(String, String)>> {
-    let mut res = Vec::new();
-    for (name, value) in req
-        .headers()
-        .iter()
-        .map(|(name, value)| (name.to_string(), std::str::from_utf8(value.as_bytes())))
-    {
-        let value = value?.to_string();
-        res.push((name, value));
-    }
-
     let default_host = http::HeaderValue::from_str("localhost")?;
     let host = std::str::from_utf8(
         req.headers()
@@ -116,14 +106,31 @@ pub fn prepare_request_headers(
             .as_bytes(),
     )?;
 
-    // Set the environment information (path info, base path, etc) as headers.
-    // In the future, we might want to have this information in a context
-    // object as opposed to headers.
-    for (keys, val) in compute_default_headers(req.uri(), host, route_match, client_addr)? {
-        res.push((prepare_header_key(&keys[0]), val.into_owned()));
+    let built_in_headers = compute_default_headers(req.uri(), host, route_match, client_addr)?;
+    let mut headers = built_in_headers
+        .into_iter()
+        .map(|(k, v)| (prepare_header_key(&k[0]), v.into_owned()))
+        .collect::<Vec<_>>();
+    let sensitive_keys = headers
+        .iter()
+        .map(|t| t.0.clone())
+        .collect::<std::collections::HashSet<_>>();
+
+    for (name, value) in req
+        .headers()
+        .iter()
+        .map(|(name, value)| (name.to_string(), std::str::from_utf8(value.as_bytes())))
+    {
+        let name = if sensitive_keys.contains(&name.to_ascii_lowercase()) {
+            format!("client-provided-{name}")
+        } else {
+            name
+        };
+        let value = value?.to_string();
+        headers.push((name, value));
     }
 
-    Ok(res)
+    Ok(headers)
 }
 
 pub fn append_headers(
@@ -306,6 +313,80 @@ mod tests {
     }
 
     #[test]
+    fn test_default_headers_with_client_spoofing() -> Result<()> {
+        use http_body_util::{BodyExt, Empty, combinators::UnsyncBoxBody};
+
+        let scheme = "https";
+        let host = "fermyon.dev";
+        let trigger_route = "/foo/...";
+        let component_path = "/foo";
+        let path_info = "/bar";
+        let client_addr: SocketAddr = "127.0.0.1:8777".parse().unwrap();
+
+        let req_uri = format!(
+            "{}://{}{}{}?key1=value1&key2=value2",
+            scheme, host, component_path, path_info
+        );
+
+        // Any old wasmtime_wasi_http error: this is infallible and
+        // we just need to make the types line up.
+        let body = UnsyncBoxBody::new(
+            Empty::new().map_err(|_| wasmtime_wasi_http::Error::ConfigurationError),
+        );
+
+        let req = http::Request::builder()
+            .method("POST")
+            .uri(req_uri)
+            .header("host", host)
+            .header("spin-client-addr", "evil.wicked.lies")
+            .header("spin-path-info", "/crimes/crimes/and/more/crimes")
+            .header("SPIN-base-Path", "/naughtyville/ohio")
+            .body(body)?;
+
+        let router = Router::build(
+            "/",
+            [(
+                &spin_http::routes::TriggerLookupKey::Component("DUMMY".into()),
+                &trigger_route.into(),
+            )],
+            None,
+        )?;
+        let route_match = router.route("/foo/bar")?;
+
+        let headers = prepare_request_headers(&req, &route_match, client_addr)?;
+
+        // The Spin predefined headers should be as intended
+
+        assert_eq!(
+            search_prepared("spin-full-url", &headers).unwrap(),
+            "https://fermyon.dev/foo/bar?key1=value1&key2=value2"
+        );
+        assert_eq!(search_prepared("spin-path-info", &headers).unwrap(), "/bar");
+        assert_eq!(search_prepared("spin-base-path", &headers).unwrap(), "/");
+        assert_eq!(
+            search_prepared("spin-client-addr", &headers).unwrap(),
+            "127.0.0.1:8777"
+        );
+
+        // The client provided headers should be preserved under new names
+
+        assert_eq!(
+            search_prepared("client-provided-spin-client-addr", &headers).unwrap(),
+            "evil.wicked.lies"
+        );
+        assert_eq!(
+            search_prepared("client-provided-spin-path-info", &headers).unwrap(),
+            "/crimes/crimes/and/more/crimes"
+        );
+        assert_eq!(
+            search_prepared("client-provided-spin-base-path", &headers).unwrap(),
+            "/naughtyville/ohio"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn forbidden_headers_are_removed() {
         let mut req = Request::get("http://test.spin.internal")
             .header("Host", "test.spin.internal")
@@ -371,5 +452,9 @@ mod tests {
         }
 
         res
+    }
+
+    fn search_prepared<'a>(key: &str, headers: &'a [(String, String)]) -> Option<&'a String> {
+        headers.iter().find(|(k, _)| k == key).map(|(_, v)| v)
     }
 }
