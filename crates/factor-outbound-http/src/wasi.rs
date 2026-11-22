@@ -460,6 +460,14 @@ impl RequestSender {
         // Note that we do this _before_ invoking the request interceptor.  It may
         // decide to add the `host` header back in, regardless of the nginx bug, in
         // which case we'll let it do so without interferring.
+        //
+        // TODO: This is invalid for HTTP/1.x requests, which require a `host`
+        // header, but as of this writing there's no way for us to do it only
+        // for HTTP/2 requests without e.g. forking `hyper-util` since we give
+        // up ownership of the request when we pass it to `Client::request`, and
+        // that happens before ALPN negotiation determines the protocol version.
+        // We could fork or replace `hyper-util`, but neither option is
+        // appealing at this time.
         request.headers_mut().remove(HOST);
         Ok(())
     }
