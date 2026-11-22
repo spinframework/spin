@@ -18,7 +18,7 @@ pub use spin_capabilities::InheritConfiguration;
 /// component's dependencies section.
 ///
 /// To compose the dependent component with its dependencies, the composer will
-/// first prepare the dependencies by maximally matching depenedency names to
+/// first prepare the dependencies by maximally matching dependency names to
 /// import names and register dependency components with the composition graph
 /// with the `deny-all` adapter applied if the set of configurations to inherit
 /// is the empty set. Once this mapping of import names to dependency infos is
