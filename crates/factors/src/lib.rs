@@ -22,6 +22,14 @@ pub use crate::{
     },
 };
 
+/// A typical size for resource tables. Use this if you don't have a
+/// reason to use another value (or as the default if your table is
+/// configurable).
+///
+/// This value is aligned with the size chosen in `Table::default`
+/// in `table/src/lib.rs`.
+pub const DEFAULT_RESOURCE_TABLE_SIZE: u32 = 1024;
+
 /// Result wrapper type defaulting to use [`Error`].
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 

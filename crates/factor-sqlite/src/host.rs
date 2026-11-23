@@ -35,7 +35,7 @@ impl InstanceState {
     ) -> Self {
         Self {
             allowed_databases,
-            connections: spin_resource_table::Table::new(256),
+            connections: spin_resource_table::Table::new(spin_factors::DEFAULT_RESOURCE_TABLE_SIZE),
             connection_creators,
             otel,
         }
