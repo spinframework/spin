@@ -9351,6 +9351,7 @@ dependencies = [
  "spin-world",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

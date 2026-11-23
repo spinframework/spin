@@ -25,6 +25,11 @@ pub use host::MqttClient;
 use crate::host::other_error_v3;
 use crate::runtime_config::RuntimeConfig;
 
+// We cap guest-provided `inflight_num` MQTT options at this value.
+// The limit (100) is the same as the MQTT default.
+// A future enhancement is to make this runtime-config-able.
+const MAX_INFLIGHT: u16 = 100;
+
 pub struct OutboundMqttFactor {
     create_client: Arc<dyn ClientCreator>,
 }
@@ -126,18 +131,63 @@ impl NetworkedMqttClient {
         password: String,
         keep_alive_interval: Duration,
     ) -> Result<Self, v3::Error> {
+        // MqttOptions::parse_url asserts on certain option values. Yes,
+        // you read that right. So we have to validate the address beforehand.
+        reject_terrible_asserts(&address).map_err(|e| {
+            tracing::warn!("invalid MQTT connection string: {e}");
+            v3::Error::InvalidAddress
+        })?;
+
         let mut conn_opts = rumqttc::MqttOptions::parse_url(address).map_err(|e| {
             tracing::error!("MQTT URL parse error: {e:?}");
             v3::Error::InvalidAddress
         })?;
         conn_opts.set_credentials(username, password);
         conn_opts.set_keep_alive(keep_alive_interval);
+        if conn_opts.inflight() > MAX_INFLIGHT {
+            conn_opts.set_inflight(MAX_INFLIGHT);
+        }
+
         let (client, event_loop) = AsyncClient::new(conn_opts, MQTT_CHANNEL_CAP);
         Ok(Self {
             inner: client,
             event_loop: Mutex::new(event_loop),
         })
     }
+}
+
+fn reject_terrible_asserts(address: &str) -> Result<(), rumqttc::OptionError> {
+    // MQTT's URL parser calls some setters which assert, rather than erroring,
+    // on invalid values, but do not check their preconditions. I believe that
+    // "inflight_num=0" and "clean_session=false" when client_id is empty are
+    // the only settings affected - anything else, including parse errors, does result
+    // in a proper error. (Specifically we do not need to check for parse errors,
+    // only handle successful parses that would later assert.)
+    //
+    // The strings in this function are taken from rumqttc::MqttOptions::try_from.
+
+    let url = url::Url::parse(address).map_err(rumqttc::OptionError::Parse)?;
+    let queries = url
+        .query_pairs()
+        .collect::<std::collections::HashMap<_, _>>();
+
+    let inflight = queries.get("inflight_num");
+    if let Some(inflight) = inflight.and_then(|s| s.parse::<u16>().ok())
+        && inflight == 0
+    {
+        return Err(rumqttc::OptionError::Inflight);
+    }
+
+    let client_id = queries.get("client_id");
+    let clean_session = queries.get("clean_session");
+    if let Some(clean_session) = clean_session.and_then(|s| s.parse::<bool>().ok())
+        && client_id.is_some_and(|cid| cid.is_empty())
+        && !clean_session
+    {
+        return Err(rumqttc::OptionError::CleanSession);
+    }
+
+    Ok(())
 }
 
 #[async_trait]
@@ -204,5 +254,25 @@ where
         keep_alive_interval: Duration,
     ) -> Result<Arc<dyn MqttClient>, v3::Error> {
         self(address, username, password, keep_alive_interval)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn terrible_asserts_are_rejected() {
+        reject_terrible_asserts("mqtt://h?inflight_num=0").expect_err("inflight 0");
+        reject_terrible_asserts("mqtt://h?inflight_num=1").expect("inflight 1");
+
+        reject_terrible_asserts("mqtt://h?client_id=&clean_session=false")
+            .expect_err("cid empty, clean_session false");
+        reject_terrible_asserts("mqtt://h?client_id=fie&clean_session=false")
+            .expect("cid nonempty, clean_session false");
+        reject_terrible_asserts("mqtt://h?client_id=&clean_session=true")
+            .expect("cid empty, clean_session true");
+        reject_terrible_asserts("mqtt://h?client_id=fie&clean_session=true")
+            .expect("cid nonempty, clean_session true");
     }
 }
