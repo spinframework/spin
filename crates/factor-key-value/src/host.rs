@@ -712,12 +712,17 @@ impl wasi_keyvalue::atomics::Host for KeyValueDispatch {
         let cas = self
             .get_cas(Resource::<Bucket>::new_own(cas_rep))
             .map_err(|e| CasError::StoreError(atomics::Error::Other(e.to_string())))?;
-        let _permit = self
-            .acquire_permit_wasi()
-            .await
-            .map_err(CasError::StoreError)?;
 
-        match cas.swap(value).await {
+        let swap_res = {
+            // In a block to drop permit promptly
+            let _permit = self
+                .acquire_permit_wasi()
+                .await
+                .map_err(CasError::StoreError)?;
+            cas.swap(value).await
+        };
+
+        match swap_res {
             Ok(_) => Ok(()),
             Err(err) => match err {
                 SwapError::CasFailed(_) => {
