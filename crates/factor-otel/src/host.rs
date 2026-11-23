@@ -3,7 +3,6 @@ use anyhow::Result;
 use anyhow::anyhow;
 use opentelemetry::trace::TraceContextExt;
 use opentelemetry_sdk::error::OTelSdkError;
-use opentelemetry_sdk::logs::LogProcessor;
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
 use opentelemetry_sdk::trace::SpanProcessor;
 use spin_world::wasi;
@@ -105,13 +104,16 @@ impl wasi::otel::metrics::Host for InstanceState {
 
 impl wasi::otel::logs::Host for InstanceState {
     async fn on_emit(&mut self, data: wasi::otel::logs::LogRecord) -> anyhow::Result<()> {
+        use opentelemetry::logs::{Logger, LoggerProvider};
+
         // If the host does not have logs enabled we just no-op
-        let Some(log_processor) = self.log_processor.as_ref() else {
+        let Some(sdk_log_provider) = self.sdk_logger_provider.as_ref() else {
             return Ok(());
         };
 
-        let (mut record, scope) = spin_world::wasi_otel::parse_wasi_log_record(data);
-        log_processor.emit(&mut record, &scope);
+        let (record, scope) = spin_world::wasi_otel::parse_wasi_log_record(data);
+        let log_processor = sdk_log_provider.logger_with_scope(scope);
+        log_processor.emit(record);
         Ok(())
     }
 }
