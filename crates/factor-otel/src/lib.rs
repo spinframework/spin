@@ -76,6 +76,13 @@ impl Factor for OtelFactor {
             );
         }
 
+        let sdk_logger_provider = self.log_processor.as_ref().map(|lp| {
+            let log_processor = DammitOTel(lp.clone());
+            opentelemetry_sdk::logs::SdkLoggerProvider::builder()
+                .with_log_processor(log_processor)
+                .build()
+        });
+
         Ok(InstanceState {
             tracing_state: self.span_processor.as_ref().map(|span_processor| {
                 Arc::new(RwLock::new(TracingState {
@@ -85,8 +92,30 @@ impl Factor for OtelFactor {
                 }))
             }),
             metric_exporter: self.metric_exporter.clone(),
-            log_processor: self.log_processor.clone(),
+            sdk_logger_provider,
         })
+    }
+}
+
+// OTel is mad about our Arc. Dammit OTel
+#[derive(Debug)]
+struct DammitOTel(Arc<BatchLogProcessor<Tokio>>);
+
+impl LogProcessor for DammitOTel {
+    fn emit(
+        &self,
+        data: &mut opentelemetry_sdk::logs::SdkLogRecord,
+        instrumentation: &opentelemetry::InstrumentationScope,
+    ) {
+        self.0.emit(data, instrumentation);
+    }
+
+    fn force_flush(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.0.force_flush()
+    }
+
+    fn shutdown(&self) -> opentelemetry_sdk::error::OTelSdkResult {
+        self.0.shutdown()
     }
 }
 
@@ -179,7 +208,7 @@ impl OtelFactor {
 pub struct InstanceState {
     tracing_state: Option<Arc<RwLock<TracingState>>>,
     metric_exporter: Option<Arc<MetricExporter>>,
-    log_processor: Option<Arc<BatchLogProcessor<Tokio>>>,
+    sdk_logger_provider: Option<opentelemetry_sdk::logs::SdkLoggerProvider>,
 }
 
 impl SelfInstanceBuilder for InstanceState {}
