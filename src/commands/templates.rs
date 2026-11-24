@@ -655,6 +655,7 @@ fn skipped_reason_text(reason: &SkippedReason) -> String {
     match reason {
         SkippedReason::AlreadyExists => "Already exists".to_owned(),
         SkippedReason::InvalidManifest(msg) => format!("Template load error: {msg}"),
+        SkippedReason::SafetyValidation(msg) => format!("Invalid template: {msg}"),
         SkippedReason::CouldNotRemove => {
             "No longer exists in source, but could not uninstall".to_owned()
         }
