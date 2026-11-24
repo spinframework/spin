@@ -81,6 +81,8 @@ pub enum SkippedReason {
     AlreadyExists,
     /// The template was skipped because its manifest was missing or invalid.
     InvalidManifest(String),
+    /// The template was skipped because it contained suspicious content.
+    SafetyValidation(String),
     /// The template was removed from the source but could not be removed locally.
     CouldNotRemove,
 }
@@ -255,6 +257,13 @@ impl TemplateManager {
             }
         };
         let id = template.id();
+
+        if let Err(e) = validate_safe_to_install(source_dir, &template) {
+            return Ok(InstallationResult::Skipped(
+                id.to_string(),
+                SkippedReason::SafetyValidation(e.to_string()),
+            ));
+        }
 
         let message = format!("Installing template {id}...");
         reporter.report(&message);
@@ -475,6 +484,20 @@ async fn copy_template_into(
     write_install_record(dest_dir, source);
 
     load_template_from(id, dest_dir)
+}
+
+fn validate_safe_to_install(source_dir: &Path, template: &Template) -> anyhow::Result<()> {
+    let walk = walkdir::WalkDir::new(source_dir).follow_links(false);
+
+    for entry in walk {
+        if entry.is_ok_and(|e| e.path_is_symlink()) {
+            anyhow::bail!("template contains a symlink");
+        }
+    }
+
+    template.validate_safe_to_run()?;
+
+    Ok(())
 }
 
 fn write_install_record(dest_dir: &Path, source: &TemplateSource) {
@@ -902,10 +925,13 @@ mod tests {
 
         let install_results = manager.install_test_data_templates().await;
 
-        assert_eq!(1, install_results.skipped.len());
+        assert!(!install_results.skipped.is_empty());
 
-        let (id, reason) = &install_results.skipped[0];
-        assert_eq!("testing-custom-filter", id);
+        let (_, reason) = &install_results
+            .skipped
+            .iter()
+            .find(|(id, _)| id == "testing-custom-filter")
+            .expect("'testing-custom-filter' should have been skipped'");
         let SkippedReason::InvalidManifest(message) = reason else {
             panic!("skip reason should be InvalidManifest"); // clippy dislikes assert!(false...)
         };

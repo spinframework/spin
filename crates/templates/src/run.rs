@@ -97,8 +97,7 @@ impl Run {
         &self,
         interaction: impl InteractionStrategy,
     ) -> anyhow::Result<Option<TemplateRenderer>> {
-        self.validate_version()?;
-        self.validate_add_component_manifest_version()?;
+        self.validate_template()?;
 
         // TODO: rationalise `path` and `dir`
         let to = self.generation_target_dir();
@@ -246,6 +245,13 @@ impl Run {
                 Err(e) => Some(format!("{name}: {e}")),
             },
         }
+    }
+
+    fn validate_template(&self) -> anyhow::Result<()> {
+        self.template.validate_safe_to_run()?;
+        self.validate_version()?;
+        self.validate_add_component_manifest_version()?;
+        Ok(())
     }
 
     fn validate_add_component_manifest_version(&self) -> anyhow::Result<()> {
