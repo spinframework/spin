@@ -139,10 +139,10 @@ pub fn append_headers(
 ) -> Result<()> {
     if let Some(src) = headers {
         for (k, v) in src.iter() {
-            map.insert(
+            map.try_insert(
                 http::header::HeaderName::from_str(k)?,
                 http::header::HeaderValue::from_str(v)?,
-            );
+            )?;
         }
     };
 
@@ -438,6 +438,15 @@ mod tests {
 
         assert_eq!(2, req.headers().len());
         assert!(req.headers().get("Host").is_some());
+    }
+
+    #[test]
+    fn absurd_number_of_headers_does_not_panic() {
+        let mut map = http::HeaderMap::new();
+        let headers = (0..65536)
+            .map(|i| (format!("header{i}"), format!("value{i}")))
+            .collect();
+        _ = append_headers(&mut map, Some(headers));
     }
 
     fn search(
