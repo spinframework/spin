@@ -106,7 +106,7 @@ impl<F: RuntimeFactors> Trigger<F> for RedisTrigger {
         let mut subscriber_tasks = Vec::new();
         for (address, channel_components) in server_channel_components {
             let subscriber = Subscriber::new(address, trigger_app.clone(), channel_components)?;
-            let task = tokio::spawn(subscriber.run_listener());
+            let task = tokio::spawn(async move { subscriber.run_listener().await });
             subscriber_tasks.push(task);
         }
 
@@ -122,9 +122,24 @@ type ChannelComponents = HashMap<String, Vec<String>>;
 /// Subscribes to channels from a single Redis server.
 struct Subscriber<F: RuntimeFactors> {
     client: Client,
+    handler_info: Arc<HandlerInfo<F>>,
+}
+
+struct HandlerInfo<F: RuntimeFactors> {
     trigger_app: Arc<TriggerApp<RedisTrigger, F>>,
     channel_components: ChannelComponents,
 }
+
+// // `derive` doesn't work because the derive macro worries that
+// // F needs to be Clone (which is doesn't because Arc)
+// impl<F: RuntimeFactors> Clone for HandlerInfo<F> {
+//     fn clone(&self) -> Self {
+//         Self {
+//             trigger_app: self.trigger_app.clone(),
+//             channel_components: self.channel_components.clone(),
+//         }
+//     }
+// }
 
 impl<F: RuntimeFactors> Subscriber<F> {
     fn new(
@@ -135,13 +150,15 @@ impl<F: RuntimeFactors> Subscriber<F> {
         let client = Client::open(address)?;
         Ok(Self {
             client,
-            trigger_app,
-            channel_components,
+            handler_info: Arc::new(HandlerInfo {
+                trigger_app,
+                channel_components,
+            }),
         })
     }
 
     async fn run_listener(self) -> anyhow::Result<()> {
-        let server_addr = &self.client.get_connection_info().addr;
+        let server_addr = self.client.get_connection_info().addr.clone();
 
         tracing::info!("Connecting to Redis server at {server_addr}");
         let mut pubsub = self
@@ -153,7 +170,7 @@ impl<F: RuntimeFactors> Subscriber<F> {
         println!("Active Channels on {server_addr}:");
 
         // Subscribe to channels
-        for (channel, components) in &self.channel_components {
+        for (channel, components) in &self.handler_info.channel_components {
             tracing::info!("Subscribing to {channel:?} on {server_addr}");
             pubsub.subscribe(channel).await.with_context(|| {
                 format!("Redis trigger failed to subscribe to channel {channel:?} on {server_addr}")
@@ -163,9 +180,13 @@ impl<F: RuntimeFactors> Subscriber<F> {
 
         let mut message_stream = pubsub.on_message();
         while let Some(msg) = message_stream.next().await {
-            if let Err(err) = self.handle_message(msg).await {
-                tracing::error!("Error handling message from {server_addr}: {err}");
-            }
+            let handler_info = self.handler_info.clone();
+            let server_addr = server_addr.clone();
+            tokio::task::spawn(async move {
+                if let Err(err) = Self::handle_message(&handler_info, msg, &server_addr).await {
+                    tracing::error!("Error handling message from {server_addr}: {err}");
+                }
+            });
         }
         Err(anyhow::anyhow!("disconnected from {server_addr}"))
     }
@@ -176,40 +197,44 @@ impl<F: RuntimeFactors> Subscriber<F> {
         messaging.operation = "receive",
         messaging.system = "redis"
     ))]
-    async fn handle_message(&self, msg: Msg) -> anyhow::Result<()> {
-        let server_addr = &self.client.get_connection_info().addr;
+    async fn handle_message(
+        handler_info: &HandlerInfo<F>,
+        msg: Msg,
+        server_addr: &redis::ConnectionAddr,
+    ) -> anyhow::Result<()> {
         let channel = msg.get_channel_name();
         tracing::trace!(%server_addr, %channel, "Received message");
 
-        let Some(component_ids) = self.channel_components.get(channel) else {
+        let Some(component_ids) = handler_info.channel_components.get(channel) else {
             anyhow::bail!("message from unexpected channel {channel:?}");
         };
 
         let dispatch_futures = component_ids.iter().map(|component_id| {
             tracing::trace!("Executing Redis component {component_id}");
-            self.dispatch_handler(&msg, component_id)
-                .inspect_err(move |err| {
+            Self::dispatch_handler(&handler_info.trigger_app, &msg, component_id).inspect_err(
+                move |err| {
                     tracing::info!("Component {component_id} handler failed: {err}");
-                })
+                },
+            )
         });
         futures::future::join_all(dispatch_futures).await;
 
         Ok(())
     }
 
-    async fn dispatch_handler(&self, msg: &Msg, component_id: &str) -> anyhow::Result<()> {
+    async fn dispatch_handler(
+        trigger_app: &TriggerApp<RedisTrigger, F>,
+        msg: &Msg,
+        component_id: &str,
+    ) -> anyhow::Result<()> {
         spin_telemetry::metrics::counter!(
             spin.request_count = 1,
             trigger_type = "redis",
-            app_id = self.trigger_app.app().id().to_string(),
+            app_id = trigger_app.app().id().to_string(),
             component_id = component_id.to_string()
         );
 
-        let (instance, mut store) = self
-            .trigger_app
-            .prepare(component_id)?
-            .instantiate(())
-            .await?;
+        let (instance, mut store) = trigger_app.prepare(component_id)?.instantiate(()).await?;
 
         let pre = instance.instance_pre(&store);
 
