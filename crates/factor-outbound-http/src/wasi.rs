@@ -22,7 +22,7 @@ use hyper_util::{
         Client,
         connect::{Connected, Connection},
     },
-    rt::{TokioExecutor, TokioIo},
+    rt::{TokioExecutor, TokioIo, TokioTimer},
 };
 use opentelemetry_semantic_conventions::attribute as otel_attribute;
 use spin_factor_outbound_networking::{
@@ -560,6 +560,7 @@ impl HttpClients {
             let mut builder = Client::builder(TokioExecutor::new());
             if !enable_pooling {
                 builder.pool_max_idle_per_host(0);
+                builder.pool_timer(TokioTimer::new());
             }
             builder
         };
