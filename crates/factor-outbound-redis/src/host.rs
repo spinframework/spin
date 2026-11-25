@@ -40,23 +40,44 @@ impl InstanceState {
         &mut self,
         address: String,
     ) -> Result<Resource<v2::Connection>, v2::Error> {
-        let permit = self
-            .semaphore
-            .acquire()
-            .await
-            .map_err(|_| v2::Error::TooManyConnections)?;
-        let config = AsyncConnectionConfig::new()
-            .set_dns_resolver(SpinDnsResolver(self.blocked_networks.clone()))
-            .set_connection_timeout(REDIS_CONNECTION_TIMEOUT);
-        let conn = redis::Client::open(address.as_str())
-            .map_err(|_| v2::Error::InvalidAddress)?
-            .get_multiplexed_async_connection_with_config(&config)
-            .await
-            .map_err(other_error_v2)?;
+        let (conn, permit) = Self::establish_connection_impl(
+            &self.semaphore,
+            &self.blocked_networks,
+            address.as_str(),
+        )
+        .await
+        .map_err(to_v2_error)?;
         self.connections
             .push((conn, permit))
             .map(Resource::new_own)
             .map_err(|_| v2::Error::TooManyConnections)
+    }
+
+    async fn establish_connection_impl(
+        semaphore: &ConnectionSemaphore,
+        blocked_networks: &BlockedNetworks,
+        address: &str,
+    ) -> Result<
+        (
+            MultiplexedConnection,
+            spin_factor_outbound_networking::ConnectionPermit,
+        ),
+        v3::Error,
+    > {
+        let permit = semaphore
+            .acquire()
+            .await
+            .map_err(|_| v3::Error::TooManyConnections)?;
+        let config = AsyncConnectionConfig::new()
+            .set_dns_resolver(SpinDnsResolver(blocked_networks.clone()))
+            .set_connection_timeout(REDIS_CONNECTION_TIMEOUT)
+            .set_response_timeout(REDIS_CONNECTION_TIMEOUT);
+        let conn = redis::Client::open(address)
+            .map_err(|_| v3::Error::InvalidAddress)?
+            .get_multiplexed_async_connection_with_config(&config)
+            .await
+            .map_err(other_error_v3)?;
+        Ok((conn, permit))
     }
 
     async fn get_conn(
@@ -263,18 +284,12 @@ impl<T: Send> v3::HostConnectionWithStore<T> for crate::RedisFactorData {
             return Err(v3::Error::InvalidAddress);
         }
 
-        let permit = semaphore
-            .acquire()
-            .await
-            .map_err(|_| v3::Error::TooManyConnections)?;
-
-        let config =
-            AsyncConnectionConfig::new().set_dns_resolver(SpinDnsResolver(blocked_networks));
-        let conn = redis::Client::open(address.as_str())
-            .map_err(|_| v3::Error::InvalidAddress)?
-            .get_multiplexed_async_connection_with_config(&config)
-            .await
-            .map_err(other_error_v3)?;
+        let (conn, permit) = InstanceState::establish_connection_impl(
+            &semaphore,
+            &blocked_networks,
+            address.as_str(),
+        )
+        .await?;
 
         accessor.with(|mut access| {
             let host = access.get();
@@ -389,6 +404,15 @@ impl<T: Send> v3::HostConnectionWithStore<T> for crate::RedisFactorData {
         Ok(operations::execute(&mut conn, command, arguments)
             .await?
             .into_v3())
+    }
+}
+
+fn to_v2_error(error: v3::Error) -> v2::Error {
+    match error {
+        v3::Error::InvalidAddress => v2::Error::InvalidAddress,
+        v3::Error::TooManyConnections => v2::Error::TooManyConnections,
+        v3::Error::TypeError => v2::Error::TypeError,
+        v3::Error::Other(msg) => v2::Error::Other(msg),
     }
 }
 
