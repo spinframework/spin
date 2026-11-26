@@ -20,6 +20,8 @@ use crate::allowed_hosts::AllowedHostChecker;
 
 const REDIS_CONNECTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+const WRONG_TYPE: &str = "WRONGTYPE";
+
 pub struct InstanceState {
     pub(crate) allowed_host_checker: AllowedHostChecker,
     pub blocked_networks: BlockedNetworks,
@@ -47,7 +49,7 @@ impl InstanceState {
             .map_err(|_| v2::Error::TooManyConnections)?;
         let config = AsyncConnectionConfig::new()
             .set_dns_resolver(SpinDnsResolver(self.blocked_networks.clone()))
-            .set_connection_timeout(REDIS_CONNECTION_TIMEOUT);
+            .set_connection_timeout(Some(REDIS_CONNECTION_TIMEOUT));
         let conn = redis::Client::open(address.as_str())
             .map_err(|_| v2::Error::InvalidAddress)?
             .get_multiplexed_async_connection_with_config(&config)
@@ -152,7 +154,7 @@ mod operations {
         values: Vec<String>,
     ) -> Result<u32, v3::Error> {
         let value = conn.sadd(&key, &values).await.map_err(|e| {
-            if e.kind() == redis::ErrorKind::TypeError {
+            if e.code().is_some_and(|c| c == WRONG_TYPE) {
                 v3::Error::TypeError
             } else {
                 v3::Error::Other(e.to_string())
@@ -675,69 +677,61 @@ impl RedisResults {
 }
 
 impl FromRedisValue for RedisResults {
-    fn from_redis_value(value: &Value) -> redis::RedisResult<Self> {
-        fn append(values: &mut Vec<v3::RedisResult>, value: &Value) -> redis::RedisResult<()> {
+    fn from_redis_value(value: Value) -> Result<Self, redis::ParsingError> {
+        fn append(
+            values: &mut Vec<v3::RedisResult>,
+            value: Value,
+        ) -> Result<(), redis::ParsingError> {
             match value {
                 Value::Nil => {
                     values.push(v3::RedisResult::Nil);
                     Ok(())
                 }
                 Value::Int(v) => {
-                    values.push(v3::RedisResult::Int64(*v));
+                    values.push(v3::RedisResult::Int64(v));
                     Ok(())
                 }
                 Value::BulkString(bytes) => {
-                    values.push(v3::RedisResult::Binary(bytes.to_owned()));
+                    values.push(v3::RedisResult::Binary(bytes));
                     Ok(())
                 }
                 Value::SimpleString(s) => {
-                    values.push(v3::RedisResult::Status(s.to_owned()));
+                    values.push(v3::RedisResult::Status(s));
                     Ok(())
                 }
                 Value::Okay => {
                     values.push(v3::RedisResult::Status("OK".to_string()));
                     Ok(())
                 }
-                Value::Map(_) => Err(redis::RedisError::from((
-                    redis::ErrorKind::TypeError,
-                    "Could not convert Redis response",
-                    "Redis Map type is not supported".to_string(),
-                ))),
-                Value::Attribute { .. } => Err(redis::RedisError::from((
-                    redis::ErrorKind::TypeError,
-                    "Could not convert Redis response",
-                    "Redis Attribute type is not supported".to_string(),
-                ))),
+                Value::Map(_) => Err(redis::ParsingError::from("Redis Map type is not supported")),
+                Value::Attribute { .. } => Err(redis::ParsingError::from(
+                    "Redis Attribute type is not supported",
+                )),
                 Value::Array(arr) | Value::Set(arr) => {
-                    arr.iter().try_for_each(|value| append(values, value))
+                    arr.into_iter().try_for_each(|value| append(values, value))
                 }
                 Value::Double(v) => {
                     values.push(v3::RedisResult::Binary(v.to_string().into_bytes()));
                     Ok(())
                 }
-                Value::VerbatimString { .. } => Err(redis::RedisError::from((
-                    redis::ErrorKind::TypeError,
-                    "Could not convert Redis response",
-                    "Redis string with format attribute is not supported".to_string(),
-                ))),
+                Value::VerbatimString { .. } => Err(redis::ParsingError::from(
+                    "Redis string with format attribute is not supported",
+                )),
                 Value::Boolean(v) => {
-                    values.push(v3::RedisResult::Int64(if *v { 1 } else { 0 }));
+                    values.push(v3::RedisResult::Int64(if v { 1 } else { 0 }));
                     Ok(())
                 }
                 Value::BigNumber(v) => {
                     values.push(v3::RedisResult::Binary(v.to_string().as_bytes().to_owned()));
                     Ok(())
                 }
-                Value::Push { .. } => Err(redis::RedisError::from((
-                    redis::ErrorKind::TypeError,
-                    "Could not convert Redis response",
-                    "Redis Pub/Sub types are not supported".to_string(),
-                ))),
-                Value::ServerError(err) => Err(redis::RedisError::from((
-                    redis::ErrorKind::ResponseError,
-                    "Server error",
-                    format!("{err:?}"),
-                ))),
+                Value::Push { .. } => Err(redis::ParsingError::from(
+                    "Redis Pub/Sub types are not supported",
+                )),
+                Value::ServerError(err) => {
+                    Err(redis::ParsingError::from(format!("Server error: {err:?}")))
+                }
+                _ => Err(redis::ParsingError::from("Unknown Redis value type")),
             }
         }
         let mut values = Vec::new();

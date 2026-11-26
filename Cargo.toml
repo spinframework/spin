@@ -174,7 +174,7 @@ path-absolutize = "3"
 pin-project-lite = "0.2.16"
 quote = "1"
 rand = "0.10.1"
-redis = "0.32.5"
+redis = "1.8"
 regex = "1"
 reqwest = { version = "0.12", features = ["stream", "blocking", "rustls-tls-native-roots"] }
 rusqlite = "0.41"
