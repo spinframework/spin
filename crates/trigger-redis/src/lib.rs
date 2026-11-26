@@ -141,7 +141,7 @@ impl<F: RuntimeFactors> Subscriber<F> {
     }
 
     async fn run_listener(self) -> anyhow::Result<()> {
-        let server_addr = &self.client.get_connection_info().addr;
+        let server_addr = self.client.get_connection_info().addr();
 
         tracing::info!("Connecting to Redis server at {server_addr}");
         let mut pubsub = self
@@ -177,7 +177,7 @@ impl<F: RuntimeFactors> Subscriber<F> {
         messaging.system = "redis"
     ))]
     async fn handle_message(&self, msg: Msg) -> anyhow::Result<()> {
-        let server_addr = &self.client.get_connection_info().addr;
+        let server_addr = self.client.get_connection_info().addr();
         let channel = msg.get_channel_name();
         tracing::trace!(%server_addr, %channel, "Received message");
 

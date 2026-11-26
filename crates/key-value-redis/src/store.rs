@@ -48,8 +48,8 @@ impl StoreManager for KeyValueRedis {
     }
 
     fn summary(&self, _store_name: &str) -> Option<String> {
-        let redis::ConnectionInfo { addr, .. } = self.database_url.as_str().parse().ok()?;
-        Some(format!("Redis at {addr}"))
+        let conn_info: redis::ConnectionInfo = self.database_url.as_str().parse().ok()?;
+        Some(format!("Redis at {}", conn_info.addr()))
     }
 }
 
@@ -159,7 +159,10 @@ impl Store for RedisStore {
             loop {
                 match scan.next_item().await {
                     None => break,
-                    Some(k) => {
+                    Some(Err(e)) => {
+                        return Err(v3::Error::Other(e.to_string()));
+                    }
+                    Some(Ok(k)) => {
                         if k.len() > max_result_bytes {
                             return Err(v3::Error::Other(format!(
                                 "query result exceeds limit of {max_result_bytes} bytes"
