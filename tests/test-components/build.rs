@@ -43,7 +43,8 @@ fn main() {
             .arg("build")
             .arg("--target=wasm32-wasip1")
             .env("RUSTFLAGS", rustflags())
-            .env("CARGO_TARGET_DIR", &out_dir)
+            .env("CARGO_BUILD_TARGET_DIR", &out_dir)
+            .env("CARGO_BUILD_BUILD_DIR", &out_dir)
             // If RUSTFLAGS was set it'll be passed to this build script through
             // this variable but since we're cross-compiling to wasm we almost
             // surely don't want this to get picked up, so remove this from the
